@@ -574,6 +574,68 @@ class ModernAdvancedSettingsModel {
                 ['continueNextPage', '再生中の動画をページ移動後も再開'],
                 ['enableAdDecoration', 'プレイリストで動画の装飾枠を表示']
             ]),
+            ...group('プレイリスト・検索', '動画の先読み', [
+                ['playlist.prefetchAhead.enabled', '動画を先読みする', {
+                        description: '検証中の機能（初期値OFF）。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間は先読みしません。失敗・期限切れ時は通常どおり読み込みます。'
+                    }],
+                ['playlist.prefetchAhead.sourcePlaylist', 'プレイリストの動画を先読み', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値ON。プレイリストの次の動画から順に先読みします。連続再生で次に再生される動画なので、もっとも当たりやすい一覧です。'
+                    }],
+                ['playlist.prefetchAhead.sourceRelated', '関連動画欄の動画を先読み', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF。関連動画欄の上から順に先読みします。関連動画をたどって見るときに効きますが、実際には見ない動画も多いため通信が無駄になりやすい一覧です。'
+                    }],
+                ['playlist.prefetchAhead.sourceDescription', '動画情報欄の動画を先読み', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF。動画情報欄（説明文）に書かれている動画リンクを上から順に先読みします。シリーズの前後編を続けて見るときに効きますが、説明文には見ない動画のリンクも多く含まれます。'
+                    }],
+                ['playlist.prefetchAhead.order', '先読みする順番', {
+                        type: 'prefetch-order',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '先読みを進める順番です（初期値「プレイリスト → 関連動画欄 → 動画情報欄」）。ドラッグして並べ替えられます（「上へ」「下へ」ボタンでも変更できます）。ONにした一覧それぞれから下の本数ずつ候補を取り、ここで決めた順に1本ずつ準備します。'
+                    }],
+                ['playlist.prefetchAhead.window', '先読みする本数（一覧ごと）', {
+                        ...slider(1, 32, 1), unit: '本',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: 'ONにした一覧それぞれから、何本先まで準備しておくかです（初期値5本）。3つともONで5本なら最大15本が対象になります。本数が多いほど通信量が増えます。'
+                    }],
+                ['playlist.prefetchAhead.cacheMB', 'メモリキャッシュの上限', {
+                        ...slider(16, 512, 16), unit: 'MB',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '準備済みの冒頭データを保持する上限です（初期値128MB。1本あたり多くの場合1〜3MBなので、おおよそ40〜100本ぶん）。超えたときは古いものから順に破棄します。ページを閉じると消えます。'
+                    }],
+                ['playlist.prefetchAhead.pacingMs', '先読み間の待機時間', {
+                        ...slider(0, 10000, 100), unit: 'ms',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '1本準備するたびに置く待機時間です（初期値0＝待機なし）。実際の待機は設定値の1〜2倍の乱数になり、アクセスが機械的な等間隔になりません。低速回線やサーバーへの連続アクセスを抑えたいときに設定してください。'
+                    }],
+                ['playlist.prefetchAhead.companions', 'コメント・場面画像も先読み', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値ON。次の動画のコメントと、シーンサーチ用の場面画像（最初のページ、シーンサーチがONのとき）も一緒に先読みします。切り替え直後からコメントが表示され、シークのプレビューも早く出ます。その分通信量は増えます。コメントは先読み時点の内容になります（手動の再読み込み・過去ログ指定では通常どおり取得します）。'
+                    }],
+                ['playlist.prefetchAhead.showMark', '先読み済みマークを表示', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '先読みが完了した動画のプレイリスト項目（サムネイル右上）に青い丸を表示します。初期値ON。'
+                    }],
+                ['playlist.prefetchAhead.notifyReady', '先読みが完了したときに画面に通知', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF。次の動画の先読みが終わってキャッシュに入ったとき、「次の動画の先読みが完了しました（smXXXX）」と画面に表示します。どの動画がいつ準備できたかを確かめたいときにONにしてください。先読みは1本ずつ順に進むため、本数を多くしているとその回数だけ表示されます。下の「先読みの通知」を「通知しない」にしているときは表示しません。'
+                    }],
+                ['playlist.prefetchAhead.notifyHit', '先読みが効いたときに画面に通知', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF。先読み済みのデータを実際に使って再生できたとき、「先読みが効きました（1.02秒で再生開始）」のように再生開始までの秒数を画面に表示します。下の「先読みの通知」を「通知しない」にしているときは表示しません。'
+                    }],
+                ['playlist.prefetchAhead.notifyMiss', '先読みなしの再生も画面に通知', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF。先読みを使えなかった再生でも秒数を表示します。上の通知と両方ONにすると、効いたときと効かなかったときの秒数を見比べられます。'
+                    }],
+                ['playlist.prefetchAhead.notify', '先読みの通知', {
+                        ...select([['off', '通知しない'], ['journal', '通知履歴のみ'], ['popup', '失敗を画面にも表示']]),
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '先読みの成否を通知する方法です。初期値は通知履歴のみです。「通知しない」にすると、上の2つの秒数通知も記録も行いません。'
+                    }]
+            ]),
             ...group('プレイリスト・検索', '検索', [
                 ['videoSearch.selectContentType', '検索対象', {
                         ...select([['long', '通常動画'], ['short', 'ショート']]),
@@ -639,7 +701,7 @@ class ModernAdvancedSettingsModel {
             '画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', 'シーンサムネイルのキャッシュ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
             'コメント表示': ['表示・配置', 'コメント一覧', '文字・装飾', '追加取得'],
             'NG・表示対象': ['NG条件', 'コメント種別', '動画の除外'],
-            'プレイリスト・検索': ['プレイリスト', '検索', 'リンク・移動',
+            'プレイリスト・検索': ['プレイリスト', '動画の先読み', '検索', 'リンク・移動',
                 '関連メニュー › カスタムリンク', '診断'],
             'ショートカット': ['プレイヤー全般', '再生', 'シーク', '再生速度', '音量', 'コメント',
                 '画面', '画面フィルター', 'フィルタ/NG', 'プレイリスト', 'マイリスト', 'その他'],

@@ -1,3 +1,16 @@
+## Task1028 / ZenzaWatch 2.7.402-prefetch1028 — 次に見る動画の先読み
+
+- 次に見そうな動画の情報と冒頭の映像・音声をあらかじめ用意し、その動画を開いた瞬間に使うことで、再生が始まるまでの待ち時間を短くする機能を追加した（**初期値はOFF**。上級者設定 → プレイリスト・検索 → 動画の先読み）。
+  - 先読みの対象は「プレイリスト」「関連動画欄」「動画情報欄（説明文中の動画リンク）」から選べる（初期値はプレイリストのみ）。先読みする順番はドラッグで並べ替えられる。
+  - 連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず、用意できていればそれを使う。
+  - 現在再生中の動画の読み込みに余裕があるときだけ、1本ずつ順番に通信する。シーク・一時停止・読み込み待ちの間は先読みの通信を止める。
+  - 用意した動画にはプレイリストのサムネイル右上に青い丸が付く（設定でOFFにできる）。
+  - 希望すれば、先読みが完了したとき・先読みが効いたとき・効かなかったときに、再生開始までの秒数を画面に表示できる（いずれも初期値OFF）。
+  - コメントと場面画像（シーンサーチ用）も一緒に先読みできる。切り替えた直後からコメントが表示される。
+  - 失敗・期限切れのときは、これまでどおり通常の読み込みで再生する。ブラウザのデータセーバーがONの間は先読みしない。
+  - 通信量とメモリ使用量は増える。保持する量の上限（初期値128MB）と、取得の間隔は設定で変えられる。
+  - 対象はニコニコ公式サイト上のHLS（Domand）再生のみ。
+
 ## 2026-10-20 / ZenzaWatch 2.7.314-public1020 — TypeScript-generated core and private development sync
 
 Bring the integrated development line (through Task903) onto the public develop branch while keeping the public-only Issue #27-#29 fixes and published Scene Search work (3-way merged). Library modules, the playlist stack, storyboard models, audio adjustment and the hover menu are now generated from reviewed TypeScript sources, with legacy-vs-generated regression tests. User-visible fixes include: dropping a .playlist.json onto the playlist list imports it again; one malformed recommendation no longer hides all related videos; new-format mylist items without counts or thumbnails no longer throw; a failed seek-bar thumbnail worker no longer leaks an unhandled rejection per video; repeated link hovers no longer accumulate click listeners; series pages without the expected container no longer abort link enhancement.

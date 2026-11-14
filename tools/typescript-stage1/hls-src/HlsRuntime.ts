@@ -5,6 +5,11 @@ declare const createHlsConfig: typeof import('./HlsConfig').createHlsConfig;
 declare const createHlsStorage: typeof import('./HlsStorage').createHlsStorage;
 declare const createHlsVideoElement: typeof import('./HlsVideoElement').createHlsVideoElement;
 declare const defineHlsDebugElements: typeof import('./HlsDebugElements').defineHlsDebugElements;
+declare const PlaylistPreloader: typeof import('./PlaylistPreloader').PlaylistPreloader;
+declare const HlsPrefetch: typeof import('./HlsStartupPrefetch').HlsPrefetch;
+declare const createPlaylistStartupPreparer: typeof import('../nico-src/PlaylistStartupPreparer').createPlaylistStartupPreparer;
+declare const describeError: typeof import('../nico-src/PlaylistStartupPreparer').describeError;
+declare const createPrefetchReporter: typeof import('../nico-src/PrefetchReporter').createPrefetchReporter;
 interface HlsRuntimeDependencies {Emitter:Loose;dimport:(url:string)=>Promise<Loose>}
 interface HlsInstalledRuntime {createVideoElement:(usecase?:string)=>HTMLElement}
 const HlsRuntime = {
@@ -23,7 +28,8 @@ const HlsRuntime = {
       const library=HlsLibrary.load();
       // Register the factory synchronously; player construction waits for the load below.
       const Storage=createHlsStorage(Config,debounce);
-      createHlsVideoElement({Config,Storage,debounce,throttle,HLS_JS_URL:HlsLibrary.url,loadLibrary:()=>HlsLibrary.load()});
+      const optionalPrefetch = typeof HlsPrefetch === 'undefined' ? undefined : HlsPrefetch;
+      createHlsVideoElement({Config,Storage,debounce,throttle,HLS_JS_URL:HlsLibrary.url,loadLibrary:()=>HlsLibrary.load(),Prefetch:optionalPrefetch});
       await library.catch(()=>{console.warn('HLS library unavailable; checking native playback');});
     const initDebug = ({hlsConfig, html, render, ZenzaWatch}: Loose) => {
       ZenzaWatch.emitter.promise('videoControBar.addonMenuReady').then(({container}: Loose) => {
@@ -164,6 +170,25 @@ const HlsRuntime = {
         return video;
       };
 
+      // The HLS bridge is inert until the Nico dialog explicitly opts into prefetch.
+      if (optionalPrefetch && typeof PlaylistPreloader !== 'undefined' &&
+          typeof createPlaylistStartupPreparer !== 'undefined' &&
+          typeof createPrefetchReporter !== 'undefined' && typeof describeError !== 'undefined') {
+      ZenzaWatch.debug.playlistPrefetch = {
+        trialDiagnostics: false,
+        createPreparer: createPlaylistStartupPreparer,
+        createReporter: createPrefetchReporter,
+        describeError,
+        create: (prepare:Loose, onReady:Loose, onEvent:Loose) => new PlaylistPreloader(prepare, undefined, onReady, onEvent,
+          (value:Loose) => value?.bytes?.bytes || 0, (value:Loose) => value?.expiresAt),
+        bytes: Object.assign({}, HlsPrefetch, {prepare: (source:string, signal:AbortSignal) => HlsPrefetch.prepare(source, signal, {
+          startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate'))})}),
+        supported: () => window.location.hostname === 'www.nicovideo.jp' && primaryVideo?.playerMode === 'HLS-JS',
+        sample: () => ({currentTime:primaryVideo?.currentTime,duration:primaryVideo?.duration,
+          buffered:primaryVideo?.buffered,rate:primaryVideo?.playbackRate,
+          seeking:primaryVideo?.seeking,ended:primaryVideo?.ended})
+      };
+      }
       window.ZenzaHLS = {
         createVideoElement
       };

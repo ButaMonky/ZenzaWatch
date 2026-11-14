@@ -49,6 +49,7 @@ test('runtime treats edits/reset as drafts, applies complete save, and reports s
  vm.runInContext(read('HlsConfig')+'\n'+read('HlsRuntime')+';globalThis.runtime=HlsRuntime;',context);
  const z={version:'2.7.379',debug:{},emitter:new Emitter(),util:{addStyle(){}}};
  const runtime=await context.runtime.install(z,{Emitter,dimport:async()=>({html(){},render(){}})});await Promise.resolve();
+ assert.equal(z.debug.playlistPrefetch,undefined,'optional prefetch modules must not be required to start ordinary HLS playback');
  const video=runtime.createVideoElement();z.emitter.emit('command-toggleHLSDebug');const dialog=z.debug.hlsDebugDialog;
  dialog.send('change',{name:'show_video_label',value:true});assert.equal(z.debug.hlsConfig.show_video_label,false);
  dialog.send('reset');assert.equal(z.debug.hlsConfig.maxBufferLength,30);assert.equal(dialog.resetValue.maxBufferLength,30);

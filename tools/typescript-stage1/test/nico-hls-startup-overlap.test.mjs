@@ -13,10 +13,11 @@ assert(begin>=0 && end>begin,'canonical video element class boundaries');
 const code=js.slice(begin,end);
 const A='https://delivery.invalid/a/master.m3u8',B='https://delivery.invalid/b/master.m3u8';
 const eventNames=['MANIFEST_PARSED','LEVEL_LOADED','LEVEL_SWITCHED','ERROR','FRAG_LOADED','BUFFER_EOS','MEDIA_ATTACHED','DESTROYING'];
-function fixture({onInit,onLoad,onAttach,onStop,onDestroy,missingLibrary=false,loadLibrary}={}){
+function fixture({onInit,onLoad,onAttach,onStop,onDestroy,missingLibrary=false,loadLibrary,prefetchRuntime}={}){
  const engines=[],events=[],calls=[];
  class Hls {
   static isSupported(){return true;}
+  static DefaultConfig={loader:class DefaultLoader {}};
   static Events=Object.fromEntries(eventNames.map(name=>[name,name]));
   constructor(config){this.config=config;this.handlers=new Map();this.loaded=[];this.attached=[];this.destroyed=false;engines.push(this);}
   on(name,handler){const list=this.handlers.get(name)||[];list.push(handler);this.handlers.set(name,list);return this;}
@@ -27,7 +28,7 @@ function fixture({onInit,onLoad,onAttach,onStop,onDestroy,missingLibrary=false,l
   detachMedia(){calls.push(['detach',this]);}
   destroy(){calls.push(['destroy',this]);this.emit('DESTROYING');this.destroyed=true;this.handlers.clear();onDestroy?.(h,this);}
  }
- const context=vm.createContext({HTMLElement:class{setAttribute(){}},Hls:missingLibrary?undefined:Hls,loadLibrary:()=>loadLibrary(Hls),ErrorEvent:class{constructor(type){this.type=type;}},overrideTarget:e=>e,HLS_ERROR_CODE:{NETWORK:2},createFragmentLoader:()=>class FragmentLoader{},
+ const context=vm.createContext({HTMLElement:class{setAttribute(){}},Hls:missingLibrary?undefined:Hls,Prefetch:prefetchRuntime,loadLibrary:()=>loadLibrary(Hls),ErrorEvent:class{constructor(type){this.type=type;}},overrideTarget:e=>e,HLS_ERROR_CODE:{NETWORK:2},createFragmentLoader:()=>class FragmentLoader{},
   CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
   PLAYER_MODE:{HLS_JS:'HLS-JS',DEFAULT:'DEFAULT'},console,performance});
  vm.runInContext(code+';globalThis.Subject=ZenzaVideoElement;',context);
@@ -204,4 +205,18 @@ test('stale library failure is silent',async()=>{
  let reject;const h=fixture({missingLibrary:true,loadLibrary(){return new Promise((_,r)=>reject=r);}});
  h.player.src=A;await flushLibrary();h.player.src='';reject(Error('private'));await flushLibrary();
  assert.equal(h.events.filter(e=>e.type==='error').length,0);
+});
+
+test('prefetched startup selects a cached HLS loader only for the matching URL',()=>{
+ const prefetchRuntime={startLevel:src=>src===A?2:undefined,
+  wrapLoader(Base){return class CachedStartupLoader extends Base {}}};
+ const h=fixture({prefetchRuntime});
+ const cached=h.player._initHLSJS(A);
+ assert.equal(cached.config.startLevel,2);
+ assert.equal(cached.config.loader.name,'CachedStartupLoader');
+ const ordinary=h.player._initHLSJS(B);
+ assert.equal(ordinary.config.startLevel,-1);
+ assert.equal(Object.prototype.hasOwnProperty.call(ordinary.config,'loader'),false,
+  'an unrelated video must use the unwrapped HLS loader');
+ assert.equal(cached.destroyed,true);
 });

@@ -12,6 +12,6 @@
     "useUnknownInCatchVariables": false,
     "declaration": false
   },
-  "include": ["hls-src/**/*.ts"],
+  "include": ["hls-src/**/*.ts", "nico-src/PlaylistStartupPreparer.ts", "nico-src/PrefetchReporter.ts"],
   "exclude": []
 }

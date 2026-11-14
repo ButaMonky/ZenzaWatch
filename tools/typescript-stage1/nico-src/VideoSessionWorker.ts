@@ -44,11 +44,13 @@ export interface VideoSessionHandle {
   connect(): Promise<unknown>;
   getState(): Promise<unknown>;
   close(): Promise<unknown>;
+  /** Promote a previously prepared session without reconnecting it. */
+  promote(): Promise<unknown>;
 }
 export interface VideoSessionWorkerClient {
   createStoryboardClasses: typeof createStoryboardClasses;
   initWorker(): CrossMessageWorker | undefined;
-  create(params: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean}): Promise<VideoSessionHandle>;
+  create(params: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean; prefetch?: boolean}): Promise<VideoSessionHandle>;
   storyboard(params: {type: string; info: VideoInfoLike}): Promise<any>;
 }
 
@@ -1156,8 +1158,29 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     // 今のセッションと同じ時だけ操作する（古い動画の close が新しい動画のセッションを閉じないように）。
     let current: (VideoSession & {[SESSION_ID]?: string}) | null = null;
     let createSeq = 0;
+    // Separate inactive HLS sessions must never replace the current playback owner.
+    const preparedSessions = new Map<string, VideoSession & {[SESSION_ID]?: string}>();
+    const MAX_PREPARED_SESSIONS = 128;
     const isCurrent = (sessionId: unknown): boolean => !!current && sessionId !== undefined && current[SESSION_ID] === sessionId;
+    const findSession = (sessionId: unknown): (VideoSession & {[SESSION_ID]?: string}) | null =>
+      isCurrent(sessionId) ? current : typeof sessionId === 'string' ? preparedSessions.get(sessionId) ?? null : null;
     const create = async (params: Loose): Promise<Loose> => {
+      if (params.prefetch === true) {
+        if (params.serverType !== 'domand' || params.useHLS !== true) {
+          throw new Error('Prefetch supports Domand HLS only');
+        }
+        const session = await VideoSession.create(params) as VideoSession & {[SESSION_ID]?: string};
+        const sessionId = getSessionId();
+        session[SESSION_ID] = sessionId;
+        preparedSessions.set(sessionId, session);
+        while (preparedSessions.size > MAX_PREPARED_SESSIONS) {
+          const oldest = preparedSessions.entries().next().value as [string, VideoSession];
+          preparedSessions.delete(oldest[0]);
+          oldest[1].close();
+        }
+        return {serverType: session.serverType, isDomand: session.isDomand,
+          isDmc: session.isDmc, sessionId};
+      }
       const seq = ++createSeq;
       if (current) {
         current.close();
@@ -1181,18 +1204,26 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
       };
     };
 
+    const promote = async ({sessionId}: Loose = {}): Promise<Loose> => {
+      const session = preparedSessions.get(sessionId);
+      if (!session) throw new Error('prepared session mismatch');
+      preparedSessions.delete(sessionId);
+      ++createSeq; // invalidate a concurrently pending ordinary create()
+      if (current && current !== session) current.close();
+      current = session;
+      return {sessionId, serverType: session.serverType, isDomand: session.isDomand, isDmc: session.isDmc};
+    };
     const connect = async ({sessionId}: Loose = {}): Promise<Loose> => {
-      if (!isCurrent(sessionId)) {
-        throw new Error('session mismatch');
-      }
-      return (current as VideoSession).connect();
+      const session = findSession(sessionId);
+      if (!session) throw new Error('session mismatch');
+      const connected = await session.connect();
+      if (findSession(sessionId) !== session) throw new Error('session superseded');
+      return connected;
     };
 
     const getState = ({sessionId}: Loose = {}): Loose => {
-      if (!isCurrent(sessionId)) {
-        return {};
-      }
-      const session = current as VideoSession & {[SESSION_ID]?: string};
+      const session = findSession(sessionId);
+      if (!session) return {};
       return {
         serverType: session.serverType,
         isDomand: session.isDomand,
@@ -1204,11 +1235,11 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     };
 
     const close = ({sessionId}: Loose = {}): void => {
-      if (!isCurrent(sessionId)) {
-        return;
-      }
-      (current as VideoSession).close();
-      current = null;
+      const session = findSession(sessionId);
+      if (!session) return;
+      if (session === current) current = null;
+      else preparedSessions.delete(sessionId);
+      session.close();
     };
 
     const storyboard = async ({videoInfo, serverType, withImages = true}: Loose): Promise<Loose> => {
@@ -1253,6 +1284,8 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
           return create(params);
         case 'connect':
           return await connect(params);
+        case 'promote':
+          return await promote(params);
         case 'getState':
           return getState(params);
         case 'close':
@@ -1292,16 +1325,19 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     });
     return undefined;
   };
-  const create = async ({videoInfo, videoQuality, serverType, useHLS}: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean}): Promise<VideoSessionHandle> => {
-    const generation = ++diagnosticGeneration;
+  const create = async ({videoInfo, videoQuality, serverType, useHLS, prefetch = false}: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean; prefetch?: boolean}): Promise<VideoSessionHandle> => {
+    // Background sessions must not invalidate the foreground watch diagnostic owner.
+    let generation = prefetch ? diagnosticGeneration : ++diagnosticGeneration;
     let closed = false;
-    const active = () => !closed && generation === diagnosticGeneration;
+    let promoted = false;
+    const active = () => !closed && (prefetch && !promoted || generation === diagnosticGeneration);
     await initWorker();
     const params = {
       videoInfo: videoInfo.toJSON(),
       videoQuality,
       serverType,
-      useHLS
+      useHLS,
+      ...(prefetch ? {prefetch: true} : {})
     };
     const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
     const result = await observeSession(scope + '-create', active,
@@ -1320,7 +1356,14 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
           return state;
         }, error => { diagnostic?.failure(error); throw error; });
       },
-      close: () => { closed = true; return (worker as CrossMessageWorker).post({command: 'close', params: {sessionId}}); }
+      close: () => { closed = true; return (worker as CrossMessageWorker).post({command: 'close', params: {sessionId}}); },
+      promote: async () => {
+        if (!prefetch || promoted || closed) throw new Error('Only a live prefetch can be promoted');
+        const next = await (worker as CrossMessageWorker).post({command: 'promote', params: {sessionId}});
+        promoted = true;
+        generation = ++diagnosticGeneration;
+        return next;
+      }
     });
   };
 

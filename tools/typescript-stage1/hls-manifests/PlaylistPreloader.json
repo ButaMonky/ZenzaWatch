@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/hls-src/PlaylistPreloader.ts",
+  "runtime": "packages/zenza/src/hls/PlaylistPreloader.js",
+  "sourceSha256": "61923128826f64e5cb336a19a3e7a273ce74fb2a330b63c5ceb862e003d2d259",
+  "runtimeSha256": "aee4760284422bc946c67b184c64ca76a887ab433c094a11090debb068acdc44"
+}

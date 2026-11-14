@@ -174,6 +174,21 @@ const Config = (() => {
     playlistLoop: false,
     // Task974: rolling single-video accumulation, not a bulk-import truncation cap.
     'playlist.maxItems': 3000,
+    // Task1028: Explicit opt-in only. Prefetch never starts on an existing install.
+    'playlist.prefetchAhead.enabled': false,
+    'playlist.prefetchAhead.sourcePlaylist': true,
+    'playlist.prefetchAhead.sourceRelated': false,
+    'playlist.prefetchAhead.sourceDescription': false,
+    'playlist.prefetchAhead.order': 'playlist,related,description',
+    'playlist.prefetchAhead.window': 5,
+    'playlist.prefetchAhead.cacheMB': 128,
+    'playlist.prefetchAhead.pacingMs': 0,
+    'playlist.prefetchAhead.companions': true,
+    'playlist.prefetchAhead.showMark': true,
+    'playlist.prefetchAhead.notifyReady': false,
+    'playlist.prefetchAhead.notifyHit': false,
+    'playlist.prefetchAhead.notifyMiss': false,
+    'playlist.prefetchAhead.notify': 'journal',
     enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
     // Task 055: デバッグ用。読み込み済みの全動画について、都度サーバーへ
     // 問い合わせ直して広告装飾の表示がズレていないか確認し、コンソールへ
@@ -571,7 +586,11 @@ const Config = (() => {
           'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
           'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
           'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
-          'videoSearch.selectContentType': ['long', 'short']
+          'videoSearch.selectContentType': ['long', 'short'],
+          'playlist.prefetchAhead.notify': ['off', 'journal', 'popup'],
+          'playlist.prefetchAhead.order': ['playlist,related,description', 'playlist,description,related',
+            'related,playlist,description', 'related,description,playlist',
+            'description,playlist,related', 'description,related,playlist']
         };
         const name = key.startsWith('screenMode:') ? 'screenMode' : key;
         if (Object.prototype.hasOwnProperty.call(choices, name)) {
@@ -581,6 +600,9 @@ const Config = (() => {
         if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
         if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
         if (key === 'playlist.maxItems') { return Number.isInteger(value) && (value as number) >= 1000 && (value as number) <= 10000 && (value as number) % 1000 === 0; }
+        if (key === 'playlist.prefetchAhead.window') { return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 32; }
+        if (key === 'playlist.prefetchAhead.cacheMB') { return Number.isInteger(value) && (value as number) >= 16 && (value as number) <= 512; }
+        if (key === 'playlist.prefetchAhead.pacingMs') { return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 10000; }
         if (key === 'search.limit') { return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 5000; }
         if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
           'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {

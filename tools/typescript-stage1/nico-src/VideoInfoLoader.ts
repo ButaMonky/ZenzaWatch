@@ -45,6 +45,8 @@ export interface WatchLoadError {
 }
 export interface VideoInfoLoaderClient {
   loadStoryboardInfo(watchId:string,options:LoadOptions):Promise<Loose>;
+  /** Passive, cancellable metadata read; does not touch active watch ownership or publish events. */
+  prefetch(watchId:string,options:LoadOptions):Promise<Loose>;
   /** Resolves the legacy `html5watchApi` data; rejects with a WatchLoadError. */
   load(watchId: string, options: LoadOptions): Promise<Loose>;
 }
@@ -185,7 +187,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     };
   };
 
-  const parseWatchApiData = async function (json: Loose | null | undefined, requestedWatchId: string): Promise<Loose | null> {
+  const parseWatchApiData = async function (json: Loose | null | undefined, requestedWatchId: string, publishCsrf = true): Promise<Loose | null> {
     const response = await normalizeWatchV4(json?.data?.response, requestedWatchId);
     if (!response) {
       return null;
@@ -474,7 +476,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       resumeInfo,
     };
 
-    emitter.emitAsync('csrfTokenUpdate', csrfToken);
+    if (publishCsrf) emitter.emitAsync('csrfTokenUpdate', csrfToken);
     return result;
   };
 
@@ -825,6 +827,20 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       }
       return {watchId,duration:video.duration,actionTrackId:client.watchTrackId,
         domandInfo:{videoId:video.id,accessRightKey:domand.accessRightKey,isStoryboardAvailable:true}};
+    },
+    // Read only: avoid anonymousWatchLoadSerial, csrfTokenUpdate and paid-channel
+    // redirection. Normal playback retains exclusive control of those states.
+    prefetch: async (watchId: string, options: LoadOptions): Promise<Loose> => {
+      if (!/^(?:sm|so|nm)?\d+$/.test(watchId)) throw new TypeError('Invalid video ID');
+      requireActive(options);
+      const payload = await fetchWatchResponse(watchId, options, () => false);
+      requireActive(options);
+      const data = await parseWatchApiData(payload, watchId, false);
+      requireActive(options);
+      if (!data || data.reject || !data.isPlayable) {
+        throw Object.assign(new Error('Video unavailable for prefetch'), {name: 'PrefetchUnavailable'});
+      }
+      return data;
     },
     load: function (watchId: string, options: LoadOptions): Promise<Loose> {
       debug.watchApiData = undefined;

@@ -163,7 +163,7 @@ const VideoInfoLoader = (function () {
                 } }
         };
     };
-    const parseWatchApiData = async function (json, requestedWatchId) {
+    const parseWatchApiData = async function (json, requestedWatchId, publishCsrf = true) {
         const response = await normalizeWatchV4(json?.data?.response, requestedWatchId);
         if (!response) {
             return null;
@@ -345,7 +345,8 @@ const VideoInfoLoader = (function () {
             linkedChannelVideo: null,
             resumeInfo,
         };
-        emitter.emitAsync('csrfTokenUpdate', csrfToken);
+        if (publishCsrf)
+            emitter.emitAsync('csrfTokenUpdate', csrfToken);
         return result;
     };
     const loadLinkedChannelVideoInfo = (originalData, isCurrent = () => true) => {
@@ -691,6 +692,21 @@ const VideoInfoLoader = (function () {
             }
             return { watchId, duration: video.duration, actionTrackId: client.watchTrackId,
                 domandInfo: { videoId: video.id, accessRightKey: domand.accessRightKey, isStoryboardAvailable: true } };
+        },
+        // Read only: avoid anonymousWatchLoadSerial, csrfTokenUpdate and paid-channel
+        // redirection. Normal playback retains exclusive control of those states.
+        prefetch: async (watchId, options) => {
+            if (!/^(?:sm|so|nm)?\d+$/.test(watchId))
+                throw new TypeError('Invalid video ID');
+            requireActive(options);
+            const payload = await fetchWatchResponse(watchId, options, () => false);
+            requireActive(options);
+            const data = await parseWatchApiData(payload, watchId, false);
+            requireActive(options);
+            if (!data || data.reject || !data.isPlayable) {
+                throw Object.assign(new Error('Video unavailable for prefetch'), { name: 'PrefetchUnavailable' });
+            }
+            return data;
         },
         load: function (watchId, options) {
             debug.watchApiData = undefined;

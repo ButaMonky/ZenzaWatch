@@ -72,3 +72,26 @@ test('pre-aborted request clears previously retained debug data without fetching
  assert.equal(result.ok,false);assert.equal(result.error.reason,'cancelled');
  assert.equal(h.requests.length,0);assert.equal(h.debug.watchApiData,undefined);assertPrivateLogs(h);
 });
+
+test('prefetch lookup never emits playback or CSRF events, or changes foreground debug ownership',async()=>{
+ const h=harness();
+ const current=await h.loader.load(ID,{});
+ assert.equal(current.isPlayable,true);
+ const previousEvents=h.events.length;
+ const other=await h.loader.prefetch('sm22222222',{});
+ assert.equal(other.isPlayable,true);
+ assert.equal(h.events.length,previousEvents,'background lookup must not emit playback/CSRF events');
+ assert.equal(h.debug.watchApiData,undefined,'no raw watch response stored for a background lookup');
+ assert.equal(h.requests.length,2);
+ assertPrivateLogs(h);
+});
+
+test('prefetch lookup aborts before transport and rejects untrusted video identifiers',async()=>{
+ const h=harness(),controller=new AbortController();
+ controller.abort();
+ const rejected=await settle(()=>h.loader.prefetch(ID,{signal:controller.signal}));
+ assert.equal(rejected.ok,false);
+ assert.equal(h.requests.length,0);
+ await assert.rejects(h.loader.prefetch('https://other.invalid/watch/sm9',{}),e=>e?.name==='TypeError');
+ assert.equal(h.requests.length,0);
+});

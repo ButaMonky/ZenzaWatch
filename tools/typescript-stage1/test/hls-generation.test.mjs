@@ -15,10 +15,16 @@ function fixture(){
  }
  // generator-core imports only Node builtins and its registry. Keep its exact dependencies.
  fs.cpSync(path.join(root,stage,'scripts'),path.join(dest,stage,'scripts'),{recursive:true});
+ // Task1028: the allowlisted HLS bundle now includes two Nico-side helpers.
+ const nico=path.join(dest,stage,'nico-src');
+ fs.mkdirSync(nico,{recursive:true});
+ for(const name of ['PlaylistStartupPreparer.ts','PrefetchReporter.ts']){
+  fs.copyFileSync(path.join(root,stage,'nico-src',name),path.join(nico,name));
+ }
  return dest;
 }
 const run=(dir,mode)=>spawnSync(process.execPath,[path.join(dir,stage,'scripts/sync-hls.mjs'),mode],{encoding:'utf8'});
-test('HLS generation verifies all six owners and is idempotent',()=>{
+test('HLS generation verifies all ten owners and is idempotent',()=>{
  const dir=fixture();assert.equal(run(dir,'--check').status,0);assert.equal(run(dir,'--write').status,0);assert.equal(run(dir,'--check').status,0);
 });
 test('HLS generation refuses a foreign runtime edit without overwriting it',()=>{

@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.401-task1027
+// @version        2.7.402-prefetch1028
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 19:12Z be164c1
+// build: 2026-11-14 08:19Z 70a6d07
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1222,7 +1222,7 @@ function createDisplaySettings(w, gm, registered=[]) {
   return {publish,apply,save,scheduleSave,diagnostics,migrate};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.401-task1027';
+    var VER = '2.7.402-prefetch1028';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 19:12Z be164c1';
+    var BUILD = '2026-11-14 08:19Z 70a6d07';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5823,6 +5823,20 @@ const Config = (() => {
 				autoCommentSpeedRate: false,
 				playlistLoop: false,
 				'playlist.maxItems': 3000,
+				'playlist.prefetchAhead.enabled': false,
+				'playlist.prefetchAhead.sourcePlaylist': true,
+				'playlist.prefetchAhead.sourceRelated': false,
+				'playlist.prefetchAhead.sourceDescription': false,
+				'playlist.prefetchAhead.order': 'playlist,related,description',
+				'playlist.prefetchAhead.window': 5,
+				'playlist.prefetchAhead.cacheMB': 128,
+				'playlist.prefetchAhead.pacingMs': 0,
+				'playlist.prefetchAhead.companions': true,
+				'playlist.prefetchAhead.showMark': true,
+				'playlist.prefetchAhead.notifyReady': false,
+				'playlist.prefetchAhead.notifyHit': false,
+				'playlist.prefetchAhead.notifyMiss': false,
+				'playlist.prefetchAhead.notify': 'journal',
 				enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
 				debugCheckAdDecoration: false,
 				commentLanguage: 'ja-jp',
@@ -6113,7 +6127,11 @@ const Config = (() => {
 								'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
 								'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
 								'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
-								'videoSearch.selectContentType': ['long', 'short']
+								'videoSearch.selectContentType': ['long', 'short'],
+								'playlist.prefetchAhead.notify': ['off', 'journal', 'popup'],
+								'playlist.prefetchAhead.order': ['playlist,related,description', 'playlist,description,related',
+										'related,playlist,description', 'related,description,playlist',
+										'description,playlist,related', 'description,related,playlist']
 						};
 						const name = key.startsWith('screenMode:') ? 'screenMode' : key;
 						if (Object.prototype.hasOwnProperty.call(choices, name)) {
@@ -6130,6 +6148,15 @@ const Config = (() => {
 						}
 						if (key === 'playlist.maxItems') {
 								return Number.isInteger(value) && value >= 1000 && value <= 10000 && value % 1000 === 0;
+						}
+						if (key === 'playlist.prefetchAhead.window') {
+								return Number.isInteger(value) && value >= 1 && value <= 32;
+						}
+						if (key === 'playlist.prefetchAhead.cacheMB') {
+								return Number.isInteger(value) && value >= 16 && value <= 512;
+						}
+						if (key === 'playlist.prefetchAhead.pacingMs') {
+								return Number.isInteger(value) && value >= 0 && value <= 10000;
 						}
 						if (key === 'search.limit') {
 								return Number.isInteger(value) && value >= 1 && value <= 5000;
@@ -12992,7 +13019,7 @@ const VideoInfoLoader = (function () {
 								} }
 				};
 		};
-		const parseWatchApiData = async function (json, requestedWatchId) {
+		const parseWatchApiData = async function (json, requestedWatchId, publishCsrf = true) {
 				const response = await normalizeWatchV4(json?.data?.response, requestedWatchId);
 				if (!response) {
 						return null;
@@ -13160,7 +13187,8 @@ const VideoInfoLoader = (function () {
 						linkedChannelVideo: null,
 						resumeInfo,
 				};
-				emitter.emitAsync('csrfTokenUpdate', csrfToken);
+				if (publishCsrf)
+						emitter.emitAsync('csrfTokenUpdate', csrfToken);
 				return result;
 		};
 		const loadLinkedChannelVideoInfo = (originalData, isCurrent = () => true) => {
@@ -13472,6 +13500,19 @@ const VideoInfoLoader = (function () {
 						}
 						return { watchId, duration: video.duration, actionTrackId: client.watchTrackId,
 								domandInfo: { videoId: video.id, accessRightKey: domand.accessRightKey, isStoryboardAvailable: true } };
+				},
+				prefetch: async (watchId, options) => {
+						if (!/^(?:sm|so|nm)?\d+$/.test(watchId))
+								throw new TypeError('Invalid video ID');
+						requireActive(options);
+						const payload = await fetchWatchResponse(watchId, options, () => false);
+						requireActive(options);
+						const data = await parseWatchApiData(payload, watchId, false);
+						requireActive(options);
+						if (!data || data.reject || !data.isPlayable) {
+								throw Object.assign(new Error('Video unavailable for prefetch'), { name: 'PrefetchUnavailable' });
+						}
+						return data;
 				},
 				load: function (watchId, options) {
 						debug.watchApiData = undefined;
@@ -43351,6 +43392,25 @@ class VideoListView extends Emitter {
 				cssUtil.registerProps({ name: '--list-length', syntax: '<integer>', initialValue: 1, inherits: true, window: w }, { name: '--active-index', syntax: '<integer>', initialValue: 1, inherits: true, window: w }, { name: '--progress', syntax: '<length-percentage>', initialValue: cssUtil.percent(0), inherits: true, window: w });
 				const container = this.listContainer = doc.querySelector('#listContainer');
 				const list = this.list = doc.getElementById('listContainerInner');
+				if (this._className === 'playlist' && !doc.getElementById('zenza-prefetch-mark-style')) {
+						const markerStyle = doc.createElement('style');
+						markerStyle.id = 'zenza-prefetch-mark-style';
+						markerStyle.textContent = '.videoItem[data-zen-prefetched] .thumbnailContainer::before{' +
+								'content:"";position:absolute;top:4px;right:4px;width:9px;height:9px;' +
+								'border-radius:50%;background:#4fc3f7;box-shadow:0 0 3px rgba(0,0,0,.7);' +
+								'z-index:5;pointer-events:none;}';
+						(doc.head || doc.body).append(markerStyle);
+				}
+				if (this._className === 'playlist') {
+						this._prefetchMarkIds = global.debug?.playlistPrefetch?.markIds || [];
+				}
+				if (this._className === 'playlist' && !this._prefetchMarkListener) {
+						this._prefetchMarkListener = (ids) => {
+								this._prefetchMarkIds = Array.isArray(ids) ? ids : [];
+								this._applyPrefetchMarks();
+						};
+						global.emitter.on('zenza-prefetch-marks', this._prefetchMarkListener);
+				}
 				if (this.items && this.items.length) {
 						this.renderList(this.items);
 				}
@@ -43602,6 +43662,17 @@ class VideoListView extends Emitter {
 				this.lastBuild = { result, time: performance.now() };
 				return result;
 		}
+		_applyPrefetchMarks() {
+				if (!this.document || this._className !== 'playlist')
+						return;
+				const ready = new Set(this._prefetchMarkIds || []);
+				for (const item of this.document.querySelectorAll('.videoItem[data-watch-id]')) {
+						const active = ready.has(item.dataset.watchId || '');
+						if (active !== item.hasAttribute('data-zen-prefetched')) {
+								item.toggleAttribute('data-zen-prefetched', active);
+						}
+				}
+		}
 		_setInviewObserver() {
 				if (!this.document) {
 						return;
@@ -43628,6 +43699,7 @@ class VideoListView extends Emitter {
 								this._observedTargets.set(target, target.dataset.itemId);
 						}
 				}
+				this._applyPrefetchMarks();
 		}
 		_onItemInview(entries) {
 				let changed = false;
@@ -45153,6 +45225,35 @@ class PlayList extends VideoList {
 				this.model.removeNonActiveItem();
 				this._refreshIndex(true);
 				this.toggleEnable(false);
+		}
+		peekNextIds(count) {
+				const result = [];
+				const total = this.length;
+				const limit = Number.isFinite(count) ? Math.min(32, Math.max(0, Math.floor(count))) : 0;
+				if (total < 1 || limit < 1)
+						return result;
+				const currentIndex = this.getIndex();
+				const currentId = currentIndex >= 0 ? this.model.getItemByIndex(currentIndex)?.watchId : null;
+				const seen = new Set(typeof currentId === 'string' ? [currentId] : []);
+				for (let step = 1; step <= total && result.length < limit; step++) {
+						let index = currentIndex + step;
+						if (index >= total) {
+								if (!this.isLoop)
+										break;
+								index %= total;
+						}
+						if (index === currentIndex)
+								break;
+						const id = this.model.getItemByIndex(index)?.watchId;
+						if (typeof id !== 'string' || !id || seen.has(id))
+								continue;
+						seen.add(id);
+						result.push(id);
+				}
+				return result;
+		}
+		peekNextId() {
+				return this.peekNextIds(1)[0] ?? null;
 		}
 		selectNext() {
 				if (!this.hasNext) {
@@ -56270,7 +56371,232 @@ class NicoVideoPlayerDialog extends Emitter {
 				e.preventDefault();
 				e.stopPropagation();
 		}
+		_prefetchFeatureEnabled() {
+				const config = this._playerConfig;
+				return config?.getValue('playlist.prefetchAhead.enabled') === true;
+		}
+		_prefetchSettingsKey() {
+				const config = this._playerConfig;
+				return JSON.stringify([
+						config.getValue('videoServerType'), config.getValue('domandVideoQuality'),
+						config.getValue('autoDisableNew'), config.getValue('video.hls.use_native_hls'),
+						global.debug?.hlsConfig?.startLevel
+				]);
+		}
+		_getPrefetchReporter() {
+				const runtime = global.debug?.playlistPrefetch;
+				if (!runtime?.createReporter)
+						return null;
+				return this._prefetchReporter ||= runtime.createReporter({
+						diagnostics: () => runtime.trialDiagnostics === true,
+						notifyMode: () => this._playerConfig.getValue('playlist.prefetchAhead.notify') || 'journal',
+						console: (name, payload) => window.console.info(name, JSON.stringify(payload)),
+						record: (entry) => this._recordDiagnostic(entry),
+						warning: (message) => this.execCommand('warning', message),
+						notify: (message) => this.execCommand('notify', message),
+						describe: runtime.describeError
+				});
+		}
+		_prepareNextStartup(watchId, signal) {
+				const runtime = global.debug?.playlistPrefetch;
+				if (!runtime?.createPreparer || !VideoInfoLoader?.prefetch) {
+						return Promise.reject(new Error('Playlist prefetch unavailable'));
+				}
+				this._prefetchPreparer ||= runtime.createPreparer({
+						loadVideoInfo: (id, abort) => VideoInfoLoader.prefetch(id, { signal: abort }),
+						createModel: (data) => new VideoInfoModel(data, null),
+						isNgVideo: (info) => this._videoFilter.isNgVideo(info),
+						getConfig: (key) => this._playerConfig.getValue(key),
+						createSession: (info, videoQuality) => VideoSessionWorker.create({
+								videoInfo: info, videoQuality, serverType: 'domand', useHLS: true, prefetch: true
+						}),
+						prepareBytes: (url, abort) => runtime.bytes.prepare(url, abort),
+						settingsKey: () => this._prefetchSettingsKey(),
+						log: (name, payload) => this._getPrefetchReporter()?.prepareLog(name, payload),
+						prepareCompanions: async (info, sig) => {
+								if (this._playerConfig.getValue('playlist.prefetchAhead.companions') !== true)
+										return null;
+								if (this._playerConfig.getValue('enableStoryboard') && info.hasStoryboard && !sig.aborted) {
+										Promise.resolve()
+												.then(() => sig.aborted ? null : global.api?.StoryboardInfoLoader?.load('domand', info))
+												.catch(() => { });
+								}
+								if (!this.threadLoader || !info.msgInfo)
+										return null;
+								const msgInfo = Object.assign({}, info.msgInfo);
+								msgInfo.language = this._playerConfig.props.commentLanguage;
+								const result = await this.threadLoader.load(msgInfo, { signal: sig });
+								return { comments: { language: msgInfo.language, result } };
+						}
+				});
+				return this._prefetchPreparer(watchId, signal);
+		}
+		_collectPrefetchCandidates(perSource) {
+				const config = this._playerConfig;
+				const order = String(config.getValue('playlist.prefetchAhead.order') ||
+						'playlist,related,description').split(',');
+				const seen = new Set();
+				if (this._watchId)
+						seen.add(this._watchId);
+				const out = [];
+				const push = (value) => {
+						const id = String(value || '');
+						if (!/^(?:sm|so|nm)\d+$/.test(id) || seen.has(id))
+								return false;
+						seen.add(id);
+						out.push(id);
+						return true;
+				};
+				for (const source of order) {
+						let taken = 0;
+						if (source === 'playlist') {
+								if (config.getValue('playlist.prefetchAhead.sourcePlaylist') === false || !this._playlist)
+										continue;
+								for (const id of (this._playlist.peekNextIds?.(perSource * 2) || [])) {
+										if (taken >= perSource)
+												break;
+										if (push(id))
+												taken++;
+								}
+						}
+						else if (source === 'related') {
+								if (config.getValue('playlist.prefetchAhead.sourceRelated') !== true)
+										continue;
+								for (const item of (this._videoInfo?.relatedVideoItems || [])) {
+										if (taken >= perSource)
+												break;
+										if (push(typeof item === 'string' ? item : item?.id))
+												taken++;
+								}
+						}
+						else if (source === 'description') {
+								if (config.getValue('playlist.prefetchAhead.sourceDescription') !== true)
+										continue;
+								for (const m of String(this._videoInfo?.description || '').matchAll(/watch\/((?:sm|so|nm)\d+)/g)) {
+										if (taken >= perSource)
+												break;
+										if (push(m[1]))
+												taken++;
+								}
+						}
+				}
+				return out.slice(0, 96);
+		}
+		_takePrefetchComments(msgInfo, loadOptions = {}) {
+				const held = this._prefetchCompanions;
+				if (!held?.comments)
+						return null;
+				if (loadOptions.manualReload || Number(msgInfo?.when) > 0)
+						return null;
+				if (held.watchId !== this._watchId ||
+						held.comments.language !== this._playerConfig.props.commentLanguage)
+						return null;
+				this._prefetchCompanions = null;
+				return held.comments.result;
+		}
+		_prefetchNow() {
+				return typeof performance !== 'undefined' && typeof performance.now === 'function' ?
+						performance.now() : Date.now();
+		}
+		_reportPrefetchTiming() {
+				const t = this._prefetchTiming;
+				if (!t || t.reported || t.requestId !== this._requestId)
+						return;
+				t.reported = true;
+				const reporter = this._getPrefetchReporter();
+				if (!reporter)
+						return;
+				const seconds = Number(((this._prefetchNow() - t.started) / 1000).toFixed(3));
+				const config = this._playerConfig;
+				try {
+						if (t.used) {
+								const hits = global.debug?.playlistPrefetch?.bytes?.hits?.(t.source) ?? 0;
+								reporter.hit?.(t.videoId, seconds, hits, config.getValue('playlist.prefetchAhead.notifyHit') === true);
+						}
+						else {
+								reporter.miss?.(t.videoId, seconds, config.getValue('playlist.prefetchAhead.notifyMiss') === true);
+						}
+				}
+				catch (_) { /* 計測は再生に影響させない */ }
+		}
+		_updatePrefetchMarks() {
+				const runtime = global.debug?.playlistPrefetch;
+				if (!runtime)
+						return;
+				const enabled = this._prefetchFeatureEnabled() &&
+						this._playerConfig.getValue('playlist.prefetchAhead.showMark') !== false;
+				const ids = enabled ? (this._playlistPrefetch?.readyIds?.() || []) : [];
+				const key = JSON.stringify(ids);
+				if (this._prefetchMarkSignature === key)
+						return;
+				this._prefetchMarkSignature = key;
+				runtime.markIds = ids;
+				global.emitter.emit?.('zenza-prefetch-marks', ids);
+		}
+		_updateNextPrefetch() {
+				try {
+						if (!this._prefetchFeatureEnabled()) {
+								const cache = this._playlistPrefetch;
+								this._playlistPrefetch = null;
+								cache?.reset();
+								this._updatePrefetchMarks();
+								return;
+						}
+						const runtime = global.debug?.playlistPrefetch;
+						if (!runtime?.create || !this.isOpen || !this._playlist ||
+								navigator.connection?.saveData === true || !runtime.supported() ||
+								this._state.isError || this._playerConfig.getValue('loop') === true) {
+								this._playlistPrefetch?.interrupt?.('waiting');
+								return;
+						}
+						const perSource = Math.max(1, Math.min(32, Number(this._playerConfig.getValue('playlist.prefetchAhead.window')) || 5));
+						const maxStoreBytes = Math.max(16, Math.min(512, Number(this._playerConfig.getValue('playlist.prefetchAhead.cacheMB')) || 128)) * 1048576;
+						const pacingMs = Math.max(0, Math.min(10000, Number(this._playerConfig.getValue('playlist.prefetchAhead.pacingMs')) || 0));
+						const candidates = this._collectPrefetchCandidates(perSource);
+						if (!candidates.length) {
+								this._playlistPrefetch?.interrupt?.('not-playing');
+								this._updatePrefetchMarks();
+								return;
+						}
+						const windowCount = candidates.length;
+						this._playlistPrefetch ||= runtime.create((id, signal) => this._prepareNextStartup(id, signal), (id) => {
+								this._getPrefetchReporter()?.ready(id, this._playerConfig.getValue('playlist.prefetchAhead.notifyReady') === true);
+								this._updatePrefetchMarks();
+						}, (event) => { this._getPrefetchReporter()?.schedulerEvent(event); this._updatePrefetchMarks(); });
+						const sample = runtime.sample(), currentTime = Number(sample?.currentTime) || 0;
+						let bufferEnd = currentTime;
+						const buffered = sample?.buffered;
+						if (buffered)
+								for (let i = 0; i < buffered.length; i++) {
+										if (buffered.start(i) <= currentTime + 0.05 && buffered.end(i) > currentTime) {
+												bufferEnd = buffered.end(i);
+												break;
+										}
+								}
+						this._playlistPrefetch.update({
+								settings: this._prefetchSettingsKey(), candidates,
+								currentId: this._watchId || null, enabled: true,
+								playing: this.isPlaying, seeking: !!this._state.isSeeking, waiting: !!this._state.isStalled,
+								currentTime, duration: Number(sample?.duration), bufferEnd,
+								rate: Number(sample?.rate) || 1, ended: !!sample?.ended,
+								windowCount, maxStoreBytes, pacingMs
+						});
+						this._updatePrefetchMarks();
+				}
+				catch (_) {
+						this._playlistPrefetch?.interrupt?.('waiting');
+				}
+		}
 		_onPlayerConfigUpdate(key, value) {
+				if (key === 'playlist.prefetchAhead.showMark')
+						this._updatePrefetchMarks();
+				if (typeof key === 'string' &&
+						(key === 'playlist.prefetchAhead.enabled' ||
+								key === 'videoServerType' || key === 'domandVideoQuality' ||
+								key === 'autoDisableNew' || key.startsWith('video.hls.'))) {
+						this._playlistPrefetch?.reset();
+						this._updateNextPrefetch();
+				}
 				if (['resume.recordEnabled', 'abRepeat.enabled'].includes(key) || (typeof key === 'string' && key.startsWith('bookmark.'))) {
 						this._view?.manualBookmarkDock?.refreshPreferences();
 				}
@@ -56724,6 +57050,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						this._playerConfig.setValue('loop', false);
 				}
 				this._view.blinkTab('playlist');
+				this._updateNextPrefetch();
 		}
 		_onCommentPanelStatusUpdate() {
 				let commentPanel = this._commentPanel;
@@ -57014,11 +57341,29 @@ class NicoVideoPlayerDialog extends Emitter {
 						this._onPlaylistInsert(watchId);
 						return;
 				}
+				const abandoned = this._prefetchPending?.prepared;
+				this._prefetchPending = null;
+				if (abandoned && !abandoned.adopted)
+						abandoned.dispose();
+				this._playlistPrefetch?.interrupt?.('waiting');
+				const candidate = this._prefetchFeatureEnabled() ? this._playlistPrefetch?.take(watchId) : null;
+				const prepared = candidate?.settings === this._prefetchSettingsKey() &&
+						candidate?.watchId === watchId &&
+						typeof candidate?.sessionInfo?.url === 'string' ? candidate : null;
+				if (candidate && !prepared)
+						candidate.dispose();
+				this._updatePrefetchMarks();
 				this._cancelCommentLoad();
 				this._abortCommonsTreeJob(); // Task197: switching video stops the parent/child job
 				this._outgoingAutoResumeSaveSuppress = this._isAutoResumeSaveSuppressed() ?
 						this._autoResumeSaveSuppress : undefined;
 				this._requestId = 'play-' + Math.random();
+				this._prefetchCompanions = null;
+				this._prefetchTiming = {
+						started: this._prefetchNow(), videoId: watchId, requestId: this._requestId,
+						used: false, cacheHits: 0, reported: false
+				};
+				this._prefetchPending = prepared ? { requestId: this._requestId, prepared } : null;
 				this._videoWatchOptions = options;
 				this._clearVideoTimers();
 				window.console.log('Video open requested');
@@ -57161,15 +57506,56 @@ class NicoVideoPlayerDialog extends Emitter {
 						document.createElement('video').canPlayType('application/x-mpegURL') !== '';
 				const useHLS = isHLSSupported && (isHLSRequired || !this._playerConfig.props['video.hls.enableOnlyRequired'] || serverType != 'dmc');
 				const isStale = () => this._requestId !== requestId;
-				const session = await VideoSessionWorker.create({
-						videoInfo,
-						videoQuality,
-						serverType,
-						useHLS
-				});
-				if (isStale()) {
-						Promise.resolve(session.close()).catch(() => { });
-						return;
+				const pending = this._prefetchPending?.requestId === requestId ? this._prefetchPending.prepared : null;
+				if (this._prefetchPending?.requestId === requestId)
+						this._prefetchPending = null;
+				const runtime = global.debug?.playlistPrefetch;
+				if (pending && Number.isFinite(pending.expiresAt) && pending.expiresAt <= Date.now() + 60000) {
+						try {
+								this._getPrefetchReporter()?.staleAdoption?.(pending.watchId);
+						}
+						catch (_) { /* optional diagnostics must not prevent ordinary playback */ }
+				}
+				const canAdopt = pending && this._prefetchFeatureEnabled() &&
+						serverType === 'domand' && useHLS && !this._videoFilter.isNgVideo(videoInfo) &&
+						pending.watchId === videoInfo.watchId &&
+						pending.settings === this._prefetchSettingsKey() &&
+						typeof pending.sessionInfo?.url === 'string' &&
+						typeof pending.session?.promote === 'function' &&
+						(!Number.isFinite(pending.expiresAt) || pending.expiresAt > Date.now() + 60000) &&
+						typeof runtime?.bytes?.activate === 'function';
+				let session = null, cachedSessionInfo = null;
+				if (canAdopt) {
+						try {
+								await pending.session.promote();
+								if (isStale()) {
+										pending.dispose();
+										return;
+								}
+								runtime.bytes.activate(pending.bytes);
+								pending.adopted = true;
+								this._prefetchCompanions = pending.companions ?
+										Object.assign({ watchId: pending.watchId }, pending.companions) : null;
+								if (this._prefetchTiming && this._prefetchTiming.requestId === this._requestId) {
+										this._prefetchTiming.used = true;
+										this._prefetchTiming.source = pending.sessionInfo?.url;
+								}
+								session = pending.session;
+								cachedSessionInfo = pending.sessionInfo;
+						}
+						catch (_) {
+								pending.dispose();
+						}
+				}
+				else if (pending) {
+						pending.dispose();
+				}
+				if (!session) {
+						session = await VideoSessionWorker.create({ videoInfo, videoQuality, serverType, useHLS });
+						if (isStale()) {
+								Promise.resolve(session.close()).catch(() => { });
+								return;
+						}
 				}
 				this._videoSession = session;
 				if (this._videoFilter.isNgVideo(videoInfo)) {
@@ -57182,7 +57568,7 @@ class NicoVideoPlayerDialog extends Emitter {
 										return;
 								}
 						}
-						const sessionInfo = await session.connect();
+						const sessionInfo = cachedSessionInfo || await session.connect();
 						if (isStale()) {
 								return;
 						}
@@ -57221,6 +57607,14 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		loadComment(msgInfo, loadOptions = {}) {
 				this._cancelCommentLoad();
+				const companion = this._takePrefetchComments(msgInfo, loadOptions);
+				if (companion) {
+						const heldRequestId = this._requestId;
+						return Promise.resolve().then(() => {
+								if (this._requestId === heldRequestId)
+										this._onCommentLoadSuccess(heldRequestId, companion);
+						});
+				}
 				const controller = this._commentLoadController = new AbortController();
 				const requestId = this._requestId;
 				const isCurrent = () => this._commentLoadController === controller &&
@@ -57277,6 +57671,12 @@ class NicoVideoPlayerDialog extends Emitter {
 				window.console.error('Video info load failed');
 				if (this._requestId !== requestId) {
 						return;
+				}
+				if (this._prefetchPending?.requestId === requestId) {
+						const held = this._prefetchPending.prepared;
+						this._prefetchPending = null;
+						if (held && !held.adopted)
+								held.dispose();
 				}
 				this._recordDiagnostic({
 						category: 'network', level: 'error',
@@ -57430,6 +57830,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (!this._state.isLoading) {
 						return;
 				}
+				this._reportPrefetchTiming();
 				const requestId = this._requestId;
 				const watchId = this._watchId;
 				const videoInfo = this._videoInfo;
@@ -57497,8 +57898,10 @@ class NicoVideoPlayerDialog extends Emitter {
 		_onVideoPlaying() {
 				this._state.setPlaying();
 				this.emit('playing');
+				this._updateNextPrefetch();
 		}
 		_onVideoSeeking() {
+				this._playlistPrefetch?.interrupt?.('seeking');
 				this._state.isSeeking = true;
 				this.emit('seeking');
 		}
@@ -57509,6 +57912,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.emit('seeked');
 		}
 		_onVideoPause() {
+				this._playlistPrefetch?.interrupt?.('not-playing');
 				this._state.setPausing();
 				if (this._videoInfo?.contextWatchId) {
 						this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
@@ -57516,18 +57920,26 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.emit('pause');
 		}
 		_onVideoStalled() {
+				this._playlistPrefetch?.interrupt?.('waiting');
 				this._state.isStalled = true;
 				this.emit('stalled');
 		}
 		_onVideoTimeUpdate() {
 				this._state.isStalled = false;
 				this._view?.manualBookmarkDock?.tick(this.currentTime, !this.isPlaying, !!this._state.isSeeking);
+				this._updateNextPrefetch();
 		}
 		_onVideoProgress(range, currentTime) {
 				this.emit('progress', range, currentTime);
 		}
 		async _onVideoError(e) {
 				this._state.setVideoErrorOccurred();
+				if (e?.type !== 'youtube') {
+						try {
+								global.debug?.playlistPrefetch?.bytes?.clear?.();
+						}
+						catch (_) { /* never block recovery */ }
+				}
 				if (e.type === 'youtube') {
 						return this._onYouTubeVideoError(e);
 				}
@@ -57841,6 +58253,12 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.hide();
 				this._cancelCommentLoad();
 				this._abortCommonsTreeJob(); // Task197
+				this._playlistPrefetch?.reset();
+				this._updatePrefetchMarks();
+				if (this._prefetchPending?.prepared && !this._prefetchPending.prepared.adopted) {
+						this._prefetchPending.prepared.dispose();
+				}
+				this._prefetchPending = null;
 				this._requestId = null; // Task 090（ZW-012）: 閉じた後に、読み込み中だった動画の結果を使わない
 				this._clearVideoTimers(); // Task 090（ZW-016）
 				this._refresh();
@@ -68275,7 +68693,7 @@ function createHlsStorage(Config, debounce) {
 				.catch(() => console.warn('HLS cache maintenance failed')), 10 * 1000);
 		return Storage;
 }
-function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary }) {
+function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary, Prefetch }) {
 		const window = globalThis.window;
 		const console = window.console;
 		const existing = window.customElements?.get('zenza-video');
@@ -68298,7 +68716,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 						return event;
 				};
 				let FragmentLoaderClass;
-				const createFragmentLoader = (Hls) => {
+				const createFragmentLoader = (Hls, prefetchActive = false) => {
 						const frag2hash = (fragment) => {
 								const url = fragment.url;
 								const levels = FragmentLoaderClass && FragmentLoaderClass.levels;
@@ -68374,7 +68792,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 						// @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#loader
 						let lastFragLoadingTime = 0;
 						let BLOCK_INTERVAL = 3000;
-						class FragmentLoader extends Hls.DefaultConfig.loader {
+						class FragmentLoader extends (prefetchActive && Prefetch ? Prefetch.wrapLoader(Hls.DefaultConfig.loader) : Hls.DefaultConfig.loader) {
 								constructor(config) {
 										super(config);
 										this._config = config;
@@ -69058,9 +69476,12 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 										return null;
 								}
 								if (!this._hls) {
-										this._fragmentLoader = createFragmentLoader(Hls);
+										const prefetchRuntime = typeof Prefetch === 'undefined' ? undefined : Prefetch;
+										const startupLevel = prefetchRuntime?.startLevel?.(src);
+										const prefetchActive = typeof startupLevel === 'number' && Number.isFinite(startupLevel);
+										this._fragmentLoader = createFragmentLoader(Hls, prefetchActive);
 										this._hlsConfig.fLoader = this._fragmentLoader;
-										const hls = new Hls(Object.assign({}, this._hlsConfig, externalTrial ? {loader:externalTrial.gm.Loader,fLoader:externalTrial.gm.Loader,pLoader:externalTrial.gm.Loader} : {}));
+										const hls = new Hls(Object.assign({}, this._hlsConfig, prefetchActive ? { loader: prefetchRuntime.wrapLoader(Hls.DefaultConfig.loader), startLevel: startupLevel } : {}, externalTrial ? {loader:externalTrial.gm.Loader,fLoader:externalTrial.gm.Loader,pLoader:externalTrial.gm.Loader} : {}));
 										this._hls = hls;
 										let lifetime = { phase: 'active', engine: hls };
 										const owned = (listener) => (...args) => {
@@ -69655,6 +70076,842 @@ function defineHlsDebugElements(_config, { Storage, HTMLDialogElement }) {
 		window.customElements.define('video-debug-dialog', VideoDebugDialog);
 		return VideoDebugDialog;
 }
+const MIN_PLAYED_SECONDS = 3;
+const MIN_AHEAD_TO_START = 15;
+const PREPARE_TIMEOUT_MS = 20000;
+const SESSION_EXPIRY_MARGIN_MS = 60 * 1000;
+const DEFAULT_HOLD_MS = 30 * 60 * 1000;
+const MAX_FAILURES = 2;
+const RETRY_DELAY_MS = 3000;
+const RETRY_JITTER_MS = 3000;
+const HARD_MAX_WINDOW = 96;
+const MAX_FAILURE_ENTRIES = 64;
+class PlaylistPreloader {
+		settings = '';
+		ready = new Map();
+		failures = new Map();
+		controller = null;
+		inflightId = '';
+		busy = false;
+		nextAllowedAt = 0;
+		timer;
+		prepare;
+		now;
+		onReady;
+		onEvent;
+		sizeOf;
+		expiresOf;
+		random;
+		timeoutMs;
+		constructor(prepare, now = () => Date.now(), onReady, onEvent, sizeOf, expiresOf, random, timeoutMs = PREPARE_TIMEOUT_MS) {
+				this.prepare = prepare;
+				this.now = now;
+				this.onReady = onReady;
+				this.onEvent = onEvent;
+				this.sizeOf = sizeOf ?? (() => 0);
+				this.expiresOf = expiresOf ?? (() => undefined);
+				this.random = random ?? Math.random;
+				this.timeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : PREPARE_TIMEOUT_MS;
+		}
+		emit(event) {
+				try {
+						this.onEvent?.(event);
+				}
+				catch (_) { /* ignore */ }
+		}
+		deadlineFor(value, at) {
+				const sessionExpiry = this.expiresOf(value);
+				return typeof sessionExpiry === 'number' && Number.isFinite(sessionExpiry) ?
+						sessionExpiry - SESSION_EXPIRY_MARGIN_MS : at + DEFAULT_HOLD_MS;
+		}
+		abortPending() {
+				const oldController = this.controller;
+				const oldTimer = this.timer;
+				this.controller = null;
+				this.busy = false;
+				this.inflightId = '';
+				this.timer = undefined;
+				clearTimeout(oldTimer);
+				oldController?.abort();
+		}
+		interrupt(reason) {
+				if (!this.controller)
+						return;
+				const id = this.inflightId;
+				this.abortPending();
+				this.emit({ type: 'paused', id, reason });
+		}
+		cancel() {
+				this.abortPending();
+				for (const entry of this.ready.values())
+						entry.value.dispose();
+				this.ready.clear();
+		}
+		reset() {
+				this.cancel();
+				this.settings = '';
+				this.failures.clear();
+		}
+		totalBytes() {
+				let total = 0;
+				for (const entry of this.ready.values())
+						total += entry.bytes;
+				return total;
+		}
+		readyIds() {
+				return [...this.ready.keys()];
+		}
+		expireStale() {
+				for (const [id, entry] of this.ready) {
+						if (this.now() >= entry.deadline) {
+								this.ready.delete(id);
+								entry.value.dispose();
+								this.failures.delete(id);
+								this.emit({ type: 'expired', id });
+						}
+				}
+		}
+		enforceBudget(maxStoreBytes) {
+				if (!(maxStoreBytes > 0))
+						return;
+				while (this.ready.size > 1 && this.totalBytes() > maxStoreBytes) {
+						const oldest = this.ready.keys().next().value;
+						const entry = this.ready.get(oldest);
+						this.ready.delete(oldest);
+						entry?.value.dispose();
+						this.emit({ type: 'evicted', id: oldest });
+				}
+		}
+		update(s) {
+				if (!s.enabled) {
+						this.reset();
+						return;
+				}
+				if (s.settings !== this.settings) {
+						this.cancel();
+						this.failures.clear();
+						this.settings = s.settings;
+				}
+				this.expireStale();
+				this.enforceBudget(s.maxStoreBytes);
+				if (this.failures.size > MAX_FAILURE_ENTRIES) {
+						const oldest = this.failures.keys().next().value;
+						this.failures.delete(oldest);
+				}
+				const windowCount = Math.max(1, Math.min(HARD_MAX_WINDOW, Math.floor(s.windowCount) || 1));
+				const windowIds = [];
+				for (const id of s.candidates) {
+						if (!id || id === s.currentId || windowIds.includes(id))
+								continue;
+						windowIds.push(id);
+						if (windowIds.length >= windowCount)
+								break;
+				}
+				if (this.controller && !windowIds.includes(this.inflightId))
+						this.abortPending();
+				if (!windowIds.length)
+						return;
+				const rate = Math.max(0.25, s.rate || 1);
+				const ahead = Math.max(0, s.bufferEnd - s.currentTime) / rate;
+				const endBuffered = Number.isFinite(s.duration) && s.duration > 0 && s.bufferEnd >= s.duration - 0.15;
+				if (s.ended && !s.seeking && !s.waiting)
+						return;
+				const pause = !s.playing ? 'not-playing' : s.seeking ? 'seeking' : s.waiting ? 'waiting' :
+						(!endBuffered && ahead < MIN_AHEAD_TO_START) ? 'low-buffer' : null;
+				if (pause) {
+						this.interrupt(pause);
+						return;
+				}
+				if (this.busy || !(s.currentTime >= MIN_PLAYED_SECONDS))
+						return;
+				const pacingMs = Number.isFinite(s.pacingMs) && s.pacingMs > 0 ? s.pacingMs : 0;
+				if (pacingMs > 0 && this.now() < this.nextAllowedAt)
+						return;
+				let target = '';
+				for (const id of windowIds) {
+						if (this.ready.has(id))
+								continue;
+						const failure = this.failures.get(id);
+						if (failure && (failure.count >= MAX_FAILURES || this.now() < failure.retryAt))
+								continue;
+						target = id;
+						break;
+				}
+				if (!target)
+						return;
+				this.busy = true;
+				this.inflightId = target;
+				const controller = this.controller = new AbortController();
+				const settings = this.settings;
+				const attempt = (this.failures.get(target)?.count ?? 0) + 1;
+				this.emit({ type: 'start', id: target, attempt });
+				this.timer = setTimeout(() => {
+						if (this.controller !== controller)
+								return;
+						const count = (this.failures.get(target)?.count ?? 0) + 1;
+						this.failures.set(target, { count, retryAt: this.now() + RETRY_DELAY_MS + this.random() * RETRY_JITTER_MS });
+						this.abortPending();
+						this.emit({ type: 'timeout', id: target });
+				}, this.timeoutMs);
+				const current = () => !controller.signal.aborted && this.controller === controller && settings === this.settings;
+				void this.prepare(target, controller.signal).then(value => {
+						if (!current()) {
+								value.dispose();
+								return;
+						}
+						const at = this.now();
+						this.ready.set(target, { value, at, bytes: this.sizeOf(value), deadline: this.deadlineFor(value, at) });
+						this.failures.delete(target);
+						this.enforceBudget(s.maxStoreBytes);
+						this.emit({ type: 'ready', id: target });
+						try {
+								this.onReady?.(target, value);
+						}
+						catch (_) { /* ignore */ }
+				}, (error) => {
+						if (!current())
+								return;
+						const count = (this.failures.get(target)?.count ?? 0) + 1;
+						const willRetry = count < MAX_FAILURES;
+						this.failures.set(target, { count, retryAt: this.now() + RETRY_DELAY_MS + this.random() * RETRY_JITTER_MS });
+						this.emit({ type: 'failed', id: target, attempt, willRetry, error });
+				}).finally(() => {
+						if (this.controller !== controller)
+								return;
+						this.busy = false;
+						this.nextAllowedAt = pacingMs > 0 ? this.now() + pacingMs + this.random() * pacingMs : 0;
+						clearTimeout(this.timer);
+						this.timer = undefined;
+						this.controller = null;
+						this.inflightId = '';
+				});
+		}
+		take(id) {
+				const entry = this.ready.get(id);
+				if (!entry) {
+						this.emit({ type: 'take-miss', id, reason: 'none' });
+						return null;
+				}
+				this.ready.delete(id);
+				if (this.now() >= entry.deadline) {
+						entry.value.dispose();
+						this.emit({ type: 'take-miss', id, reason: 'expired' });
+						return null;
+				}
+				return entry.value;
+		}
+}
+class PrefetchError extends Error {
+		detail;
+		constructor(detail) {
+				super('prefetch ' + detail.reason);
+				this.name = 'PrefetchError';
+				this.detail = detail;
+		}
+}
+const MAX_PREFETCH_BYTES = 16 * 1024 * 1024;
+const MAX_TEXT_BYTES = 256 * 1024;
+const MAX_REQUESTS = 12;
+const BANDWIDTH_FACTOR = 0.8;
+const DOMAND_HOSTS = new Set(['delivery.domand.nicovideo.jp', 'asset.domand.nicovideo.jp']);
+const isAllowedPrefetchUrl = (u, sourceHost) => u.protocol === 'https:' && !u.port && !u.username && !u.password &&
+		DOMAND_HOSTS.has(sourceHost) && DOMAND_HOSTS.has(u.hostname);
+const parseAttributes = (line) => {
+		const out = {};
+		for (const m of line.matchAll(/([A-Z0-9-]+)=("[^"]*"|[^,]*)/g)) {
+				const key = m[1], value = m[2];
+				if (key !== undefined && value !== undefined)
+						out[key] = value.replace(/^"|"$/g, '');
+		}
+		return out;
+};
+const chooseStartVariant = (variants, startLevel, bandwidthEstimate) => {
+		const sorted = variants.slice().sort((a, b) => a.bandwidth - b.bandwidth || a.index - b.index);
+		if (!sorted.length)
+				return null;
+		let level = 0;
+		if (typeof startLevel === 'number' && Number.isFinite(startLevel) && startLevel >= 0) {
+				level = Math.min(Math.round(startLevel), sorted.length - 1);
+		}
+		else if (typeof bandwidthEstimate === 'number' && bandwidthEstimate > 0) {
+				const budget = bandwidthEstimate * BANDWIDTH_FACTOR;
+				for (let i = 0; i < sorted.length; i++) {
+						const v = sorted[i];
+						if (v && Number.isFinite(v.bandwidth) && v.bandwidth <= budget)
+								level = i;
+				}
+		}
+		const variant = sorted[level];
+		return variant ? { variant, level } : null;
+};
+const HlsPrefetch = (() => {
+		let active = null;
+		let expires;
+		const clear = () => {
+				active?.dispose();
+				active = null;
+				clearTimeout(expires);
+				expires = undefined;
+		};
+		const prepare = async (source, signal, options = {}) => {
+				const fetcher = options.fetcher ?? ((url, init) => fetch(url, init));
+				const now = options.now ?? (() => performance.now());
+				const maxBytes = options.maxBytes ?? MAX_PREFETCH_BYTES;
+				const sourceHost = new URL(source).hostname;
+				const entries = new Map();
+				const stages = [];
+				let bytes = 0, requests = 0, stage = 'master';
+				const fail = (reason, extra = {}) => new PrefetchError({ stage, reason, ...extra });
+				const check = () => { if (signal.aborted)
+						throw new Error('prefetch canceled'); };
+				const resolve = (uri, base) => {
+						let u;
+						try {
+								u = new URL(uri, base);
+						}
+						catch (_) {
+								throw fail('invalid URL');
+						}
+						if (!isAllowedPrefetchUrl(u, sourceHost))
+								throw fail('unsupported URL', { host: u.hostname });
+						return u.href;
+				};
+				const get = async (url, text, aliases = []) => {
+						check();
+						const prior = entries.get(url);
+						if (prior)
+								return prior.data;
+						if (++requests > MAX_REQUESTS)
+								throw fail('request limit');
+						const target = resolve(url, source);
+						const host = new URL(target).hostname;
+						const begin = now();
+						let response;
+						try {
+								response = await fetcher(target, { credentials: 'include', signal, cache: 'no-store', priority: 'low', redirect: 'error' });
+						}
+						catch (error) {
+								check();
+								throw fail('network error', { host, message: String(error?.message ?? error) });
+						}
+						check();
+						if (response.url)
+								resolve(response.url, source);
+						if (!response.ok || response.status === 206) {
+								void response.body?.cancel().catch(() => { });
+								throw fail('HTTP error', { host, status: response.status });
+						}
+						const limit = text ? MAX_TEXT_BYTES : maxBytes - bytes;
+						const length = Number(response.headers.get('content-length'));
+						if (length > limit) {
+								void response.body?.cancel().catch(() => { });
+								throw fail('size limit', { host, bytes: length });
+						}
+						if (!response.body)
+								throw fail('streaming unavailable', { host });
+						const reader = response.body.getReader();
+						const chunks = [];
+						let size = 0;
+						const abort = () => { void reader.cancel().catch(() => { }); };
+						signal.addEventListener('abort', abort, { once: true });
+						try {
+								for (;;) {
+										check();
+										const part = await reader.read();
+										check();
+										if (part.done)
+												break;
+										size += part.value.byteLength;
+										if (size > limit || bytes + size > maxBytes) {
+												await reader.cancel().catch(() => { });
+												throw fail('size limit', { host, bytes: size });
+										}
+										chunks.push(part.value);
+								}
+						}
+						finally {
+								signal.removeEventListener('abort', abort);
+								try {
+										reader.releaseLock();
+								}
+								catch (_) { /* already released */ }
+						}
+						const data = new Uint8Array(size);
+						let offset = 0;
+						for (const chunk of chunks) {
+								data.set(chunk, offset);
+								offset += chunk.byteLength;
+						}
+						bytes += size;
+						const entry = { data: data.buffer, url: response.url || target, elapsed: Math.max(1, now() - begin) };
+						for (const key of new Set([url, target, ...aliases]))
+								entries.set(key, entry);
+						stages.push(stage);
+						return entry.data;
+				};
+				const getText = async (url) => new TextDecoder().decode(await get(url, true));
+				const media = async (url, kind) => {
+						stage = `${kind}-playlist`;
+						const text = await getText(url);
+						if (!text.startsWith('#EXTM3U') || !text.includes('#EXT-X-ENDLIST') || /#EXT-X-(?:BYTERANGE|PART|SESSION-KEY)/.test(text))
+								throw fail('unsupported media playlist');
+						let map = null;
+						let key = null;
+						let segment = null;
+						for (const raw of text.split(/\r?\n/)) {
+								const line = raw.trim();
+								if (line.startsWith('#EXT-X-MAP:')) {
+										const a = parseAttributes(line);
+										if (a.BYTERANGE || !a.URI)
+												throw fail('unsupported init range');
+										map = { href: resolve(a.URI, url), raw: a.URI };
+								}
+								else if (line.startsWith('#EXT-X-KEY:')) {
+										const a = parseAttributes(line);
+										if (a.METHOD === 'NONE') {
+												key = null;
+												continue;
+										}
+										if (a.METHOD !== 'AES-128' || !a.URI || (a.KEYFORMAT && a.KEYFORMAT !== 'identity'))
+												throw fail('unsupported encryption');
+										key = { href: resolve(a.URI, url), raw: a.URI };
+								}
+								else if (line && !line.startsWith('#')) {
+										segment = { href: resolve(line, url), raw: line };
+										break;
+								}
+						}
+						if (!segment)
+								throw fail('missing startup segment');
+						const alias = (r) => /^https:\/\//i.test(r.raw) ? [r.raw] : [];
+						if (key) {
+								stage = `${kind}-key`;
+								await get(key.href, false, alias(key));
+						}
+						if (map) {
+								stage = `${kind}-init`;
+								await get(map.href, false, alias(map));
+						}
+						stage = `${kind}-segment`;
+						await get(segment.href, false, alias(segment));
+				};
+				try {
+						stage = 'master';
+						const master = await getText(source);
+						if (!master.startsWith('#EXTM3U'))
+								throw fail('invalid playlist');
+						if (master.includes('#EXT-X-SESSION-KEY'))
+								throw fail('unsupported session key');
+						const lines = master.split(/\r?\n/).map(s => s.trim());
+						const variants = [];
+						const audio = [];
+						for (let i = 0; i < lines.length; i++) {
+								const line = lines[i] ?? '';
+								if (line.startsWith('#EXT-X-MEDIA:'))
+										audio.push(parseAttributes(line));
+								if (line.startsWith('#EXT-X-STREAM-INF:')) {
+										const a = parseAttributes(line), uri = lines[i + 1];
+										if (!uri || uri.startsWith('#'))
+												throw fail('invalid variant');
+										const v = { uri: resolve(uri, source), bandwidth: Number(a.BANDWIDTH) || Infinity, index: variants.length };
+										if (a.AUDIO)
+												v.audio = a.AUDIO;
+										variants.push(v);
+								}
+						}
+						let startLevel = 0;
+						if (!variants.length) {
+								await media(source, 'media');
+						}
+						else {
+								const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate);
+								if (!choice)
+										throw fail('invalid variant');
+								startLevel = choice.level;
+								const chosen = choice.variant;
+								if (chosen.audio) {
+										const tracks = audio.filter(a => a.TYPE === 'AUDIO' && a['GROUP-ID'] === chosen.audio);
+										const track = tracks.find(a => a.DEFAULT === 'YES') ?? tracks[0];
+										if (!track)
+												throw fail('missing audio group');
+										if (track.URI)
+												await media(resolve(track.URI, source), 'audio');
+								}
+								await media(chosen.uri, 'video');
+						}
+						check();
+						return { source, entries, bytes, startLevel, stages, hits: 0, dispose() { entries.clear(); } };
+				}
+				catch (error) {
+						entries.clear();
+						throw error;
+				}
+		};
+		const wrapLoader = (Base) => {
+				const Wrapped = class StartupLoader extends Base {
+						cached = false;
+						canceled = false;
+						load(context, config, callbacks) {
+								const hit = !context.rangeStart && !context.rangeEnd ? active?.entries.get(context.url) : undefined;
+								if (!hit) {
+										super.load(context, config, callbacks);
+										return;
+								}
+								this.cached = true;
+								if (active)
+										active.hits++;
+								this.context = context;
+								const data = context.responseType === 'arraybuffer' ? hit.data.slice(0) : new TextDecoder().decode(hit.data);
+								const t = performance.now();
+								Object.assign(this.stats, { aborted: false, loaded: hit.data.byteLength, total: hit.data.byteLength, retry: 0,
+										bwEstimate: hit.data.byteLength * 8000 / hit.elapsed });
+								Object.assign(this.stats.loading, { start: t - hit.elapsed, first: t - hit.elapsed, end: t });
+								queueMicrotask(() => {
+										if (this.canceled)
+												return;
+										callbacks.onSuccess({ url: hit.url, data, code: 200 }, this.stats, context, null);
+								});
+						}
+						abort() { this.canceled = true; if (this.cached)
+								this.stats.aborted = true; super.abort(); }
+						destroy() { this.canceled = true; super.destroy(); }
+				};
+				return Wrapped;
+		};
+		return {
+				prepare, wrapLoader, clear,
+				activate(value) { clear(); active = value; expires = setTimeout(clear, 45000); },
+				startLevel(source) { return active?.source === source ? active.startLevel : undefined; },
+				hits(source) { return active?.source === source ? active.hits : 0; }
+		};
+})();
+const sessionExpiresAt = (sessionInfo) => {
+		const info = sessionInfo;
+		const raw = info?.lastResponse?.data?.expireTime;
+		if (typeof raw !== 'string' && typeof raw !== 'number')
+				return undefined;
+		const t = typeof raw === 'number' ? raw : Date.parse(raw);
+		return Number.isFinite(t) && t > 0 ? t : undefined;
+};
+class PrepareFailure extends Error {
+		stage;
+		cause;
+		constructor(stage, message, cause) {
+				super(message);
+				this.name = 'PrepareFailure';
+				this.stage = stage;
+				this.cause = cause;
+		}
+}
+const describeError = (error) => {
+		const seen = new WeakSet();
+		const sanitize = (value, limit = 300) => String(value ?? '').replace(/https?:\/\/[^\s"']+/gi, (value) => {
+				try {
+						const url = new URL(value);
+						return url.origin + url.pathname.replace(/[^/]{24,}/g, '…');
+				}
+				catch (_) {
+						return '[url]';
+				}
+		}).slice(0, limit);
+		const summarize = (value, depth) => {
+				if (value !== null && typeof value === 'object') {
+						if (seen.has(value) || depth > 3)
+								return { name: 'Error', message: 'nested error omitted' };
+						seen.add(value);
+				}
+				const e = value;
+				const safeName = typeof e?.name === 'string' && /^[a-z0-9_-]{1,80}$/i.test(e.name) ? e.name : 'Error';
+				const out = { name: safeName, message: sanitize(e?.message ?? value) };
+				if (typeof e?.stage === 'string' && /^[a-z][a-z0-9-]{0,60}$/i.test(e.stage))
+						out.stage = e.stage;
+				if (e?.detail !== null && typeof e?.detail === 'object' && !Array.isArray(e.detail)) {
+						const raw = e.detail;
+						const detail = {};
+						if (typeof raw.stage === 'string' && /^[a-z][a-z0-9-]{0,60}$/i.test(raw.stage))
+								detail.stage = raw.stage;
+						if (typeof raw.reason === 'string')
+								detail.reason = sanitize(raw.reason, 100);
+						if (typeof raw.host === 'string' && /^[a-z0-9.-]{1,120}$/i.test(raw.host))
+								detail.host = raw.host;
+						if (typeof raw.status === 'number' && Number.isInteger(raw.status) && raw.status >= 100 && raw.status <= 599)
+								detail.status = raw.status;
+						if (typeof raw.bytes === 'number' && Number.isFinite(raw.bytes) && raw.bytes >= 0)
+								detail.bytes = raw.bytes;
+						if (typeof raw.message === 'string')
+								detail.message = sanitize(raw.message);
+						if (Object.keys(detail).length)
+								out.detail = detail;
+				}
+				if (e?.cause && depth < 3)
+						out.cause = summarize(e.cause, depth + 1);
+				return out;
+		};
+		return summarize(error, 0);
+};
+const createPlaylistStartupPreparer = (deps) => {
+		const now = deps.now ?? (() => performance.now());
+		return async (watchId, signal) => {
+				const settings = deps.settingsKey();
+				const started = now();
+				let stage = 'metadata';
+				const seconds = () => Number(((now() - started) / 1000).toFixed(3));
+				const report = (event, extra = {}) => {
+						try {
+								deps.log?.(event, { videoId: watchId, stage, seconds: seconds(), ...extra });
+						}
+						catch (_) { /* ignore */ }
+				};
+				const check = () => { if (signal.aborted)
+						throw new Error('Prefetch canceled'); };
+				report('start');
+				try {
+						check();
+						const data = await deps.loadVideoInfo(watchId, signal);
+						check();
+						stage = 'eligibility';
+						const info = deps.createModel(data);
+						const serverType = deps.getConfig('videoServerType');
+						const autoDisableNew = !!deps.getConfig('autoDisableNew');
+						if (!info.isDomandAvailable)
+								throw new PrepareFailure(stage, 'domand unavailable');
+						if (deps.isNgVideo(info))
+								throw new PrepareFailure(stage, 'ng video');
+						if (!info.isDomandOnly && (serverType === 'dmc' || (autoDisableNew && info.maybeBetterQualityServerType === 'dmc')))
+								throw new PrepareFailure(stage, 'dmc preferred');
+						stage = 'session';
+						const session = await deps.createSession(info, deps.getConfig('domandVideoQuality'));
+						let closed = false;
+						let bytes = null;
+						const close = () => {
+								if (!closed) {
+										closed = true;
+										void Promise.resolve().then(() => session.close()).catch(() => { });
+								}
+								bytes?.dispose();
+						};
+						const abort = () => close();
+						signal.addEventListener('abort', abort, { once: true });
+						try {
+								check();
+								stage = 'connect';
+								const sessionInfo = await session.connect();
+								check();
+								stage = 'startup-media';
+								bytes = await deps.prepareBytes(sessionInfo.url, signal);
+								check();
+								const preparedBytes = bytes;
+								let companions = null;
+								if (deps.prepareCompanions) {
+										try {
+												companions = await deps.prepareCompanions(info, signal);
+										}
+										catch (error) {
+												check();
+												report('companions-failed', { error: describeError(error) });
+										}
+								}
+								check();
+								const expiresAt = sessionExpiresAt(sessionInfo);
+								const expiresInSec = typeof expiresAt === 'number' ? Math.round((expiresAt - Date.now()) / 1000) : -1;
+								report('prepared', { bytes: preparedBytes.bytes, startLevel: preparedBytes.startLevel, stages: preparedBytes.stages,
+										companions: companions ? Object.keys(companions).join(',') : '', expiresInSec });
+								const prepared = { watchId, data, session, sessionInfo, bytes: preparedBytes, settings,
+										expiresAt, companions, adopted: false,
+										dispose() { if (!this.adopted)
+												close(); } };
+								return prepared;
+						}
+						catch (error) {
+								close();
+								throw error;
+						}
+						finally {
+								signal.removeEventListener('abort', abort);
+						}
+				}
+				catch (error) {
+						report(signal.aborted ? 'canceled' : 'failed', signal.aborted ? {} : { error: describeError(error) });
+						throw error;
+				}
+		};
+};
+const codeValue = (value) => {
+		if (typeof value !== 'string')
+				return undefined;
+		const normalized = value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+		return normalized || undefined;
+};
+const errorDetail = (described) => (described.detail && typeof described.detail === 'object' ? described.detail : described);
+const describeFailure = (described) => {
+		const d = errorDetail(described);
+		const parts = [];
+		if (typeof d.stage === 'string')
+				parts.push(d.stage);
+		const reason = typeof d.reason === 'string' ? d.reason : typeof described.message === 'string' ? described.message : '';
+		if (reason)
+				parts.push(typeof d.status === 'number' ? `${reason} ${d.status}` : reason);
+		if (typeof d.host === 'string')
+				parts.push(d.host);
+		return parts.join(' / ') || '原因不明';
+};
+const createPrefetchReporter = (deps) => {
+		const log = (name, payload) => {
+				try {
+						if (deps.diagnostics())
+								deps.console(name, payload);
+				}
+				catch (_) { /* 診断は再生に影響させない */ }
+		};
+		const mode = () => {
+				try {
+						const value = deps.notifyMode();
+						return value === 'off' || value === 'popup' ? value : 'journal';
+				}
+				catch (_) {
+						return 'journal';
+				}
+		};
+		const record = (entry) => {
+				if (mode() === 'off')
+						return;
+				try {
+						deps.record(entry);
+				}
+				catch (_) { /* 記録失敗は無視する */ }
+		};
+		const notifiedFinalFailure = new Set();
+		const failureDetails = (described, attempt, willRetry) => {
+				const d = errorDetail(described);
+				const details = { operation: 'playlist', event: 'prefetch-failed', retryScheduled: willRetry };
+				const phase = codeValue(d.stage);
+				if (phase)
+						details.phase = phase;
+				const kind = codeValue(d.reason);
+				if (kind)
+						details.kind = kind;
+				if (typeof d.status === 'number')
+						details.httpStatus = d.status;
+				if (typeof attempt === 'number')
+						details.attempt = attempt;
+				const errorName = codeValue(described.name);
+				if (errorName)
+						details.errorName = errorName;
+				return details;
+		};
+		return {
+				prepareLog(event, payload) {
+						log('ZENZA_PREFETCH_PREPARE', { event, ...payload });
+						if (event !== 'prepared')
+								return;
+						const videoId = String(payload.videoId ?? '');
+						const bytes = typeof payload.bytes === 'number' ? payload.bytes : 0;
+						const seconds = typeof payload.seconds === 'number' ? payload.seconds : 0;
+						const details = { operation: 'playlist', event: 'prefetch-ready' };
+						if (bytes > 0)
+								details.count = bytes;
+						if (seconds > 0)
+								details.elapsedMs = Math.round(seconds * 1000);
+						const expiresInSec = typeof payload.expiresInSec === 'number' && Number.isFinite(payload.expiresInSec) ? payload.expiresInSec : -1;
+						const expiryText = expiresInSec >= 0 ? `・有効期限あと${Math.round(expiresInSec / 60)}分` : '・有効期限不明';
+						record({ category: 'player', level: 'info', videoId, source: 'prefetch', details,
+								message: `次の動画の先頭部分を先読みしました（${videoId}${bytes ? '・' + (bytes / 1024 / 1024).toFixed(1) + 'MB' : ''}${expiryText}）` });
+				},
+				schedulerEvent(event) {
+						if (event.type !== 'ready') {
+								const payload = { event: event.type, videoId: event.id };
+								if (event.reason !== undefined)
+										payload.reason = event.reason;
+								if (event.readyId !== undefined)
+										payload.readyId = event.readyId;
+								if (event.attempt !== undefined)
+										payload.attempt = event.attempt;
+								if (event.willRetry !== undefined)
+										payload.willRetry = event.willRetry;
+								if (event.error !== undefined)
+										payload.error = deps.describe(event.error);
+								log('ZENZA_PREFETCH_EVENT', payload);
+						}
+						if (event.type === 'timeout') {
+								record({ category: 'player', level: 'warning', videoId: event.id, source: 'prefetch',
+										message: `次の動画の先読みが時間内に終わりませんでした（${event.id}）。通常の読み込みで再生します`,
+										details: { operation: 'playlist', event: 'prefetch-timeout' } });
+								return;
+						}
+						if (event.type !== 'failed')
+								return;
+						const described = deps.describe(event.error);
+						const failure = describeFailure(described);
+						const willRetry = event.willRetry === true;
+						record({ category: 'player', level: willRetry ? 'warning' : 'error', videoId: event.id, source: 'prefetch',
+								message: willRetry ?
+										`次の動画の先読みに失敗しました（${event.id}・${failure}）。少し待って再試行します` :
+										`次の動画の先読みに失敗しました（${event.id}・${failure}）。通常の読み込みで再生します`,
+								details: failureDetails(described, event.attempt, willRetry) });
+						if (!willRetry && mode() === 'popup' && !notifiedFinalFailure.has(event.id)) {
+								notifiedFinalFailure.add(event.id);
+								if (notifiedFinalFailure.size > 32)
+										notifiedFinalFailure.delete(notifiedFinalFailure.values().next().value);
+								try {
+										deps.warning(`次の動画の先読みに失敗しました（${event.id}）。通常の読み込みで再生します`);
+								}
+								catch (_) { /* 通知失敗は無視する */ }
+						}
+				},
+				ready(videoId, popup = false) {
+						log('ZENZA_PREFETCH_READY', { videoId, event: 'startup-ready' });
+						if (!(popup || deps.diagnostics()) || mode() === 'off')
+								return;
+						try {
+								deps.notify(`次の動画の先読みが完了しました（${videoId}）`);
+						}
+						catch (_) { /* 通知失敗は再生に影響させない */ }
+				},
+				hit(videoId, seconds, cacheHits, popup) {
+						const shown = Number.isFinite(seconds) && seconds > 0 ? seconds.toFixed(2) : '?';
+						const text = cacheHits > 0 ?
+								`先読みが効きました（${shown}秒で再生開始）` :
+								`先読み（準備のみ）で再生しました（${shown}秒で再生開始）`;
+						const details = { operation: 'playlist', event: 'prefetch-hit' };
+						if (Number.isFinite(seconds) && seconds > 0)
+								details.elapsedMs = Math.round(seconds * 1000);
+						if (cacheHits > 0)
+								details.count = cacheHits;
+						record({ category: 'player', level: 'info', videoId, source: 'prefetch', details,
+								message: `${text}（${videoId}）` });
+						if (!popup || mode() === 'off')
+								return;
+						try {
+								deps.notify(text);
+						}
+						catch (_) { /* 通知失敗は再生に影響させない */ }
+				},
+				miss(videoId, seconds, popup) {
+						const shown = Number.isFinite(seconds) && seconds > 0 ? seconds.toFixed(2) : '?';
+						const text = `先読みなしで再生しました（${shown}秒で再生開始）`;
+						const details = { operation: 'playlist', event: 'prefetch-miss' };
+						if (Number.isFinite(seconds) && seconds > 0)
+								details.elapsedMs = Math.round(seconds * 1000);
+						record({ category: 'player', level: 'info', videoId, source: 'prefetch', details,
+								message: `${text}（${videoId}）` });
+						if (!popup || mode() === 'off')
+								return;
+						try {
+								deps.notify(text);
+						}
+						catch (_) { /* 通知失敗は再生に影響させない */ }
+				},
+				staleAdoption(videoId) {
+						log('ZENZA_PREFETCH_EVENT', { event: 'stale-adoption', videoId });
+						record({ category: 'player', level: 'warning', videoId, source: 'prefetch',
+								message: `先読みデータの期限が近いか切れているため、通常の読み込みで再生します（${videoId}）`,
+								details: { operation: 'playlist', event: 'prefetch-stale' } });
+				},
+				timing(payload) {
+						log('ZENZA_PREFETCH_TIMING', payload);
+				}
+		};
+};
 const HlsRuntime = {
 		install(ZenzaWatch, dependencies) {
 				const window = globalThis.window, console = window.console;
@@ -69671,7 +70928,8 @@ const HlsRuntime = {
 						let primaryVideo;
 						const library = HlsLibrary.load();
 						const Storage = createHlsStorage(Config, debounce);
-						createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL: HlsLibrary.url, loadLibrary: () => HlsLibrary.load() });
+						const optionalPrefetch = typeof HlsPrefetch === 'undefined' ? undefined : HlsPrefetch;
+						createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL: HlsLibrary.url, loadLibrary: () => HlsLibrary.load(), Prefetch: optionalPrefetch });
 						await library.catch(() => { console.warn('HLS library unavailable; checking native playback'); });
 						const initDebug = ({ hlsConfig, html, render, ZenzaWatch }) => {
 								ZenzaWatch.emitter.promise('videoControBar.addonMenuReady').then(({ container }) => {
@@ -69798,6 +71056,24 @@ const HlsRuntime = {
 										video.setAttribute('use-native-hls', externalTrial ? 'no' : nativeHlsPreference(Config.get('use_native_hls')));
 										return video;
 								};
+								if (optionalPrefetch && typeof PlaylistPreloader !== 'undefined' &&
+										typeof createPlaylistStartupPreparer !== 'undefined' &&
+										typeof createPrefetchReporter !== 'undefined' && typeof describeError !== 'undefined') {
+										ZenzaWatch.debug.playlistPrefetch = {
+												trialDiagnostics: false,
+												createPreparer: createPlaylistStartupPreparer,
+												createReporter: createPrefetchReporter,
+												describeError,
+												create: (prepare, onReady, onEvent) => new PlaylistPreloader(prepare, undefined, onReady, onEvent, (value) => value?.bytes?.bytes || 0, (value) => value?.expiresAt),
+												bytes: Object.assign({}, HlsPrefetch, { prepare: (source, signal) => HlsPrefetch.prepare(source, signal, {
+																startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate'))
+														}) }),
+												supported: () => window.location.hostname === 'www.nicovideo.jp' && primaryVideo?.playerMode === 'HLS-JS',
+												sample: () => ({ currentTime: primaryVideo?.currentTime, duration: primaryVideo?.duration,
+														buffered: primaryVideo?.buffered, rate: primaryVideo?.playbackRate,
+														seeking: primaryVideo?.seeking, ended: primaryVideo?.ended })
+										};
+								}
 								window.ZenzaHLS = {
 										createVideoElement
 								};
@@ -72106,6 +73382,68 @@ class ModernAdvancedSettingsModel {
 								['continueNextPage', '再生中の動画をページ移動後も再開'],
 								['enableAdDecoration', 'プレイリストで動画の装飾枠を表示']
 						]),
+						...group('プレイリスト・検索', '動画の先読み', [
+								['playlist.prefetchAhead.enabled', '動画を先読みする', {
+												description: '検証中の機能（初期値OFF）。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間は先読みしません。失敗・期限切れ時は通常どおり読み込みます。'
+										}],
+								['playlist.prefetchAhead.sourcePlaylist', 'プレイリストの動画を先読み', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値ON。プレイリストの次の動画から順に先読みします。連続再生で次に再生される動画なので、もっとも当たりやすい一覧です。'
+										}],
+								['playlist.prefetchAhead.sourceRelated', '関連動画欄の動画を先読み', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値OFF。関連動画欄の上から順に先読みします。関連動画をたどって見るときに効きますが、実際には見ない動画も多いため通信が無駄になりやすい一覧です。'
+										}],
+								['playlist.prefetchAhead.sourceDescription', '動画情報欄の動画を先読み', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値OFF。動画情報欄（説明文）に書かれている動画リンクを上から順に先読みします。シリーズの前後編を続けて見るときに効きますが、説明文には見ない動画のリンクも多く含まれます。'
+										}],
+								['playlist.prefetchAhead.order', '先読みする順番', {
+												type: 'prefetch-order',
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '先読みを進める順番です（初期値「プレイリスト → 関連動画欄 → 動画情報欄」）。ドラッグして並べ替えられます（「上へ」「下へ」ボタンでも変更できます）。ONにした一覧それぞれから下の本数ずつ候補を取り、ここで決めた順に1本ずつ準備します。'
+										}],
+								['playlist.prefetchAhead.window', '先読みする本数（一覧ごと）', {
+												...slider(1, 32, 1), unit: '本',
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: 'ONにした一覧それぞれから、何本先まで準備しておくかです（初期値5本）。3つともONで5本なら最大15本が対象になります。本数が多いほど通信量が増えます。'
+										}],
+								['playlist.prefetchAhead.cacheMB', 'メモリキャッシュの上限', {
+												...slider(16, 512, 16), unit: 'MB',
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '準備済みの冒頭データを保持する上限です（初期値128MB。1本あたり多くの場合1〜3MBなので、おおよそ40〜100本ぶん）。超えたときは古いものから順に破棄します。ページを閉じると消えます。'
+										}],
+								['playlist.prefetchAhead.pacingMs', '先読み間の待機時間', {
+												...slider(0, 10000, 100), unit: 'ms',
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '1本準備するたびに置く待機時間です（初期値0＝待機なし）。実際の待機は設定値の1〜2倍の乱数になり、アクセスが機械的な等間隔になりません。低速回線やサーバーへの連続アクセスを抑えたいときに設定してください。'
+										}],
+								['playlist.prefetchAhead.companions', 'コメント・場面画像も先読み', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値ON。次の動画のコメントと、シーンサーチ用の場面画像（最初のページ、シーンサーチがONのとき）も一緒に先読みします。切り替え直後からコメントが表示され、シークのプレビューも早く出ます。その分通信量は増えます。コメントは先読み時点の内容になります（手動の再読み込み・過去ログ指定では通常どおり取得します）。'
+										}],
+								['playlist.prefetchAhead.showMark', '先読み済みマークを表示', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '先読みが完了した動画のプレイリスト項目（サムネイル右上）に青い丸を表示します。初期値ON。'
+										}],
+								['playlist.prefetchAhead.notifyReady', '先読みが完了したときに画面に通知', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値OFF。次の動画の先読みが終わってキャッシュに入ったとき、「次の動画の先読みが完了しました（smXXXX）」と画面に表示します。どの動画がいつ準備できたかを確かめたいときにONにしてください。先読みは1本ずつ順に進むため、本数を多くしているとその回数だけ表示されます。下の「先読みの通知」を「通知しない」にしているときは表示しません。'
+										}],
+								['playlist.prefetchAhead.notifyHit', '先読みが効いたときに画面に通知', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値OFF。先読み済みのデータを実際に使って再生できたとき、「先読みが効きました（1.02秒で再生開始）」のように再生開始までの秒数を画面に表示します。下の「先読みの通知」を「通知しない」にしているときは表示しません。'
+										}],
+								['playlist.prefetchAhead.notifyMiss', '先読みなしの再生も画面に通知', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値OFF。先読みを使えなかった再生でも秒数を表示します。上の通知と両方ONにすると、効いたときと効かなかったときの秒数を見比べられます。'
+										}],
+								['playlist.prefetchAhead.notify', '先読みの通知', {
+												...select([['off', '通知しない'], ['journal', '通知履歴のみ'], ['popup', '失敗を画面にも表示']]),
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '先読みの成否を通知する方法です。初期値は通知履歴のみです。「通知しない」にすると、上の2つの秒数通知も記録も行いません。'
+										}]
+						]),
 						...group('プレイリスト・検索', '検索', [
 								['videoSearch.selectContentType', '検索対象', {
 												...select([['long', '通常動画'], ['short', 'ショート']]),
@@ -72170,7 +73508,7 @@ class ModernAdvancedSettingsModel {
 						'画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', 'シーンサムネイルのキャッシュ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
 						'コメント表示': ['表示・配置', 'コメント一覧', '文字・装飾', '追加取得'],
 						'NG・表示対象': ['NG条件', 'コメント種別', '動画の除外'],
-						'プレイリスト・検索': ['プレイリスト', '検索', 'リンク・移動',
+						'プレイリスト・検索': ['プレイリスト', '動画の先読み', '検索', 'リンク・移動',
 								'関連メニュー › カスタムリンク', '診断'],
 						'ショートカット': ['プレイヤー全般', '再生', 'シーク', '再生速度', '音量', 'コメント',
 								'画面', '画面フィルター', 'フィルタ/NG', 'プレイリスト', 'マイリスト', 'その他'],
@@ -73685,6 +75023,80 @@ class ModernAdvancedSettingsUI {
 				}
 				return icon;
 		}
+		_renderPrefetchOrderControls(id) {
+				const labels = {
+						playlist: 'プレイリスト', related: '関連動画欄', description: '動画情報欄'
+				};
+				const keys = Object.keys(labels);
+				const host = this.doc.createElement('div');
+				host.style.cssText = 'width:100%;display:grid;gap:6px';
+				const hint = this.doc.createElement('p');
+				hint.textContent = 'ドラッグして並べ替えられます。上にあるものから先に先読みします。';
+				hint.style.cssText = 'margin:0;opacity:.8';
+				host.append(hint);
+				const order = String(this.model.get(id) || '').split(',').filter(v => keys.includes(v));
+				for (const key of keys)
+						if (!order.includes(key))
+								order.push(key);
+				const apply = (next) => {
+						this.model.set(id, next.join(','));
+						this._renderCards();
+						this._refreshFooter();
+						const card = this.cards?.querySelector('[data-zw-id="' + id + '"]');
+						card?.querySelector('[data-zw-prefetch-order]')?.focus();
+				};
+				order.forEach((key, index) => {
+						const row = this.doc.createElement('div');
+						row.draggable = true;
+						row.dataset.zwPrefetchOrderRow = key;
+						row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;' +
+								'border:1px solid #48515c;border-radius:6px;cursor:grab';
+						const grip = this.doc.createElement('span');
+						grip.textContent = '≡';
+						grip.style.cssText = 'opacity:.7';
+						const label = this.doc.createElement('span');
+						label.textContent = (index + 1) + '. ' + labels[key];
+						label.style.cssText = 'flex:1;min-width:80px';
+						row.append(grip, label);
+						for (const [caption, offset] of [['上へ', -1], ['下へ', 1]]) {
+								const button = this._button(caption, 'data-zw-prefetch-order', key, 'zw-modern-plainbtn');
+								button.setAttribute('aria-label', labels[key] + 'を' + caption);
+								button.disabled = (offset < 0 && index === 0) || (offset > 0 && index === order.length - 1);
+								button.addEventListener('click', () => {
+										const next = order.slice();
+										next.splice(index + offset, 0, next.splice(index, 1)[0]);
+										apply(next);
+								});
+								row.append(button);
+						}
+						row.addEventListener('dragstart', (e) => {
+								e.dataTransfer?.setData('text/plain', key);
+								if (e.dataTransfer)
+										e.dataTransfer.effectAllowed = 'move';
+								row.style.opacity = '.5';
+						});
+						row.addEventListener('dragend', () => { row.style.opacity = ''; row.style.borderColor = ''; });
+						row.addEventListener('dragover', (e) => {
+								e.preventDefault();
+								if (e.dataTransfer)
+										e.dataTransfer.dropEffect = 'move';
+								row.style.borderColor = '#4fc3f7';
+						});
+						row.addEventListener('dragleave', () => { row.style.borderColor = ''; });
+						row.addEventListener('drop', (e) => {
+								e.preventDefault();
+								row.style.borderColor = '';
+								const from = String(e.dataTransfer?.getData('text/plain') || '');
+								if (!keys.includes(from) || from === key)
+										return;
+								const next = order.filter(v => v !== from);
+								next.splice(next.indexOf(key), 0, from);
+								apply(next);
+						});
+						host.append(row);
+				});
+				return host;
+		}
 		_renderScreenPresetOrderControls() {
 				const host = this.doc.createElement('div');
 				host.style.cssText = 'width:100%;display:grid;gap:12px';
@@ -73853,6 +75265,9 @@ class ModernAdvancedSettingsUI {
 						else {
 								host.textContent = '複合NGエディターを読み込めませんでした。';
 						}
+				}
+				else if (descriptor.type === 'prefetch-order') {
+						controls.append(this._renderPrefetchOrderControls(descriptor.id));
 				}
 				else if (descriptor.type === 'screen-preset-order') {
 						controls.append(this._renderScreenPresetOrderControls());
@@ -80939,8 +82354,27 @@ const VideoSessionWorker = (() => {
 				const getSessionId = function () { return `session_${this.id++}`; }.bind({ id: 0 });
 				let current = null;
 				let createSeq = 0;
+				const preparedSessions = new Map();
+				const MAX_PREPARED_SESSIONS = 128;
 				const isCurrent = (sessionId) => !!current && sessionId !== undefined && current[SESSION_ID] === sessionId;
+				const findSession = (sessionId) => isCurrent(sessionId) ? current : typeof sessionId === 'string' ? preparedSessions.get(sessionId) ?? null : null;
 				const create = async (params) => {
+						if (params.prefetch === true) {
+								if (params.serverType !== 'domand' || params.useHLS !== true) {
+										throw new Error('Prefetch supports Domand HLS only');
+								}
+								const session = await VideoSession.create(params);
+								const sessionId = getSessionId();
+								session[SESSION_ID] = sessionId;
+								preparedSessions.set(sessionId, session);
+								while (preparedSessions.size > MAX_PREPARED_SESSIONS) {
+										const oldest = preparedSessions.entries().next().value;
+										preparedSessions.delete(oldest[0]);
+										oldest[1].close();
+								}
+								return { serverType: session.serverType, isDomand: session.isDomand,
+										isDmc: session.isDmc, sessionId };
+						}
 						const seq = ++createSeq;
 						if (current) {
 								current.close();
@@ -80961,17 +82395,30 @@ const VideoSessionWorker = (() => {
 								sessionId
 						};
 				};
+				const promote = async ({ sessionId } = {}) => {
+						const session = preparedSessions.get(sessionId);
+						if (!session)
+								throw new Error('prepared session mismatch');
+						preparedSessions.delete(sessionId);
+							createSeq; // invalidate a concurrently pending ordinary create()
+						if (current && current !== session)
+								current.close();
+						current = session;
+						return { sessionId, serverType: session.serverType, isDomand: session.isDomand, isDmc: session.isDmc };
+				};
 				const connect = async ({ sessionId } = {}) => {
-						if (!isCurrent(sessionId)) {
+						const session = findSession(sessionId);
+						if (!session)
 								throw new Error('session mismatch');
-						}
-						return current.connect();
+						const connected = await session.connect();
+						if (findSession(sessionId) !== session)
+								throw new Error('session superseded');
+						return connected;
 				};
 				const getState = ({ sessionId } = {}) => {
-						if (!isCurrent(sessionId)) {
+						const session = findSession(sessionId);
+						if (!session)
 								return {};
-						}
-						const session = current;
 						return {
 								serverType: session.serverType,
 								isDomand: session.isDomand,
@@ -80982,11 +82429,14 @@ const VideoSessionWorker = (() => {
 						};
 				};
 				const close = ({ sessionId } = {}) => {
-						if (!isCurrent(sessionId)) {
+						const session = findSession(sessionId);
+						if (!session)
 								return;
-						}
-						current.close();
-						current = null;
+						if (session === current)
+								current = null;
+						else
+								preparedSessions.delete(sessionId);
+						session.close();
 				};
 				const storyboard = async ({ videoInfo, serverType, withImages = true }) => {
 						const sbSessionInfo = await StoryboardSession.create({ videoInfo, serverType }).create();
@@ -81028,6 +82478,8 @@ const VideoSessionWorker = (() => {
 										return create(params);
 								case 'connect':
 										return await connect(params);
+								case 'promote':
+										return await promote(params);
 								case 'getState':
 										return getState(params);
 								case 'close':
@@ -81065,16 +82517,18 @@ const VideoSessionWorker = (() => {
 				});
 				return undefined;
 		};
-		const create = async ({ videoInfo, videoQuality, serverType, useHLS }) => {
-				const generation = ++diagnosticGeneration;
+		const create = async ({ videoInfo, videoQuality, serverType, useHLS, prefetch = false }) => {
+				let generation = prefetch ? diagnosticGeneration : ++diagnosticGeneration;
 				let closed = false;
-				const active = () => !closed && generation === diagnosticGeneration;
+				let promoted = false;
+				const active = () => !closed && (prefetch && !promoted || generation === diagnosticGeneration);
 				await initWorker();
 				const params = {
 						videoInfo: videoInfo.toJSON(),
 						videoQuality,
 						serverType,
-						useHLS
+						useHLS,
+						...(prefetch ? { prefetch: true } : {})
 				};
 				const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
 				const result = await observeSession(scope + '-create', active, () => worker.post({ command: 'create', params }));
@@ -81097,7 +82551,15 @@ const VideoSessionWorker = (() => {
 										return state;
 								}, error => { diagnostic?.failure(error); throw error; });
 						},
-						close: () => { closed = true; return worker.post({ command: 'close', params: { sessionId } }); }
+						close: () => { closed = true; return worker.post({ command: 'close', params: { sessionId } }); },
+						promote: async () => {
+								if (!prefetch || promoted || closed)
+										throw new Error('Only a live prefetch can be promoted');
+								const next = await worker.post({ command: 'promote', params: { sessionId } });
+								promoted = true;
+								generation = ++diagnosticGeneration;
+								return next;
+						}
 				});
 		};
 		const withTimeout = (promise, ms) => {

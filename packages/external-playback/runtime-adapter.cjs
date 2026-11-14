@@ -36,8 +36,15 @@ module.exports=function adaptRuntime(base) {
  `);
  if(body.split('return new Response(buffer, _init);').length!==3)throw Error('Response adapter count changed');
  body=body.replaceAll('return new Response(buffer, _init);','return new Response([204,205,304].includes(_init.status) ? null : buffer, _init);');
- once('const hls = new Hls(Object.assign({}, this._hlsConfig));',
- 'const hls = new Hls(Object.assign({}, this._hlsConfig, externalTrial ? {loader:externalTrial.gm.Loader,fLoader:externalTrial.gm.Loader,pLoader:externalTrial.gm.Loader} : {}));');
+ // Recognize both known constructors; external trial must override HLS loaders last.
+ const legacyHls='const hls = new Hls(Object.assign({}, this._hlsConfig));';
+ const prefetchHls='const hls = new Hls(Object.assign({}, this._hlsConfig, prefetchActive ? { loader: prefetchRuntime.wrapLoader(Hls.DefaultConfig.loader), startLevel: startupLevel } : {}));';
+ const trialLoaders='externalTrial ? {loader:externalTrial.gm.Loader,fLoader:externalTrial.gm.Loader,pLoader:externalTrial.gm.Loader} : {}';
+ if(body.includes(prefetchHls) && !body.includes(legacyHls)){
+   once(prefetchHls,'const hls = new Hls(Object.assign({}, this._hlsConfig, prefetchActive ? { loader: prefetchRuntime.wrapLoader(Hls.DefaultConfig.loader), startLevel: startupLevel } : {}, '+trialLoaders+'));');
+ } else {
+   once(legacyHls,'const hls = new Hls(Object.assign({}, this._hlsConfig, '+trialLoaders+'));');
+ }
  body=body.replaceAll('`ZenzaWatch_video.hls.', '`\${externalTrial ? "ZenzaWatchExternalTrial" : "ZenzaWatch"}_video.hls.');
  // HLS settings use a fixed prefix in the canonical implementation.
  body=body.replaceAll("'ZenzaWatch_video.hls.", "(externalTrial ? 'ZenzaWatchExternalTrial_video.hls.' : 'ZenzaWatch_video.hls.') + '");

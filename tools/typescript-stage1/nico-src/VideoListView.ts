@@ -53,6 +53,8 @@ class VideoListView extends Emitter {
   declare _itemCss: Loose;
   declare _maxItems: Loose;
   declare _observedRoot: Loose;
+  declare _prefetchMarkIds: string[];
+  declare _prefetchMarkListener: ((ids: string[]) => void) | undefined;
   declare _observedTargets: Map<HTMLElement, string | undefined>;
   declare _pocket: Loose;
   declare _renderGeneration: number;
@@ -124,6 +126,26 @@ class VideoListView extends Emitter {
 
     const container = this.listContainer = doc.querySelector('#listContainer');
     const list = this.list = doc.getElementById('listContainerInner');
+    // Only the real playlist iframe owns these markers, not related-video lists.
+    if (this._className === 'playlist' && !doc.getElementById('zenza-prefetch-mark-style')) {
+      const markerStyle = doc.createElement('style');
+      markerStyle.id = 'zenza-prefetch-mark-style';
+      markerStyle.textContent = '.videoItem[data-zen-prefetched] .thumbnailContainer::before{' +
+        'content:"";position:absolute;top:4px;right:4px;width:9px;height:9px;' +
+        'border-radius:50%;background:#4fc3f7;box-shadow:0 0 3px rgba(0,0,0,.7);' +
+        'z-index:5;pointer-events:none;}';
+      (doc.head || doc.body).append(markerStyle);
+    }
+    if (this._className === 'playlist') {
+      this._prefetchMarkIds = global.debug?.playlistPrefetch?.markIds || [];
+    }
+    if (this._className === 'playlist' && !this._prefetchMarkListener) {
+      this._prefetchMarkListener = (ids: string[]) => {
+        this._prefetchMarkIds = Array.isArray(ids) ? ids : [];
+        this._applyPrefetchMarks();
+      };
+      global.emitter.on('zenza-prefetch-marks', this._prefetchMarkListener);
+    }
     if (this.items && this.items.length) {
       this.renderList(this.items);
     }
@@ -385,6 +407,17 @@ class VideoListView extends Emitter {
     this.lastBuild = {result, time: performance.now()};
     return result;
   }
+  /** Apply only an attribute; never replace the card or its click handlers. */
+  _applyPrefetchMarks(): void {
+    if (!this.document || this._className !== 'playlist') return;
+    const ready = new Set(this._prefetchMarkIds || []);
+    for (const item of this.document.querySelectorAll('.videoItem[data-watch-id]') as NodeListOf<HTMLElement>) {
+      const active = ready.has(item.dataset.watchId || '');
+      if (active !== item.hasAttribute('data-zen-prefetched')) {
+        item.toggleAttribute('data-zen-prefetched', active);
+      }
+    }
+  }
   _setInviewObserver() {
     if (!this.document) { return; }
     if (!this.intersectionObserver || this._observedRoot !== this.listContainer) {
@@ -410,6 +443,7 @@ class VideoListView extends Emitter {
         this._observedTargets.set(target, target.dataset.itemId);
       }
     }
+    this._applyPrefetchMarks();
   }
   _onItemInview(entries?: Loose) {
     let changed = false;

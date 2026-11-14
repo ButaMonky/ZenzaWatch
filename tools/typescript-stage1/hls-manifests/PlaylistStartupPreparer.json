@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PlaylistStartupPreparer.ts",
+  "runtime": "packages/zenza/src/hls/PlaylistStartupPreparer.js",
+  "sourceSha256": "3a1ccf1112303cc29ec25ad74669e61a3bd3179283860e2c23c50a8d80ab2e7d",
+  "runtimeSha256": "f0f9294e2d6cec4808ba7cc59c77347540ecc99438c0e8db3dcfc56db5e24356"
+}

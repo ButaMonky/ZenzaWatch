@@ -992,8 +992,28 @@ const VideoSessionWorker = (() => {
         // 今のセッションと同じ時だけ操作する（古い動画の close が新しい動画のセッションを閉じないように）。
         let current = null;
         let createSeq = 0;
+        // Separate inactive HLS sessions must never replace the current playback owner.
+        const preparedSessions = new Map();
+        const MAX_PREPARED_SESSIONS = 128;
         const isCurrent = (sessionId) => !!current && sessionId !== undefined && current[SESSION_ID] === sessionId;
+        const findSession = (sessionId) => isCurrent(sessionId) ? current : typeof sessionId === 'string' ? preparedSessions.get(sessionId) ?? null : null;
         const create = async (params) => {
+            if (params.prefetch === true) {
+                if (params.serverType !== 'domand' || params.useHLS !== true) {
+                    throw new Error('Prefetch supports Domand HLS only');
+                }
+                const session = await VideoSession.create(params);
+                const sessionId = getSessionId();
+                session[SESSION_ID] = sessionId;
+                preparedSessions.set(sessionId, session);
+                while (preparedSessions.size > MAX_PREPARED_SESSIONS) {
+                    const oldest = preparedSessions.entries().next().value;
+                    preparedSessions.delete(oldest[0]);
+                    oldest[1].close();
+                }
+                return { serverType: session.serverType, isDomand: session.isDomand,
+                    isDmc: session.isDmc, sessionId };
+            }
             const seq = ++createSeq;
             if (current) {
                 current.close();
@@ -1015,17 +1035,30 @@ const VideoSessionWorker = (() => {
                 sessionId
             };
         };
+        const promote = async ({ sessionId } = {}) => {
+            const session = preparedSessions.get(sessionId);
+            if (!session)
+                throw new Error('prepared session mismatch');
+            preparedSessions.delete(sessionId);
+            ++createSeq; // invalidate a concurrently pending ordinary create()
+            if (current && current !== session)
+                current.close();
+            current = session;
+            return { sessionId, serverType: session.serverType, isDomand: session.isDomand, isDmc: session.isDmc };
+        };
         const connect = async ({ sessionId } = {}) => {
-            if (!isCurrent(sessionId)) {
+            const session = findSession(sessionId);
+            if (!session)
                 throw new Error('session mismatch');
-            }
-            return current.connect();
+            const connected = await session.connect();
+            if (findSession(sessionId) !== session)
+                throw new Error('session superseded');
+            return connected;
         };
         const getState = ({ sessionId } = {}) => {
-            if (!isCurrent(sessionId)) {
+            const session = findSession(sessionId);
+            if (!session)
                 return {};
-            }
-            const session = current;
             return {
                 serverType: session.serverType,
                 isDomand: session.isDomand,
@@ -1036,11 +1069,14 @@ const VideoSessionWorker = (() => {
             };
         };
         const close = ({ sessionId } = {}) => {
-            if (!isCurrent(sessionId)) {
+            const session = findSession(sessionId);
+            if (!session)
                 return;
-            }
-            current.close();
-            current = null;
+            if (session === current)
+                current = null;
+            else
+                preparedSessions.delete(sessionId);
+            session.close();
         };
         const storyboard = async ({ videoInfo, serverType, withImages = true }) => {
             const sbSessionInfo = await StoryboardSession.create({ videoInfo, serverType }).create();
@@ -1083,6 +1119,8 @@ const VideoSessionWorker = (() => {
                     return create(params);
                 case 'connect':
                     return await connect(params);
+                case 'promote':
+                    return await promote(params);
                 case 'getState':
                     return getState(params);
                 case 'close':
@@ -1127,16 +1165,19 @@ const VideoSessionWorker = (() => {
         });
         return undefined;
     };
-    const create = async ({ videoInfo, videoQuality, serverType, useHLS }) => {
-        const generation = ++diagnosticGeneration;
+    const create = async ({ videoInfo, videoQuality, serverType, useHLS, prefetch = false }) => {
+        // Background sessions must not invalidate the foreground watch diagnostic owner.
+        let generation = prefetch ? diagnosticGeneration : ++diagnosticGeneration;
         let closed = false;
-        const active = () => !closed && generation === diagnosticGeneration;
+        let promoted = false;
+        const active = () => !closed && (prefetch && !promoted || generation === diagnosticGeneration);
         await initWorker();
         const params = {
             videoInfo: videoInfo.toJSON(),
             videoQuality,
             serverType,
-            useHLS
+            useHLS,
+            ...(prefetch ? { prefetch: true } : {})
         };
         const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
         const result = await observeSession(scope + '-create', active, () => worker.post({ command: 'create', params }));
@@ -1159,7 +1200,15 @@ const VideoSessionWorker = (() => {
                     return state;
                 }, error => { diagnostic?.failure(error); throw error; });
             },
-            close: () => { closed = true; return worker.post({ command: 'close', params: { sessionId } }); }
+            close: () => { closed = true; return worker.post({ command: 'close', params: { sessionId } }); },
+            promote: async () => {
+                if (!prefetch || promoted || closed)
+                    throw new Error('Only a live prefetch can be promoted');
+                const next = await worker.post({ command: 'promote', params: { sessionId } });
+                promoted = true;
+                generation = ++diagnosticGeneration;
+                return next;
+            }
         });
     };
     const withTimeout = (promise, ms) => {

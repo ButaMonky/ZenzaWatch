@@ -3145,6 +3145,11 @@ class NicoVideoPlayerDialog extends Emitter {
   declare _offScreenLayer: Loose;
   declare _playerConfig: Loose;
   declare _playlist: Loose;
+  declare _playlistPrefetch: Loose;
+  declare _prefetchReporter: Loose;
+  declare _prefetchPreparer: Loose;
+  declare _prefetchPending: Loose;
+  declare _prefetchMarkSignature: string | undefined;
   declare _requestId: ZenzaDialogRequestId | null | undefined;
   declare _savePlaybackPositionNow: Loose;
   declare _playbackPositionSaves:Map<string,Promise<unknown>>|undefined;
@@ -3733,7 +3738,224 @@ class NicoVideoPlayerDialog extends Emitter {
     e.preventDefault();
     e.stopPropagation();
   }
+  /** Extra network activity is always user opt-in, and only in a real playlist. */
+  _prefetchFeatureEnabled(): boolean {
+    const config = this._playerConfig;
+    return config?.getValue('playlist.prefetchAhead.enabled') === true;
+  }
+  _prefetchSettingsKey(): string {
+    const config = this._playerConfig;
+    return JSON.stringify([
+      config.getValue('videoServerType'),config.getValue('domandVideoQuality'),
+      config.getValue('autoDisableNew'),config.getValue('video.hls.use_native_hls'),
+      // Bandwidth estimates are updated automatically by HLS during playback;
+      // they are NOT a settings change and must not evict every prepared video.
+      global.debug?.hlsConfig?.startLevel
+    ]);
+  }
+  _getPrefetchReporter(): Loose {
+    const runtime = global.debug?.playlistPrefetch;
+    if (!runtime?.createReporter) return null;
+    return this._prefetchReporter ||= runtime.createReporter({
+      diagnostics: () => runtime.trialDiagnostics === true,
+      notifyMode: () => this._playerConfig.getValue('playlist.prefetchAhead.notify') || 'journal',
+      console: (name: string, payload: Loose) => window.console.info(name, JSON.stringify(payload)),
+      record: (entry: Loose) => this._recordDiagnostic(entry),
+      warning: (message: string) => this.execCommand('warning', message),
+      notify: (message: string) => this.execCommand('notify', message),
+      describe: runtime.describeError
+    });
+  }
+  _prepareNextStartup(watchId: string, signal: AbortSignal): Promise<Loose> {
+    const runtime = global.debug?.playlistPrefetch;
+    if (!runtime?.createPreparer || !VideoInfoLoader?.prefetch) {
+      return Promise.reject(new Error('Playlist prefetch unavailable'));
+    }
+    this._prefetchPreparer ||= runtime.createPreparer({
+      loadVideoInfo: (id: string, abort: AbortSignal) => VideoInfoLoader.prefetch(id, {signal: abort}),
+      createModel: (data: Loose) => new VideoInfoModel(data, null),
+      isNgVideo: (info: Loose) => this._videoFilter.isNgVideo(info),
+      getConfig: (key: string) => this._playerConfig.getValue(key),
+      createSession: (info: Loose, videoQuality: Loose) => VideoSessionWorker.create({
+        videoInfo: info, videoQuality, serverType: 'domand', useHLS: true, prefetch: true
+      }),
+      prepareBytes: (url: string, abort: AbortSignal) => runtime.bytes.prepare(url, abort),
+      settingsKey: () => this._prefetchSettingsKey(),
+      log: (name: string, payload: Loose) => this._getPrefetchReporter()?.prepareLog(name, payload),
+      // コメントと場面画像の先読み。失敗しても本体の準備は失敗にしない。
+      prepareCompanions: async (info: Loose, sig: AbortSignal) => {
+        if (this._playerConfig.getValue('playlist.prefetchAhead.companions') !== true) return null;
+        if (this._playerConfig.getValue('enableStoryboard') && info.hasStoryboard && !sig.aborted) {
+          Promise.resolve()
+            .then(() => sig.aborted ? null : global.api?.StoryboardInfoLoader?.load('domand', info))
+            .catch(() => {});
+        }
+        if (!this.threadLoader || !info.msgInfo) return null;
+        const msgInfo = Object.assign({}, info.msgInfo);
+        msgInfo.language = this._playerConfig.props.commentLanguage;
+        const result = await this.threadLoader.load(msgInfo, {signal: sig});
+        return {comments: {language: msgInfo.language, result}};
+      }
+    });
+    return this._prefetchPreparer(watchId, signal);
+  }
+  /**
+   * 先読み候補を、設定した順番で各一覧から perSource 本ずつ集める。
+   * 重複と再生中の動画は除き、合計は HARD_MAX_WINDOW(96) までに抑える。
+   */
+  _collectPrefetchCandidates(perSource: number): string[] {
+    const config = this._playerConfig;
+    const order = String(config.getValue('playlist.prefetchAhead.order') ||
+      'playlist,related,description').split(',');
+    const seen = new Set<string>();
+    if (this._watchId) seen.add(this._watchId);
+    const out: string[] = [];
+    const push = (value: unknown): boolean => {
+      const id = String(value || '');
+      if (!/^(?:sm|so|nm)\d+$/.test(id) || seen.has(id)) return false;
+      seen.add(id);
+      out.push(id);
+      return true;
+    };
+    for (const source of order) {
+      let taken = 0;
+      if (source === 'playlist') {
+        // 既定ONのため、値が未設定でも有効として扱う
+        if (config.getValue('playlist.prefetchAhead.sourcePlaylist') === false || !this._playlist) continue;
+        for (const id of (this._playlist.peekNextIds?.(perSource * 2) || [])) {
+          if (taken >= perSource) break;
+          if (push(id)) taken++;
+        }
+      } else if (source === 'related') {
+        if (config.getValue('playlist.prefetchAhead.sourceRelated') !== true) continue;
+        for (const item of (this._videoInfo?.relatedVideoItems || [])) {
+          if (taken >= perSource) break;
+          if (push(typeof item === 'string' ? item : (item as Loose)?.id)) taken++;
+        }
+      } else if (source === 'description') {
+        if (config.getValue('playlist.prefetchAhead.sourceDescription') !== true) continue;
+        for (const m of String(this._videoInfo?.description || '').matchAll(/watch\/((?:sm|so|nm)\d+)/g)) {
+          if (taken >= perSource) break;
+          if (push(m[1])) taken++;
+        }
+      }
+    }
+    return out.slice(0, 96);
+  }
+  /** 先読み済みコメントを再生時に引き渡す。過去ログ指定と手動再読み込みでは使わない。 */
+  _takePrefetchComments(msgInfo?: Loose, loadOptions: Loose = {}): Loose {
+    const held = this._prefetchCompanions;
+    if (!held?.comments) return null;
+    // msgInfo.when の既定値は null。過去ログ指定は when > 0 で表される。
+    if (loadOptions.manualReload || Number(msgInfo?.when) > 0) return null;
+    if (held.watchId !== this._watchId ||
+      held.comments.language !== this._playerConfig.props.commentLanguage) return null;
+    this._prefetchCompanions = null;
+    return held.comments.result;
+  }
+  /** performance が無い環境でも計測できるようにする。 */
+  _prefetchNow(): number {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function' ?
+      performance.now() : Date.now();
+  }
+  /** 再生開始までにかかった秒数を通知する（設定がONのときだけ画面に出す）。 */
+  _reportPrefetchTiming(): void {
+    const t = this._prefetchTiming;
+    if (!t || t.reported || t.requestId !== this._requestId) return;
+    t.reported = true;
+    const reporter = this._getPrefetchReporter();
+    if (!reporter) return;
+    const seconds = Number(((this._prefetchNow() - t.started) / 1000).toFixed(3));
+    const config = this._playerConfig;
+    try {
+      if (t.used) {
+        const hits = global.debug?.playlistPrefetch?.bytes?.hits?.(t.source) ?? 0;
+        reporter.hit?.(t.videoId, seconds, hits,
+          config.getValue('playlist.prefetchAhead.notifyHit') === true);
+      } else {
+        reporter.miss?.(t.videoId, seconds,
+          config.getValue('playlist.prefetchAhead.notifyMiss') === true);
+      }
+    } catch (_) { /* 計測は再生に影響させない */ }
+  }
+  _updatePrefetchMarks(): void {
+    const runtime = global.debug?.playlistPrefetch;
+    if (!runtime) return;
+    const enabled = this._prefetchFeatureEnabled() &&
+      this._playerConfig.getValue('playlist.prefetchAhead.showMark') !== false;
+    const ids: string[] = enabled ? (this._playlistPrefetch?.readyIds?.() || []) : [];
+    const key = JSON.stringify(ids);
+    if (this._prefetchMarkSignature === key) return;
+    this._prefetchMarkSignature = key;
+    runtime.markIds = ids;
+    global.emitter.emit?.('zenza-prefetch-marks', ids);
+  }
+  _updateNextPrefetch(): void {
+    try {
+      if (!this._prefetchFeatureEnabled()) {
+        const cache = this._playlistPrefetch;
+        this._playlistPrefetch = null;
+        cache?.reset();
+        this._updatePrefetchMarks();
+        return;
+      }
+      const runtime = global.debug?.playlistPrefetch;
+      if (!runtime?.create || !this.isOpen || !this._playlist ||
+        (navigator as Loose).connection?.saveData === true || !runtime.supported() ||
+        this._state.isError || this._playerConfig.getValue('loop') === true) {
+        this._playlistPrefetch?.interrupt?.('waiting');
+        return;
+      }
+      const perSource = Math.max(1,Math.min(32,Number(this._playerConfig.getValue('playlist.prefetchAhead.window')) || 5));
+      const maxStoreBytes = Math.max(16,Math.min(512,Number(this._playerConfig.getValue('playlist.prefetchAhead.cacheMB')) || 128))*1048576;
+      const pacingMs = Math.max(0,Math.min(10000,Number(this._playerConfig.getValue('playlist.prefetchAhead.pacingMs')) || 0));
+      const candidates: string[] = this._collectPrefetchCandidates(perSource);
+      if (!candidates.length) {
+        // 候補が無いだけならキャッシュは残すが、準備中の通信は止める
+        this._playlistPrefetch?.interrupt?.('not-playing');
+        this._updatePrefetchMarks();
+        return;
+      }
+      const windowCount = candidates.length;
+      this._playlistPrefetch ||= runtime.create(
+        (id: string, signal: AbortSignal) => this._prepareNextStartup(id, signal),
+        (id: string) => {
+          this._getPrefetchReporter()?.ready(id,
+            this._playerConfig.getValue('playlist.prefetchAhead.notifyReady') === true);
+          this._updatePrefetchMarks();
+        },
+        (event: Loose) => { this._getPrefetchReporter()?.schedulerEvent(event); this._updatePrefetchMarks(); });
+      const sample = runtime.sample(), currentTime = Number(sample?.currentTime) || 0;
+      let bufferEnd = currentTime;
+      const buffered = sample?.buffered;
+      if (buffered) for (let i=0; i<buffered.length; i++) {
+        if (buffered.start(i) <= currentTime+0.05 && buffered.end(i) > currentTime) {
+          bufferEnd = buffered.end(i); break;
+        }
+      }
+      this._playlistPrefetch.update({
+        settings: this._prefetchSettingsKey(), candidates,
+        currentId: this._watchId || null, enabled: true,
+        playing: this.isPlaying, seeking: !!this._state.isSeeking, waiting: !!this._state.isStalled,
+        currentTime, duration: Number(sample?.duration), bufferEnd,
+        rate: Number(sample?.rate) || 1, ended: !!sample?.ended,
+        windowCount, maxStoreBytes, pacingMs
+      });
+      this._updatePrefetchMarks();
+    } catch (_) {
+      // Never allow a background optimization to interfere with foreground video.
+      this._playlistPrefetch?.interrupt?.('waiting');
+    }
+  }
   _onPlayerConfigUpdate(key?: Loose, value?: Loose) {
+    if (key === 'playlist.prefetchAhead.showMark') this._updatePrefetchMarks();
+    if (typeof key === 'string' &&
+      (key === 'playlist.prefetchAhead.enabled' ||
+       key === 'videoServerType' || key === 'domandVideoQuality' ||
+       key === 'autoDisableNew' || key.startsWith('video.hls.'))) {
+      this._playlistPrefetch?.reset();
+      this._updateNextPrefetch();
+    }
     if(['resume.recordEnabled','abRepeat.enabled'].includes(key)||(typeof key==='string'&&key.startsWith('bookmark.'))){
       this._view?.manualBookmarkDock?.refreshPreferences();
     }
@@ -4258,6 +4480,7 @@ class NicoVideoPlayerDialog extends Emitter {
       this._playerConfig.setValue('loop', false);
     }
     this._view.blinkTab('playlist');
+    this._updateNextPrefetch();
   }
   _onCommentPanelStatusUpdate() {
     let commentPanel = this._commentPanel;
@@ -4549,6 +4772,18 @@ class NicoVideoPlayerDialog extends Emitter {
       this._onPlaylistInsert(watchId);
       return;
     }
+    // A playlist click may bypass playNextVideo(). Cache ownership belongs to
+    // the actual watch request, not the next-button UI.
+    const abandoned = this._prefetchPending?.prepared;
+    this._prefetchPending = null;
+    if (abandoned && !abandoned.adopted) abandoned.dispose();
+    this._playlistPrefetch?.interrupt?.('waiting');
+    const candidate = this._prefetchFeatureEnabled() ? this._playlistPrefetch?.take(watchId) : null;
+    const prepared = candidate?.settings === this._prefetchSettingsKey() &&
+      candidate?.watchId === watchId &&
+      typeof candidate?.sessionInfo?.url === 'string' ? candidate : null;
+    if (candidate && !prepared) candidate.dispose();
+    this._updatePrefetchMarks();
     this._cancelCommentLoad();
     this._abortCommonsTreeJob();  // Task197: switching video stops the parent/child job
     // Keep the outgoing session's deletion barrier while the new request takes
@@ -4556,6 +4791,12 @@ class NicoVideoPlayerDialog extends Emitter {
     this._outgoingAutoResumeSaveSuppress = this._isAutoResumeSaveSuppressed() ?
       this._autoResumeSaveSuppress : undefined;
     this._requestId = 'play-' + Math.random() as ZenzaDialogRequestId;
+    this._prefetchCompanions = null;
+    this._prefetchTiming = {
+      started: this._prefetchNow(), videoId: watchId, requestId: this._requestId,
+      used: false, cacheHits: 0, reported: false
+    };
+    this._prefetchPending = prepared ? {requestId: this._requestId, prepared} : null;
     this._videoWatchOptions = options;
     this._clearVideoTimers();
 
@@ -4716,15 +4957,51 @@ class NicoVideoPlayerDialog extends Emitter {
     // Task 090（監査v2 ZW-012）: セッションはこの読み込みのローカル変数で持ち、await の後ごとに、
     // 別の動画を開いた・閉じた（requestId が変わった）かを確かめる。古い読み込みの結果は画面へ入れない
     const isStale = () => this._requestId !== requestId;
-    const session = await VideoSessionWorker.create({
-      videoInfo,
-      videoQuality,
-      serverType,
-      useHLS
-    });
-    if (isStale()) {
-      Promise.resolve(session.close()).catch(() => {});
-      return;
+    const pending = this._prefetchPending?.requestId === requestId ? this._prefetchPending.prepared : null;
+    if (this._prefetchPending?.requestId === requestId) this._prefetchPending = null;
+    const runtime = global.debug?.playlistPrefetch;
+    // The scheduler checks expiry at take(); check again just before the real
+    // session transfer, keeping the existing 60-second safety margin.
+    if (pending && Number.isFinite(pending.expiresAt) && pending.expiresAt <= Date.now() + 60000) {
+      try { this._getPrefetchReporter()?.staleAdoption?.(pending.watchId); }
+      catch (_) { /* optional diagnostics must not prevent ordinary playback */ }
+    }
+    const canAdopt = pending && this._prefetchFeatureEnabled() &&
+      serverType === 'domand' && useHLS && !this._videoFilter.isNgVideo(videoInfo) &&
+      pending.watchId === videoInfo.watchId &&
+      pending.settings === this._prefetchSettingsKey() &&
+      typeof pending.sessionInfo?.url === 'string' &&
+      typeof pending.session?.promote === 'function' &&
+      (!Number.isFinite(pending.expiresAt) || pending.expiresAt > Date.now() + 60000) &&
+      typeof runtime?.bytes?.activate === 'function';
+    let session: Loose = null, cachedSessionInfo: Loose = null;
+    if (canAdopt) {
+      try {
+        await pending.session.promote();
+        if (isStale()) {
+          pending.dispose();
+          return;
+        }
+        runtime.bytes.activate(pending.bytes);
+        pending.adopted = true;
+        this._prefetchCompanions = pending.companions ?
+          Object.assign({watchId: pending.watchId}, pending.companions) : null;
+        if (this._prefetchTiming && this._prefetchTiming.requestId === this._requestId) {
+          this._prefetchTiming.used = true;
+          this._prefetchTiming.source = pending.sessionInfo?.url;
+        }
+        session = pending.session;
+        cachedSessionInfo = pending.sessionInfo;
+      } catch (_) { pending.dispose(); }
+    } else if (pending) {
+      pending.dispose();
+    }
+    if (!session) {
+      session = await VideoSessionWorker.create({videoInfo, videoQuality, serverType, useHLS});
+      if (isStale()) {
+        Promise.resolve(session.close()).catch(() => {});
+        return;
+      }
     }
     this._videoSession = session;
 
@@ -4739,7 +5016,7 @@ class NicoVideoPlayerDialog extends Emitter {
           return;
         }
       }
-      const sessionInfo = await session.connect();
+      const sessionInfo = cachedSessionInfo || await session.connect();
       if (isStale()) {
         return;
       }
@@ -4779,8 +5056,15 @@ class NicoVideoPlayerDialog extends Emitter {
     this._commentLoadController = null;
     if (previous) { previous.abort(); }
   }
-  loadComment(msgInfo?: Loose, loadOptions = {}) {
+  loadComment(msgInfo?: Loose, loadOptions: Loose = {}) {
     this._cancelCommentLoad();
+    const companion = this._takePrefetchComments(msgInfo, loadOptions);
+    if (companion) {
+      const heldRequestId = this._requestId;
+      return Promise.resolve().then(() => {
+        if (this._requestId === heldRequestId) this._onCommentLoadSuccess(heldRequestId, companion);
+      });
+    }
     const controller = this._commentLoadController = new AbortController();
     const requestId = this._requestId;
     const isCurrent = () => this._commentLoadController === controller &&
@@ -4843,6 +5127,11 @@ class NicoVideoPlayerDialog extends Emitter {
     window.console.error('Video info load failed');
     if (this._requestId !== requestId) {
       return;
+    }
+    if (this._prefetchPending?.requestId === requestId) {
+      const held = this._prefetchPending.prepared;
+      this._prefetchPending = null;
+      if (held && !held.adopted) held.dispose();
     }
     this._recordDiagnostic({
       category: 'network', level: 'error',
@@ -5021,6 +5310,7 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!this._state.isLoading) {
       return;
     }
+    this._reportPrefetchTiming();
     const requestId = this._requestId;
     const watchId = this._watchId;
     const videoInfo = this._videoInfo;
@@ -5102,8 +5392,10 @@ class NicoVideoPlayerDialog extends Emitter {
   _onVideoPlaying() {
     this._state.setPlaying();
     this.emit('playing');
+    this._updateNextPrefetch();
   }
   _onVideoSeeking() {
+    this._playlistPrefetch?.interrupt?.('seeking');
     this._state.isSeeking = true;
     this.emit('seeking');
   }
@@ -5118,6 +5410,7 @@ class NicoVideoPlayerDialog extends Emitter {
     this.emit('seeked');
   }
   _onVideoPause() {
+    this._playlistPrefetch?.interrupt?.('not-playing');
     this._state.setPausing();
     // Metadata may have been cleared by a failed replacement video request.
     // A late native pause must not dereference null or save an old watch ID.
@@ -5127,18 +5420,25 @@ class NicoVideoPlayerDialog extends Emitter {
     this.emit('pause');
   }
   _onVideoStalled() {
+    this._playlistPrefetch?.interrupt?.('waiting');
     this._state.isStalled = true;
     this.emit('stalled');
   }
   _onVideoTimeUpdate() {
     this._state.isStalled = false;
     this._view?.manualBookmarkDock?.tick(this.currentTime,!this.isPlaying,!!this._state.isSeeking);
+    this._updateNextPrefetch();
   }
   _onVideoProgress(range?: Loose, currentTime?: Loose) {
     this.emit('progress', range, currentTime);
   }
   async _onVideoError(e?: Loose) {
     this._state.setVideoErrorOccurred();
+    // Cached startup fragments may be stale/corrupt if HLS failed to decode.
+    // Remove only this transient startup handoff; the ordinary retry remains intact.
+    if (e?.type !== 'youtube') {
+      try { global.debug?.playlistPrefetch?.bytes?.clear?.(); } catch (_) { /* never block recovery */ }
+    }
     if (e.type === 'youtube') {
       return this._onYouTubeVideoError(e);
     }
@@ -5461,6 +5761,12 @@ class NicoVideoPlayerDialog extends Emitter {
     this.hide();
     this._cancelCommentLoad();
     this._abortCommonsTreeJob();  // Task197
+    this._playlistPrefetch?.reset();
+    this._updatePrefetchMarks();
+    if (this._prefetchPending?.prepared && !this._prefetchPending.prepared.adopted) {
+      this._prefetchPending.prepared.dispose();
+    }
+    this._prefetchPending = null;
     this._requestId = null;  // Task 090（ZW-012）: 閉じた後に、読み込み中だった動画の結果を使わない
     this._clearVideoTimers();  // Task 090（ZW-016）
     this._refresh();

@@ -942,6 +942,76 @@ declare panel: HTMLElement;
     return icon;
   }
 
+  /** 先読みする順番をドラッグで並べ替えるUI。キーボード操作用に上へ/下へボタンも置く。 */
+  _renderPrefetchOrderControls(id: string): HTMLElement {
+    const labels: Record<string,string> = {
+      playlist:'プレイリスト', related:'関連動画欄', description:'動画情報欄'
+    };
+    const keys = Object.keys(labels);
+    const host = this.doc.createElement('div');
+    host.style.cssText = 'width:100%;display:grid;gap:6px';
+    const hint = this.doc.createElement('p');
+    hint.textContent = 'ドラッグして並べ替えられます。上にあるものから先に先読みします。';
+    hint.style.cssText = 'margin:0;opacity:.8';
+    host.append(hint);
+    const order = String(this.model.get(id) || '').split(',').filter(v => keys.includes(v));
+    for (const key of keys) if (!order.includes(key)) order.push(key);
+    const apply = (next: string[]): void => {
+      this.model.set(id, next.join(','));
+      this._renderCards();
+      this._refreshFooter();
+      const card = this.cards?.querySelector('[data-zw-id="' + id + '"]') as HTMLElement | null;
+      (card?.querySelector('[data-zw-prefetch-order]') as HTMLElement | null)?.focus();
+    };
+    order.forEach((key, index) => {
+      const row = this.doc.createElement('div');
+      row.draggable = true;
+      row.dataset.zwPrefetchOrderRow = key;
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;' +
+        'border:1px solid #48515c;border-radius:6px;cursor:grab';
+      const grip = this.doc.createElement('span');
+      grip.textContent = '≡';
+      grip.style.cssText = 'opacity:.7';
+      const label = this.doc.createElement('span');
+      label.textContent = (index + 1) + '. ' + labels[key];
+      label.style.cssText = 'flex:1;min-width:80px';
+      row.append(grip, label);
+      for (const [caption, offset] of [['上へ',-1],['下へ',1]] as [string,number][]) {
+        const button = this._button(caption, 'data-zw-prefetch-order', key, 'zw-modern-plainbtn');
+        button.setAttribute('aria-label', labels[key] + 'を' + caption);
+        button.disabled = (offset < 0 && index === 0) || (offset > 0 && index === order.length - 1);
+        button.addEventListener('click', () => {
+          const next = order.slice();
+          next.splice(index + offset, 0, next.splice(index, 1)[0] as string);
+          apply(next);
+        });
+        row.append(button);
+      }
+      row.addEventListener('dragstart', (e: DragEvent) => {
+        e.dataTransfer?.setData('text/plain', key);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+        row.style.opacity = '.5';
+      });
+      row.addEventListener('dragend', () => { row.style.opacity = ''; row.style.borderColor = ''; });
+      row.addEventListener('dragover', (e: DragEvent) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        row.style.borderColor = '#4fc3f7';
+      });
+      row.addEventListener('dragleave', () => { row.style.borderColor = ''; });
+      row.addEventListener('drop', (e: DragEvent) => {
+        e.preventDefault();
+        row.style.borderColor = '';
+        const from = String(e.dataTransfer?.getData('text/plain') || '');
+        if (!keys.includes(from) || from === key) return;
+        const next = order.filter(v => v !== from);
+        next.splice(next.indexOf(key), 0, from);
+        apply(next);
+      });
+      host.append(row);
+    });
+    return host;
+  }
   _renderScreenPresetOrderControls(): HTMLElement {
     const host=this.doc.createElement('div');
     host.style.cssText='width:100%;display:grid;gap:12px';
@@ -1088,6 +1158,8 @@ declare panel: HTMLElement;
             this._refreshFooter();
           });
       } else {host.textContent='複合NGエディターを読み込めませんでした。';}
+    } else if(descriptor.type==='prefetch-order') {
+      controls.append(this._renderPrefetchOrderControls(descriptor.id));
     } else if(descriptor.type==='screen-preset-order') {
       controls.append(this._renderScreenPresetOrderControls());
     } else if(descriptor.type==='related-order') {

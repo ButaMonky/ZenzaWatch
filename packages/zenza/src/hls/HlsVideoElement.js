@@ -1,6 +1,6 @@
 // GENERATED FROM tools/typescript-stage1/hls-src/HlsVideoElement.ts (Task997). Edit TypeScript and run npm run hls:sync.
 //===BEGIN===
-function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary }) {
+function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary, Prefetch }) {
     const window = globalThis.window;
     const console = window.console;
     const existing = window.customElements?.get('zenza-video');
@@ -25,7 +25,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
             return event;
         };
         let FragmentLoaderClass;
-        const createFragmentLoader = (Hls) => {
+        const createFragmentLoader = (Hls, prefetchActive = false) => {
             const frag2hash = (fragment) => {
                 const url = fragment.url;
                 // 修正前は`this.levels`だったが、frag2hashはアロー関数で、
@@ -111,7 +111,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
             // @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#loader
             let lastFragLoadingTime = 0;
             let BLOCK_INTERVAL = 3000;
-            class FragmentLoader extends Hls.DefaultConfig.loader {
+            class FragmentLoader extends (prefetchActive && Prefetch ? Prefetch.wrapLoader(Hls.DefaultConfig.loader) : Hls.DefaultConfig.loader) {
                 constructor(config) {
                     super(config);
                     this._config = config;
@@ -848,9 +848,14 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                     return null;
                 }
                 if (!this._hls) {
-                    this._fragmentLoader = createFragmentLoader(Hls);
+                    // Do not require the optional prefetch module for ordinary HLS playback.
+                    // Isolated/legacy hosts can construct this player without that module.
+                    const prefetchRuntime = typeof Prefetch === 'undefined' ? undefined : Prefetch;
+                    const startupLevel = prefetchRuntime?.startLevel?.(src);
+                    const prefetchActive = typeof startupLevel === 'number' && Number.isFinite(startupLevel);
+                    this._fragmentLoader = createFragmentLoader(Hls, prefetchActive);
                     this._hlsConfig.fLoader = this._fragmentLoader;
-                    const hls = new Hls(Object.assign({}, this._hlsConfig));
+                    const hls = new Hls(Object.assign({}, this._hlsConfig, prefetchActive ? { loader: prefetchRuntime.wrapLoader(Hls.DefaultConfig.loader), startLevel: startupLevel } : {}));
                     this._hls = hls;
                     let lifetime = { phase: 'active', engine: hls };
                     const owned = (listener) => (...args) => {

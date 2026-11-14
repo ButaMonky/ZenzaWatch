@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/hls-src/HlsStartupPrefetch.ts",
+  "runtime": "packages/zenza/src/hls/HlsStartupPrefetch.js",
+  "sourceSha256": "c930ed6b425747375d32064b459665cf7b0d306b6885f2a5628edbb143e4706e",
+  "runtimeSha256": "3651ae4ce9f9116cf0869c4ecc2d746da1b2dff85f117763e120a86905d8f1d4"
+}

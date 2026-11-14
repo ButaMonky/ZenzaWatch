@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PrefetchReporter.ts",
+  "runtime": "packages/zenza/src/hls/PrefetchReporter.js",
+  "sourceSha256": "378f39f5ea5e9dc2f7e7f30d68264089f8baad50f06f8f9a17f1d5ae2b1318b0",
+  "runtimeSha256": "5d0bcd8eab91f4b63537a0409d7ad9d3007e8aad6d86e5deafb02f2f6618f338"
+}

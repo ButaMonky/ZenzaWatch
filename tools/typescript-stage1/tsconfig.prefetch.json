@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noEmitOnError": true,
+    "rootDir": ".",
+    "outDir": ".generated/prefetch",
+    "declaration": false
+  },
+  "include": [
+    "hls-src/HlsStartupPrefetch.ts",
+    "hls-src/PlaylistPreloader.ts",
+    "nico-src/PlaylistStartupPreparer.ts",
+    "nico-src/PrefetchReporter.ts"
+  ]
+}

@@ -11,8 +11,10 @@ export interface HlsVideoElementDependencies {
   throttle: HlsDebounce;
   HLS_JS_URL: string;
   loadLibrary(): Promise<Loose>;
+  /** Opt-in startup-prefetch handoff; legacy playback remains the default. */
+  Prefetch?: Loose;
 }
-export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary}: HlsVideoElementDependencies): CustomElementConstructor {
+export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary, Prefetch}: HlsVideoElementDependencies): CustomElementConstructor {
   const window = globalThis.window as Loose;
   const console = window.console;
   const existing = window.customElements?.get('zenza-video');
@@ -39,7 +41,7 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
       };
 
       let FragmentLoaderClass: Loose;
-      const createFragmentLoader = (Hls?: Loose) => {
+      const createFragmentLoader = (Hls?: Loose, prefetchActive = false) => {
 
         const frag2hash = (fragment?: Loose) => {
           const url = fragment.url;
@@ -112,7 +114,7 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
         // @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#loader
         let lastFragLoadingTime = 0;
         let BLOCK_INTERVAL = 3000;
-        class FragmentLoader extends Hls.DefaultConfig.loader {
+        class FragmentLoader extends (prefetchActive && Prefetch ? Prefetch.wrapLoader(Hls.DefaultConfig.loader) : Hls.DefaultConfig.loader) {
           declare _config: Loose;
           declare _isAborted: Loose;
           declare _isDestroyed: Loose;
@@ -906,9 +908,15 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
           }
 
           if (!this._hls) {
-            this._fragmentLoader = createFragmentLoader(Hls);
+            // Do not require the optional prefetch module for ordinary HLS playback.
+            // Isolated/legacy hosts can construct this player without that module.
+            const prefetchRuntime = typeof Prefetch === 'undefined' ? undefined : Prefetch;
+            const startupLevel = prefetchRuntime?.startLevel?.(src);
+            const prefetchActive = typeof startupLevel === 'number' && Number.isFinite(startupLevel);
+            this._fragmentLoader = createFragmentLoader(Hls, prefetchActive);
             this._hlsConfig.fLoader = this._fragmentLoader;
-            const hls: HlsStartupEngine = new Hls(Object.assign({}, this._hlsConfig));
+            const hls: HlsStartupEngine = new Hls(Object.assign({}, this._hlsConfig,
+              prefetchActive ? {loader: prefetchRuntime.wrapLoader(Hls.DefaultConfig.loader), startLevel: startupLevel} : {}));
             this._hls = hls;
             let lifetime:ZenzaHlsLifetime={phase:'active',engine:hls};
             const owned=(listener:(...args:unknown[])=>void)=>(...args:unknown[]):void=>{

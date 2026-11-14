@@ -3,6 +3,10 @@ import {createHlsConfig} from './HlsConfig';
 import {createHlsStorage} from './HlsStorage';
 import {createHlsVideoElement} from './HlsVideoElement';
 import {defineHlsDebugElements} from './HlsDebugElements';
+import {PlaylistPreloader} from './PlaylistPreloader';
+import {HlsPrefetch} from './HlsStartupPrefetch';
+import {createPlaylistStartupPreparer,describeError} from './PlaylistStartupPreparer';
+import {createPrefetchReporter} from './PrefetchReporter';
 // GENERATED FROM tools/typescript-stage1/hls-src/HlsRuntime.ts (Task997). Edit TypeScript and run npm run hls:sync.
 //===BEGIN===
 //@require HlsLibrary
@@ -10,6 +14,10 @@ import {defineHlsDebugElements} from './HlsDebugElements';
 //@require createHlsStorage
 //@require createHlsVideoElement
 //@require defineHlsDebugElements
+//@require PlaylistPreloader
+//@require HlsPrefetch
+//@require createPlaylistStartupPreparer
+//@require createPrefetchReporter
 const HlsRuntime = {
     install(ZenzaWatch, dependencies) {
         const window = globalThis.window, console = window.console;
@@ -27,7 +35,8 @@ const HlsRuntime = {
             const library = HlsLibrary.load();
             // Register the factory synchronously; player construction waits for the load below.
             const Storage = createHlsStorage(Config, debounce);
-            createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL: HlsLibrary.url, loadLibrary: () => HlsLibrary.load() });
+            const optionalPrefetch = typeof HlsPrefetch === 'undefined' ? undefined : HlsPrefetch;
+            createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL: HlsLibrary.url, loadLibrary: () => HlsLibrary.load(), Prefetch: optionalPrefetch });
             await library.catch(() => { console.warn('HLS library unavailable; checking native playback'); });
             const initDebug = ({ hlsConfig, html, render, ZenzaWatch }) => {
                 ZenzaWatch.emitter.promise('videoControBar.addonMenuReady').then(({ container }) => {
@@ -174,6 +183,25 @@ const HlsRuntime = {
                     video.setAttribute('use-native-hls', nativeHlsPreference(Config.get('use_native_hls')));
                     return video;
                 };
+                // The HLS bridge is inert until the Nico dialog explicitly opts into prefetch.
+                if (optionalPrefetch && typeof PlaylistPreloader !== 'undefined' &&
+                    typeof createPlaylistStartupPreparer !== 'undefined' &&
+                    typeof createPrefetchReporter !== 'undefined' && typeof describeError !== 'undefined') {
+                    ZenzaWatch.debug.playlistPrefetch = {
+                        trialDiagnostics: false,
+                        createPreparer: createPlaylistStartupPreparer,
+                        createReporter: createPrefetchReporter,
+                        describeError,
+                        create: (prepare, onReady, onEvent) => new PlaylistPreloader(prepare, undefined, onReady, onEvent, (value) => value?.bytes?.bytes || 0, (value) => value?.expiresAt),
+                        bytes: Object.assign({}, HlsPrefetch, { prepare: (source, signal) => HlsPrefetch.prepare(source, signal, {
+                                startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate'))
+                            }) }),
+                        supported: () => window.location.hostname === 'www.nicovideo.jp' && primaryVideo?.playerMode === 'HLS-JS',
+                        sample: () => ({ currentTime: primaryVideo?.currentTime, duration: primaryVideo?.duration,
+                            buffered: primaryVideo?.buffered, rate: primaryVideo?.playbackRate,
+                            seeking: primaryVideo?.seeking, ended: primaryVideo?.ended })
+                    };
+                }
                 window.ZenzaHLS = {
                     createVideoElement
                 };

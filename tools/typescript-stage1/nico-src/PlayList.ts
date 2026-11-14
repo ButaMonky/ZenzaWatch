@@ -1182,6 +1182,33 @@ class PlayList extends VideoList {
     this._refreshIndex(true);
     this.toggleEnable(false);
   }
+  /** Read-only next-N candidate selection for prefetch. Never advances the active item. */
+  peekNextIds(count: number): string[] {
+    const result: string[] = [];
+    const total = this.length;
+    const limit = Number.isFinite(count) ? Math.min(32, Math.max(0, Math.floor(count))) : 0;
+    if (total < 1 || limit < 1) return result;
+    const currentIndex = this.getIndex();
+    const currentId = currentIndex >= 0 ? this.model.getItemByIndex(currentIndex)?.watchId : null;
+    const seen = new Set<string>(typeof currentId === 'string' ? [currentId] : []);
+    for (let step = 1; step <= total && result.length < limit; step++) {
+      let index = currentIndex + step;
+      if (index >= total) {
+        if (!this.isLoop) break;
+        index %= total;
+      }
+      if (index === currentIndex) break;
+      const id = this.model.getItemByIndex(index)?.watchId;
+      if (typeof id !== 'string' || !id || seen.has(id)) continue;
+      seen.add(id);
+      result.push(id);
+    }
+    return result;
+  }
+  /** Backward-compatible convenience helper for single-video prefetch. */
+  peekNextId(): string | null {
+    return this.peekNextIds(1)[0] ?? null;
+  }
   selectNext() {
     if (!this.hasNext) {
       return null;

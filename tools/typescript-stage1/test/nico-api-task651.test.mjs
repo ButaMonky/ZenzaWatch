@@ -30,7 +30,7 @@ function world(opt={}){
     const ctx=createContext({self,fetch,URL,URLSearchParams,console:{time(){},timeEnd(){},error:(...a)=>L('w.error',a[0])},
       location:{origin:'https://www.nicovideo.jp',href:'https://www.nicovideo.jp/watch/sm9'},AbortController,
       setTimeout:(fn,ms)=>{L('w.setTimeout',ms);return setTimeout(fn,0);},clearTimeout,setInterval:(fn,ms)=>{L('w.setInterval',ms);return 1;},clearInterval:()=>L('w.clearInterval'),
-      Date:{now:()=>1000},Symbol,Object,Promise,JSON,Error,Number,Math,Array,isNaN});
+      Date:opt.dateConstructor || {now:()=>1000},Symbol,Object,Promise,JSON,Error,Number,Math,Array,isNaN});
     runInContext(`${o.inject}\n(${func.toString()})(self);`,ctx);
     workerSelf=self;
     return {post:async m=>{L('post',m.command);return self.onmessage(structuredClone(m));}};
@@ -129,4 +129,26 @@ test('createStoryboardClasses: direct use',async()=>{
       await settle(()=>C.StoryboardInfoLoader.fetchImages([{url:'javascript:1'}])),
       await settle(()=>Promise.resolve().then(()=>C.StoryboardInfoLoader.create({type:'x'})))];
   });
+});
+
+test('prefetched sessions coexist with playback, promote once and close only their own session',async()=>{
+  const routes={'access-rights/hls':json(200,{meta:{status:201},data:{contentUrl:'https://hls/master.m3u8',expireTime:'2030-01-01T00:00:00Z'}})};
+  const api=load(after,world({routes,dateConstructor:Date})).VideoSessionWorker;
+  const playback=await api.create({videoInfo:info(),serverType:'domand',useHLS:true});
+  const initial=await playback.connect();
+  const a=await api.create({videoInfo:info(),serverType:'domand',useHLS:true,prefetch:true});
+  const b=await api.create({videoInfo:info(),serverType:'domand',useHLS:true,prefetch:true});
+  assert.notEqual(a.sessionId,b.sessionId);
+  assert.equal((await playback.getState()).sessionId,playback.sessionId,'prefetch cannot evict the active session');
+  assert.equal((await a.connect()).url,initial.url);
+  assert.equal((await b.connect()).url,initial.url);
+  await b.close();
+  assert.deepEqual(Object.keys(await b.getState()),[],'closing b does not touch a');
+  assert.equal((await a.getState()).sessionId,a.sessionId);
+  await a.promote();
+  assert.deepEqual(Object.keys(await playback.getState()),[],'promotion supersedes active playback');
+  assert.equal((await a.getState()).sessionId,a.sessionId);
+  await a.close();
+  assert.deepEqual(Object.keys(await a.getState()),[]);
+  await assert.rejects(api.create({videoInfo:info(),serverType:'dmc',useHLS:true,prefetch:true}));
 });

@@ -95,3 +95,43 @@ for(const stale of [false,true])test(`#117 startup playlist rejection is handled
  assert.equal(calls.filter(x=>x==='Initial playlist load failed').length,stale?0:1);
  assert.equal(current(),!stale);
 });
+
+test('peekNextIds is read-only, bounded, deduplicated and wraps only for loop playlists',()=>{
+ const h=playlist();h.seed(0);
+ const before=h.p.getIndex();
+ assert.deepEqual(Array.from(h.p.peekNextIds(2)),['sm2','sm3']);
+ assert.equal(h.p.peekNextId(),'sm2');
+ assert.deepEqual(Array.from(h.p.peekNextIds(0)),[]);
+ assert.deepEqual(Array.from(h.p.peekNextIds(Number.POSITIVE_INFINITY)),[]);
+ assert.equal(h.p.getIndex(),before,'prefetch must not select the next item');
+ assert.equal(h.saves.length,0,'prefetch must not persist/emit a playlist mutation');
+ h.p.setIndex(2,true);
+ assert.deepEqual(Array.from(h.p.peekNextIds(2)),[],'non-loop end has no successors');
+ h.p.toggleLoop();h.save();h.saves.length=0;
+ assert.deepEqual(Array.from(h.p.peekNextIds(10)),['sm1','sm2'],'loop stops before current item');
+ assert.equal(h.p.getIndex(),2);
+ assert.equal(h.saves.length,0);
+ const fake=Object.create(h.p);
+ fake.model={length:5,getItemByIndex:i=>[{watchId:'sm1'},{watchId:'sm2'},{watchId:'sm2'},{watchId:'sm3'},{watchId:'sm4'}][i]};
+ fake._activeItem={watchId:'sm1'};fake._index=0;fake._isLoop=true;
+ assert.deepEqual(Array.from(fake.peekNextIds(100)),['sm2','sm3','sm4'],'duplicate candidates are removed');
+});
+test('marker applies only to iframe list items without replacing their DOM',()=>{
+ const ctx=vm.createContext({Emitter:class {},Set});
+ vm.runInContext(classBody('VideoListView')+';globalThis.Candidate=VideoListView;',ctx);
+ const candidate=Object.create(ctx.Candidate.prototype),attrs=[new Set(),new Set()];
+ candidate._className='playlist';
+ const items=[{dataset:{watchId:'sm2'},hasAttribute:x=>attrs[0].has(x),
+  toggleAttribute:(x,on)=>on?attrs[0].add(x):attrs[0].delete(x)},
+ {dataset:{watchId:'sm3'},hasAttribute:x=>attrs[1].has(x),
+  toggleAttribute:(x,on)=>on?attrs[1].add(x):attrs[1].delete(x)}];
+ const query=[];
+ candidate.document={querySelectorAll:selector=>{query.push(selector);return items;}};
+ candidate._prefetchMarkIds=['sm2'];
+ candidate._applyPrefetchMarks();
+ assert.deepEqual([attrs[0].has('data-zen-prefetched'),attrs[1].has('data-zen-prefetched')],[true,false]);
+ candidate._prefetchMarkIds=['sm3'];
+ candidate._applyPrefetchMarks();
+ assert.deepEqual([attrs[0].has('data-zen-prefetched'),attrs[1].has('data-zen-prefetched')],[false,true]);
+ assert.deepEqual(query,['.videoItem[data-watch-id]','.videoItem[data-watch-id]']);
+});

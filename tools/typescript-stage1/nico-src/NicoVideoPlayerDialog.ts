@@ -4366,14 +4366,17 @@ class NicoVideoPlayerDialog extends Emitter {
       },
       (err: unknown) => this._reportPlaylistLoadFailure(owner, err, 'マイリストのロード失敗'));
   }
-  _onPlaylistSetUploadedVideo(id?: Loose) {
+  _onPlaylistSetUploadedVideo(param?: Loose) {
+    // Task1042: {id, contentType: 'long' | 'short'} で種類を絞れる（文字列なら動画とショートの両方）
+    const id = param && typeof param === 'object' ? param.id : param;
+    const contentType = param && typeof param === 'object' && ['long', 'short'].includes(param.contentType) ? param.contentType : 'all';
     const owner = this._capturePlaylistLoadOwner();
     let option = {watchId: this._watchId};
     // 通常時はプレイリストの置き換え、
     // 連続再生中はプレイリストに追加で読み込む
     (option as Loose).insert = this._playlist.isEnable;
 
-    owner.playlist.load({ type: 'user-uploaded', id }, option, owner.videoInfo.msgInfo,
+    owner.playlist.load({ type: 'user-uploaded', id, ...(contentType === 'all' ? {} : {contentType}) }, option, owner.videoInfo.msgInfo,
       () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result) => {
         if (!this._acceptPlaylistLoadResult(owner, result)) { return; }
         this.execCommand('notify', result.message);

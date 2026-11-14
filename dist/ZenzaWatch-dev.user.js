@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.429-task1041
+// @version        2.7.430-task1042
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-14 22:52Z 0d5c9c1
+// build: 2026-11-14 23:10Z 60d5294
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2071,10 +2071,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.429-task1041';
+    var VER = '2.7.430-task1042';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-14 22:52Z 0d5c9c1';
+    var BUILD = '2026-11-14 23:10Z 60d5294';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -45497,6 +45497,20 @@ class PlayList extends VideoList {
 				const contentType = isUploader && ['long', 'short'].includes(playlist.contentType) ? playlist.contentType : 'all';
 				const { contentType: _ignored, ...apiRequest } = playlist || {};
 				let shortsNotice = '';
+				let uploaderCounts = null;
+				const uploaderLabel = () => {
+						if (!uploaderCounts) {
+								return '';
+						}
+						const parts = [];
+						if (contentType !== 'short') {
+								parts.push(`動画${uploaderCounts.videos}件`);
+						}
+						if (contentType !== 'long') {
+								parts.push(`ショート${uploaderCounts.shorts}件`);
+						}
+						return parts.join('・') + 'を読み込みました';
+				};
 				const loadShorts = () => {
 						const loader = this._playlistApiLoader;
 						if (!isUploader || contentType === 'long' || typeof loader.loadUserShorts !== 'function') {
@@ -45506,7 +45520,7 @@ class PlayList extends VideoList {
 								if (contentType === 'short') {
 										throw error;
 								}
-								window.console.warn('[ZenzaWatch] 投稿ショート動画の取得に失敗しました', { userId: playlist?.id, error: String(error?.message || error) });
+								window.console.warn?.('[ZenzaWatch] 投稿ショート動画の取得に失敗しました', { userId: playlist?.id, error: String(error?.message || error) });
 								shortsNotice = '（ショート動画は取得できませんでした）';
 								return [];
 						});
@@ -45522,7 +45536,7 @@ class PlayList extends VideoList {
 						}
 						const shorts = shortsResult.value || [];
 						if (longResult.status === 'rejected') {
-								window.console.warn('[ZenzaWatch] 投稿動画一覧の取得に失敗しました', { userId: playlist?.id, error: String(longResult.reason?.message || longResult.reason) });
+								window.console.warn?.('[ZenzaWatch] 投稿動画一覧の取得に失敗しました', { userId: playlist?.id, error: String(longResult.reason?.message || longResult.reason) });
 								if (!shorts.length) {
 										throw longResult.reason;
 								}
@@ -45530,8 +45544,24 @@ class PlayList extends VideoList {
 						}
 						const long = longResult.status === 'fulfilled' ? longResult.value : [];
 						if (isUploader) {
-								window.console.info('[ZenzaWatch] 投稿動画一覧', { userId: playlist?.id, contentType,
+								window.console.info?.('[ZenzaWatch] 投稿動画一覧', { userId: playlist?.id, contentType,
 										videos: Array.isArray(long) ? long.length : 0, shorts: shorts.length });
+						}
+						const isShortItem = (item) => item?.content?.contentType === 'short' || /^ss\d+$/.test(String(item?.content?.id || item?.watchId || ''));
+						if (isUploader) {
+								const all = [...(Array.isArray(long) ? long : []), ...shorts];
+								const ids = new Set(), shortIds = new Set();
+								for (const item of all) {
+										const id = String(item?.content?.id || item?.watchId || '');
+										if (!id) {
+												continue;
+										}
+										ids.add(id);
+										if (isShortItem(item)) {
+												shortIds.add(id);
+										}
+								}
+								uploaderCounts = { videos: ids.size - shortIds.size, shorts: shortIds.size };
 						}
 						if (!shorts.length) {
 								return long;
@@ -45567,7 +45597,9 @@ class PlayList extends VideoList {
 						if (videoListItems.length < 1) {
 								return Promise.reject({
 										status: 'fail',
-										message: 'プレイリストの取得に失敗しました'
+										message: isUploader && uploaderCounts ?
+												(contentType === 'short' ? '投稿ショート動画はありませんでした' : contentType === 'long' ? '投稿動画（ショート以外）はありませんでした' : '投稿動画はありませんでした') :
+												'プレイリストの取得に失敗しました'
 								});
 						}
 						if (options.shuffle) {
@@ -45610,9 +45642,11 @@ class PlayList extends VideoList {
 						}
 						return Promise.resolve({
 								status: 'ok',
-								message: (added !== null ?
-										`プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
-										'プレイリストに読み込みしました') + capacityNotice + shortsNotice
+								message: (uploaderCounts ?
+										uploaderLabel() + (added !== null ? `（プレイリストに${added}件追加${overflow ? `・上限により${overflow}件追加できませんでした` : ''}）` : '') :
+										added !== null ?
+												`プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
+												'プレイリストに読み込みしました') + capacityNotice + shortsNotice
 						});
 				}, error => {
 						if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
@@ -57842,11 +57876,13 @@ class NicoVideoPlayerDialog extends Emitter {
 						owner.playlist.insertCurrentVideo(owner.videoInfo);
 				}, (err) => this._reportPlaylistLoadFailure(owner, err, 'マイリストのロード失敗'));
 		}
-		_onPlaylistSetUploadedVideo(id) {
+		_onPlaylistSetUploadedVideo(param) {
+				const id = param && typeof param === 'object' ? param.id : param;
+				const contentType = param && typeof param === 'object' && ['long', 'short'].includes(param.contentType) ? param.contentType : 'all';
 				const owner = this._capturePlaylistLoadOwner();
 				let option = { watchId: this._watchId };
 				option.insert = this._playlist.isEnable;
-				owner.playlist.load({ type: 'user-uploaded', id }, option, owner.videoInfo.msgInfo, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
+				owner.playlist.load({ type: 'user-uploaded', id, ...(contentType === 'all' ? {} : { contentType }) }, option, owner.videoInfo.msgInfo, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
 						if (!this._acceptPlaylistLoadResult(owner, result)) {
 								return;
 						}
@@ -64277,6 +64313,17 @@ class VideoInfoPanel extends Emitter {
 						}
 				});
 				view.addEventListener('mousemove', (e) => e.stopPropagation());
+				const ownerVideoButton = view.querySelector('.playlistSetUploadedVideo');
+				const revealOwnerVideoKinds = () => view.querySelector('.ownerVideoKinds')?.classList.add('is-revealed');
+				ownerVideoButton?.addEventListener('mouseenter', revealOwnerVideoKinds);
+				ownerVideoButton?.addEventListener('focus', revealOwnerVideoKinds);
+				view.addEventListener('keydown', (e) => {
+						const kind = e.target?.closest?.('.ownerVideoKind');
+						if (kind && (e.key === 'Enter' || e.key === ' ')) {
+								e.preventDefault();
+								kind.click();
+						}
+				});
 				view.addEventListener('command', this._onCommandEvent.bind(this));
 				view.addEventListener('click', this._onClick.bind(this));
 				view.addEventListener('keydown', this._onTabKeyDown.bind(this));
@@ -64719,6 +64766,10 @@ class VideoInfoPanel extends Emitter {
 						case 'ownerVideo':
 								domEvent.dispatchCommand(this._view, 'playlistSetUploadedVideo', this._videoInfo.owner.id);
 								break;
+						case 'ownerVideoLong':
+						case 'ownerVideoShort':
+								domEvent.dispatchCommand(this._view, 'playlistSetUploadedVideo', { id: this._videoInfo.owner.id, contentType: command === 'ownerVideoShort' ? 'short' : 'long' });
+								break;
 						default:
 								return;
 				}
@@ -65088,6 +65139,53 @@ css.addStyle(`
 	.zenzaWatchVideoInfoPanel .videoInfoTab .pocket-info,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd {
 		display: none;
+	}
+	/* Task1042: ▶ の横の「動画」「ショート」。▶ にマウスを乗せると右から出てきて、そのまま残る */
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds {
+		display: inline-flex;
+		gap: 4px;
+		margin-left: 6px;
+		vertical-align: middle;
+		visibility: hidden;
+		opacity: 0;
+		transform: translateX(-8px);
+		transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+	}
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds.is-revealed {
+		visibility: visible;
+		opacity: 1;
+		transform: none;
+		transition: opacity 0.2s ease, transform 0.2s ease;
+	}
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind {
+		display: inline-block;
+		padding: 0 7px;
+		height: 20px;
+		line-height: 20px;
+		font-size: 12px;
+		border-radius: 10px;
+		background: #444;
+		color: #ddd;
+		border: 1px solid #777;
+		cursor: pointer;
+		user-select: none;
+		white-space: nowrap;
+	}
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind::before {
+		margin-right: 3px;
+		font-size: 10px;
+	}
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-long::before { content: '▭'; }
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-short::before { content: '▯'; }
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:hover,
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:focus-visible {
+		background: #666;
+		color: #fff;
+		border-color: #aaa;
+		outline: none;
+	}
+	.zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:active {
+		transform: scale(0.94);
 	}
 	.zenzaWatchVideoInfoPanel .videoInfoTab .owner:hover .playlistAppend,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .watch:hover .playlistAppend,
@@ -65635,7 +65733,13 @@ VideoInfoPanel.__tpl__ = (`
 								<span class="ownerName"></span>
 								<zenza-playlist-append class="playlistSetUploadedVideo userVideo"
 									data-command="ownerVideo"
-									title="投稿動画一覧をプレイリストで開く">▶</zenza-playlist-append>
+									title="投稿動画一覧をプレイリストで開く（動画とショートの両方。投稿日時の順）">▶</zenza-playlist-append>
+								<span class="ownerVideoKinds" role="group" aria-label="種類を選んで投稿動画一覧を開く">
+									<span class="ownerVideoKind is-long" data-command="ownerVideoLong" role="button" tabindex="0"
+										title="投稿動画だけをプレイリストで開く（ショートを除く）">動画</span>
+									<span class="ownerVideoKind is-short" data-command="ownerVideoShort" role="button" tabindex="0"
+										title="投稿ショート動画だけをプレイリストで開く">ショート</span>
+								</span>
 							</span>
 						</div>
 						<div class="publicStatus">
@@ -85261,7 +85365,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.429-task1041",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.430-task1042",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

@@ -564,6 +564,21 @@ class PlayList extends VideoList {
         const contentType = isUploader && ['long', 'short'].includes(playlist.contentType) ? playlist.contentType : 'all';
         const { contentType: _ignored, ...apiRequest } = playlist || {};
         let shortsNotice = '';
+        // Task1042: 投稿動画一覧は「動画○件・ショート○件を読み込みました」と知らせる
+        let uploaderCounts = null;
+        const uploaderLabel = () => {
+            if (!uploaderCounts) {
+                return '';
+            }
+            const parts = [];
+            if (contentType !== 'short') {
+                parts.push(`動画${uploaderCounts.videos}件`);
+            }
+            if (contentType !== 'long') {
+                parts.push(`ショート${uploaderCounts.shorts}件`);
+            }
+            return parts.join('・') + 'を読み込みました';
+        };
         const loadShorts = () => {
             const loader = this._playlistApiLoader;
             if (!isUploader || contentType === 'long' || typeof loader.loadUserShorts !== 'function') {
@@ -573,7 +588,7 @@ class PlayList extends VideoList {
                 if (contentType === 'short') {
                     throw error;
                 }
-                window.console.warn('[ZenzaWatch] 投稿ショート動画の取得に失敗しました', { userId: playlist?.id, error: String(error?.message || error) });
+                window.console.warn?.('[ZenzaWatch] 投稿ショート動画の取得に失敗しました', { userId: playlist?.id, error: String(error?.message || error) });
                 shortsNotice = '（ショート動画は取得できませんでした）';
                 return [];
             });
@@ -592,7 +607,7 @@ class PlayList extends VideoList {
             }
             const shorts = shortsResult.value || [];
             if (longResult.status === 'rejected') {
-                window.console.warn('[ZenzaWatch] 投稿動画一覧の取得に失敗しました', { userId: playlist?.id, error: String(longResult.reason?.message || longResult.reason) });
+                window.console.warn?.('[ZenzaWatch] 投稿動画一覧の取得に失敗しました', { userId: playlist?.id, error: String(longResult.reason?.message || longResult.reason) });
                 if (!shorts.length) {
                     throw longResult.reason;
                 }
@@ -600,8 +615,24 @@ class PlayList extends VideoList {
             }
             const long = longResult.status === 'fulfilled' ? longResult.value : [];
             if (isUploader) {
-                window.console.info('[ZenzaWatch] 投稿動画一覧', { userId: playlist?.id, contentType,
+                window.console.info?.('[ZenzaWatch] 投稿動画一覧', { userId: playlist?.id, contentType,
                     videos: Array.isArray(long) ? long.length : 0, shorts: shorts.length });
+            }
+            const isShortItem = (item) => item?.content?.contentType === 'short' || /^ss\d+$/.test(String(item?.content?.id || item?.watchId || ''));
+            if (isUploader) {
+                const all = [...(Array.isArray(long) ? long : []), ...shorts];
+                const ids = new Set(), shortIds = new Set();
+                for (const item of all) {
+                    const id = String(item?.content?.id || item?.watchId || '');
+                    if (!id) {
+                        continue;
+                    }
+                    ids.add(id);
+                    if (isShortItem(item)) {
+                        shortIds.add(id);
+                    }
+                }
+                uploaderCounts = { videos: ids.size - shortIds.size, shorts: shortIds.size };
             }
             if (!shorts.length) {
                 return long;
@@ -638,7 +669,10 @@ class PlayList extends VideoList {
             if (videoListItems.length < 1) {
                 return Promise.reject({
                     status: 'fail',
-                    message: 'プレイリストの取得に失敗しました'
+                    // Task1042: 種類を絞った投稿動画一覧で0件のときは、そうと分かる文にする
+                    message: isUploader && uploaderCounts ?
+                        (contentType === 'short' ? '投稿ショート動画はありませんでした' : contentType === 'long' ? '投稿動画（ショート以外）はありませんでした' : '投稿動画はありませんでした') :
+                        'プレイリストの取得に失敗しました'
                 });
             }
             if (options.shuffle) {
@@ -686,9 +720,11 @@ class PlayList extends VideoList {
             }
             return Promise.resolve({
                 status: 'ok',
-                message: (added !== null ?
-                    `プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
-                    'プレイリストに読み込みしました') + capacityNotice + shortsNotice
+                message: (uploaderCounts ?
+                    uploaderLabel() + (added !== null ? `（プレイリストに${added}件追加${overflow ? `・上限により${overflow}件追加できませんでした` : ''}）` : '') :
+                    added !== null ?
+                        `プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
+                        'プレイリストに読み込みしました') + capacityNotice + shortsNotice
             });
         }, error => {
             if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {

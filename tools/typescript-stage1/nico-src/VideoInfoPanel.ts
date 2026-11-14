@@ -134,6 +134,15 @@ class VideoInfoPanel extends Emitter {
     });
 
     view.addEventListener('mousemove', (e?: Loose) => e.stopPropagation());
+    // Task1042: ▶ にマウスを乗せたら「動画」「ショート」のボタンを横に出す。小さいので一度出したら出したままにする。
+    const ownerVideoButton = view.querySelector('.playlistSetUploadedVideo');
+    const revealOwnerVideoKinds = () => view.querySelector('.ownerVideoKinds')?.classList.add('is-revealed');
+    ownerVideoButton?.addEventListener('mouseenter', revealOwnerVideoKinds);
+    ownerVideoButton?.addEventListener('focus', revealOwnerVideoKinds);
+    view.addEventListener('keydown', (e: KeyboardEvent) => {
+      const kind = (e.target as Element | null)?.closest?.('.ownerVideoKind') as HTMLElement | null;
+      if (kind && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); kind.click(); }
+    });
     view.addEventListener('command', this._onCommandEvent.bind(this));
     view.addEventListener('click', this._onClick.bind(this));
     view.addEventListener('keydown', this._onTabKeyDown.bind(this));
@@ -587,6 +596,12 @@ class VideoInfoPanel extends Emitter {
       case 'ownerVideo':
         domEvent.dispatchCommand(this._view, 'playlistSetUploadedVideo', this._videoInfo.owner.id);
         break;
+      // Task1042: ▶ の横の「動画」「ショート」。種類を絞って投稿動画一覧を開く
+      case 'ownerVideoLong':
+      case 'ownerVideoShort':
+        domEvent.dispatchCommand(this._view, 'playlistSetUploadedVideo',
+          {id: this._videoInfo.owner.id, contentType: command === 'ownerVideoShort' ? 'short' : 'long'});
+        break;
       default:
         return;
     }
@@ -966,6 +981,53 @@ css.addStyle(`
   .zenzaWatchVideoInfoPanel .videoInfoTab .pocket-info,
   .zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd {
     display: none;
+  }
+  /* Task1042: ▶ の横の「動画」「ショート」。▶ にマウスを乗せると右から出てきて、そのまま残る */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds.is-revealed {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind {
+    display: inline-block;
+    padding: 0 7px;
+    height: 20px;
+    line-height: 20px;
+    font-size: 12px;
+    border-radius: 10px;
+    background: #444;
+    color: #ddd;
+    border: 1px solid #777;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind::before {
+    margin-right: 3px;
+    font-size: 10px;
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-long::before { content: '▭'; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-short::before { content: '▯'; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:hover,
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:focus-visible {
+    background: #666;
+    color: #fff;
+    border-color: #aaa;
+    outline: none;
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:active {
+    transform: scale(0.94);
   }
 
   .zenzaWatchVideoInfoPanel .videoInfoTab .owner:hover .playlistAppend,
@@ -1568,7 +1630,13 @@ VideoInfoPanel.__tpl__ = (`
                 <span class="ownerName"></span>
                 <zenza-playlist-append class="playlistSetUploadedVideo userVideo"
                   data-command="ownerVideo"
-                  title="投稿動画一覧をプレイリストで開く">▶</zenza-playlist-append>
+                  title="投稿動画一覧をプレイリストで開く（動画とショートの両方。投稿日時の順）">▶</zenza-playlist-append>
+                <span class="ownerVideoKinds" role="group" aria-label="種類を選んで投稿動画一覧を開く">
+                  <span class="ownerVideoKind is-long" data-command="ownerVideoLong" role="button" tabindex="0"
+                    title="投稿動画だけをプレイリストで開く（ショートを除く）">動画</span>
+                  <span class="ownerVideoKind is-short" data-command="ownerVideoShort" role="button" tabindex="0"
+                    title="投稿ショート動画だけをプレイリストで開く">ショート</span>
+                </span>
               </span>
             </div>
             <div class="publicStatus">

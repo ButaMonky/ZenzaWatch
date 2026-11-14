@@ -309,9 +309,15 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
           headers: {'X-Frontend-Id': 6, 'X-Frontend-Version': 0},
           credentials: 'include', timeout: 15000,
           ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => !isCurrent || isCurrent()} : {})
-        }).then((r: Response) => r.json()) as {meta?: {status?: unknown}; data?: {items?: unknown; totalCount?: unknown}};
+        }).then(async (r: Response) => {
+          const body = await r.json().catch(() => null);
+          if (!r.ok && !body) { throw new Error(`ショート動画の取得失敗 HTTP ${r.status} (${page}ページ目)`); }
+          return body;
+        }) as {meta?: {status?: unknown; errorCode?: unknown}; data?: {items?: unknown; totalCount?: unknown}};
         if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
-          throw new Error(`ショート動画の取得失敗(1) (${page}ページ目)`);
+          // 理由（HTTP状態・エラーコード・欠けた項目）を通知とコンソールで分かるようにする
+          const why = result?.meta?.status !== 200 ? `status ${String(result?.meta?.status)}${result?.meta?.errorCode ? ' ' + String(result.meta.errorCode) : ''}` : 'data.items がありません';
+          throw new Error(`ショート動画の取得失敗(1) ${why} (${page}ページ目)`);
         }
         const count = Number(result.data.totalCount);
         if (Number.isSafeInteger(count) && count >= 0) { total = count; }

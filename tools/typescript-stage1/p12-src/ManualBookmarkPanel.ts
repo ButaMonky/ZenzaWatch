@@ -896,7 +896,8 @@ export class ManualBookmarkPanel {
     const description=doc.createElement('span');description.textContent=(item?.label||'ここまで見た')+' · '+displayTime(time)+
       (item?.endTime===undefined?'':' – '+displayTime(item.endTime));
     const seek=this.libraryButton(item?'seek':'seek-auto',item?'ここから再生':'続きへ',video.videoId,item?.id);
-    seek.disabled=time<0||time>=video.duration||!this.deps.openLibraryPosition;
+    // Task1041: 終わりの位置でも押せるようにする（開く側が最初から再生する）
+    seek.disabled=time<0||!this.deps.openLibraryPosition;
     row.append(this.preview(video.videoId,time),description,seek);
     if(item?.endTime!==undefined){const repeat=this.libraryButton('repeat','リピート',video.videoId,item.id);
       repeat.disabled=!this.deps.openLibraryPosition||this.deps.repeatEnabled?.()===false;row.append(repeat);}
@@ -934,7 +935,7 @@ export class ManualBookmarkPanel {
     const item=video.bookmarks.find(row=>row.id===button.dataset.bookmarkId);
     const time=item?.time??video.automaticTime;
     if(action==='seek'||action==='seek-auto'||action==='repeat'){
-      if(time===null||time<0||time>=video.duration)return;
+      if(time===null||time<0||(action==='repeat'&&time>=video.duration))return;
       if(action==='repeat'&&item?.endTime!==undefined&&video.videoId===this.last.videoId&&this.ownsVideo()){this.setRepeatRange(time,item.endTime);return;}
       this.libraryDrafts.clear();this.library=false;this.libraryGeneration++;this.render(this.last);
       this.deps.openLibraryPosition?.(video.videoId,time,action==='repeat'?item?.endTime:undefined);return;

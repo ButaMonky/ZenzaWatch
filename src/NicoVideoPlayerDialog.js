@@ -1070,8 +1070,9 @@ class NicoVideoPlayerDialogView extends Emitter {
         if (videoId === this._state.videoInfo?.watchId) {
             if (endTime !== undefined)
                 this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
+            // Task1041: 終わりの位置なら最初から
             else
-                this.emit('command', 'seekTo', time);
+                this.emit('command', 'seekTo', NicoVideoPlayerDialog.isNearPlaybackEnd(time, this._state.videoInfo?.duration) ? 0 : time);
             return;
         }
         try {
@@ -5831,6 +5832,12 @@ class NicoVideoPlayerDialog extends Emitter {
         // パラメータで開始秒数が指定されていたらそこにシーク
         let currentTime = this._videoWatchOptions.currentTime;
         if (currentTime > 0) {
+            // Task1041: 終わりの位置（残り3秒以内）から始めると、すぐ終わって再生できないように見える。最初から再生する。
+            const duration = this._nicoVideoPlayer?.duration;
+            if (NicoVideoPlayerDialog.isNearPlaybackEnd(currentTime, duration) && Number(duration) > 6) {
+                this.execCommand('notify', '保存されていた位置が動画の最後だったため、最初から再生します');
+                return;
+            }
             this.currentTime = currentTime;
         }
     }
@@ -6380,6 +6387,11 @@ class NicoVideoPlayerDialog extends Emitter {
         const save = this._savePlaybackPositionNow || this._savePlaybackPosition;
         save.call(this, contextWatchId, ct);
     }
+    /** Task1041: 残り3秒以内（または終わりを越えた位置）なら「最後まで見た」とみなす */
+    static isNearPlaybackEnd(seconds, duration) {
+        const t = Number(seconds), d = Number(duration);
+        return Number.isFinite(t) && Number.isFinite(d) && d > 0 && t >= d - 3;
+    }
     _queuePlaybackPositionSave(videoId, record) {
         // Watch aliases can share a video: serialize the actual PUT resource.
         const queues = this._playbackPositionSaves || (this._playbackPositionSaves = new Map());
@@ -6409,7 +6421,12 @@ class NicoVideoPlayerDialog extends Emitter {
         if (this._playerConfig?.getValue('resume.recordEnabled') === false)
             return;
         const current = this._videoInfo;
-        if (current && current.contextWatchId === contextWatchId && Number.isFinite(ct) && ct > 0 &&
+        // Task1041: 最後まで（残り3秒以内）見た位置は「ここまで見た」に残さない。
+        // 以前はサーバーへの保存だけがこの判定をしていて、手元の履歴には動画の終わりの位置が残っていた。
+        // 連続再生で次の動画へ進むと、終了時に消した位置を open() の保存が終わりの位置で上書きし、
+        // しおりの保存一覧の「続きへ」が押せない（終わりの位置）か、開いてもすぐ終わって再生できなかった。
+        const nearEnd = NicoVideoPlayerDialog.isNearPlaybackEnd(ct, this.duration) || !!this._state?.isEnded;
+        if (current && current.contextWatchId === contextWatchId && Number.isFinite(ct) && ct > 0 && !nearEnd &&
             !this._isAutoResumeSaveSuppressed()) {
             const watchId = this._watchId, requestId = this._requestId;
             void Promise.resolve(WatchInfoCacheDb.putBestEffort(watchId, { currentTime: ct })).then(record => {

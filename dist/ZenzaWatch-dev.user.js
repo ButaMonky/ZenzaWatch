@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.428-task1040
+// @version        2.7.429-task1041
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-14 22:38Z 4917cfa
+// build: 2026-11-14 22:52Z 0d5c9c1
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2071,10 +2071,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.428-task1040';
+    var VER = '2.7.429-task1041';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-14 22:38Z 4917cfa';
+    var BUILD = '2026-11-14 22:52Z 0d5c9c1';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -14133,9 +14133,16 @@ const PlaylistApiLoader = (() => {
 										headers: { 'X-Frontend-Id': 6, 'X-Frontend-Version': 0 },
 										credentials: 'include', timeout: 15000,
 										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-								}).then((r) => r.json());
+								}).then(async (r) => {
+										const body = await r.json().catch(() => null);
+										if (!r.ok && !body) {
+												throw new Error(`ショート動画の取得失敗 HTTP ${r.status} (${page}ページ目)`);
+										}
+										return body;
+								});
 								if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
-										throw new Error(`ショート動画の取得失敗(1) (${page}ページ目)`);
+										const why = result?.meta?.status !== 200 ? `status ${String(result?.meta?.status)}${result?.meta?.errorCode ? ' ' + String(result.meta.errorCode) : ''}` : 'data.items がありません';
+										throw new Error(`ショート動画の取得失敗(1) ${why} (${page}ページ目)`);
 								}
 								const count = Number(result.data.totalCount);
 								if (Number.isSafeInteger(count) && count >= 0) {
@@ -18065,7 +18072,7 @@ class ManualBookmarkPanel {
 				description.textContent = (item?.label || 'ここまで見た') + ' · ' + displayTime(time) +
 						(item?.endTime === undefined ? '' : ' – ' + displayTime(item.endTime));
 				const seek = this.libraryButton(item ? 'seek' : 'seek-auto', item ? 'ここから再生' : '続きへ', video.videoId, item?.id);
-				seek.disabled = time < 0 || time >= video.duration || !this.deps.openLibraryPosition;
+				seek.disabled = time < 0 || !this.deps.openLibraryPosition;
 				row.append(this.preview(video.videoId, time), description, seek);
 				if (item?.endTime !== undefined) {
 						const repeat = this.libraryButton('repeat', 'リピート', video.videoId, item.id);
@@ -18144,7 +18151,7 @@ class ManualBookmarkPanel {
 				const item = video.bookmarks.find(row => row.id === button.dataset.bookmarkId);
 				const time = item?.time ?? video.automaticTime;
 				if (action === 'seek' || action === 'seek-auto' || action === 'repeat') {
-						if (time === null || time < 0 || time >= video.duration)
+						if (time === null || time < 0 || (action === 'repeat' && time >= video.duration))
 								return;
 						if (action === 'repeat' && item?.endTime !== undefined && video.videoId === this.last.videoId && this.ownsVideo()) {
 								this.setRepeatRange(time, item.endTime);
@@ -45499,7 +45506,7 @@ class PlayList extends VideoList {
 								if (contentType === 'short') {
 										throw error;
 								}
-								window.console.warn('投稿ショート動画の取得に失敗しました', error);
+								window.console.warn('[ZenzaWatch] 投稿ショート動画の取得に失敗しました', { userId: playlist?.id, error: String(error?.message || error) });
 								shortsNotice = '（ショート動画は取得できませんでした）';
 								return [];
 						});
@@ -45509,7 +45516,23 @@ class PlayList extends VideoList {
 								maxItems: 10000,
 								isCurrent: loadCurrent
 						}, msgInfo);
-				const network = Promise.all([loadLong(), loadShorts()]).then(([long, shorts]) => {
+				const network = Promise.allSettled([loadLong(), loadShorts()]).then(([longResult, shortsResult]) => {
+						if (shortsResult.status === 'rejected') {
+								throw shortsResult.reason;
+						}
+						const shorts = shortsResult.value || [];
+						if (longResult.status === 'rejected') {
+								window.console.warn('[ZenzaWatch] 投稿動画一覧の取得に失敗しました', { userId: playlist?.id, error: String(longResult.reason?.message || longResult.reason) });
+								if (!shorts.length) {
+										throw longResult.reason;
+								}
+								shortsNotice = '（投稿動画は取得できず、ショート動画だけ読み込みました）';
+						}
+						const long = longResult.status === 'fulfilled' ? longResult.value : [];
+						if (isUploader) {
+								window.console.info('[ZenzaWatch] 投稿動画一覧', { userId: playlist?.id, contentType,
+										videos: Array.isArray(long) ? long.length : 0, shorts: shorts.length });
+						}
 						if (!shorts.length) {
 								return long;
 						}
@@ -54755,7 +54778,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 						if (endTime !== undefined)
 								this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
 						else
-								this.emit('command', 'seekTo', time);
+								this.emit('command', 'seekTo', NicoVideoPlayerDialog.isNearPlaybackEnd(time, this._state.videoInfo?.duration) ? 0 : time);
 						return;
 				}
 				try {
@@ -59098,6 +59121,11 @@ class NicoVideoPlayerDialog extends Emitter {
 				}
 				let currentTime = this._videoWatchOptions.currentTime;
 				if (currentTime > 0) {
+						const duration = this._nicoVideoPlayer?.duration;
+						if (NicoVideoPlayerDialog.isNearPlaybackEnd(currentTime, duration) && Number(duration) > 6) {
+								this.execCommand('notify', '保存されていた位置が動画の最後だったため、最初から再生します');
+								return;
+						}
 						this.currentTime = currentTime;
 				}
 		}
@@ -59605,6 +59633,10 @@ class NicoVideoPlayerDialog extends Emitter {
 				const save = this._savePlaybackPositionNow || this._savePlaybackPosition;
 				save.call(this, contextWatchId, ct);
 		}
+		static isNearPlaybackEnd(seconds, duration) {
+				const t = Number(seconds), d = Number(duration);
+				return Number.isFinite(t) && Number.isFinite(d) && d > 0 && t >= d - 3;
+		}
 		_queuePlaybackPositionSave(videoId, record) {
 				const queues = this._playbackPositionSaves || (this._playbackPositionSaves = new Map());
 				const previous = queues.get(videoId);
@@ -59630,7 +59662,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (this._playerConfig?.getValue('resume.recordEnabled') === false)
 						return;
 				const current = this._videoInfo;
-				if (current && current.contextWatchId === contextWatchId && Number.isFinite(ct) && ct > 0 &&
+				const nearEnd = NicoVideoPlayerDialog.isNearPlaybackEnd(ct, this.duration) || !!this._state?.isEnded;
+				if (current && current.contextWatchId === contextWatchId && Number.isFinite(ct) && ct > 0 && !nearEnd &&
 						!this._isAutoResumeSaveSuppressed()) {
 						const watchId = this._watchId, requestId = this._requestId;
 						void Promise.resolve(WatchInfoCacheDb.putBestEffort(watchId, { currentTime: ct })).then(record => {
@@ -85228,7 +85261,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.428-task1040",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.429-task1041",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

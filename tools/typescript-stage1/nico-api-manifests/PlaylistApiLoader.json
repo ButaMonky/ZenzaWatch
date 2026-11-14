@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/PlaylistApiLoader.ts",
   "runtime": "packages/lib/src/nico/PlaylistApiLoader.js",
-  "sourceSha256": "64e61385f686f54cf39e642885338f31dba4ee91ec8c906df0b73161009a8388",
-  "runtimeSha256": "1ec8cb8dff19b277e010b1506957d64165bceec37f8a432f657a4c7d19fc8bc5"
+  "sourceSha256": "0d1825e41aef825e390ba3cdf85982bbdd5691a8d4e809f813b95ecbae6ba585",
+  "runtimeSha256": "46498078b3bd1d3553d8ed9ee755e3c0a731dd9c0849bcfb0fc5509e8ba7e6a8"
 }

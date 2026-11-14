@@ -573,7 +573,7 @@ class PlayList extends VideoList {
                 if (contentType === 'short') {
                     throw error;
                 }
-                window.console.warn('投稿ショート動画の取得に失敗しました', error);
+                window.console.warn('[ZenzaWatch] 投稿ショート動画の取得に失敗しました', { userId: playlist?.id, error: String(error?.message || error) });
                 shortsNotice = '（ショート動画は取得できませんでした）';
                 return [];
             });
@@ -584,7 +584,25 @@ class PlayList extends VideoList {
                 maxItems: 10000,
                 isCurrent: loadCurrent
             }, msgInfo);
-        const network = Promise.all([loadLong(), loadShorts()]).then(([long, shorts]) => {
+        // Task1041: ショートだけ投稿している人などで投稿動画側の取得が失敗しても、ショートが取れたらそれで読み込む。
+        // どちらの失敗も、取得先と理由をコンソールに出す（原因の切り分け用）。
+        const network = Promise.allSettled([loadLong(), loadShorts()]).then(([longResult, shortsResult]) => {
+            if (shortsResult.status === 'rejected') {
+                throw shortsResult.reason;
+            }
+            const shorts = shortsResult.value || [];
+            if (longResult.status === 'rejected') {
+                window.console.warn('[ZenzaWatch] 投稿動画一覧の取得に失敗しました', { userId: playlist?.id, error: String(longResult.reason?.message || longResult.reason) });
+                if (!shorts.length) {
+                    throw longResult.reason;
+                }
+                shortsNotice = '（投稿動画は取得できず、ショート動画だけ読み込みました）';
+            }
+            const long = longResult.status === 'fulfilled' ? longResult.value : [];
+            if (isUploader) {
+                window.console.info('[ZenzaWatch] 投稿動画一覧', { userId: playlist?.id, contentType,
+                    videos: Array.isArray(long) ? long.length : 0, shorts: shorts.length });
+            }
             if (!shorts.length) {
                 return long;
             }

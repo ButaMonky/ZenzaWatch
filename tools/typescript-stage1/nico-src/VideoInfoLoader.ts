@@ -47,6 +47,7 @@ export interface VideoInfoLoaderClient {
   loadStoryboardInfo(watchId:string,options:LoadOptions):Promise<Loose>;
   /** Passive, cancellable metadata read; does not touch active watch ownership or publish events. */
   prefetch(watchId:string,options:LoadOptions):Promise<Loose>;
+  adoptPrefetched(watchId: string, data: Loose, options: LoadOptions): Promise<Loose>;
   /** Resolves the legacy `html5watchApi` data; rejects with a WatchLoadError. */
   load(watchId: string, options: LoadOptions): Promise<Loose>;
 }
@@ -69,24 +70,36 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
   // NICOCOMPAT-04 / Task455: validate only the structural fields that the
   // existing V4-to-legacy conversion must dereference. A missing optional
   // comment/media/owner section is not itself a schema failure.
-  const validWatchV4Structure = (data: Loose): boolean => {
+  /**
+   * Task1036: 形式が想定と違うとき、最初に食い違った項目の場所を返す（問題なければ null）。
+   * ニコニコの仕様変更で壊れたとき、通知履歴に「どの項目が読めなかったか」を出すため。値は返さない。
+   */
+  const missingWatchV4Field = (data: Loose): string | null => {
     const record = (value: unknown): boolean => value !== null && typeof value === 'object' &&
       !Array.isArray(value);
-    return record(data) &&
-      record(data.client) &&
-      typeof data.client.watchId === 'string' && !!data.client.watchId &&
-      (data.client.watchTrackId === undefined ||
-        typeof data.client.watchTrackId === 'string') &&
-      record(data.video) && typeof data.video.id === 'string' && !!data.video.id &&
-      typeof data.video.title === 'string' &&
-      typeof data.video.duration === 'number' &&
-      Number.isFinite(data.video.duration) && data.video.duration >= 0 &&
-      record(data.video.count) &&
-      (data.video.thumbnail == null || record(data.video.thumbnail)) &&
-      record(data.player) && record(data.genre) &&
-      record(data.tags) && Array.isArray(data.tags.items) &&
-      data.tags.items.every(record);
+    const checks: [string, () => boolean][] = [
+      ['data', () => record(data)],
+      ['data.client', () => record(data.client)],
+      ['data.client.watchId', () => typeof data.client.watchId === 'string' && !!data.client.watchId],
+      ['data.client.watchTrackId', () => data.client.watchTrackId === undefined || typeof data.client.watchTrackId === 'string'],
+      ['data.video', () => record(data.video)],
+      ['data.video.id', () => typeof data.video.id === 'string' && !!data.video.id],
+      ['data.video.title', () => typeof data.video.title === 'string'],
+      ['data.video.duration', () => typeof data.video.duration === 'number' &&
+        Number.isFinite(data.video.duration) && data.video.duration >= 0],
+      ['data.video.count', () => record(data.video.count)],
+      ['data.video.thumbnail', () => data.video.thumbnail == null || record(data.video.thumbnail)],
+      ['data.player', () => record(data.player)],
+      ['data.genre', () => record(data.genre)],
+      ['data.tags', () => record(data.tags)],
+      ['data.tags.items', () => Array.isArray(data.tags.items) && data.tags.items.every(record)]
+    ];
+    for (const [path, ok] of checks) {
+      try { if (!ok()) { return path; } } catch (_) { return path; }
+    }
+    return null;
   };
+  const validWatchV4Structure = (data: Loose): boolean => missingWatchV4Field(data) === null;
 
   // Task153: adapt watch v4 at the boundary; keep the existing player contract.
   const normalizeWatchV4 = async (response: Loose | undefined, requestedWatchId: string): Promise<Loose | undefined> => {
@@ -95,7 +108,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     if (data.errorCode) return data;
     if (!validWatchV4Structure(data)) {
       // Never retain raw responses, URLs or key material in diagnostics.
-      return {errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4'};
+      return {errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4', missing: missingWatchV4Field(data) || 'unknown'};
     }
 
     // Lazy keys are bound to the requested ID (including numeric channel IDs).
@@ -220,7 +233,8 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
         message,
         statusCode,
         errorCode,
-        reasonCode
+        reasonCode,
+        ...(typeof response.missing === 'string' ? {missing: response.missing} : {})
       };
     }
 
@@ -776,6 +790,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
             ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING'].includes(err.errorCode)) {
           return Promise.reject({
             watchId, reason: 'watch api', errorCode: err.errorCode,
+            ...(typeof err.missing === 'string' ? {missing: err.missing} : {}),
             message: err.message || '動画情報の形式が変更されました'
           });
         } else if (err.reason === 'network') {
@@ -839,6 +854,30 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       requireActive(options);
       if (!data || data.reject || !data.isPlayable) {
         throw Object.assign(new Error('Video unavailable for prefetch'), {name: 'PrefetchUnavailable'});
+      }
+      return data;
+    },
+    /**
+     * Task1030: 先読みで取得済みの視聴メタデータを、通常の読み込み結果として採用する。
+     * 切り替え時間の大半は watch ページの再取得（300〜600ms）だったため、これを省く。
+     * prefetch() が省いていた「通常再生だけが持つ処理」（読み込み世代の更新・CSRFトークンの
+     * 公開・投稿者の補完・loadVideoInfo イベント）はここで行い、load() と同じ状態にする。
+     */
+    adoptPrefetched: async function (watchId: string, data: Loose, options: LoadOptions): Promise<Loose> {
+      debug.watchApiData = undefined;
+      const generation = ++anonymousWatchLoadSerial;
+      const callerSignal = options?.signal;
+      const isCurrent = (): boolean => generation === anonymousWatchLoadSerial &&
+        !(callerSignal != null && typeof callerSignal === 'object' && callerSignal.aborted === true);
+      if (!data || data.reject || !data.isPlayable) {
+        throw Object.assign(new Error('Prefetched data is not playable'), {name: 'PrefetchUnavailable'});
+      }
+      requireActive(options || {});
+      if (data.csrfToken) { emitter.emitAsync('csrfTokenUpdate', data.csrfToken); }
+      await resolveMissingOwner(data).catch(() => window.console.warn('resolveMissingOwner failed'));
+      requireActive(options || {});
+      if (isCurrent()) {
+        emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);
       }
       return data;
     },

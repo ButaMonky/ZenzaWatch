@@ -16,7 +16,7 @@ const SECRETS = {
   postKey: 'SYNTH-POSTKEY-7f3a',
   threadKey: 'SYNTH-THREADKEY-91c2',
   retryThreadKey: 'SYNTH-THREADKEY-RETRY-55aa',
-  nicoruKey: 'fixture',
+  nicoruKey: 'SYNTH-NICORUKEY-0b1e',
   deleteKey: 'SYNTH-DELETEKEY-c4d5',
   text: 'SYNTH-BODY-こんにちは-8e9f',
   command: 'SYNTH-COMMAND-private-55ef',

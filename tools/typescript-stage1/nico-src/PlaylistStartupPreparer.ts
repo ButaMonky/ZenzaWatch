@@ -44,6 +44,8 @@ export interface PreparedNext<D, B extends StartupBytesLike> {
   expiresAt: number | undefined;
   /** 先読みした付随データ（コメント結果など）。 */
   companions: Record<string, unknown> | null;
+  /** Task1030: 視聴メタデータを取得した時刻（epoch ms）。再利用してよい鮮度の判定に使う。 */
+  dataAt: number;
   adopted: boolean;
   dispose(): void;
 }
@@ -120,6 +122,7 @@ export const createPlaylistStartupPreparer = <D, I extends VideoInfoLike, B exte
     try {
       check();
       const data = await deps.loadVideoInfo(watchId, signal);
+      const dataAt = Date.now();
       check();
       stage = 'eligibility';
       const info = deps.createModel(data);
@@ -164,7 +167,7 @@ export const createPlaylistStartupPreparer = <D, I extends VideoInfoLike, B exte
         report('prepared', {bytes: preparedBytes.bytes, startLevel: preparedBytes.startLevel, stages: preparedBytes.stages,
           companions: companions ? Object.keys(companions).join(',') : '', expiresInSec});
         const prepared: PreparedNext<D, B> = {watchId, data, session, sessionInfo, bytes: preparedBytes, settings,
-          expiresAt, companions, adopted: false,
+          expiresAt, companions, dataAt, adopted: false,
           dispose() { if (!this.adopted) close(); }};
         return prepared;
       } catch (error) {

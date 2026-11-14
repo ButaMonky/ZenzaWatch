@@ -8,6 +8,10 @@
  *    必ず失敗していた。→ https かつ nicovideo.jp 配下（ポート・認証情報なし）を許可する。
  *  - 失敗理由を PrefetchError.detail（段階・理由・ホスト・HTTPステータス）として返す。
  *  - 開始画質を hls.js と同じ考え方（設定の startLevel／推定回線速度）で選ぶ。旧版は常に最低画質だった。
+ *
+ * Task1031: 自動画質でも、先読みは選べる中で最高の画質で取る（preferHighest）。画質を指定している場合は
+ *  セッション側でその画質1本だけになるので、そのまま指定画質になる。推定回線速度で選ぶと、背景で
+ *  取得した遅い実測が混ざって低画質で始まることがあった。
  */
 export type PrefetchKind = 'video' | 'audio' | 'media';
 export type PrefetchPart = 'playlist' | 'key' | 'init' | 'segment';
@@ -50,6 +54,11 @@ export interface PreparedStartup {
   stages: PrefetchStage[];
   /** hls.js が先読みデータを実際に使った回数（診断用）。 */
   hits: number;
+  /** Task1031: 先読み時の推定回線速度 (bps)。キャッシュ応答の速度を hls.js へ報告するときの下限に使う。 */
+  bandwidthEstimate?: number;
+  /** Task1030: 先読みデータが有効な間に、先読みに無くてネットワークへ出た回数と種類（診断用・URLは持たない）。 */
+  misses?: number;
+  missKinds?: string[];
   dispose(): void;
 }
 
@@ -59,6 +68,8 @@ export interface PrefetchOptions {
   startLevel?: number;
   /** 自動のときに使う推定回線速度 (bps)。 */
   bandwidthEstimate?: number;
+  /** Task1031: 設定の startLevel が自動のとき、最高画質を選ぶ。 */
+  preferHighest?: boolean;
   /** 合計取得量の上限 (bytes)。 */
   maxBytes?: number;
   now?: () => number;
@@ -88,12 +99,15 @@ export const parseAttributes = (line: string): Record<string, string> => {
 
 /** hls.js はレベルをビットレート昇順に並べるので、同じ並びでのインデックスを返す。 */
 export const chooseStartVariant = <T extends {bandwidth: number; index: number}>(
-  variants: readonly T[], startLevel?: number, bandwidthEstimate?: number): {variant: T; level: number} | null => {
+  variants: readonly T[], startLevel?: number, bandwidthEstimate?: number,
+  preferHighest = false): {variant: T; level: number} | null => {
   const sorted = variants.slice().sort((a, b) => a.bandwidth - b.bandwidth || a.index - b.index);
   if (!sorted.length) return null;
   let level = 0;
   if (typeof startLevel === 'number' && Number.isFinite(startLevel) && startLevel >= 0) {
     level = Math.min(Math.round(startLevel), sorted.length - 1);
+  } else if (preferHighest) {
+    level = sorted.length - 1;
   } else if (typeof bandwidthEstimate === 'number' && bandwidthEstimate > 0) {
     const budget = bandwidthEstimate * BANDWIDTH_FACTOR;
     for (let i = 0; i < sorted.length; i++) {
@@ -261,7 +275,7 @@ const HlsPrefetch = (() => {
       if (!variants.length) {
         await media(source, 'media');
       } else {
-        const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate);
+        const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate, options.preferHighest === true);
         if (!choice) throw fail('invalid variant');
         startLevel = choice.level;
         const chosen = choice.variant;
@@ -274,7 +288,9 @@ const HlsPrefetch = (() => {
         await media(chosen.uri, 'video');
       }
       check();
-      return {source, entries, bytes, startLevel, stages, hits: 0, dispose() { entries.clear(); }};
+      return {source, entries, bytes, startLevel, stages, hits: 0,
+        ...(typeof options.bandwidthEstimate === 'number' && options.bandwidthEstimate > 0 ? {bandwidthEstimate: options.bandwidthEstimate} : {}),
+        dispose() { entries.clear(); }};
     } catch (error) {
       entries.clear();
       throw error;
@@ -288,15 +304,32 @@ const HlsPrefetch = (() => {
       canceled = false;
       override load(context: LoaderContext, config: unknown, callbacks: LoaderCallbacks): void {
         const hit = !context.rangeStart && !context.rangeEnd ? active?.entries.get(context.url) : undefined;
-        if (!hit) { super.load(context, config, callbacks); return; }
+        if (!hit) {
+          if (active) {
+            active.misses = (active.misses || 0) + 1;
+            const kinds = active.missKinds ||= [];
+            if (kinds.length < 12) {
+              const type = (context as {type?: unknown}).type;
+              kinds.push(`${typeof type === 'string' ? type : 'frag'}:${context.responseType || 'text'}` +
+                (context.rangeStart || context.rangeEnd ? ':range' : ''));
+            }
+          }
+          super.load(context, config, callbacks); return;
+        }
         this.cached = true;
         if (active) active.hits++;
         this.context = context;
         const data = context.responseType === 'arraybuffer' ? hit.data.slice(0) : new TextDecoder().decode(hit.data);
         const t = performance.now();
+        // Task1031: 背景で取得したときの速度（本編と帯域を分け合って遅い）をそのまま報告すると、
+        // hls.js が回線を遅いと判断して次のセグメントから画質を下げる。記録済みの推定速度を下限にする。
+        const measured = hit.data.byteLength * 8000 / Math.max(1, hit.elapsed);
+        const floor = active?.bandwidthEstimate || 0;
+        const bw = Math.max(measured, floor);
+        const elapsed = hit.data.byteLength * 8000 / Math.max(1, bw);
         Object.assign(this.stats, {aborted: false, loaded: hit.data.byteLength, total: hit.data.byteLength, retry: 0,
-          bwEstimate: hit.data.byteLength * 8000 / hit.elapsed});
-        Object.assign(this.stats.loading, {start: t - hit.elapsed, first: t - hit.elapsed, end: t});
+          bwEstimate: bw});
+        Object.assign(this.stats.loading, {start: t - elapsed, first: t - elapsed, end: t});
         queueMicrotask(() => {
           if (this.canceled) return;
           callbacks.onSuccess({url: hit.url, data, code: 200}, this.stats, context, null);
@@ -314,7 +347,13 @@ const HlsPrefetch = (() => {
     activate(value: PreparedStartup): void { clear(); active = value; expires = setTimeout(clear, 45000); },
     startLevel(source: string): number | undefined { return active?.source === source ? active.startLevel : undefined; },
     /** 診断用: 再生開始時に、先読みデータが実際に hls.js から引かれたかを返す。 */
-    hits(source: string): number { return active?.source === source ? active.hits : 0; }
+    hits(source: string): number { return active?.source === source ? active.hits : 0; },
+    /** Task1030 診断: 先読みデータの利用状況（URLは含めない）。 */
+    stats(source: string): {hits: number; misses: number; missKinds: string[]; entries: number; startLevel: number} | null {
+      if (!active || active.source !== source) return null;
+      return {hits: active.hits, misses: active.misses || 0, missKinds: (active.missKinds || []).slice(),
+        entries: new Set([...active.entries.values()]).size, startLevel: active.startLevel};
+    }
   };
 })();
 

@@ -13,9 +13,11 @@ import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';
 import {ScreenshotFileName} from './ScreenshotFileName';
+import {createPlaybackRateReconciler} from '../packages/zenza/src/videoPlayer/PlaybackRateReconciler';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/NicoVideoPlayer.ts (Task963). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require createPlaybackRateReconciler
 /**
  * VideoPlayer + CommentPlayer = NicoVideoPlayer
  *
@@ -1207,6 +1209,7 @@ class VideoPlayer extends Emitter {
         this._canPlay = false;
         this.volume = volume;
         this.muted = params.mute;
+        this._rateReconciler = this._createRateReconciler(playbackRate);
         this.playbackRate = playbackRate;
         this._touchWrapper = new TouchWrapper({
             parentElement: body
@@ -1223,6 +1226,24 @@ class VideoPlayer extends Emitter {
         Object.assign(global.external, { getVideoElement: () => this._video });
     }
     _initializeEvents() {
+        this._initializeVideoEvents();
+        const eventBridge = function (name, ...args) {
+            console.log('%c_on-%s:', 'background: cyan;', name, ...args);
+            this.emit(name, ...args);
+        };
+        const touch = util.$(this._touchWrapper.body);
+        touch
+            .on('click', eventBridge.bind(this, 'click'))
+            .on('dblclick', this._onDoubleClick.bind(this))
+            .on('contextmenu', eventBridge.bind(this, 'contextmenu'))
+            .on('wheel', this._onMouseWheel.bind(this), { passive: true });
+    }
+    /**
+     * Task1029: <video> に対するイベントだけを張る。
+     * ウォームスワップで要素を差し替えたあとに張り直せるよう、タッチ操作（入れ物の body に
+     * 張るもの）とは分けている。まとめて張り直すと、タッチ操作が二重に反応する。
+     */
+    _initializeVideoEvents() {
         const eventBridge = function (name, ...args) {
             console.log('%c_on-%s:', 'background: cyan;', name, ...args);
             this.emit(name, ...args);
@@ -1261,18 +1282,16 @@ class VideoPlayer extends Emitter {
             .on('seeking', fromNative(this._onSeeking.bind(this)))
             .on('seeked', fromNative(this._onSeeked.bind(this)))
             .on('volumechange', fromNative(this._onVolumeChange.bind(this)))
+            // Task1029: 速度が変わった合図。拡張機能が直接書き換えた場合もここに来る。
+            .on('ratechange', fromNative(this._onRateChange.bind(this)))
             .on('contextmenu', eventBridge.bind(this, 'contextmenu'))
             .on('click', eventBridge.bind(this, 'click'));
-        const touch = util.$(this._touchWrapper.body);
-        touch
-            .on('click', eventBridge.bind(this, 'click'))
-            .on('dblclick', this._onDoubleClick.bind(this))
-            .on('contextmenu', eventBridge.bind(this, 'contextmenu'))
-            .on('wheel', this._onMouseWheel.bind(this), { passive: true });
     }
     _onCanPlay(...args) {
         console.log('%c_onCanPlay:', 'background: cyan; color: blue;', ...args);
-        this.playbackRate = this.playbackRate;
+        // Task1029: 以前はここで保持値を無条件に書き戻していたため、拡張機能で変えた速度が
+        // シークや読み込みのたびに戻っていた。実際にズレているときだけ入れ直す。
+        this._reconcilePlaybackRate();
         // リピート時にも飛んでくるっぽいので初回だけにする
         if (!this._canPlay) {
             this._canPlay = true;
@@ -1648,16 +1667,97 @@ class VideoPlayer extends Emitter {
     set vpos(vpos) { this._video.currentTime = vpos / 100; }
     get isLoop() { return !!this._video.loop; }
     set isLoop(v) { this._video.loop = !!v; }
+    /**
+     * Task1029: 速度の設定。
+     * 以前は「いったん 1 倍にして 100ms 後に目的値へ」書いていたため、その 100ms の間だけ
+     * 速度が 1 倍になり、Video Speed Controller のような拡張機能と押し合いになっていた。
+     * 今は目的値を 1 回だけ書き、あわせて defaultPlaybackRate も設定する
+     * （次の動画を読み込んだときにブラウザがこの値へ戻すので、書き戻しが不要になる）。
+     */
     set playbackRate(v) {
-        console.log('setPlaybackRate', v);
-        //if (!ZenzaWatch.util.isPremium()) { v = Math.min(1, v); }
-        // たまにリセットされたり反映されなかったりする？
-        this._playbackRate = v;
-        const video = this._video;
-        video.playbackRate = 1;
-        window.setTimeout(() => video.playbackRate = parseFloat(v), 100);
+        const reconciler = this._rateReconciler;
+        const rate = reconciler ? reconciler.requestRate(v) : Number.parseFloat(v);
+        if (rate === null || !Number.isFinite(rate) || rate <= 0) {
+            return;
+        }
+        this._playbackRate = rate;
+        this._applyPlaybackRate(rate);
     }
     get playbackRate() { return this._playbackRate; }
+    /** Task1029: 外部の変更を尊重するかの設定を読む調停器を作る。 */
+    _createRateReconciler(initialRate) {
+        if (typeof createPlaybackRateReconciler !== 'function') {
+            return null;
+        }
+        return createPlaybackRateReconciler({
+            respectExternal: () => {
+                try {
+                    return Config.props['playbackRate.respectExternal'] !== false;
+                }
+                catch (_) {
+                    return true;
+                }
+            }
+        }, initialRate);
+    }
+    /** Task1029: <video> へ速度を書く唯一の場所。 */
+    _applyPlaybackRate(rate) {
+        const video = this._video;
+        if (!video) {
+            return;
+        }
+        // 先に「自分が書いた値」として記録する。書いた直後に来る ratechange を
+        // 外部の変更と誤認しないため。
+        if (this._rateReconciler) {
+            this._rateReconciler.noteApplied(rate);
+        }
+        try {
+            video.defaultPlaybackRate = rate;
+        }
+        catch (_) {
+            // 一部の環境では設定できない。playbackRate だけで続行する。
+        }
+        if (video.playbackRate !== rate) {
+            video.playbackRate = rate;
+        }
+    }
+    /** Task1029: 実際の速度と保持値がズレているときだけ入れ直す。 */
+    _reconcilePlaybackRate() {
+        const reconciler = this._rateReconciler;
+        const video = this._video;
+        if (!video) {
+            return;
+        }
+        if (!reconciler) {
+            this._applyPlaybackRate(this._playbackRate);
+            return;
+        }
+        const decision = reconciler.reconcile(video.playbackRate);
+        if (decision.kind === 'reapply') {
+            this._applyPlaybackRate(decision.rate);
+        }
+    }
+    /**
+     * Task1029: 速度が変わった合図。
+     * 拡張機能（Video Speed Controller など）が <video>.playbackRate を直接書き換えた場合も来る。
+     * 取り込むときは通常の速度コマンドと同じ経路へ流すので、設定・速度表示・コメントの
+     * 流れる速さの補正まで一緒に追随する。
+     */
+    _onRateChange() {
+        const reconciler = this._rateReconciler;
+        const video = this._video;
+        if (video && reconciler) {
+            const decision = reconciler.observe(video.playbackRate);
+            if (decision.kind === 'adopt') {
+                this._playbackRate = decision.rate;
+                this.emit('command', 'playbackRate', decision.rate);
+            }
+            else if (decision.kind === 'reapply') {
+                this._applyPlaybackRate(decision.rate);
+            }
+        }
+        this.emit('ratechange');
+    }
     get bufferedRange() { return this._video.buffered; }
     // Task 090（監査v2 ZW-020）: <video> のプロパティは autoplay（以前は autoPlay を読んでいて常に undefined）
     set isAutoPlay(v) { this._video.autoplay = !!v; }

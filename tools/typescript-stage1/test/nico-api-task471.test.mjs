@@ -194,3 +194,4 @@ test('#261: /users/me/mylists never reads previous owner private cache',async()=
   assert.equal(w.log.filter(row=>row[0]==='fetch').length,2);
   assert.equal(w.log.filter(row=>row[0]==='cache:get' && row[1]==='mylistList').length,0);
 });
+

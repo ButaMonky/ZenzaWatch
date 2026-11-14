@@ -42,7 +42,7 @@ function harness(file) {
   dialog.execCommand = (...args) => notifications.push(args);
   panel.emit = (...args) => dialog._onCommand(...args.slice(1));
   const click = () => list._onItemClick({
-    target:{closest:selector=>selector === '.nicoru-icon' ? {} : null}
+    target:{closest:selector=>String(selector).split(',').map(s=>s.trim()).includes('.nicoru-icon') ? {} : null}
   }, row);
   const settle = async () => {
     await new Promise(resolve=>setImmediate(resolve));

@@ -28,7 +28,7 @@ function harness(mode='fullscreen'){
 describe('Task956 fullscreen preview clearance from *visible* buttons',()=>{
   it('keeps the fullscreen pixel-hit regression in private CI',()=>{
     const {readFileSync}=require('fs');
-    const ci=readFileSync('.github/workflows/quality.yml','utf8');
+    const ci=readFileSync('.github/workflows/ci.yml','utf8');
     assert(ci.includes('run: node test/browser/task956-fullscreen-scene-control-clearance.cjs'));
   });
   it('reserves the rendered button top, not only the transparent control-column top',()=>{

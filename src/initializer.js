@@ -41,6 +41,59 @@ const START_PAGE_QUERY = 'hoge=fuga';
 const { initialize } = (() => {
     //@require HoverMenu
     //@require OfficialPlayerRoute
+    /**
+     * Task1036: ZenzaWatch 自身のコードで起きた、どこにも捕まえられなかったエラーを通知履歴へ残す。
+     * ニコニコのページ自体のエラーは拾わない（発生元が ZenzaWatch のときだけ）。
+     * 同じエラー（種類＋場所）は1件にまとめて回数を数える。メッセージは記録時に URL・トークンを伏せる。
+     */
+    const ZENZA_SOURCE = /ZenzaWatchRuntime\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
+    const scriptErrorWhere = (stack) => {
+        if (typeof stack !== 'string') {
+            return '';
+        }
+        for (const line of stack.split('\n').slice(1, 8)) {
+            if (!ZENZA_SOURCE.test(line)) {
+                continue;
+            }
+            const fn = /at (?:async )?([A-Za-z_$][\w$.<>]*) /.exec(line);
+            const pos = /:(\d+):\d+\)?\s*$/.exec(line);
+            return (fn ? fn[1] : 'anonymous') + (pos ? '@' + pos[1] : '');
+        }
+        return '';
+    };
+    let scriptErrorInstalled = false;
+    const installScriptErrorJournal = () => {
+        if (scriptErrorInstalled) {
+            return;
+        }
+        scriptErrorInstalled = true;
+        const recordError = (error, filename) => {
+            try {
+                const stack = typeof error?.stack === 'string' ? error.stack : '';
+                if (!ZENZA_SOURCE.test(String(filename || '')) && !ZENZA_SOURCE.test(stack)) {
+                    return;
+                }
+                const name = typeof error?.name === 'string' && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'Error';
+                const message = String(error?.message ?? error ?? '').slice(0, 300);
+                const where = scriptErrorWhere(stack).replace(/[^A-Za-z0-9_.$@<>-]/g, '').slice(0, 100);
+                const missing = RequestDiagnostics?.missingFromMessage?.(message);
+                NotificationJournal.recordDiagnostic('script-error-' + name + '-' + (where || message.slice(0, 40)), {
+                    category: 'system', source: 'script-error', level: 'error',
+                    message: 'ZenzaWatch のスクリプトエラー: ' + name + ': ' + message,
+                    details: { operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name,
+                        ...(where ? { where } : {}), ...(missing ? { missing } : {}) }
+                });
+            }
+            catch (_) { /* 記録の失敗で本体を止めない */ }
+        };
+        window.addEventListener('error', (e) => recordError(e.error || { message: e.message, name: 'Error' }, e.filename));
+        window.addEventListener('unhandledrejection', (e) => {
+            const reason = e.reason;
+            if (reason instanceof Error) {
+                recordError(reason, '');
+            }
+        });
+    };
     // GINZAを置き換えるべきか？の判定
     const overrideGinza = async (dialog, query) => {
         // GINZAで視聴のリンクできた場合はスキップ
@@ -52,9 +105,51 @@ const { initialize } = (() => {
             }
             return;
         }
-        // Retired: direct watch-page navigation belongs to the official player.
-        // Old stored overrideGinza=true must not revive automatic replacement.
-        return;
+        // Task1030: task1019 で廃止された「公式の視聴ページでZenzaWatchを優先」を復活。
+        // 視聴ページを直接開いた（アドレス・ブックマーク・別タブ）ときに公式プレイヤーしか
+        // 開かなくなり、利用者から「公式のプレイヤーでしか再生されなくなった」と報告された。
+        // 設定は従来どおり任意（初期値OFF）。ONにしている利用者だけ以前の動作に戻る。
+        if (!Config.props.overrideGinza) {
+            return;
+        }
+        initializeGinzaSlayer(dialog, query);
+        await uq.complete();
+        // 公式プレイヤーの再生を止める（二重に音が出ないように）
+        const stopPlayer = (ev) => {
+            if (!document.body.classList.contains('showNicoVideoPlayerDialog')) {
+                return;
+            }
+            // 画面モードが横か小のときには止めない
+            if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className)) {
+                return;
+            }
+            ev.target.pause();
+        };
+        const video = document.querySelector('.grid-area_\\[player\\] video');
+        if (video !== null) {
+            video.addEventListener('play', stopPlayer);
+            video.pause();
+            return;
+        }
+        const root = document.getElementById('root');
+        // On SPA transitions the root can already have been detached.
+        if (!root) {
+            return;
+        }
+        new MutationObserver((records, observer) => {
+            for (const record of records) {
+                if (record.addedNodes.length === 0) {
+                    continue;
+                }
+                const found = record.target.querySelector('.grid-area_\\[player\\] video');
+                if (found === null) {
+                    continue;
+                }
+                found.addEventListener('play', stopPlayer);
+                found.pause();
+                observer.disconnect();
+            }
+        }).observe(root, { childList: true, subtree: true });
     };
     // Task175 (F02): the wait ends even if #root is missing or the SPA never mounts.
     const readyContent = (timeoutMs = 15000) => {
@@ -148,18 +243,32 @@ const { initialize } = (() => {
         }
         if (typeof NotificationJournal !== 'undefined') {
             NotificationJournal.configureRecording?.(key => Config.getValue(key));
+            // Task1036: 上限件数と保存期間。設定を変えたらすぐ整理する。
+            const applyRetention = () => NotificationJournal.configureRetention?.(Config.getValue('notificationHistory.maxRecords'), Config.getValue('notificationHistory.maxAgeDays'));
+            applyRetention();
+            Config.onkey?.('notificationHistory.maxRecords', applyRetention);
+            Config.onkey?.('notificationHistory.maxAgeDays', applyRetention);
         }
         if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
             NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
             RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
                 category: 'network', source: event.operation, message: event.message,
                 level: event.outcome === 'recovered' ? 'success' :
-                    ['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
+                    ['spec-change', 'script'].includes(event.reason) ? 'error' :
+                        ['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
                 details: { operation: event.operation, phase: event.phase, outcome: event.outcome,
                     reason: event.reason, elapsedMs: event.elapsedMs,
                     ...(event.statusCode === undefined ? {} : { statusCode: event.statusCode }),
-                    ...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }) }
+                    ...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }),
+                    // Task1036: 直す場所がすぐ分かるように（値・URL・本文は含めない）。
+                    ...(event.missing === undefined ? {} : { missing: event.missing }),
+                    ...(event.errorName === undefined ? {} : { errorName: event.errorName }),
+                    ...(event.module === undefined ? {} : { module: event.module }),
+                    ...(event.distinctTargets === undefined ? {} : { distinctTargets: event.distinctTargets }) }
             }));
+        }
+        if (typeof NotificationJournal !== 'undefined') {
+            installScriptErrorJournal();
         }
         await HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
         window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
@@ -389,8 +498,9 @@ const { initialize } = (() => {
         }
     };
     const initializeLastSession = (dialog) => {
-        // Direct watch pages belong to the official player, including unavailable videos.
-        if (util.isGinzaWatchUrl()) {
+        // Task1030: 視聴ページでは「公式の視聴ページでZenzaWatchを優先」がONのときだけ前回の
+        // 続きを復元する（OFFなら公式プレイヤーに任せる。task1019 の意図はOFF時に維持）。
+        if (util.isGinzaWatchUrl() && !Config.props.overrideGinza) {
             return;
         }
         window.addEventListener('beforeunload', () => {

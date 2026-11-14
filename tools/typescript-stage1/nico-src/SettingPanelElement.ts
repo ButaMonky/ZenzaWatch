@@ -155,6 +155,12 @@ const {SettingPanelElement} = (() => {
               連続再生中は提供画面を表示しない
           </label>
           </fieldset>
+          <label>
+            <input type="checkbox" class="checkbox"
+              data-setting-name="nicoadEnd.enable"
+              .checked=${conf['nicoadEnd.enable']}>
+              動画が最後で止まったとき、ニコニ広告された動画を表示する
+          </label>
         </fieldset>
 
         <div class="control">
@@ -276,6 +282,18 @@ const {SettingPanelElement} = (() => {
             </select>
             コメントの速度(倍率)
               <small>※ コメントのレイアウトが一部崩れます</small>
+          </label>
+        </div>
+
+        <div class="control">
+          <label>
+            <select class="nicoruStyle" data-setting-name="commentPanel.nicoruStyle">
+                <option value="dark"   .selected=${conf['commentPanel.nicoruStyle']!=='light'&&conf['commentPanel.nicoruStyle']!=='legacy'}>公式ダークモード風</option>
+                <option value="light"  .selected=${conf['commentPanel.nicoruStyle']==='light'}>公式ライトモード風</option>
+                <option value="legacy" .selected=${conf['commentPanel.nicoruStyle']==='legacy'}>旧式</option>
+            </select>
+            コメント一覧のニコるボタンの見た目
+              <small>（もう一度押すとニコるを取り消し）</small>
           </label>
         </div>
 

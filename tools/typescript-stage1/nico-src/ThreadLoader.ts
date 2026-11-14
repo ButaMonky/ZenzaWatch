@@ -65,6 +65,8 @@ export interface LoadOptions {
   /** Set only when the user explicitly requests a reload, not for post-token retries. */
   manualReload?: boolean;
   retrying?: boolean;
+  /** 先読みなど、失敗しても良い取得でリトライを行わない（Task1029）。 */
+  noRetry?: boolean;
   useServerDefaultLanguage?: boolean;
   language?: string;
   fork?: string;
@@ -260,6 +262,27 @@ const {ThreadLoader} = (() => {
   // Error objects contain only stable codes, never the raw response or keys.
   const commentSchemaError = (reason: string): Failure =>
     ({kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason});
+  /**
+   * Task1036: コメント投稿・ニコる・削除の成否を通知履歴へ（失敗理由・欠けていた項目・修正箇所の目安）。
+   * 呼び出し側の値・エラー・再試行は変えない。2026-11 の不具合（msgInfo.threadInfo が無い）は
+   * 通信より前の TypeError で、これまでどこにも記録されなかった。
+   */
+  const observeAction = async <T>(operation: 'comment-post' | 'nicoru' | 'comment-delete',
+    msgInfo: CommentMsgInfo | null | undefined, run: () => Promise<T>): Promise<T> => {
+    const info = msgInfo as {threadInfo?: {threadId?: unknown}; videoId?: unknown} | null | undefined;
+    const scope = String(info?.threadInfo?.threadId ?? info?.videoId ?? '');
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin(operation, scope, 'response');
+    try {
+      const value = await run();
+      ticket?.success();
+      return value;
+    } catch (error) {
+      const bag = error as {result?: unknown} | null;
+      ticket?.failure(bag && typeof bag === 'object' && bag.result && typeof bag.result === 'object' ? bag.result : error);
+      throw error;
+    }
+  };
   // Task498: type-checked external read adapter, loaded before ThreadLoader.
 
 
@@ -568,7 +591,7 @@ const {ThreadLoader} = (() => {
       // 動画を素早く切り替えた直後などは、サーバー側の一時的な不整合や
       // レート制限で400が続けて返ることがある。3秒1回だけのリトライでは
       // 足りないケースが報告された(Task B-5)ため、間隔を空けて2回リトライする。
-      const RETRY_DELAYS_MS = [3000, 6000];
+      const RETRY_DELAYS_MS = options.noRetry === true ? [] : [3000, 6000];
       // Only an EXPLICIT button-triggered reload refreshes the saved thread key
       // before its first POST. Checking msgInfo.threadInfo is insufficient:
       // the post-token recovery path also calls load() after a successful read.
@@ -700,7 +723,8 @@ const {ThreadLoader} = (() => {
 
     async postChat(msgInfo: CommentMsgInfo, text: string, cmd?: string | null, vpos?: number | null,
       isOriginalVideo?: () => boolean): Promise<PostResult> {
-      return this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo);
+      return observeAction('comment-post', msgInfo, () =>
+        this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo));
     }
 
     async _postChat(msgInfo: CommentMsgInfo, text: string, cmd: string | null | undefined, vpos: number | null | undefined,
@@ -974,6 +998,9 @@ const {ThreadLoader} = (() => {
     }
 
     async deleteChat(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number}): Promise<{status: 'ok'; message: string}> {
+      return observeAction('comment-delete', msgInfo, () => this._deleteChat(msgInfo, chat));
+    }
+    async _deleteChat(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number}): Promise<{status: 'ok'; message: string}> {
       const {
         videoId,
         threadId,
@@ -1032,6 +1059,9 @@ const {ThreadLoader} = (() => {
     }
 
     async nicoru(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number; text: string}): Promise<{status: 'ok'; id: unknown; count: unknown; message: string}> {
+      return observeAction('nicoru', msgInfo, () => this._nicoru(msgInfo, chat));
+    }
+    async _nicoru(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number; text: string}): Promise<{status: 'ok'; id: unknown; count: unknown; message: string}> {
       const {
         videoId,
         threadId,
@@ -1061,6 +1091,41 @@ const {ThreadLoader} = (() => {
           status: 'fail',
           statusCode,
           message: errorCode ? `ニコれなかった＞＜ ${errorCode}` : 'ニコれなかった＞＜'
+        };
+      }
+    }
+    /**
+     * Task1039: ニコるの取り消し。公式の視聴ページと同じ
+     * DELETE https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/{nicoruId}（応答 {meta:{status:200},data:[]}）。
+     */
+    async unNicoru(msgInfo: CommentMsgInfo, nicoruId: string): Promise<{status: 'ok'; message: string}> {
+      return observeAction('nicoru', msgInfo, () => this._unNicoru(nicoruId));
+    }
+    async _unNicoru(nicoruId: string): Promise<{status: 'ok'; message: string}> {
+      if (typeof nicoruId !== 'string' || !/^[0-9A-Za-z]+$/.test(nicoruId)) {
+        throw {status: 'fail', message: 'ニコるを取り消せなかった＞＜（IDが不正）'};
+      }
+      let statusCode: unknown = null;
+      try {
+        const res = await fetch('https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId), {
+          method: 'DELETE',
+          headers: {'x-frontend-id': '6', 'x-frontend-version': '0', 'x-request-with': 'nicovideo'},
+          credentials: 'include'
+        });
+        statusCode = res.status;
+        const body = await res.json().catch(() => null) as {meta?: {status?: number; errorCode?: string}} | null;
+        const status = Number(body?.meta?.status ?? res.status);
+        if (!res.ok || status >= 300) {
+          throw {result: {status, errorCode: body?.meta?.errorCode}};
+        }
+        return {status: 'ok', message: 'ニコるを取り消した'};
+      } catch (error) {
+        const result = (error as {result?: {status?: unknown; errorCode?: unknown}})?.result;
+        throw {
+          status: 'fail',
+          statusCode: result?.status ?? statusCode,
+          result: result || error,
+          message: result?.errorCode ? `ニコるを取り消せなかった＞＜ ${result.errorCode}` : 'ニコるを取り消せなかった＞＜'
         };
       }
     }

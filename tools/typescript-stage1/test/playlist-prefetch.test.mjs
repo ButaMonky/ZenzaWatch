@@ -65,6 +65,20 @@ test('開始画質: 推定回線速度・固定 startLevel に合わせる（旧
   assert.deepEqual(chooseStartVariant(v, -1, 0.5), {variant: v[1], level: 0});
 });
 
+test('Task1031 開始画質: preferHighest は自動画質でも最高画質を選ぶ（固定 startLevel は優先）', async () => {
+  const v = [{bandwidth: 3, index: 0}, {bandwidth: 1, index: 1}, {bandwidth: 2, index: 2}];
+  assert.deepEqual(chooseStartVariant(v, -1, 0.5, true), {variant: v[0], level: 2});
+  assert.deepEqual(chooseStartVariant(v, undefined, undefined, true), {variant: v[0], level: 2});
+  assert.deepEqual(chooseStartVariant(v, 0, 0.5, true), {variant: v[1], level: 0});
+  const {fetcher, calls} = makeFetcher();
+  const prepared = await HlsPrefetch.prepare(MASTER, new AbortController().signal,
+    {fetcher, bandwidthEstimate: 2e6, preferHighest: true});
+  assert.equal(prepared.bandwidthEstimate, 2e6);
+  assert.equal(prepared.startLevel, 2);
+  assert.ok(calls.some(c => c.url.includes('video-h264-720p')));
+  assert.ok(!calls.some(c => c.url.includes('video-h264-360p')), '最低画質を取りに行かない');
+});
+
 test('nicovideo.jp 外・http・ポート付きは拒否し、理由とホストを返す', async () => {
   const src = new URL(MASTER).hostname;
   assert.equal(isAllowedPrefetchUrl(new URL('https://evil.example/x'), src), false);

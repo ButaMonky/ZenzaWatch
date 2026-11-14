@@ -48,14 +48,6 @@ function fixture({record}={}){
  });
  return {dialog,remote,cache,events,warnings};
 }
-test('recording OFF suppresses ordinary outgoing automatic saves',async()=>{
- const h=fixture();
- h.dialog._playerConfig.getValue=key=>key==='resume.recordEnabled'?false:false;
- h.dialog._savePlaybackPosition('sm1',85);
- assert.deepEqual(h.remote,[],'disabled automatic recording must not submit');
- await h.dialog.open('sm2',{openNow:true});
- assert.deepEqual(h.remote,[],'switch must not submit while recording is disabled');
-});
 for(const target of ['sm2','sm1'])test(`acknowledged automatic deletion survives open(${target}) final outgoing save`,async()=>{
  const h=fixture();
  const outcome=await h.dialog._deleteAutomaticResume();

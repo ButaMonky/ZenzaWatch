@@ -40,11 +40,18 @@ export interface CommentPictureInPictureContract {
  * - 表示中のコメントは開始時刻順の配列を二分探索して探す（全コメントを毎フレーム走査しない）
  * - タブが裏に回ってもrequestAnimationFrameが止まらないよう、Workerのタイマーで描画する
  * - 一時停止中で時刻も大きさも変わらない時は描き直さない
+ * Task1038（カクつき対策）:
+ * - video.currentTime はブラウザによって数十ms単位でしか進まないため、再生中は前回の値から経過時間で補間した時刻で描く
+ * - 表に出ている間は requestAnimationFrame（画面の更新に合わせる）で描き、裏タブの時だけ Worker のタイマーで描く
+ * - コメント一覧の並べ替えは件数が変わった時だけにする（以前は2秒ごとに全件を並べ替えて一瞬止まっていた）
+ * - これから流れてくるコメントの文字画像を少しずつ先に作っておき、出始めの瞬間に重くならないようにする
+ * - 流れるコメントの横位置は整数に丸めない（1pxずつ跳ねて見えるのを防ぐ）
  */
 const CommentPictureInPicture = (() => {
   const SCREEN = CommentLayer.SCREEN;
   const FPS = 60;
   const MAX_DRAW_COMMENTS = 200;
+  const PREWARM_PER_FRAME = 4;
   const DEFAULT_FONT = `'ＭＳ Ｐゴシック', 'MS PGothic', 'IPAMonaPGothic', 'Hiragino Sans', 'Yu Gothic', sans-serif, Arial`;
   const COMMAND_FONT = {
     gothic: `'游ゴシック', 'Yu Gothic', 'YuGothic', Simsun, 'ＭＳ ゴシック', 'IPAMonaPGothic', sans-serif, Arial`,
@@ -232,7 +239,7 @@ const CommentPictureInPicture = (() => {
         .filter(Boolean);
       const key = groups.map(g => (g.members || []).length).join(',');
       const snapshot = this.snapshot;
-      if (snapshot.viewModel === viewModel && snapshot.key === key && now - snapshot.updatedAt < 2000) {
+      if (snapshot.viewModel === viewModel && snapshot.key === key) {
         return snapshot;
       }
       const list = groups.flatMap(g => g.members || []);
@@ -258,10 +265,11 @@ const CommentPictureInPicture = (() => {
         const mid = (lo + hi) >> 1;
         list[mid].beginLeftTiming < from ? (lo = mid + 1) : (hi = mid);
       }
-      const naka = [], fixed = [];
+      const naka = [], fixed = [], upcoming = [];
       for (let i = lo; i < list.length; i++) {
         const chat = list[i];
-        if (chat.beginLeftTiming > sec + 1) { break; }
+        if (chat.beginLeftTiming > sec + 1.5) { break; }
+        if (chat.beginLeftTiming > sec + 0.2) { chat.isInvisible || upcoming.push(chat); continue; }
         if (chat.isInvisible) { continue; }
         if (chat.isFixed) {
           sec >= chat.beginLeftTiming && sec <= chat.endRightTiming && chat.isInViewBySecond(sec) && fixed.push(chat);
@@ -270,7 +278,7 @@ const CommentPictureInPicture = (() => {
           naka.push(chat);
         }
       }
-      return {naka, fixed};
+      return {naka, fixed, upcoming};
     }
 
     draw(ctx, {viewModel, sec, width, height, now}) {
@@ -285,7 +293,7 @@ const CommentPictureInPicture = (() => {
       const layerOpacity = typeof props.commentLayerOpacity === 'number' ? props.commentLayerOpacity : 1;
       const easyOpacity = props['commentLayer.easyCommentOpacity'];
       const aiOpacity = props['commentLayer.aiCommentOpacity'];
-      const {naka, fixed} = this._getInView(viewModel, sec, now);
+      const {naka, fixed, upcoming} = this._getInView(viewModel, sec, now);
       const chats = naka.concat(fixed);
       const start = Math.max(0, chats.length - MAX_DRAW_COMMENTS);
       for (let i = start; i < chats.length; i++) {
@@ -323,9 +331,17 @@ const CommentPictureInPicture = (() => {
         chat.fork === 3 && typeof aiOpacity === 'number' && (alpha *= aiOpacity);
         if (alpha <= 0) { continue; }
         ctx.globalAlpha = Math.min(1, alpha);
-        ctx.drawImage(bitmap.canvas, Math.round(dx), Math.round(offsetY + y * scale - bitmap.margin));
+        ctx.drawImage(bitmap.canvas, chat.isFixed ? Math.round(dx) : dx, Math.round(offsetY + y * scale - bitmap.margin));
       }
       ctx.globalAlpha = 1;
+      // まもなく流れてくるコメントの文字画像を、1フレームあたり少しだけ先に作っておく
+      let warmed = 0;
+      for (let i = 0; i < upcoming.length && warmed < PREWARM_PER_FRAME; i++) {
+        const cache = this.bitmaps.get(upcoming[i]);
+        if (cache && cache.scale === scale) { continue; }
+        try { this._getBitmap(upcoming[i], scale); } catch (e) { /* 描く時にもう一度試す */ }
+        warmed++;
+      }
       if (this.frame % 600 === 0) {
         for (const [chat, bitmap] of this.bitmaps) {
           this.frame - bitmap.lastUsed > 600 && this.bitmaps.delete(chat);
@@ -372,6 +388,25 @@ const CommentPictureInPicture = (() => {
       this._onVideoSeeked = this._onVideoSeeked.bind(this);
       this._onResize = this._onResize.bind(this);
       this.draw = this.draw.bind(this);
+      this._rafAt = 0;
+      this._raf = 0;
+      this._onWorkerTick = () => {
+        // 表に出ていて requestAnimationFrame が動いている間は、そちらに任せる（二重に描かない）
+        if (performance.now() - this._rafAt < 100) { return; }
+        this.draw();
+      };
+      this._onRaf = () => {
+        this._raf = 0;
+        if (this.isStopped) { return; }
+        this._rafAt = performance.now();
+        this.draw();
+        this._startRaf();
+      };
+    }
+
+    _startRaf() {
+      if (this.isStopped || this._raf || typeof requestAnimationFrame !== 'function') { return; }
+      this._raf = requestAnimationFrame(this._onRaf);
     }
 
     _bindVideo(video) {
@@ -430,6 +465,39 @@ const CommentPictureInPicture = (() => {
       }
     }
 
+    /** 再生中は currentTime を経過時間で補間する（currentTime の更新が粗いブラウザでも滑らかに流す） */
+    _getSmoothTime(video, now) {
+      const raw = video ? video.currentTime : 0;
+      if (!video || video.paused || video.seeking || video.readyState < 3 || !isFinite(raw)) {
+        this._clock = null;
+        return raw;
+      }
+      const rate = video.playbackRate || 1;
+      const c = this._clock;
+      if (!c) {
+        this._clock = {raw, base: raw, at: now, last: raw};
+        return raw;
+      }
+      let predicted = c.base + (now - c.at) / 1000 * rate;
+      if (raw !== c.raw) {
+        const diff = raw - predicted;
+        if (Math.abs(diff) > 0.3) {
+          // シーク・詰まりなどで大きくずれた時はそのまま合わせる
+          this._clock = {raw, base: raw, at: now, last: raw};
+          return raw;
+        }
+        // 少しずつ本来の時刻に寄せる（急に戻ったり跳んだりしない）
+        predicted += diff * 0.2;
+        c.raw = raw; c.base = predicted; c.at = now;
+      } else if (predicted - raw > 0.3) {
+        // currentTime が止まったまま（読み込み待ちなど）なら先へ進めすぎない
+        predicted = raw + 0.3;
+      }
+      const sec = Math.max(c.last, predicted);
+      c.last = sec;
+      return sec;
+    }
+
     _resizeCanvas(video) {
       const vw = video && video.videoWidth || 16;
       const vh = video && video.videoHeight || 9;
@@ -456,7 +524,8 @@ const CommentPictureInPicture = (() => {
         const resized = this._resizeCanvas(video);
         const canvas = this.canvas, ctx = this.ctx;
         const width = canvas.width, height = canvas.height;
-        const sec = video ? video.currentTime : 0;
+        const now = performance.now();
+        const sec = this._getSmoothTime(video, now);
         const showComment = !!this.config.props.showComment;
         const viewModel = this.getViewModel();
         // Task 077: 一時停止中に画面フィルターを変えた時も描き直す
@@ -466,7 +535,6 @@ const CommentPictureInPicture = (() => {
           return;
         }
         this.lastKey = key;
-        const now = performance.now();
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, width, height);
@@ -535,7 +603,8 @@ const CommentPictureInPicture = (() => {
       });
       document.body.append(pip);
       pip.srcObject = stream;
-      this.ticker = createTicker(Math.floor(1000 / FPS), this.draw);
+      this.ticker = createTicker(Math.floor(1000 / FPS), this._onWorkerTick);
+      this._startRaf();
       const metadata = pip.readyState >= 1 ? Promise.resolve(true) : waitEvent(pip, 'loadedmetadata', 3000, this._abort.signal);
       this.lastKey = '';
       this.draw();
@@ -574,6 +643,8 @@ const CommentPictureInPicture = (() => {
       this.isStopped = true;
       this._abort.abort();
       this.ticker && this.ticker.stop();
+      this._raf && typeof cancelAnimationFrame === 'function' && cancelAnimationFrame(this._raf);
+      this._raf = 0;
       this._bindVideo(null);
       this.pipWindow && this.pipWindow.removeEventListener('resize', this._onResize);
       const pip = this.pipVideo;

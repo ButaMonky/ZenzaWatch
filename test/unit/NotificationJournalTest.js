@@ -129,12 +129,14 @@ describe('NotificationJournal source-only, no network', () => {
     const journal = harness();
     journal.record({category: 'system', message: 'x'.repeat(3000)});
     assert.strictEqual((await journal.list())[0].message.length, 1024);
-    for (let i = 0; i < 2020; i++) {
+    // Task1036: 上限は設定で変えられる（初期値5000）。ここでは小さい上限で切り捨てを確かめる。
+    journal.configureRetention(100, 0);
+    for (let i = 0; i < 120; i++) {
       journal.record({category: 'general', message: 'item-' + i});
     }
     const stored = await journal.list(5000);
-    assert.strictEqual(stored.length, 2000);
-    assert(stored.some(x => x.message === 'item-2019'));
+    assert.strictEqual(stored.length, 100);
+    assert(stored.some(x => x.message === 'item-119'));
     assert(!stored.some(x => x.message === 'item-0'));
   });
 

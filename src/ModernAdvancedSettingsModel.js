@@ -168,6 +168,15 @@ class ModernAdvancedSettingsModel {
                 "category": "外部サイトからの再生",
                 "subcategory": "基本設定",
                 "dependsOn": "externalLinks.enabled"
+            },
+            {
+                "id": "externalLinks.consoleLog",
+                "label": "外部サイト再生の動作をコンソールに詳しく出力",
+                "type": "boolean",
+                "description": "初期値OFF。調査用です。外部サイトのページと、再生用の枠（www.nicovideo.jp/robots.txt）の両方で、ボタンの検出・クリック・枠の作成・本体との接続・ログイン確認・動画を開く各段階と失敗理由を、開発者ツールのコンソール（F12）へ ZENZA_EXT として出します。",
+                "descriptionDetails": "本体とZenzaBlogPartsButtonの両方へ設定が届くよう、ONにしたらニコニコ動画のページを一度再読み込みしてから外部サイトを開いてください。再生用の枠の記録は、コンソール上部の「top」を robots.txt の枠に切り替えると見えます（「すべてのコンテキスト」表示でも出ます）。URLのクエリ・Cookie・認証情報は出しません。",
+                "category": "外部サイトからの再生",
+                "subcategory": "基本設定"
             }
         ];
     }
@@ -209,6 +218,19 @@ class ModernAdvancedSettingsModel {
                 ['notificationHistory.record.related', '関連動画・投稿者情報・大百科', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '関連動画やシリーズ、投稿者情報、大百科の取得に関する問題と復旧を記録します。' }],
                 ['notificationHistory.record.network', 'その他の通信', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '上の種類に分類できない通信の問題と復旧を記録します。この項目をOFFにしても、上でONにした種類の通信記録は残ります。' }],
                 ['notificationHistory.record.system', 'システム通知', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'システムとして分類された内部処理の通知を記録します。ブラウザのConsoleに出るすべてのログを取り込む機能ではありません。' }],
+                ['notificationHistory.record.specChange', '仕様変更の疑い', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期値ON。同じ機能で「応答の形式を読み取れない」などの失敗が、30分以内に別々の動画などで3件以上起きたとき、ニコニコ側の仕様変更の可能性として1件にまとめて記録します。詳細に「修正箇所の目安」（直すべきソースファイル）と「読めなかった項目」が出ます。' }],
+                ['notificationHistory.record.scriptError', 'スクリプトエラー', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期値ON。ZenzaWatch 自身のコードで起きた想定外のエラー（TypeError など）を、エラーの種類と発生箇所つきで記録します。ニコニコのページ自体のエラーは記録しません。同じエラーは1件にまとめて回数を数えます。' }],
+                ['notificationHistory.record.commentAction', 'コメント投稿・ニコる・削除', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期値ON。コメントの投稿・ニコる・自分のコメントの削除が失敗したとき、理由と欠けていた項目を記録します（成功は記録しません。投稿したコメントの履歴は別の項目です）。' }],
+                ['notificationHistory.maxRecords', '記録する上限件数', {
+                        ...select([[1000, '1,000件'], [2000, '2,000件'], [5000, '5,000件（初期値）'], [10000, '10,000件'], [20000, '20,000件']]),
+                        dependsOn: 'notificationHistory.enabled',
+                        description: '上限を超えると古い記録から自動で消します。1件は数百バイト程度の文字列なので、20,000件でも数MB程度です。'
+                    }],
+                ['notificationHistory.maxAgeDays', '記録を残す期間', {
+                        ...select([[7, '7日'], [30, '30日'], [90, '90日（初期値）'], [180, '180日'], [365, '1年'], [0, '無期限（上限件数のみ）']]),
+                        dependsOn: 'notificationHistory.enabled',
+                        description: 'これより古い記録は自動で消します。上限件数と両方が適用されます。'
+                    }],
             ]),
             ...group('再生・音声', '再生動作', [
                 ['autoPlay', '動画を自動再生'],
@@ -218,6 +240,9 @@ class ModernAdvancedSettingsModel {
                 ['loop', '動画をループ再生'],
                 ['autoPauseCommentInput', 'コメント入力中に動画を一時停止'],
                 ['playbackRate', '再生速度', { type: 'number' }],
+                ['playbackRate.respectExternal', '拡張機能による再生速度の変更を受け入れる', {
+                        description: '初期値ON。Video Speed Controller のような拡張機能が再生速度を変えたとき、その速度をそのまま使い、上の「再生速度」の表示とコメントの流れる速さもその速度に合わせます。OFFにすると、拡張機能が変えてもZenza側の設定値へ戻します（従来の動作）。'
+                    }],
                 ['enableSingleton', '複数のプレイヤーを同時起動しない']
             ]),
             ...group('再生・音声', 'ここまで見た・しおり・ABリピート', [
@@ -272,7 +297,7 @@ class ModernAdvancedSettingsModel {
                     ])]
             ]),
             ...group('再生・音声', '公式プレイヤー連携', [
-                ['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { hidden: true }]
+                ['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { description: '視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。初期値OFF。' }]
             ]),
             ...group('画面・映像', '画面フィルター', [
                 ['screenFilter.showDescriptions', '画面フィルターの説明を表示'],
@@ -486,7 +511,10 @@ class ModernAdvancedSettingsModel {
             ]),
             ...group('コメント表示', 'コメント一覧', [
                 ['enableCommentPanel', 'コメント一覧を表示'],
-                ['enableCommentPanelAutoScroll', 'コメント一覧を自動スクロール']
+                ['enableCommentPanelAutoScroll', 'コメント一覧を自動スクロール'],
+                ['commentPanel.nicoruStyle', 'ニコるボタンの見た目', { ...select([
+                            ['dark', '公式ダークモード風（既定）'], ['light', '公式ライトモード風'], ['legacy', '旧式（以前のZenzaWatch）']
+                        ]), description: 'コメント一覧のニコるボタンの色と動きです。どれでもニコった後にもう一度押すとニコるを取り消せます。' }]
             ]),
             ...group('コメント表示', '文字・装飾', [
                 ['commentLanguage', 'コメントの言語', select([
@@ -576,7 +604,7 @@ class ModernAdvancedSettingsModel {
             ]),
             ...group('プレイリスト・検索', '動画の先読み', [
                 ['playlist.prefetchAhead.enabled', '動画を先読みする', {
-                        description: '初期値ON。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間は先読みしません。失敗・期限切れ時は通常どおり読み込みます。'
+                        description: '初期値ON。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間と、外部サイトからの再生（ZenzaBlogPartsButton で開いたプレイヤー）では先読みしません（他サイトに埋め込まれた状態では先読みデータを取得できず、通信とメモリを無駄に使うため）。失敗・期限切れ時は通常どおり読み込みます。'
                     }],
                 ['playlist.prefetchAhead.sourcePlaylist', 'プレイリストの動画を先読み', {
                         dependsOn: 'playlist.prefetchAhead.enabled',
@@ -629,6 +657,10 @@ class ModernAdvancedSettingsModel {
                 ['playlist.prefetchAhead.notifyMiss', '先読みなしの再生も画面に通知', {
                         dependsOn: 'playlist.prefetchAhead.enabled',
                         description: '初期値OFF。先読みを使えなかった再生でも秒数を表示します。上の通知と両方ONにすると、効いたときと効かなかったときの秒数を見比べられます。'
+                    }],
+                ['playlist.prefetchAhead.consoleLog', '先読みの動きをコンソールに詳しく出力', {
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF。調査用です。動画の切り替えに関わる判断と時間を、ブラウザの開発者ツールのコンソール（F12）へ細かく出します。出る行は、ZENZA_DIAG_ENV（版と設定の一覧）、ZENZA_PREFETCH_GATE（先読みを止めている条件）、ZENZA_PREFETCH_CANDIDATES（先読みの対象に選んだ動画・一覧の件数と位置）、ZENZA_PREFETCH_INPUT（再生が安定しているかの判断に使った値）、ZENZA_PREFETCH_PREPARE／_READY／_EVENT（先読みの準備の経過）、ZENZA_OPEN_TIMING（1回の切り替えの内訳。どの区間で何ms使ったか）、ZENZA_PLAYLIST_SAVE（プレイリスト保存のやり直し回数と所要時間）です。速くならないときは、この行をそのままコピーして開発者へ渡してください。出力量が多いので普段はOFFのままに。'
                     }],
                 ['playlist.prefetchAhead.notify', '先読みの通知', {
                         ...select([['off', '通知しない'], ['journal', '通知履歴のみ'], ['popup', '失敗を画面にも表示']]),
@@ -720,7 +752,7 @@ class ModernAdvancedSettingsModel {
         if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) {
             return ['再生・音声', 'ここまで見た・しおり・ABリピート'];
         }
-        if (/^supporterCredit\./.test(key)) {
+        if (/^supporterCredit\./.test(key) || key === 'nicoadEnd.enable') {
             return ['再生・音声', '提供画面'];
         }
         if (/^audio\./.test(key) || /^(volume|mute|speakLark)/.test(key)) {
@@ -782,6 +814,7 @@ class ModernAdvancedSettingsModel {
         }
         const direct = {
             'supporterCredit.enable': 'uaa.enable',
+            'nicoadEnd.enable': 'uaa.enable',
             'sceneSearch.commentPreviewVisible': 'sceneSearch.enabled',
             'sceneSearch.miniCommentVisible': 'sceneSearch.commentPreviewVisible',
             'sceneSearch.commentListVisible': 'sceneSearch.commentPreviewVisible',
@@ -791,6 +824,7 @@ class ModernAdvancedSettingsModel {
             'touch.tap2command': 'touch.enable', 'touch.tap3command': 'touch.enable',
             'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
             'enableCommentPanelAutoScroll': 'enableCommentPanel',
+            'commentPanel.nicoruStyle': 'enableCommentPanel',
             'pipPageThumbnailSource': 'pipPageThumbnail',
             'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',
             'speakLarkVolume': 'speakLark'

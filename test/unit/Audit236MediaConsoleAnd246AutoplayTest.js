@@ -17,7 +17,7 @@ describe('Audits #236/#246 media URL privacy and autoplay ownership',()=>{
         CONSTANT:{BLANK_VIDEO_URL:'about:blank'},window:{console:safeConsole},console:safeConsole});
       const Player=loadClass(file,'VideoPlayer',context);
       const p=Object.create(Player.prototype),events=[];
-      const secret='demo1';
+      const secret='TEST_ONLY_SIGNED_URL_PRIVATE';
       p._video={src:'https://media.invalid/?token='+secret,poster:''};
       p._videoElement={src:p._video.src};
       p._currentVideo=p._video;

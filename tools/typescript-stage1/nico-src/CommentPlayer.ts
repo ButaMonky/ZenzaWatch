@@ -120,7 +120,10 @@ class NicoCommentPlayer extends Emitter {
     if (typeof vpos !== 'number') {
       vpos = this.vpos;
     }
-    const nicoChat = NicoChat.create(Object.assign({text, cmd, vpos}, options));
+    // Task1038: 投稿直後のコメントに日時が無く、更新するまで「1970年」と表示されていた。
+    // 呼び出し側が date を渡さなければ今の時刻（秒）を入れる。
+    const date = options && options.date !== undefined ? options.date : Math.floor(Date.now() / 1000);
+    const nicoChat = NicoChat.create(Object.assign({text, cmd, vpos}, options, {date}));
     this._model.addChat(nicoChat);
 
     return nicoChat;

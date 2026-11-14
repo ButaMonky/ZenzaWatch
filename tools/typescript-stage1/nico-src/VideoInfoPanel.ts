@@ -325,6 +325,33 @@ class VideoInfoPanel extends Emitter {
       link.replaceWith(wrapper);
       wrapper.append(link, button);
     };
+    /*
+     * Task1037: 大百科の記事（動画記事 /v/… ・単語記事 /a/…）へのリンクにも「プレイリストで開く」を付ける。
+     * ランキング動画などは「全ランクイン動画リスト」を大百科の記事に載せていることがある。
+     */
+    const nicodicArticleUrl = (link?: Loose): string | null => {
+      try {
+        const url = new URL(link.href);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') { return null; }
+        if (url.hostname !== 'dic.nicovideo.jp') { return null; }
+        if (!/^\/(?:v|a)\/[^/]+\/?$/.test(url.pathname)) { return null; }
+        return 'https://dic.nicovideo.jp' + url.pathname;
+      } catch (_) { return null; }
+    };
+    const nicodicLink = (link?: Loose) => {
+      const url = nicodicArticleUrl(link);
+      if (!url) { return; }
+      link.classList.add('nicodicLink');
+      const wrapper = document.createElement('zenza-nicodic-link');
+      wrapper.dataset.nicodicUrl = url;
+      const button = document.createElement('zenza-playlist-append');
+      button.className = 'playlistSetNicodic clickable-item';
+      button.title = 'この大百科記事に載っている動画をプレイリストで開く';
+      Object.assign(button.dataset, {command: 'playlistSetNicodic', param: url});
+      button.textContent = '▶';
+      link.replaceWith(wrapper);
+      wrapper.append(link, button);
+    };
     const mylistLink = (link?: Loose) =>
       playlistLink(link, {kind: 'mylist', tag: 'zenza-mylist-link', idKey: 'mylistId', command: 'playlistSetMylist'});
     const seriesLink = (link?: Loose) =>
@@ -382,6 +409,8 @@ class VideoInfoPanel extends Emitter {
         mylistLink(a);
       } else if (/^series\//.test(a.textContent)) {
         seriesLink(a);
+      } else if (nicodicArticleUrl(a)) {
+        nicodicLink(a);
       } else if (/^https?:\/\/((www\.|)youtube\.com\/watch|youtu\.be)/.test(href)) {
         youtube(a);
         this._zenTubeUrl = href;
@@ -915,6 +944,7 @@ css.addStyle(`
   .zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetMylist,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetSeries,
+  .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetNicodic,
   .zenzaWatchVideoInfoPanel .videoInfoTab .pocket-info,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetUploadedVideo {
     display: inline-block;
@@ -968,6 +998,7 @@ css.addStyle(`
   .zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd:hover,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetMylist:hover,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetSeries:hover,
+  .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetNicodic:hover,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetUploadedVideo:hover {
     transform: scale(1.5);
   }
@@ -976,6 +1007,7 @@ css.addStyle(`
   .zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd:active,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetMylist:active,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetSeries:active,
+  .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetNicodic:active,
   .zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetUploadedVideo:active {
     transform: scale(1.2);
     border: 1px inset;
@@ -1408,7 +1440,7 @@ css.addStyle(`
 
     /* 縦長モニター */
     @media
-      (width < 992px) and (min-height: 700px)
+      (width < 992px) and (min-height: 700px) and (aspect-ratio < 4/3)
     {
       .zenzaScreenMode_normal .zenzaWatchVideoInfoPanel {
         display: inherit;
@@ -1436,7 +1468,7 @@ css.addStyle(`
     }
 
     @media
-      (width < 1216px) and (min-height: 700px) {
+      (width < 1216px) and (min-height: 700px) and (aspect-ratio < 4/3) {
       .zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
         display: inherit;
         top: 100%;
@@ -1460,6 +1492,20 @@ css.addStyle(`
 
       .zenzaScreenMode_big .zenzaWatchVideoHeaderPanel {
         width: 100% !important;
+      }
+    }
+  }
+
+  /* Task1039: 幅が足りないだけの横長の画面でも、情報パネルは動画の右に置く（下パネルにしない） */
+  @media screen and (min-width: 640px) and (aspect-ratio >= 4/3) {
+    @media (width < 992px) {
+      body.zenzaScreenMode_normal .zenzaWatchVideoInfoPanel {
+        display: inherit;
+      }
+    }
+    @media (width < 1216px) {
+      body.zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
+        display: inherit;
       }
     }
   }
@@ -2438,6 +2484,9 @@ class VideoSearchForm extends Emitter {
             this._syncContentTypeControls();
             this._refreshWordCountsAfterFilterChange();
           }
+          // Task1039: 「キーワード／タグ」「動画／ショート」の切り替えだけでは検索しない
+          // （語を入れ直す前に勝手に検索されて困るため）。検索ボタンか Enter で検索する。
+          if ((item as Loose).name === 'mode' || (item as Loose).name === 'selectContentType') { return; }
           submit();
         });
       } else if ((item as Loose).name === 'sortKey' || (item as Loose).name === 'sortOrder') {

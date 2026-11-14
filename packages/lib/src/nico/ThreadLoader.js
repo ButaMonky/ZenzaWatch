@@ -196,6 +196,27 @@ const { ThreadLoader } = (() => {
     // current-video state. Never invent an empty list when the schema changes.
     // Error objects contain only stable codes, never the raw response or keys.
     const commentSchemaError = (reason) => ({ kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason });
+    /**
+     * Task1036: コメント投稿・ニコる・削除の成否を通知履歴へ（失敗理由・欠けていた項目・修正箇所の目安）。
+     * 呼び出し側の値・エラー・再試行は変えない。2026-11 の不具合（msgInfo.threadInfo が無い）は
+     * 通信より前の TypeError で、これまでどこにも記録されなかった。
+     */
+    const observeAction = async (operation, msgInfo, run) => {
+        const info = msgInfo;
+        const scope = String(info?.threadInfo?.threadId ?? info?.videoId ?? '');
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin(operation, scope, 'response');
+        try {
+            const value = await run();
+            ticket?.success();
+            return value;
+        }
+        catch (error) {
+            const bag = error;
+            ticket?.failure(bag && typeof bag === 'object' && bag.result && typeof bag.result === 'object' ? bag.result : error);
+            throw error;
+        }
+    };
     // Task498: type-checked external read adapter, loaded before ThreadLoader.
     // Task478: posting's header/body deadline is implemented in CommentPostWire.
     // No retries occur inside the transport, including unknown-acceptance outcomes.
@@ -522,7 +543,7 @@ const { ThreadLoader } = (() => {
             // 動画を素早く切り替えた直後などは、サーバー側の一時的な不整合や
             // レート制限で400が続けて返ることがある。3秒1回だけのリトライでは
             // 足りないケースが報告された(Task B-5)ため、間隔を空けて2回リトライする。
-            const RETRY_DELAYS_MS = [3000, 6000];
+            const RETRY_DELAYS_MS = options.noRetry === true ? [] : [3000, 6000];
             // Only an EXPLICIT button-triggered reload refreshes the saved thread key
             // before its first POST. Checking msgInfo.threadInfo is insufficient:
             // the post-token recovery path also calls load() after a successful read.
@@ -649,7 +670,7 @@ const { ThreadLoader } = (() => {
             return requestChallengeToken(siteKey);
         }
         async postChat(msgInfo, text, cmd, vpos, isOriginalVideo) {
-            return this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo);
+            return observeAction('comment-post', msgInfo, () => this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo));
         }
         async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo) {
             diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
@@ -911,6 +932,9 @@ const { ThreadLoader } = (() => {
             }
         }
         async deleteChat(msgInfo, chat) {
+            return observeAction('comment-delete', msgInfo, () => this._deleteChat(msgInfo, chat));
+        }
+        async _deleteChat(msgInfo, chat) {
             const { videoId, threadId, language } = msgInfo.threadInfo;
             const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
             const fork = FORK_LABEL[chat.fork || 0];
@@ -964,6 +988,9 @@ const { ThreadLoader } = (() => {
             }
         }
         async nicoru(msgInfo, chat) {
+            return observeAction('nicoru', msgInfo, () => this._nicoru(msgInfo, chat));
+        }
+        async _nicoru(msgInfo, chat) {
             const { videoId, threadId, language } = msgInfo.threadInfo;
             const url = new URL(`/v1/threads/${threadId}/nicorus`, msgInfo.nvComment.server);
             const { nicoruKey } = await this.getNicoruKey(threadId, { language: language });
@@ -990,6 +1017,42 @@ const { ThreadLoader } = (() => {
                     status: 'fail',
                     statusCode,
                     message: errorCode ? `ニコれなかった＞＜ ${errorCode}` : 'ニコれなかった＞＜'
+                };
+            }
+        }
+        /**
+         * Task1039: ニコるの取り消し。公式の視聴ページと同じ
+         * DELETE https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/{nicoruId}（応答 {meta:{status:200},data:[]}）。
+         */
+        async unNicoru(msgInfo, nicoruId) {
+            return observeAction('nicoru', msgInfo, () => this._unNicoru(nicoruId));
+        }
+        async _unNicoru(nicoruId) {
+            if (typeof nicoruId !== 'string' || !/^[0-9A-Za-z]+$/.test(nicoruId)) {
+                throw { status: 'fail', message: 'ニコるを取り消せなかった＞＜（IDが不正）' };
+            }
+            let statusCode = null;
+            try {
+                const res = await fetch('https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId), {
+                    method: 'DELETE',
+                    headers: { 'x-frontend-id': '6', 'x-frontend-version': '0', 'x-request-with': 'nicovideo' },
+                    credentials: 'include'
+                });
+                statusCode = res.status;
+                const body = await res.json().catch(() => null);
+                const status = Number(body?.meta?.status ?? res.status);
+                if (!res.ok || status >= 300) {
+                    throw { result: { status, errorCode: body?.meta?.errorCode } };
+                }
+                return { status: 'ok', message: 'ニコるを取り消した' };
+            }
+            catch (error) {
+                const result = error?.result;
+                throw {
+                    status: 'fail',
+                    statusCode: result?.status ?? statusCode,
+                    result: result || error,
+                    message: result?.errorCode ? `ニコるを取り消せなかった＞＜ ${result.errorCode}` : 'ニコるを取り消せなかった＞＜'
                 };
             }
         }

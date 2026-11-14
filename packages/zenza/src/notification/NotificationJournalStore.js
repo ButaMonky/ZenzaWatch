@@ -5,7 +5,9 @@ const NotificationJournalStore = (() => {
         const DB_NAME = 'zenza-notification-journal';
         const STORE = 'entries';
         const META = 'control';
-        const MAX_RECORDS = 2000;
+        // Task1036: 上限件数と保存期間は上級者設定で変えられる（setRetention）。古い順に自動で消す。
+        let MAX_RECORDS = 5000;
+        let MAX_AGE_MS = 90 * 86400000;
         let opening = null;
         let connection = null;
         let writes = 0;
@@ -85,20 +87,55 @@ const NotificationJournalStore = (() => {
             } });
             return attempt;
         };
+        /**
+         * Task1038: 古い順に消すが、いいね・ニコるの記録は最後に回す。
+         * 期間切れでは消さず、件数が上限を超えたときも、ほかの記録を先に消し、
+         * それでも超える場合だけ古いいいね・ニコるを消す。
+         */
+        const isProtected = (value) => {
+            const v = value;
+            return !!v && v.level === 'success' && (v.activity?.kind === 'like' || v.activity?.kind === 'nicoru');
+        };
         const prune = (db) => {
             try {
                 const tx = db.transaction(STORE, 'readwrite');
-                let kept = 0;
-                const req = tx.objectStore(STORE).index('timestamp').openCursor(null, 'prev');
+                const store = tx.objectStore(STORE);
+                const rows = [];
+                const req = store.index('timestamp').openCursor(null, 'prev');
+                const oldest = MAX_AGE_MS > 0 ? Date.now() - MAX_AGE_MS : -Infinity;
                 req.onsuccess = () => {
                     const cursor = req.result;
-                    if (!cursor) {
+                    if (cursor) {
+                        const timestamp = Number(cursor.value?.timestamp);
+                        rows.push({ key: cursor.primaryKey, timestamp, keep: isProtected(cursor.value) });
+                        cursor.continue();
                         return;
                     }
-                    if (++kept > MAX_RECORDS) {
-                        cursor.delete();
+                    // 新しい順。まず期間切れの通常記録を除き、残りから上限を超えた分を古い通常記録→古い活動記録の順に消す。
+                    const removals = [];
+                    const alive = rows.filter(row => {
+                        if (!row.keep && Number.isFinite(row.timestamp) && row.timestamp < oldest) {
+                            removals.push(row.key);
+                            return false;
+                        }
+                        return true;
+                    });
+                    let excess = alive.length - MAX_RECORDS;
+                    for (let i = alive.length - 1; i >= 0 && excess > 0; i--) {
+                        if (!alive[i].keep) {
+                            removals.push(alive[i].key);
+                            excess--;
+                        }
                     }
-                    cursor.continue();
+                    for (let i = alive.length - 1; i >= 0 && excess > 0; i--) {
+                        if (alive[i].keep) {
+                            removals.push(alive[i].key);
+                            excess--;
+                        }
+                    }
+                    for (const key of removals) {
+                        store.delete(key);
+                    }
                 };
                 req.onerror = () => { };
                 tx.onerror = () => { };
@@ -237,7 +274,17 @@ const NotificationJournalStore = (() => {
                 }
             }).catch(() => false);
         };
-        return { append, list, snapshot, clear };
+        /** Task1036: 上限件数（100〜50000）と保存期間（日、0は無期限）を設定し、すぐに整理する。 */
+        const setRetention = (maxRecords, maxAgeDays) => {
+            const count = Number(maxRecords), days = Number(maxAgeDays);
+            MAX_RECORDS = Number.isFinite(count) ? Math.max(100, Math.min(50000, Math.round(count))) : 5000;
+            MAX_AGE_MS = Number.isFinite(days) && days > 0 ? Math.min(3650, days) * 86400000 : 0;
+            void open().then(db => { if (db) {
+                prune(db);
+            } }).catch(() => { });
+        };
+        const limits = () => ({ maxRecords: MAX_RECORDS, maxAgeMs: MAX_AGE_MS });
+        return { append, list, snapshot, clear, setRetention, limits };
     };
     return { create };
 })();

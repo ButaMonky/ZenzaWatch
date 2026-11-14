@@ -54,7 +54,9 @@ describe('AUD unsupported settings stay preserved without editable controls',()=
    const Model=canonical('advanced-src/ModernAdvancedSettingsModel.ts','ModernAdvancedSettingsModel',createContext());
    const values={'overrideWatchLink:others':true,bestZenTube:true,overrideGinza:true,overrideWatchLink:true,'overrideWatchLink:allowPropagation':false};
    const model=new Model({config:{default:values,getValue:key=>values[key],setValue(){throw new Error('must preserve saved values');}},legacyRoot:dom.window.document.body});
-   assert(!model.search('').some(d=>['overrideWatchLink:others','bestZenTube','overrideGinza','overrideWatchLink:allowPropagation'].includes(d.id)));
+   assert(!model.search('').some(d=>['overrideWatchLink:others','bestZenTube','overrideWatchLink:allowPropagation'].includes(d.id)));
+   // Task1030: 「公式の視聴ページでZenzaWatchを優先」は再び設定画面に出す（任意・初期値OFF）。
+   assert(model.search('').some(d=>d.id==='overrideGinza'));
    assert(model.descriptor('overrideWatchLink').description.includes('外部サイト'));
    assert(model.descriptor('overrideWatchLink:allowPropagation'));
    assert.strictEqual(values.bestZenTube,true);assert.strictEqual(values['overrideWatchLink:others'],true);

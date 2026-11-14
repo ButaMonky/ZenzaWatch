@@ -12,7 +12,7 @@ const rows = () => new Map([
     videoInfo: {
       videoId: 'sm101', title: 'TEST_ONLY_TITLE', duration: 111,
       count: {comment: 5, view: 123, secretToken: 'TEST_ONLY_COUNT_SECRET'},
-      owner: {name: 'TEST_ONLY_OWNER', id: 42, accessToken: 'demo1'},
+      owner: {name: 'TEST_ONLY_OWNER', id: 42, accessToken: 'TEST_ONLY_OWNER_SECRET'},
       genre: {key: 'game', label: 'Game', signature: 'TEST_ONLY_GENRE_SECRET'},
       csrfToken: 'TEST_ONLY_CSRF', watchAuthKey: 'TEST_ONLY_WATCH_AUTH',
       playlistToken: 'TEST_ONLY_PLAYLIST',
@@ -133,7 +133,7 @@ describe('AUD #286 old watch history privacy migration (synthetic only)', functi
     assert(!JSON.stringify(after.videoInfo).includes('TEST_ONLY_CSRF'));
     assert(!JSON.stringify(after.videoInfo).includes('TEST_ONLY_DMC_SIG'));
     assert(!JSON.stringify(after.videoInfo).includes('TEST_ONLY_DOMAND'));
-    assert(!JSON.stringify(after.videoInfo).includes('demo1'));
+    assert(!JSON.stringify(after.videoInfo).includes('TEST_ONLY_OWNER_SECRET'));
     const second=await h.controller.scrubWatchVideoInfo({
       name:'watch-info',storeName:'cache',data:{afterKey:first.nextKey,maxRecords:2}
     });

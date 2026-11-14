@@ -86,6 +86,7 @@ const createPlaylistStartupPreparer = (deps) => {
         try {
             check();
             const data = await deps.loadVideoInfo(watchId, signal);
+            const dataAt = Date.now();
             check();
             stage = 'eligibility';
             const info = deps.createModel(data);
@@ -136,7 +137,7 @@ const createPlaylistStartupPreparer = (deps) => {
                 report('prepared', { bytes: preparedBytes.bytes, startLevel: preparedBytes.startLevel, stages: preparedBytes.stages,
                     companions: companions ? Object.keys(companions).join(',') : '', expiresInSec });
                 const prepared = { watchId, data, session, sessionInfo, bytes: preparedBytes, settings,
-                    expiresAt, companions, adopted: false,
+                    expiresAt, companions, dataAt, adopted: false,
                     dispose() { if (!this.adopted)
                         close(); } };
                 return prepared;

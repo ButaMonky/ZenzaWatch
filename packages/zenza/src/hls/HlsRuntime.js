@@ -194,7 +194,8 @@ const HlsRuntime = {
                         describeError,
                         create: (prepare, onReady, onEvent) => new PlaylistPreloader(prepare, undefined, onReady, onEvent, (value) => value?.bytes?.bytes || 0, (value) => value?.expiresAt),
                         bytes: Object.assign({}, HlsPrefetch, { prepare: (source, signal) => HlsPrefetch.prepare(source, signal, {
-                                startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate'))
+                                startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate')),
+                                preferHighest: true
                             }) }),
                         supported: () => window.location.hostname === 'www.nicovideo.jp' && primaryVideo?.playerMode === 'HLS-JS',
                         sample: () => ({ currentTime: primaryVideo?.currentTime, duration: primaryVideo?.duration,

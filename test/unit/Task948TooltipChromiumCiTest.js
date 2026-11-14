@@ -4,8 +4,8 @@ const assert=require('assert');
 const fs=require('fs');
 const path=require('path');
 const root=path.resolve(__dirname,'../..');
-describe('Task948 public Chromium tooltip CI coverage',function(){
-  const workflow=fs.readFileSync(path.join(root,'.github/workflows/quality.yml'),'utf8').replace(/\r\n/g,'\n');
+describe('Task948 private Chromium tooltip CI coverage',function(){
+  const workflow=fs.readFileSync(path.join(root,'.github/workflows/ci.yml'),'utf8').replace(/\r\n/g,'\n');
   it('runs both volume and playback-rate geometry suites after the full regression',()=>{
     const legacy=workflow.indexOf('run: npm test -- --timeout 20000 --reporter dot');
     const volume=workflow.indexOf('run: node test/browser/task939-volume-tooltip.cjs');
@@ -13,8 +13,8 @@ describe('Task948 public Chromium tooltip CI coverage',function(){
     assert(legacy>=0&&volume>legacy&&rate>volume,'browser regressions missing or out of order');
     assert.strictEqual(workflow.split('run: node test/browser/task947-speed-tooltip.cjs').length-1,1);
   });
-  it('uses a read-only public CI workflow without release or publish steps',()=>{
-    assert.match(workflow,/^name: ZenzaWatch quality gates$/m);
+  it('uses a read-only private CI workflow without release or publish steps',()=>{
+    assert.match(workflow,/^name: ZenzaWatch private CI$/m);
     assert.match(workflow,/^permissions:\n  contents: read$/m);
     assert.match(workflow,/branches: \[develop\]/);
     assert.doesNotMatch(workflow,/npm publish|gh release create|git push origin/i);

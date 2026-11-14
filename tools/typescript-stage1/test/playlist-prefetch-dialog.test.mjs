@@ -233,3 +233,92 @@ test('Nico prefetch: reporter exception cannot block expiry fallback',async()=>{
  await h.flush();await open;
  assert.ok(h.log.includes('setVideo:https://delivery.domand.nicovideo.jp/fresh.m3u8'));
 });
+test('Nico prefetch: adopted prefetched comments attach threadInfo so posting, nicoru and delete work',async()=>{
+ // 2.7.412 までは先読みコメントを採用すると今の msgInfo に threadInfo が付かず、
+ // "Cannot destructure property 'videoId' of 'msgInfo.threadInfo'" で投稿・ニコる・削除が全て失敗した。
+ const {h}=make();
+ const threadInfo={videoId:'sm9',userId:1,threadId:123,canPost:true,language:'ja-jp',totalResCount:3};
+ h.dialog._watchId='sm9';
+ h.dialog._playerConfig.props.commentLanguage='ja-jp';
+ h.dialog._prefetchCompanions={watchId:'sm9',comments:{language:'ja-jp',result:{threadInfo,body:[]}}};
+ h.dialog._onCommentLoadSuccess=()=>{};
+ const msgInfo={videoId:'sm9',userId:1,threadId:123,when:null};
+ // ハーネスは loadComment を記録用に差し替えているので、本物（プロトタイプ側）を呼ぶ。
+ await Object.getPrototypeOf(h.dialog).loadComment.call(h.dialog,msgInfo,{});
+ assert.equal(msgInfo.threadInfo,threadInfo,'the current msgInfo must carry the adopted threadInfo');
+ assert.equal(msgInfo.language,'ja-jp');
+});
+
+// Task1030: 先読みした視聴メタデータを使い、watch ページを取り直さない。
+const reusePrepared=(h,data,dataAt)=>{
+ const url='https://delivery.domand.nicovideo.jp/video/reuse.m3u8';
+ return {watchId:'sm2',settings:h.dialog._prefetchSettingsKey(),sessionInfo:{url,type:'domand'},bytes:data,
+  data:h.videoData('sm2'),dataAt,
+  session:{isDmc:false,serverType:'domand',promote:async()=>{},close(){}},adopted:false,dispose(){}};
+};
+const VideoInfoLoaderOf=h=>h.context.VideoInfoLoader;
+test('Nico prefetch (task1030): fresh prefetched metadata is reused without a foreground watch fetch',async()=>{
+ const {h,data}=make();
+ const adopted=[];
+ VideoInfoLoaderOf(h).adoptPrefetched=async(id,value)=>{adopted.push(id);return value;};
+ const prepared=reusePrepared(h,data,Date.now()-5000);
+ h.dialog._playlistPrefetch={interrupt(){},take(){return prepared;}};
+ const open=h.dialog.open('sm2',{openNow:true});
+ await h.flush();
+ assert.equal(h.loader.calls.length,0,'watch ページを取り直さない');
+ assert.deepEqual(adopted,['sm2']);
+ h.cacheGet.calls[0].resolve(null);
+ await h.flush();await open;
+ assert.equal(h.dialog._prefetchTiming.infoSource,'prefetch');
+ assert.equal(prepared.adopted,true);
+ assert.equal(h.sessionCreate.calls.length,0);
+});
+test('Nico prefetch (task1030): stale prefetched metadata is fetched again',async()=>{
+ const {h,data}=make();
+ let adopted=0;
+ VideoInfoLoaderOf(h).adoptPrefetched=async(id,value)=>{adopted++;return value;};
+ const prepared=reusePrepared(h,data,Date.now()-11*60*1000);
+ h.dialog._playlistPrefetch={interrupt(){},take(){return prepared;}};
+ await settle(h,'sm2');
+ assert.equal(adopted,0);
+ assert.equal(h.dialog._prefetchTiming.infoReuseBlocked,'stale');
+});
+test('Nico prefetch (task1030): a failed adoption falls back to the ordinary fetch',async()=>{
+ const {h,data}=make();
+ VideoInfoLoaderOf(h).adoptPrefetched=async()=>{throw Object.assign(Error('x'),{name:'PrefetchUnavailable'});};
+ const prepared=reusePrepared(h,data,Date.now());
+ h.dialog._playlistPrefetch={interrupt(){},take(){return prepared;}};
+ await settle(h,'sm2');
+ assert.equal(h.dialog._prefetchTiming.infoReuseBlocked,'adopt-failed');
+});
+
+// Task1035: 外部サイトからの再生用の枠では、設定がONでも先読みしない。
+test('Nico prefetch (task1035): never prefetches inside the external playback frame',()=>{
+ const {h}=make();
+ const Dialog=h.dialog.constructor;
+ const original=Dialog.isExternalPlayback;
+ try{
+  Dialog.isExternalPlayback=()=>true;
+  assert.equal(h.dialog._prefetchFeatureEnabled(),false);
+  Dialog.isExternalPlayback=()=>false;
+  assert.equal(h.dialog._prefetchFeatureEnabled(),true);
+ }finally{Dialog.isExternalPlayback=original;}
+});
+
+// Task1037: 大百科記事の本文に載っている動画を、載っている順に取り出す。
+test('nicodic (task1037): extracts article-body videos in order and skips ads and BBS',()=>{
+ const {h}=make();
+ const D=h.dialog.constructor;
+ const html='<a href="https://www.nicovideo.jp/watch/sm2?nicopedia_from=nicopedia_article_nicoad_pc">ad</a>'+
+  '<a href="https://www.nicovideo.jp/watch/sm10?nicopedia_from=nicopedia_article_body_pc&amp;nicopedia_article_id=1">1</a>'+
+  '<a href="https://www.nicovideo.jp/watch/sm11?nicopedia_from=nicopedia_article_body_pc">2</a>'+
+  '<a href="https://www.nicovideo.jp/watch/ss12?nicopedia_from=nicopedia_article_body_pc">short</a>'+
+  '<a href="https://www.nicovideo.jp/watch/sm10?nicopedia_from=nicopedia_article_body_pc">dup</a>'+
+  '<a href="https://www.nicovideo.jp/watch/sm3?nicopedia_from=nicopedia_bbs_body_pc">bbs</a>';
+ const x=v=>JSON.parse(JSON.stringify(v));
+ assert.deepEqual(x(D.extractNicodicVideoIds(html)),{ids:['sm10','sm11','ss12'],marker:true});
+ const changed='<a href="https://www.nicovideo.jp/watch/sm20">a</a><a href="https://nico.ms/sm21">b</a>'+
+  '<a href="https://www.nicovideo.jp/watch/sm3?nicopedia_from=nicopedia_bbs_body_pc">bbs</a>';
+ assert.deepEqual(x(D.extractNicodicVideoIds(changed)),{ids:['sm20','sm21'],marker:false});
+ assert.deepEqual(x(D.extractNicodicVideoIds('')),{ids:[],marker:false});
+});

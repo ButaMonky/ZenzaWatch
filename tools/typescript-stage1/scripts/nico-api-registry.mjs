@@ -852,7 +852,7 @@ export const NICO_API_MODULES=Object.freeze([
     originalSha256:"c0946bf0435dff7865891caf989d15fb21eb976c1a343cb56d79dab8e4a74ead",
     preamble:[],
     shape:"declarations",
-    topLevel:["const PlayListSession = ((storage) => {","})(sessionStorage);","PlayListSession.MAX_ITEMS = 10000;","PlayListSession.MIN_ITEMS = 100;","const PlaylistSession = PlayListSession;"],
+    topLevel:["const PlayListSession = ((storage) => {","})(sessionStorage);","PlayListSession.MAX_ITEMS = 10000;","PlayListSession.MIN_ITEMS = 100;","PlayListSession.diagnostics = false;","const PlaylistSession = PlayListSession;"],
     exportNames:["PlayListSession","PlaylistSession"],
     task:'task851'
   }),
@@ -1192,8 +1192,9 @@ export const NICO_API_MODULES=Object.freeze([
   api({
     name:"NicoVideoPlayer",
     runtime:"src/NicoVideoPlayer.js",
+    beginLines:["//@require createPlaybackRateReconciler"],
     originalSha256:"698a43dc2d2c0559dc31166c6af471de6fbf234dde3fe6346a3a82c6c630c86e",
-    preamble:["import {global} from './ZenzaWatchIndex';","import {NicoCommentPlayer} from './CommentPlayer';","import {util, Config, Fullscreen, VideoCaptureUtil, BaseViewComponent} from './util';","import {YouTubeWrapper} from '../packages/zenza/src/videoPlayer/YouTubeWrapper';","import {CONSTANT} from './constant';","import {Emitter} from './baselib';","import {NicoChatFilter} from '../packages/zenza/src/commentLayer/NicoChatFilter';","import {cssUtil} from '../packages/lib/src/css/css';","import {MediaTimeline} from '../packages/lib/src/dom/MediaTimeline';","import {bounce} from '../packages/lib/src/infra/bounce';","import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';","import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';","import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';","import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';","import {ScreenshotFileName} from './ScreenshotFileName';",""],
+    preamble:["import {global} from './ZenzaWatchIndex';","import {NicoCommentPlayer} from './CommentPlayer';","import {util, Config, Fullscreen, VideoCaptureUtil, BaseViewComponent} from './util';","import {YouTubeWrapper} from '../packages/zenza/src/videoPlayer/YouTubeWrapper';","import {CONSTANT} from './constant';","import {Emitter} from './baselib';","import {NicoChatFilter} from '../packages/zenza/src/commentLayer/NicoChatFilter';","import {cssUtil} from '../packages/lib/src/css/css';","import {MediaTimeline} from '../packages/lib/src/dom/MediaTimeline';","import {bounce} from '../packages/lib/src/infra/bounce';","import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';","import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';","import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';","import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';","import {ScreenshotFileName} from './ScreenshotFileName';","import {createPlaybackRateReconciler} from '../packages/zenza/src/videoPlayer/PlaybackRateReconciler';",""],
     shape:'declarations',
     topLevel:["class NicoVideoPlayer extends Emitter {","}","NicoVideoPlayer.CREDIT_PRELOAD_SEC = 45;","NicoVideoPlayer.CREDIT_WAIT_MS = 5000;","class ContextMenu extends BaseViewComponent {","}","ContextMenu.__css__ = (`","ContextMenu.__tpl__ = (`","`).trim();","class VideoPlayer extends Emitter {","}","VideoPlayer.__css__ = `","class TouchWrapper extends Emitter {","}"],
     exportNames:["NicoVideoPlayer","ContextMenu","VideoPlayer"],

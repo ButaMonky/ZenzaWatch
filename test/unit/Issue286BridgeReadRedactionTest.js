@@ -49,17 +49,17 @@ describe('Issue #286 bridge privacy: readonly worker get before migration', func
       resume: [{time: 15}], comment: [{text: 'TEST_ONLY_COMMENT'}],
       videoInfo: {
         videoId: 'TEST_ONLY_sm286', title: 'TEST_ONLY_TITLE',
-        csrfToken: 'demo1', watchAuthKey: 'demo1',
-        owner: {name: 'TEST_ONLY_OWNER', token: 'demo1'},
-        count: {view: 3, secret: 'demo1'},
-        genre: {key: 'test', label: 'TEST_ONLY_GENRE', keySecret: 'demo1'}
+        csrfToken: 'TEST_ONLY_AUTH', watchAuthKey: 'TEST_ONLY_AUTH',
+        owner: {name: 'TEST_ONLY_OWNER', token: 'TEST_ONLY_AUTH'},
+        count: {view: 3, secret: 'TEST_ONLY_AUTH'},
+        genre: {key: 'test', label: 'TEST_ONLY_GENRE', keySecret: 'TEST_ONLY_AUTH'}
       }
     };
     const controller = createWorkerGetFixture(raw);
     const reply = await controller.get({
       name: 'watch-info', storeName: 'cache', data: {key: 'TEST_ONLY_sm286'}
     });
-    assert(!JSON.stringify(reply).includes('demo1'));
+    assert(!JSON.stringify(reply).includes('TEST_ONLY_AUTH'));
     assert.deepStrictEqual(JSON.parse(JSON.stringify(reply.videoInfo)), {
       videoId: 'TEST_ONLY_sm286', title: 'TEST_ONLY_TITLE',
       count: {view: 3}, owner: {name: 'TEST_ONLY_OWNER'},
@@ -67,17 +67,17 @@ describe('Issue #286 bridge privacy: readonly worker get before migration', func
     });
     assert.deepStrictEqual(JSON.parse(JSON.stringify(reply.resume)), [{time: 15}]);
     assert.strictEqual(reply.watchCount, 4);
-    assert.strictEqual(raw.videoInfo.csrfToken, 'demo1',
+    assert.strictEqual(raw.videoInfo.csrfToken, 'TEST_ONLY_AUTH',
       'readonly access must never modify disk state');
   });
 
   it('does not change unrelated IndexedDB stores or a missing row', async function() {
-    const raw = {watchId: 'TEST_ONLY_sm287', videoInfo: {token: 'demo1'}};
+    const raw = {watchId: 'TEST_ONLY_sm287', videoInfo: {token: 'TEST_ONLY_AUTH'}};
     const controller = createWorkerGetFixture(raw);
     const unrelated = await controller.get({
       name: 'unrelated', storeName: 'cache', data: {key: 'TEST_ONLY_sm287'}
     });
-    assert.strictEqual(unrelated.videoInfo.token, 'demo1');
+    assert.strictEqual(unrelated.videoInfo.token, 'TEST_ONLY_AUTH');
     const nullWorker = createWorkerGetFixture(null);
     const empty = await nullWorker.get({
       name: 'watch-info', storeName: 'cache', data: {key: 'TEST_ONLY_none'}
@@ -92,7 +92,7 @@ describe('Issue #286 bridge privacy: readonly worker get before migration', func
         resume: [{time: 17}], comment: [{text: 'TEST_ONLY_COMMENT'}],
         videoInfo: {
           videoId: 'TEST_ONLY_sm288', title: 'TEST_ONLY_TITLE',
-          csrfToken: 'demo1', owner: {name: 'TEST_ONLY_OWNER', token: 'demo1'}
+          csrfToken: 'TEST_ONLY_AUTH', owner: {name: 'TEST_ONLY_OWNER', token: 'TEST_ONLY_AUTH'}
         }
       };
       const h = createWorkerUpdateFixture(raw);
@@ -100,26 +100,26 @@ describe('Issue #286 bridge privacy: readonly worker get before migration', func
         name: 'watch-info', storeName: 'cache',
         data: {key: 'TEST_ONLY_sm288', patch: {watchCount: 5}}
       });
-      assert(!JSON.stringify(updated).includes('demo1'));
+      assert(!JSON.stringify(updated).includes('TEST_ONLY_AUTH'));
       assert.strictEqual(updated.watchCount, 5);
       assert.strictEqual(updated.videoInfo.title, 'TEST_ONLY_TITLE');
       assert.deepStrictEqual(updated.resume, [{time: 17}]);
-      assert.strictEqual(h.persisted.videoInfo.csrfToken, 'demo1',
+      assert.strictEqual(h.persisted.videoInfo.csrfToken, 'TEST_ONLY_AUTH',
         'update response projection must not rewrite the stored row');
 
       const touched = await h.controller.updateTime({
         name: 'watch-info', storeName: 'cache', data: {key: 'TEST_ONLY_sm288'}
       });
-      assert(!JSON.stringify(touched).includes('demo1'));
+      assert(!JSON.stringify(touched).includes('TEST_ONLY_AUTH'));
       assert.strictEqual(touched.watchCount, 5);
       assert.strictEqual(touched.updatedAt, h.persisted.updatedAt);
-      assert.strictEqual(h.persisted.videoInfo.csrfToken, 'demo1',
+      assert.strictEqual(h.persisted.videoInfo.csrfToken, 'TEST_ONLY_AUTH',
         'updateTime response projection must not rewrite the stored row');
 
       const unrelated = await h.controller.update({
         name: 'other-db', storeName: 'cache',
         data: {key: 'TEST_ONLY_sm288', patch: {watchCount: 6}}
       });
-      assert.strictEqual(unrelated.videoInfo.csrfToken, 'demo1');
+      assert.strictEqual(unrelated.videoInfo.csrfToken, 'TEST_ONLY_AUTH');
     });
 });

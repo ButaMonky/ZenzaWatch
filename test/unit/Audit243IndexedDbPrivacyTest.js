@@ -29,7 +29,7 @@ describe('AUD #243 IndexedDB Worker failure diagnostics', () => {
   it('rejects a failed update but logs only a known command name', async () => {
     const h = workerHarness();
     const self = await h.setup();
-    const secret = 'demo1';
+    const secret = 'SECRET_SENTINEL_FROM_FAKE_WATCH_HISTORY';
     const params = {
       name: 'synthetic',
       storeName: 'cache',
@@ -50,7 +50,7 @@ describe('AUD #243 IndexedDB Worker failure diagnostics', () => {
   it('never renders unknown commands or parameters into diagnostics', async () => {
     const h = workerHarness();
     const self = await h.setup();
-    const secret = 'demo2';
+    const secret = 'SECRET_SENTINEL_UNKNOWN_COMMAND';
     await assert.rejects(self.onmessage({
       command: secret, params: {name: secret, data: {token: secret}}
     }));

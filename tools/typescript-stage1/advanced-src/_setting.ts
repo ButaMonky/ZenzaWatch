@@ -1067,6 +1067,17 @@ const $: typeof uq = uq;
             直接切り替えをここに追加した。ショートカット自体も
             引き続きショートカットキー設定パネルから利用できる。 -->
 
+          <div class="nicoruStyleControl control toggle">
+            <label>
+              コメント一覧のニコるボタンの見た目
+              <select data-setting-name="commentPanel.nicoruStyle">
+                <option value="dark">公式ダークモード風（既定）</option>
+                <option value="light">公式ライトモード風</option>
+                <option value="legacy">旧式（以前のZenzaWatchの画像）</option>
+              </select>
+            </label>
+          </div>
+
           <div class="videoHeaderPositionControl control toggle">
             <label>
               動画ヘッダー（タイトル・タグ欄）の表示位置（通常・大モード）
@@ -1130,6 +1141,15 @@ const $: typeof uq = uq;
               <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.skipInPlaylist">
               連続再生中は提供画面を表示しない（すぐ次の動画へ進む）
             </label>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="nicoadEnd.enable">
+              動画が最後で止まったとき、ニコニ広告された動画（最大10件）を表示する
+            </label>
+            <div class="settingNote">
+              リピート再生・連続再生で次へ進むときは表示しません。提供した人と宣伝ポイントも表示し、クリックするとその動画を開きます。
+            </div>
           </div>
 
           <div class="relatedMenuCustomLinksContainer"></div>

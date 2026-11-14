@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PlaybackRateReconciler.ts",
+  "runtime": "packages/zenza/src/videoPlayer/PlaybackRateReconciler.js",
+  "sourceSha256": "34dc1640a82aa764995425eeb9a15139414d1aa37f7dd5e355f305fada41c262",
+  "runtimeSha256": "c2fd42b49f9ebeaa3391aa0da5c3773fee28fe803958fbd9742fa7c636ac2676"
+}

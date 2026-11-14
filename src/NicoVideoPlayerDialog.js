@@ -2980,9 +2980,15 @@ NicoVideoPlayerDialogView.__css__ = `
       }
     }
 
-    /* 縦長モニター */
+    /*
+      縦長モニター（情報パネルを動画の下に出す）。
+      Task1039: 幅が足りないだけの横長の画面（例: Firefox 100% で 1212x715）は縦長として扱わない。
+      以前は幅 1216px 未満・高さ 700px 以上なら横長でも下パネルの配置になり、動画が小さく情報パネルが
+      下に回って崩れていた。横長（縦横比 4:3 以上）の時は下の「高さが足りない時」と同じく、
+      情報パネルを右に置いたまま動画を縮める。
+    */
     @media
-      (width < 992px) and (min-height: 700px)
+      (width < 992px) and (min-height: 700px) and (aspect-ratio < 4/3)
     {
       .zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
         padding-bottom: 240px;
@@ -2991,7 +2997,7 @@ NicoVideoPlayerDialogView.__css__ = `
     }
 
     @media
-      (width < 1216px) and (min-height: 700px)
+      (width < 1216px) and (min-height: 700px) and (aspect-ratio < 4/3)
     {
       .zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
         padding-bottom: 240px;
@@ -3004,7 +3010,7 @@ NicoVideoPlayerDialogView.__css__ = `
       information and comment tabs stay adjacent to the movie. Resize only
       the video frame at its native aspect ratio, reserving header/toolbar room.
     */
-    @media (min-width: 640px) and (width < 992px) and (height < 700px) {
+    @media (min-width: 640px) and (width < 992px) and ((height < 700px) or (aspect-ratio >= 4/3)) {
       body.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
         padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
         background: none;
@@ -3015,7 +3021,7 @@ NicoVideoPlayerDialogView.__css__ = `
         aspect-ratio: 7 / 4;
       }
     }
-    @media (min-width: 640px) and (width < 1216px) and (height < 700px) {
+    @media (min-width: 640px) and (width < 1216px) and ((height < 700px) or (aspect-ratio >= 4/3)) {
       body.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
         padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
         background: none;
@@ -3051,27 +3057,35 @@ NicoVideoPlayerDialogView.__css__ = `
        The legacy below-video layout also exceeded the viewport at 700px
        high when its fixed-size movie was wider/taller than the available
        window. Keep the native bottom panel and scale the movie into it. */
-    @media (width < 992px) and (min-height: 700px) {
+    @media (width < 992px) and (min-height: 700px) and (aspect-ratio < 4/3) {
       body.zenzaScreenMode_normal .zenzaPlayerContainer {
         width: min(672px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.75));
         height: auto;
         aspect-ratio: 7 / 4;
       }
     }
-    @media (width < 1216px) and (min-height: 700px) {
+    @media (width < 1216px) and (min-height: 700px) and (aspect-ratio < 4/3) {
       body.zenzaScreenMode_big .zenzaPlayerContainer {
         width: min(896px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.8666667));
         height: auto;
         aspect-ratio: 28 / 15;
       }
     }
+    /*
+      Task1038: 大モードの固定サイズ（960x540 など）は、画面の高さがその段のぎりぎり（例: 高さ 700〜740px）だと
+      上のタイトル・タグ欄と下の再生バーが入りきらず、ヘッダーが動画に重なったり箱ごと押し下げられて崩れていた。
+      Firefox は 100% 表示のときにちょうどこの高さになりやすい（90%/110% では別の段になるので起きない）。
+      どの段でも「画面の高さ − 200px（ヘッダーと再生バーの分）」を超えない大きさに縮める（比率 28:15 は同じ）。
+      高さが十分ある時は従来と同じ大きさになるので、他のブラウザ・他の倍率の見た目は変わらない。
+    */
     /* 960x540 */
     @media
       (min-width: 1328px) and (min-height: 700px)
     {
       .zenzaScreenMode_big .zenzaPlayerContainer {
-        width: calc(960px * 1.05);
-        height: 540px;
+        width: min(calc(960px * 1.05), calc((100vh - 200px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
       }
     }
 
@@ -3080,8 +3094,9 @@ NicoVideoPlayerDialogView.__css__ = `
       (min-width: 1530px) and (min-height: 900px)
     {
       .zenzaScreenMode_big .zenzaPlayerContainer {
-        width: calc(1152px * 1.05);
-        height: 648px;
+        width: min(calc(1152px * 1.05), calc((100vh - 200px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
       }
     }
 
@@ -3090,8 +3105,9 @@ NicoVideoPlayerDialogView.__css__ = `
       (min-width: 1664px) and (min-height: 900px)
     {
       .zenzaScreenMode_big .zenzaPlayerContainer {
-        width: calc(1280px * 1.05);
-        height: 720px;
+        width: min(calc(1280px * 1.05), calc((100vh - 200px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
       }
     }
 
@@ -3100,8 +3116,9 @@ NicoVideoPlayerDialogView.__css__ = `
       (min-width: 2336px) and (min-height: 1200px)
     {
       .zenzaScreenMode_big .zenzaPlayerContainer {
-        width: calc(1920px * 1.05);
-        height: 1080px;
+        width: min(calc(1920px * 1.05), calc((100vh - 200px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
       }
     }
 
@@ -3110,8 +3127,9 @@ NicoVideoPlayerDialogView.__css__ = `
       (min-width: 2976px) and (min-height: 1660px)
     {
       .zenzaScreenMode_big .zenzaPlayerContainer {
-        width: calc(2560px * 1.05);
-        height: 1440px;
+        width: min(calc(2560px * 1.05), calc((100vh - 200px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
       }
     }
   }
@@ -3136,6 +3154,8 @@ NicoVideoPlayerDialogView.__tpl__ = (`
 class NicoVideoPlayerDialog extends Emitter {
     // Task 090（監査v2 ZW-017）: キャッシュ・プレイリストの初期化を待つ最長の時間（ミリ秒）
     static get OPTIONAL_LOAD_TIMEOUT() { return 3000; }
+    /** Task1030: 先読みした視聴メタデータを再利用してよい最長の古さ。いいね状態等の個人データも含むため短めにする。 */
+    static get PREFETCH_DATA_MAX_AGE_MS() { return 10 * 60 * 1000; }
     constructor(params) {
         super();
         this.initialize(params);
@@ -3362,6 +3382,9 @@ class NicoVideoPlayerDialog extends Emitter {
                 case 'playlistSetCommonsTree':
                     this._onPlaylistSetCommonsTree();
                     break;
+                case 'playlistSetNicodic':
+                    void this._onPlaylistSetNicodic(param);
+                    break;
                 case 'playNextVideo':
                     this.playNextVideo();
                     break;
@@ -3545,13 +3568,55 @@ class NicoVideoPlayerDialog extends Emitter {
                     const msgInfo = videoInfo?.msgInfo;
                     const loader = this.threadLoader;
                     Promise.resolve().then(() => loader.nicoru(msgInfo, param))
-                        .then(result => { request?.resolve?.(result); })
+                        .then(result => {
+                        request?.resolve?.(result);
+                        // Task1038: ニコるは日時・コメント本文・動画ID・動画タイトル・コメントの位置を残す。
+                        const chat = param;
+                        const text = typeof chat?.text === 'string' ? chat.text : '';
+                        const title = typeof videoInfo?.title === 'string' ? videoInfo.title : '';
+                        const vpos = Number(chat?.vpos);
+                        this._recordDiagnostic({
+                            category: 'comment', level: 'success', source: 'nicoru',
+                            message: 'ニコりました' + (text ? '「' + text.slice(0, 80) + '」' : '') + (title ? '（' + title + '）' : ''),
+                            videoId: videoInfo?.watchId || videoInfo?.videoId,
+                            details: { operation: 'nicoru', outcome: 'accepted' },
+                            activity: { kind: 'nicoru', text: text || '（本文なし）', videoTitle: title,
+                                ...(Number.isFinite(vpos) && vpos >= 0 ? { positionMs: Math.floor(vpos * 10) } : {}) }
+                        });
+                    })
                         .catch(e => {
                         request?.reject?.(e);
                         if (this._videoInfo !== videoInfo || this._requestId !== requestId || this._state?.isOpen === false) {
                             return;
                         }
                         this.execCommand('alert', e?.message || 'ニコれなかった＞＜');
+                    });
+                    break;
+                }
+                case 'nicoru-cancel': {
+                    // Task1039: ニコるの取り消し（公式の DELETE /v1/users/me/nicoru/send/{nicoruId}）。
+                    const videoInfo = this._videoInfo;
+                    const requestId = this._requestId;
+                    const loader = this.threadLoader;
+                    const chat = param;
+                    Promise.resolve().then(() => loader.unNicoru(videoInfo?.msgInfo, chat?.nicoruId))
+                        .then(result => {
+                        request?.resolve?.(result);
+                        const text = typeof chat?.text === 'string' ? chat.text : '';
+                        const title = typeof videoInfo?.title === 'string' ? videoInfo.title : '';
+                        this._recordDiagnostic({
+                            category: 'comment', level: 'success', source: 'nicoru',
+                            message: 'ニコるを取り消しました' + (text ? '「' + text.slice(0, 80) + '」' : '') + (title ? '（' + title + '）' : ''),
+                            videoId: videoInfo?.watchId || videoInfo?.videoId,
+                            details: { operation: 'nicoru-cancel', outcome: 'accepted' }
+                        });
+                    })
+                        .catch(e => {
+                        request?.reject?.(e);
+                        if (this._videoInfo !== videoInfo || this._requestId !== requestId || this._state?.isOpen === false) {
+                            return;
+                        }
+                        this.execCommand('alert', e?.message || 'ニコるを取り消せなかった＞＜');
                     });
                     break;
                 }
@@ -3714,8 +3779,24 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     /** Extra network activity is always user opt-in, and only in a real playlist. */
     _prefetchFeatureEnabled() {
+        // Task1035: 外部サイトからの再生（www.nicovideo.jp/robots.txt の枠）では先読みしない。
+        // 実機ログでは、他サイトに埋め込まれた枠からの再生用データ取得が毎回 HTTP エラーになる一方、
+        // 動画情報・再生許可・コメントの取得は毎回走り、10秒あたり25〜37MBの通信と長い処理が続いていた。
+        if (NicoVideoPlayerDialog.isExternalPlayback()) {
+            return false;
+        }
         const config = this._playerConfig;
         return config?.getValue('playlist.prefetchAhead.enabled') === true;
+    }
+    /** Task1035: 外部サイトからの再生用の枠の中で動いているか。 */
+    static isExternalPlayback() {
+        try {
+            return window !== window.top && window.name === 'ZenzaWatchExternalTrialPlayer' &&
+                location.hostname === 'www.nicovideo.jp';
+        }
+        catch (_) {
+            return false;
+        }
     }
     _prefetchSettingsKey() {
         const config = this._playerConfig;
@@ -3732,7 +3813,8 @@ class NicoVideoPlayerDialog extends Emitter {
         if (!runtime?.createReporter)
             return null;
         return this._prefetchReporter ||= runtime.createReporter({
-            diagnostics: () => runtime.trialDiagnostics === true,
+            diagnostics: () => runtime.trialDiagnostics === true ||
+                this._playerConfig.getValue('playlist.prefetchAhead.consoleLog') === true,
             notifyMode: () => this._playerConfig.getValue('playlist.prefetchAhead.notify') || 'journal',
             console: (name, payload) => window.console.info(name, JSON.stringify(payload)),
             record: (entry) => this._recordDiagnostic(entry),
@@ -3770,7 +3852,9 @@ class NicoVideoPlayerDialog extends Emitter {
                     return null;
                 const msgInfo = Object.assign({}, info.msgInfo);
                 msgInfo.language = this._playerConfig.props.commentLanguage;
-                const result = await this.threadLoader.load(msgInfo, { signal: sig });
+                // 先読みのコメント取得は失敗しても本編に影響しない。3秒・6秒を空けた
+                // リトライを繰り返すと通信とログを無駄に増やすので1回で諦める（Task1029）。
+                const result = await this.threadLoader.load(msgInfo, { signal: sig, noRetry: true });
                 return { comments: { language: msgInfo.language, result } };
             }
         });
@@ -3851,6 +3935,38 @@ class NicoVideoPlayerDialog extends Emitter {
         return typeof performance !== 'undefined' && typeof performance.now === 'function' ?
             performance.now() : Date.now();
     }
+    /**
+     * Task1029: 1回の切り替えの内訳を1行で出す。
+     * prefetchUsed=先読みのセッションを使えたか。
+     * infoSource=動画情報の取得元（prefetch=先読みを再利用 / network=取り直した）。
+     * marks は動画を開いてからの経過ms（videoInfo=動画情報が揃った、session=再生許可が揃った、
+     * setVideo=プレーヤーへ渡した、canPlay=再生可能になった）。
+     */
+    _diagOpenTiming() {
+        const t = this._prefetchTiming;
+        if (!t || !this._prefetchConsoleLog()) {
+            return;
+        }
+        const hits = (() => {
+            try {
+                return global.debug?.playlistPrefetch?.bytes?.hits?.(t.source) ?? null;
+            }
+            catch (_) {
+                return null;
+            }
+        })();
+        this._diag('ZENZA_OPEN_TIMING', {
+            videoId: t.videoId || null,
+            prefetchUsed: !!t.used,
+            infoSource: t.infoSource || null,
+            infoReuseBlocked: t.infoReuseBlocked || null,
+            infoAgeSec: Number.isFinite(t.infoAgeSec) ? t.infoAgeSec : null,
+            cacheHits: hits,
+            totalMs: Math.round(this._prefetchNow() - t.started),
+            marks: t.marks || {},
+            readyCount: (this._playlistPrefetch?.readyIds?.() || []).length
+        });
+    }
     /** 再生開始までにかかった秒数を通知する（設定がONのときだけ画面に出す）。 */
     _reportPrefetchTiming() {
         const t = this._prefetchTiming;
@@ -3887,26 +4003,205 @@ class NicoVideoPlayerDialog extends Emitter {
         runtime.markIds = ids;
         global.emitter.emit?.('zenza-prefetch-marks', ids);
     }
+    /**
+     * Task1029: 動画を開いてからの区間時間を刻む。
+     * どこで時間を使っているのかを1回の切り替えごとに1行で出すため。
+     */
+    _markTiming(key) {
+        const t = this._prefetchTiming;
+        if (!t || t.requestId !== this._requestId) {
+            return;
+        }
+        t.marks ||= {};
+        if (t.marks[key] === undefined) {
+            t.marks[key] = Math.round(this._prefetchNow() - t.started);
+        }
+    }
+    /**
+     * Task1029: 調査用の1行を出す。payload は JSON にして1行にまとめる
+     * （コンソールで折り畳まれず、そのままコピーして貼れるようにするため）。
+     */
+    _diag(name, payload) {
+        if (!this._prefetchConsoleLog()) {
+            return;
+        }
+        try {
+            window.console.info(name, JSON.stringify(payload));
+        }
+        catch (_) { /* 調査用の出力で本編を止めない。 */ }
+    }
+    /**
+     * Task1030: 動画を開いてから実際に再生が始まるまで（canPlay は HLS では
+     * マニフェスト解析時点の互換イベントで、映像が出た時刻ではない）。
+     * 先読みデータを hls.js が本当に使えたか（hits/misses）も出す。
+     */
+    _diagFirstPlaying() {
+        const t = this._prefetchTiming;
+        if (!t || t.requestId !== this._requestId || t.firstPlayingReported) {
+            return;
+        }
+        t.firstPlayingReported = true;
+        this._markTiming('playing');
+        if (!this._prefetchConsoleLog()) {
+            return;
+        }
+        const stats = (() => {
+            try {
+                return t.source ? global.debug?.playlistPrefetch?.bytes?.stats?.(t.source) ?? null : null;
+            }
+            catch (_) {
+                return null;
+            }
+        })();
+        const level = (() => {
+            try {
+                const hls = global.debug?.video?.hls || this._nicoVideoPlayer?._videoPlayer?._video?.hls;
+                return typeof hls?.currentLevel === 'number' ? hls.currentLevel : null;
+            }
+            catch (_) {
+                return null;
+            }
+        })();
+        this._diag('ZENZA_FIRST_PLAYING', {
+            videoId: t.videoId || null,
+            prefetchUsed: !!t.used,
+            infoSource: t.infoSource || null,
+            playingMs: Math.round(this._prefetchNow() - t.started),
+            marks: t.marks || {},
+            cache: stats,
+            currentLevel: level
+        });
+    }
+    /** Task1029: 同じ内容を繰り返し出さないための記録。 */
+    _diagOnce(name, key, payload) {
+        if (!this._prefetchConsoleLog()) {
+            return;
+        }
+        this._diagSeen ||= new Map();
+        if (this._diagSeen.get(name) === key) {
+            return;
+        }
+        this._diagSeen.set(name, key);
+        this._diag(name, payload);
+    }
+    /** Task1029: 起動時に版と設定をまとめて出す（どのビルドのログか後から分かるように）。 */
+    _diagEnvironment() {
+        if (!this._prefetchConsoleLog() || this._diagEnvDone) {
+            return;
+        }
+        this._diagEnvDone = true;
+        const config = this._playerConfig;
+        const keys = ['playlist.prefetchAhead.enabled', 'playlist.prefetchAhead.sourcePlaylist',
+            'playlist.prefetchAhead.sourceRelated', 'playlist.prefetchAhead.sourceDescription',
+            'playlist.prefetchAhead.order', 'playlist.prefetchAhead.window', 'playlist.prefetchAhead.cacheMB',
+            'playlist.prefetchAhead.pacingMs', 'playlist.prefetchAhead.companions',
+            'playbackRate.respectExternal', 'playbackRate',
+            'loop', 'playlistLoop', 'autoPlay', 'enableStoryboard', 'videoServerType', 'domandVideoQuality',
+            'playlist.prefetchAhead.showMark', 'playlist.prefetchAhead.notify'];
+        const settings = {};
+        for (const key of keys) {
+            try {
+                settings[key] = config.getValue(key);
+            }
+            catch (_) {
+                settings[key] = '?';
+            }
+        }
+        this._diag('ZENZA_DIAG_ENV', {
+            version: global.version || window.ZenzaWatch?.version || null,
+            saveData: navigator.connection?.saveData === true,
+            memoryGB: navigator.deviceMemory ?? null,
+            hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+            settings
+        });
+    }
+    /** Task1029: 上級者設定「コンソールに詳しく出力」がONか。 */
+    _prefetchConsoleLog() {
+        const on = this._playerConfig?.getValue('playlist.prefetchAhead.consoleLog') === true ||
+            global.debug?.playlistPrefetch?.trialDiagnostics === true;
+        // プレイリストの保存は別モジュールなので、静的フラグで伝える。
+        try {
+            if (typeof PlayListSession !== 'undefined' && PlayListSession.diagnostics !== on) {
+                PlayListSession.diagnostics = on;
+            }
+        }
+        catch (_) { /* 伝えられなくても本編には影響しない。 */ }
+        return on;
+    }
     _updateNextPrefetch() {
         try {
+            this._diagEnvironment();
             if (!this._prefetchFeatureEnabled()) {
                 const cache = this._playlistPrefetch;
                 this._playlistPrefetch = null;
                 cache?.reset();
                 this._updatePrefetchMarks();
+                const gate = NicoVideoPlayerDialog.isExternalPlayback() ? 'external-site' : 'disabled';
+                this._diagOnce('ZENZA_PREFETCH_GATE', gate, { gate });
                 return;
             }
             const runtime = global.debug?.playlistPrefetch;
-            if (!runtime?.create || !this.isOpen || !this._playlist ||
-                navigator.connection?.saveData === true || !runtime.supported() ||
-                this._state.isError || this._playerConfig.getValue('loop') === true) {
+            // Task1029: どの条件で止まっているのかを1つずつ記録する。
+            // 「先読みを追加しなくなった」の原因をログだけで切り分けられるようにするため。
+            const gate = !runtime?.create ? 'no-runtime' :
+                !this.isOpen ? 'player-closed' :
+                    !this._playlist ? 'no-playlist' :
+                        navigator.connection?.saveData === true ? 'data-saver' :
+                            !runtime.supported() ? 'not-hls' :
+                                this._state.isError ? 'video-error' :
+                                    this._playerConfig.getValue('loop') === true ? 'loop-on' : null;
+            if (gate) {
                 this._playlistPrefetch?.interrupt?.('waiting');
+                this._diagOnce('ZENZA_PREFETCH_GATE', gate, {
+                    gate,
+                    playerMode: global.debug?.video?.playerMode ?? null,
+                    // supported() が見ているのは ZenzaHLS 側の primaryVideo。
+                    // 引き継ぎ後に古い要素を指したままになる不具合があったため、別に出す。
+                    supported: (() => {
+                        try {
+                            return global.debug?.playlistPrefetch?.supported?.() === true;
+                        }
+                        catch (_) {
+                            return null;
+                        }
+                    })(),
+                    sampleTime: (() => {
+                        try {
+                            return global.debug?.playlistPrefetch?.sample?.()?.currentTime ?? null;
+                        }
+                        catch (_) {
+                            return null;
+                        }
+                    })(),
+                    isOpen: !!this.isOpen,
+                    playlistItems: this._playlist?.length ?? null,
+                    watchId: this._watchId || null
+                });
                 return;
             }
+            this._diagOnce('ZENZA_PREFETCH_GATE', 'open', { gate: 'open' });
             const perSource = Math.max(1, Math.min(32, Number(this._playerConfig.getValue('playlist.prefetchAhead.window')) || 5));
             const maxStoreBytes = Math.max(16, Math.min(512, Number(this._playerConfig.getValue('playlist.prefetchAhead.cacheMB')) || 128)) * 1048576;
             const pacingMs = Math.max(0, Math.min(10000, Number(this._playerConfig.getValue('playlist.prefetchAhead.pacingMs')) || 0));
             const candidates = this._collectPrefetchCandidates(perSource);
+            this._diagOnce('ZENZA_PREFETCH_CANDIDATES', candidates.join(','), {
+                current: this._watchId || null,
+                candidates,
+                perSource,
+                playlistItems: this._playlist?.length ?? null,
+                playlistIndex: this._playlist?.index ?? null,
+                playlistEnable: !!this.isPlaylistEnable,
+                peekNext: (() => {
+                    try {
+                        return this._playlist?.peekNextIds?.(5) || null;
+                    }
+                    catch (_) {
+                        return 'error';
+                    }
+                })(),
+                relatedCount: (this._videoInfo?.relatedVideoItems || []).length,
+                ready: this._playlistPrefetch?.readyIds?.() || []
+            });
             if (!candidates.length) {
                 // 候補が無いだけならキャッシュは残すが、準備中の通信は止める
                 this._playlistPrefetch?.interrupt?.('not-playing');
@@ -3928,14 +4223,38 @@ class NicoVideoPlayerDialog extends Emitter {
                         break;
                     }
                 }
-            this._playlistPrefetch.update({
+            const schedulerInput = {
                 settings: this._prefetchSettingsKey(), candidates,
                 currentId: this._watchId || null, enabled: true,
                 playing: this.isPlaying, seeking: !!this._state.isSeeking, waiting: !!this._state.isStalled,
                 currentTime, duration: Number(sample?.duration), bufferEnd,
                 rate: Number(sample?.rate) || 1, ended: !!sample?.ended,
                 windowCount, maxStoreBytes, pacingMs
+            };
+            // 止まっている原因が「再生が安定していない」なのか分かるように、
+            // 判断に使った値そのものを出す（状態が変わったときだけ）。
+            // 判断に関わる状態が変わったときだけ出す。再生位置では出さない
+            // （0.5秒ごとに1行出て他の記録が埋もれるため）。
+            // ahead は先読みが実際に使う値（残量を再生速度で割ったもの）。
+            // 以前は割る前の値を出していて、2倍速のときに判断を読み違えた。
+            const ahead = Math.max(0, bufferEnd - currentTime) / Math.max(0.25, schedulerInput.rate);
+            const readyCount = (this._playlistPrefetch?.readyIds?.() || []).length;
+            const busy = this._playlistPrefetch?.isBusy?.() === true;
+            this._diagOnce('ZENZA_PREFETCH_INPUT', [schedulerInput.playing, schedulerInput.seeking, schedulerInput.waiting,
+                schedulerInput.ended, ahead >= 15, busy, readyCount].join('/'), {
+                playing: schedulerInput.playing, seeking: schedulerInput.seeking,
+                waiting: schedulerInput.waiting, ended: schedulerInput.ended,
+                currentTime: Number(currentTime.toFixed(1)),
+                bufferEnd: Number(bufferEnd.toFixed(1)),
+                aheadSec: Number(ahead.toFixed(1)),
+                aheadEnough: ahead >= 15,
+                duration: Number(sample?.duration) || null,
+                rate: schedulerInput.rate,
+                busy, readyCount,
+                ready: this._playlistPrefetch?.readyIds?.() || [],
+                totalBytes: this._playlistPrefetch?.totalBytes?.() ?? null
             });
+            this._playlistPrefetch.update(schedulerInput);
             this._updatePrefetchMarks();
         }
         catch (_) {
@@ -4444,6 +4763,117 @@ class NicoVideoPlayerDialog extends Emitter {
         };
     }
     // Task197: abort the running parent/child job (HTTP, waits and display-info fill)
+    /**
+     * Task1037: 大百科記事の本文に載っている動画の ID を、載っている順に返す（重複は最初の1回だけ）。
+     * 記事本文のリンクには nicopedia_from=nicopedia_article_body_pc が付く（広告は …_nicoad_…、
+     * 掲示板は …_bbs_… で区別できる）。この印が見つからないときは、記事の形式が変わった可能性が
+     * あるので、広告・掲示板の印が付いたものを除いた全リンクで代用し marker=false を返す。
+     */
+    static extractNicodicVideoIds(html) {
+        const text = typeof html === 'string' ? html : '';
+        const pick = (re) => {
+            const seen = new Set(), ids = [];
+            for (const m of text.matchAll(re)) {
+                const id = m[1];
+                if (id && !seen.has(id)) {
+                    seen.add(id);
+                    ids.push(id);
+                }
+            }
+            return ids;
+        };
+        const marked = pick(/watch\/((?:sm|nm|so|ss)\d+)\?[^"'\s>]*nicopedia_from=nicopedia_article_body/g);
+        if (marked.length) {
+            return { ids: marked, marker: true };
+        }
+        const all = pick(/(?:www\.nicovideo\.jp\/watch|nico\.ms)\/((?:sm|nm|so|ss)\d+)(?![^"'\s>]*nicopedia_from=nicopedia_(?:bbs|article_nicoad))/g);
+        return { ids: all, marker: false };
+    }
+    _getNicodicGate() {
+        if (this._nicodicGate) {
+            return this._nicodicGate;
+        }
+        this._nicodicGate = new CrossDomainGate({
+            baseUrl: 'https://dic.nicovideo.jp/robots.txt',
+            origin: 'https://dic.nicovideo.jp/',
+            type: 'nicodic'
+        });
+        return this._nicodicGate;
+    }
+    /** Task1037: 大百科記事に載っている動画をすべてプレイリストへ入れる。 */
+    async _onPlaylistSetNicodic(articleUrl) {
+        let url;
+        try {
+            url = new URL(String(articleUrl));
+        }
+        catch (_) {
+            return;
+        }
+        if (url.hostname !== 'dic.nicovideo.jp' || !/^\/(?:v|a)\/[^/]+\/?$/.test(url.pathname)) {
+            return;
+        }
+        const href = 'https://dic.nicovideo.jp' + url.pathname;
+        const requestId = this._requestId, watchId = this._watchId;
+        const token = this._nicodicPlaylistToken = {};
+        const isCurrent = () => this._nicodicPlaylistToken === token && this._requestId === requestId && this._watchId === watchId;
+        const articleName = decodeURIComponent(url.pathname.replace(/^\/(?:v|a)\//, '').replace(/\/$/, ''));
+        this.execCommand('notify', `大百科「${articleName}」の記事から動画を取得中...`);
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('dictionary', href, 'response', isCurrent);
+        let html = '';
+        try {
+            const gate = this._getNicodicGate();
+            const res = await gate.fetch(href, { _format: 'text', timeout: 30000 });
+            if (!res || typeof res.text !== 'function') {
+                throw Object.assign(new Error('NICODIC_GATE_UNAVAILABLE'), { status: 0 });
+            }
+            if (!res.ok) {
+                throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+            }
+            html = await res.text();
+        }
+        catch (e) {
+            diagnostic?.failure(e);
+            if (!isCurrent()) {
+                return;
+            }
+            window.console.warn('大百科記事の取得に失敗', e?.message);
+            return this.execCommand('alert', `大百科記事を取得できませんでした（${e?.message || '通信エラー'}）`);
+        }
+        if (!isCurrent()) {
+            return;
+        }
+        const { ids, marker } = NicoVideoPlayerDialog.extractNicodicVideoIds(html);
+        if (!ids.length) {
+            diagnostic?.failure({ kind: 'schema', missing: 'nicopedia_article_body links' });
+            return this.execCommand('notify', `大百科「${articleName}」の記事に動画は見つかりませんでした`);
+        }
+        if (marker) {
+            diagnostic?.success();
+        }
+        else {
+            diagnostic?.failure({ kind: 'schema', missing: 'nicopedia_from=nicopedia_article_body' });
+        }
+        const report = {};
+        const option = { watchId, isCancelled: () => !isCurrent(), deferDetails: true, report,
+            insert: this._playlist.isEnable };
+        this._state.currentTab = 'playlist';
+        const added = await this._playlist.appendWatchIds(ids, option);
+        if (added === null || !isCurrent()) {
+            return;
+        }
+        const overflow = Array.isArray(report.overflow) ? report.overflow : [];
+        const notes = [
+            report.existing ? `${report.existing}件は既にプレイリストにあります` : '',
+            overflow.length ? `プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加` : '',
+            marker ? '' : '記事の形式が想定と違うため、本文以外の動画も含まれる可能性があります'
+        ].filter(Boolean);
+        this.execCommand('notify', `大百科「${articleName}」から${added}件をプレイリストに追加しました（記事内の動画${ids.length}件` +
+            (notes.length ? '／' + notes.join('／') : '') + '）');
+        if (this._videoInfo) {
+            this._playlist.insertCurrentVideo(this._videoInfo);
+        }
+    }
     _abortCommonsTreeJob() {
         const job = this._commonsTreeJob;
         this._commonsTreeJob = null;
@@ -4609,9 +5039,14 @@ class NicoVideoPlayerDialog extends Emitter {
             const popupText = message || (isLiked ? '(･A･)ﾉｼ' : '(･∀･)ｨｨﾈ!!');
             // Persist the actual API result for its original video even after navigation.
             // This must not update the newly opened video's model or show a stale popup.
+            // Task1038: いいねは日時・動画ID・動画タイトルを自分の活動として残す（検索で「いいね」でも見つかる）。
+            const title = typeof videoInfo.title === 'string' ? videoInfo.title : '';
             this._recordDiagnostic({
-                category: 'like', level: 'success', message: popupText,
-                videoId, source: 'like', details: { operation: isLiked ? 'unlike' : 'like' }
+                category: 'like', level: 'success',
+                message: (isLiked ? 'いいね！を取り消しました' : 'いいね！しました') + (title ? '「' + title + '」' : '') +
+                    (message ? ' ' + message : ''),
+                videoId, source: 'like', details: { operation: isLiked ? 'unlike' : 'like' },
+                ...(isLiked ? {} : { activity: { kind: 'like', text: message || '', videoTitle: title } })
             });
             if (this._videoInfo !== videoInfo) {
                 return;
@@ -4786,6 +5221,7 @@ class NicoVideoPlayerDialog extends Emitter {
         if (!watchId) {
             return;
         }
+        this._hideNicoadEndScreen();
         // 連打対策
         if (Date.now() - this._lastOpenAt < 1500 && this._watchId === watchId) {
             return;
@@ -4875,7 +5311,7 @@ class NicoVideoPlayerDialog extends Emitter {
             Promise.resolve().then(func).then(result => { window.clearTimeout(timer); resolve(result); }, () => { window.clearTimeout(timer); window.console.warn(`${label}: fail`); onGiveUp(); resolve(fallback); });
         });
         Promise.all([
-            VideoInfoLoader.load(watchId, options.videoLoadOptions),
+            this._loadVideoInfoForOpen(watchId, options, prepared),
             optional('WatchInfoCacheDb.get', () => WatchInfoCacheDb.get(watchId), null),
             // プレイリストを待つ処理（再生可能になった時の playlist-ready 待ち）が止まらないよう、諦めた時も ready にする
             optional('initializePlaylist', () => this._initializePlaylist(), undefined, () => this.emitResolve('playlist-ready')) //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
@@ -4928,11 +5364,65 @@ class NicoVideoPlayerDialog extends Emitter {
         this._playerConfig.props.lastPlayerId = '';
         this._playerConfig.props.lastPlayerId = this.id;
     }
+    /**
+     * Task1030: 動画情報の取得元を決める。
+     * 先読み済みで新しいメタデータがあれば watch ページを取り直さずにそれを使う
+     * （実測で切り替え時間の大半がこの再取得だった）。使えない・失敗したときは通常どおり取得する。
+     */
+    _loadVideoInfoForOpen(watchId, options, prepared) {
+        const reason = this._prefetchDataReuseBlock(watchId, options, prepared);
+        const timing = this._prefetchTiming;
+        if (reason) {
+            if (timing) {
+                timing.infoSource = 'network';
+                timing.infoReuseBlocked = reason;
+            }
+            return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+        }
+        if (timing) {
+            timing.infoSource = 'prefetch';
+            timing.infoAgeSec = Math.round((Date.now() - prepared.dataAt) / 1000);
+        }
+        return VideoInfoLoader.adoptPrefetched(watchId, prepared.data, options.videoLoadOptions)
+            .catch((error) => {
+            if (timing) {
+                timing.infoSource = 'network';
+                timing.infoReuseBlocked = 'adopt-failed';
+            }
+            this._diag('ZENZA_INFO_REUSE', { watchId, fallback: true,
+                error: String(error?.name || error?.message || error).slice(0, 80) });
+            return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+        });
+    }
+    /** Task1030: 先読みのメタデータを使えない理由（使えるなら null）。 */
+    _prefetchDataReuseBlock(watchId, options, prepared) {
+        if (!prepared) {
+            return 'not-prefetched';
+        }
+        if (typeof VideoInfoLoader?.adoptPrefetched !== 'function') {
+            return 'unsupported';
+        }
+        if (prepared.watchId !== watchId || !prepared.data) {
+            return 'mismatch';
+        }
+        if (options?.videoLoadOptions?.economy) {
+            return 'economy';
+        }
+        const age = Date.now() - Number(prepared.dataAt);
+        if (!Number.isFinite(age) || age < 0) {
+            return 'no-timestamp';
+        }
+        if (age > NicoVideoPlayerDialog.PREFETCH_DATA_MAX_AGE_MS) {
+            return 'stale';
+        }
+        return null;
+    }
     async _onVideoInfoLoaderLoad(requestId, [videoInfoData, localCacheData]) {
         console.log('Video info load completed');
         if (this._requestId !== requestId) {
             return;
         }
+        this._markTiming('videoInfo');
         const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
         this._watchId = videoInfo.watchId;
         WatchInfoCacheDb.putBestEffort(this._watchId, { videoInfo });
@@ -5045,7 +5535,9 @@ class NicoVideoPlayerDialog extends Emitter {
             if (isStale()) {
                 return;
             }
+            this._markTiming('session');
             this.setVideo(sessionInfo.url);
+            this._markTiming('setVideo');
             videoInfo.setCurrentVideo(sessionInfo.url);
             this.emit('videoServerType', sessionInfo.type, sessionInfo, videoInfo);
         }
@@ -5083,6 +5575,18 @@ class NicoVideoPlayerDialog extends Emitter {
         this._cancelCommentLoad();
         const companion = this._takePrefetchComments(msgInfo, loadOptions);
         if (companion) {
+            // 投稿・ニコる・削除は ThreadLoader が msgInfo.threadInfo を読む。通常の読み込みでは
+            // ThreadLoader.load() が msgInfo へ書き込むが、先読みのコメントは先読み時の別の
+            // msgInfo で読み込んでいるため、今の msgInfo には付いていなかった。
+            // （"Cannot destructure property 'videoId' of 'msgInfo.threadInfo'" でコメント関係が
+            // 全て失敗していた。先読みした動画でだけ起きる。）
+            if (msgInfo && companion.threadInfo) {
+                msgInfo.threadInfo = companion.threadInfo;
+                // 言語の自動切り替え（INVALID_PARAMETER 時の既定言語への退避）も load() が書く値。
+                if (companion.threadInfo.language) {
+                    msgInfo.language = companion.threadInfo.language;
+                }
+            }
             const heldRequestId = this._requestId;
             return Promise.resolve().then(() => {
                 if (this._requestId === heldRequestId)
@@ -5334,6 +5838,8 @@ class NicoVideoPlayerDialog extends Emitter {
         if (!this._state.isLoading) {
             return;
         }
+        this._markTiming('canPlay');
+        this._diagOpenTiming();
         this._reportPrefetchTiming();
         const requestId = this._requestId;
         const watchId = this._watchId;
@@ -5409,6 +5915,8 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     _onVideoPlaying() {
         this._state.setPlaying();
+        this._hideNicoadEndScreen();
+        this._diagFirstPlaying();
         this.emit('playing');
         this._updateNextPrefetch();
     }
@@ -5561,6 +6069,168 @@ class NicoVideoPlayerDialog extends Emitter {
             Fullscreen.cancel();
         }
         global.emitter.emitAsync('videoEnded');
+        // Task1038: リピートも連続再生もせず止まったときは、公式と同じくニコニ広告された動画を並べる。
+        void this._showNicoadEndScreen();
+    }
+    /**
+     * Task1038: 動画の最後に「ニコニ広告」された動画（公式の視聴ページと同じ最大10件）を表示する。
+     * API: GET api.nicoad.nicovideo.jp/v1/nicoad?frameId=12&limit=10&tags=…&excludeVideoIds=…（公式の視聴ページの通信を参照）。
+     * 宣伝した人（提供）と宣伝ポイント（activePoint）も出す。クリックは公式の計測URLを通さず、ZenzaWatch で開く。
+     */
+    static nicoadEndItems(body) {
+        const list = Array.isArray(body?.data?.nicoads) ? body.data.nicoads : [];
+        return list.filter((ad) => ad && typeof ad.contentId === 'string' && /^(?:sm|nm|so|ss)\d+$/.test(ad.contentId) &&
+            ad.contentType !== 'live').slice(0, 10).map((ad) => ({
+            id: ad.contentId,
+            title: typeof ad.title === 'string' ? ad.title : ad.contentId,
+            thumbnail: typeof ad.thumbnailUrl === 'string' && /^https:\/\//.test(ad.thumbnailUrl) ? ad.thumbnailUrl : '',
+            supporter: typeof ad.userName === 'string' && ad.userName ? ad.userName : 'ゲスト',
+            point: Number.isFinite(Number(ad.activePoint)) ? Number(ad.activePoint) : Number(ad.totalPoint) || 0,
+            decoration: ['gold', 'silver', 'bronze'].includes(ad.decoration) ? ad.decoration : '',
+            mask: ad.mustMask === true
+        }));
+    }
+    async _showNicoadEndScreen() {
+        const props = this._playerConfig?.props || {};
+        if (!props['uaa.enable'] || props['nicoadEnd.enable'] === false) {
+            return;
+        }
+        if (NicoVideoPlayerDialog.isExternalPlayback()) {
+            return;
+        }
+        const videoInfo = this._videoInfo;
+        const parent = this._nicoVideoPlayer?._videoPlayer?._body;
+        if (!videoInfo || !parent || this._nicoVideoPlayer?._videoPlayer?._isYouTube) {
+            return;
+        }
+        const videoId = videoInfo.videoId;
+        if (!/^[a-z]{2}\d+$/.test(String(videoId))) {
+            return;
+        }
+        const requestId = this._requestId;
+        const tags = (videoInfo.tagList || []).map((t) => t && (t.name || t.tag || t.text))
+            .filter((t) => typeof t === 'string' && t).slice(0, 30);
+        const url = 'https://api.nicoad.nicovideo.jp/v1/nicoad?frameId=12&limit=10' +
+            '&tags=' + encodeURIComponent(tags.join(',')) + '&excludeVideoIds=' + encodeURIComponent(videoId) +
+            '&allowSensitiveContents=true&decoration=video';
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('advertising', 'nicoad-end:' + videoId, 'response', () => this._requestId === requestId);
+        let items = [];
+        try {
+            const res = await fetch(url, { credentials: 'include', headers: { 'x-frontend-id': '6', 'x-frontend-version': '0' } });
+            if (!res.ok) {
+                diagnostic?.failure({ status: res.status });
+                return;
+            }
+            const body = await res.json();
+            if (!Array.isArray(body?.data?.nicoads)) {
+                diagnostic?.failure({ kind: 'schema', missing: 'data.nicoads' });
+                return;
+            }
+            diagnostic?.success();
+            items = NicoVideoPlayerDialog.nicoadEndItems(body);
+        }
+        catch (e) {
+            diagnostic?.failure(e);
+            return;
+        }
+        // 待っている間に再生・別の動画・閉じる操作があったら出さない。
+        if (this._requestId !== requestId || !this._state?.isEnded || this.isPlaying || !items.length) {
+            return;
+        }
+        this._hideNicoadEndScreen();
+        NicoVideoPlayerDialog.ensureNicoadEndStyle();
+        const view = document.createElement('div');
+        view.className = 'zenzaNicoadEnd';
+        view.setAttribute('role', 'region');
+        view.setAttribute('aria-label', 'ニコニ広告された動画');
+        const header = document.createElement('div');
+        header.className = 'zenzaNicoadEnd-header';
+        const title = document.createElement('span');
+        title.textContent = 'ニコニ広告';
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'zenzaNicoadEnd-close';
+        close.textContent = '×';
+        close.title = '閉じる';
+        close.addEventListener('click', e => { e.stopPropagation(); this._hideNicoadEndScreen(); });
+        header.append(title, close);
+        const list = document.createElement('div');
+        list.className = 'zenzaNicoadEnd-list';
+        for (const item of items) {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'zenzaNicoadEnd-item' + (item.decoration ? ' is-' + item.decoration : '');
+            card.title = item.title;
+            const thumb = document.createElement('div');
+            thumb.className = 'zenzaNicoadEnd-thumb' + (item.mask ? ' is-mask' : '');
+            if (item.thumbnail) {
+                thumb.style.backgroundImage = 'url("' + item.thumbnail.replace(/["\\]/g, '') + '")';
+            }
+            const name = document.createElement('div');
+            name.className = 'zenzaNicoadEnd-title';
+            name.textContent = item.title;
+            const by = document.createElement('div');
+            by.className = 'zenzaNicoadEnd-by';
+            by.textContent = '提供：' + item.supporter;
+            const pt = document.createElement('div');
+            pt.className = 'zenzaNicoadEnd-pt';
+            pt.textContent = item.point.toLocaleString('ja-JP') + 'pt';
+            card.append(thumb, name, by, pt);
+            card.addEventListener('click', e => {
+                e.stopPropagation();
+                this._hideNicoadEndScreen();
+                this.open(item.id, { openNow: true });
+            });
+            list.append(card);
+        }
+        view.append(header, list);
+        for (const type of ['mousedown', 'dblclick', 'wheel']) {
+            view.addEventListener(type, e => e.stopPropagation());
+        }
+        parent.append(view);
+        this._nicoadEnd = view;
+    }
+    _hideNicoadEndScreen() {
+        const view = this._nicoadEnd;
+        this._nicoadEnd = null;
+        try {
+            view?.remove();
+        }
+        catch (_) { /* noop */ }
+    }
+    static ensureNicoadEndStyle() {
+        if (document.getElementById('zenzaNicoadEndStyle')) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = 'zenzaNicoadEndStyle';
+        style.textContent = `
+      .zenzaNicoadEnd { position:absolute; inset:0; z-index:200; display:flex; flex-direction:column; gap:1.5%;
+        padding:2% 2.5%; box-sizing:border-box; background:rgba(0,0,0,.82); color:#fff; overflow:auto;
+        font-family:YuGothic,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif; container-type:inline-size; }
+      .zenzaNicoadEnd-header { display:flex; align-items:center; justify-content:space-between; font-weight:bold;
+        font-size:clamp(12px,2.2cqw,22px); }
+      .zenzaNicoadEnd-close { background:none; border:0; color:#fff; font-size:1.4em; cursor:pointer; line-height:1; }
+      .zenzaNicoadEnd-list { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:2cqw 1.6cqw; }
+      .zenzaNicoadEnd-item { all:unset; cursor:pointer; display:flex; flex-direction:column; gap:.3em; min-width:0;
+        font-size:clamp(10px,1.35cqw,15px); }
+      .zenzaNicoadEnd-item:focus-visible { outline:2px solid #fcd842; outline-offset:2px; }
+      .zenzaNicoadEnd-thumb { position:relative; aspect-ratio:16/9; background:#222 center/cover no-repeat; border-radius:4px; overflow:hidden; }
+      .zenzaNicoadEnd-thumb.is-mask { filter:blur(10px) brightness(.7); }
+      .zenzaNicoadEnd-item.is-gold .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #e8c13a; }
+      .zenzaNicoadEnd-item.is-silver .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #c9ccd1; }
+      .zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #c58a54; }
+      .zenzaNicoadEnd-thumb::before { content:"📣"; position:absolute; left:0; top:0; padding:.15em .35em;
+        background:#fcd842; border-bottom-right-radius:6px; font-size:.9em; }
+      .zenzaNicoadEnd-item:hover .zenzaNicoadEnd-title { text-decoration:underline; }
+      .zenzaNicoadEnd-title { font-weight:bold; line-height:1.3; display:-webkit-box; -webkit-box-orient:vertical;
+        -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; }
+      .zenzaNicoadEnd-by { color:#f0b400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .zenzaNicoadEnd-pt { color:#f0b400; }
+      .zenzaNicoadEnd-pt::before { content:"📣 "; }
+    `;
+        (document.head || document.documentElement).append(style);
     }
     // A completed video's own cache key must be invalidated even when the
     // server's final zero save cannot be sent (offline or logged out).
@@ -5785,6 +6455,7 @@ class NicoVideoPlayerDialog extends Emitter {
         });
     }
     close() {
+        this._hideNicoadEndScreen();
         this._view?.manualBookmarkDock?.deactivate();
         this._keyEmitter?.releaseTemporaryPlaybackRate?.();
         if (this.isPlaying) {

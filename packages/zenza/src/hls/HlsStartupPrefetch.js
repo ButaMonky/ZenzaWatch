@@ -26,13 +26,16 @@ const parseAttributes = (line) => {
     return out;
 };
 /** hls.js はレベルをビットレート昇順に並べるので、同じ並びでのインデックスを返す。 */
-const chooseStartVariant = (variants, startLevel, bandwidthEstimate) => {
+const chooseStartVariant = (variants, startLevel, bandwidthEstimate, preferHighest = false) => {
     const sorted = variants.slice().sort((a, b) => a.bandwidth - b.bandwidth || a.index - b.index);
     if (!sorted.length)
         return null;
     let level = 0;
     if (typeof startLevel === 'number' && Number.isFinite(startLevel) && startLevel >= 0) {
         level = Math.min(Math.round(startLevel), sorted.length - 1);
+    }
+    else if (preferHighest) {
+        level = sorted.length - 1;
     }
     else if (typeof bandwidthEstimate === 'number' && bandwidthEstimate > 0) {
         const budget = bandwidthEstimate * BANDWIDTH_FACTOR;
@@ -226,7 +229,7 @@ const HlsPrefetch = (() => {
                 await media(source, 'media');
             }
             else {
-                const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate);
+                const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate, options.preferHighest === true);
                 if (!choice)
                     throw fail('invalid variant');
                 startLevel = choice.level;
@@ -242,7 +245,9 @@ const HlsPrefetch = (() => {
                 await media(chosen.uri, 'video');
             }
             check();
-            return { source, entries, bytes, startLevel, stages, hits: 0, dispose() { entries.clear(); } };
+            return { source, entries, bytes, startLevel, stages, hits: 0,
+                ...(typeof options.bandwidthEstimate === 'number' && options.bandwidthEstimate > 0 ? { bandwidthEstimate: options.bandwidthEstimate } : {}),
+                dispose() { entries.clear(); } };
         }
         catch (error) {
             entries.clear();
@@ -257,6 +262,15 @@ const HlsPrefetch = (() => {
             load(context, config, callbacks) {
                 const hit = !context.rangeStart && !context.rangeEnd ? active?.entries.get(context.url) : undefined;
                 if (!hit) {
+                    if (active) {
+                        active.misses = (active.misses || 0) + 1;
+                        const kinds = active.missKinds ||= [];
+                        if (kinds.length < 12) {
+                            const type = context.type;
+                            kinds.push(`${typeof type === 'string' ? type : 'frag'}:${context.responseType || 'text'}` +
+                                (context.rangeStart || context.rangeEnd ? ':range' : ''));
+                        }
+                    }
                     super.load(context, config, callbacks);
                     return;
                 }
@@ -266,9 +280,15 @@ const HlsPrefetch = (() => {
                 this.context = context;
                 const data = context.responseType === 'arraybuffer' ? hit.data.slice(0) : new TextDecoder().decode(hit.data);
                 const t = performance.now();
+                // Task1031: 背景で取得したときの速度（本編と帯域を分け合って遅い）をそのまま報告すると、
+                // hls.js が回線を遅いと判断して次のセグメントから画質を下げる。記録済みの推定速度を下限にする。
+                const measured = hit.data.byteLength * 8000 / Math.max(1, hit.elapsed);
+                const floor = active?.bandwidthEstimate || 0;
+                const bw = Math.max(measured, floor);
+                const elapsed = hit.data.byteLength * 8000 / Math.max(1, bw);
                 Object.assign(this.stats, { aborted: false, loaded: hit.data.byteLength, total: hit.data.byteLength, retry: 0,
-                    bwEstimate: hit.data.byteLength * 8000 / hit.elapsed });
-                Object.assign(this.stats.loading, { start: t - hit.elapsed, first: t - hit.elapsed, end: t });
+                    bwEstimate: bw });
+                Object.assign(this.stats.loading, { start: t - elapsed, first: t - elapsed, end: t });
                 queueMicrotask(() => {
                     if (this.canceled)
                         return;
@@ -287,7 +307,14 @@ const HlsPrefetch = (() => {
         activate(value) { clear(); active = value; expires = setTimeout(clear, 45000); },
         startLevel(source) { return active?.source === source ? active.startLevel : undefined; },
         /** 診断用: 再生開始時に、先読みデータが実際に hls.js から引かれたかを返す。 */
-        hits(source) { return active?.source === source ? active.hits : 0; }
+        hits(source) { return active?.source === source ? active.hits : 0; },
+        /** Task1030 診断: 先読みデータの利用状況（URLは含めない）。 */
+        stats(source) {
+            if (!active || active.source !== source)
+                return null;
+            return { hits: active.hits, misses: active.misses || 0, missKinds: (active.missKinds || []).slice(),
+                entries: new Set([...active.entries.values()]).size, startLevel: active.startLevel };
+        }
     };
 })();
 //===END===

@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.403-prefetch1028
+// @version        2.7.427-task1039
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-14 08:40Z 450cfd5
+// build: 2026-11-14 22:00Z b7fe12d
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -141,7 +141,9 @@ exports.externalDefaults = {
     'externalLinks.redirects': false,
     'externalLinks.textIds': false,
     'externalLinks.prefixes': 'sm\nnm\nso\nss',
-    'externalLinks.preflight': 'off'
+    'externalLinks.preflight': 'off',
+    // Task1032: 調査用。外部サイト再生の各段階をコンソールへ詳しく出す。
+    'externalLinks.consoleLog': false
 };
 const choice = (items) => items.map(([value, label]) => ({ value, label }));
 exports.externalDescriptors = [
@@ -154,7 +156,8 @@ exports.externalDescriptors = [
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
     { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'textarea', description: '1行に1種類。初期値はsm・nm・so・ssです。', descriptionDetails: '数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。' },
-    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '既定は追加通信なし。確認するタイミングを選べます。', descriptionDetails: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) }
+    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '既定は追加通信なし。確認するタイミングを選べます。', descriptionDetails: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) },
+    { id: 'externalLinks.consoleLog', label: '外部サイト再生の動作をコンソールに詳しく出力', type: 'boolean', dependsOn: undefined, description: '初期値OFF。調査用です。外部サイトのページと、再生用の枠（www.nicovideo.jp/robots.txt）の両方で、ボタンの検出・クリック・枠の作成・本体との接続・ログイン確認・動画を開く各段階と失敗理由を、開発者ツールのコンソール（F12）へ ZENZA_EXT として出します。', descriptionDetails: '本体とZenzaBlogPartsButtonの両方へ設定が届くよう、ONにしたらニコニコ動画のページを一度再読み込みしてから外部サイトを開いてください。再生用の枠の記録は、コンソール上部の「top」を robots.txt の枠に切り替えると見えます（「すべてのコンテキスト」表示でも出ます）。URLのクエリ・Cookie・認証情報は出しません。' }
 ].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : ('dependsOn' in d ? d.dependsOn : 'externalLinks.enabled') }));
 const tokens = (v) => typeof v === 'string' ? v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean) : [];
 function sanitizeExternal(values) {
@@ -943,11 +946,42 @@ function eligible(w) {
     return w !== w.top && w.name === 'ZenzaWatchExternalTrialPlayer' &&
         w.location.origin === 'https://www.nicovideo.jp' && w.location.pathname === '/robots.txt';
 }
-function accepts(w, event) {
-    return event.source === w && event.origin === w.location.origin &&
-        event.data?.protocol === protocol;
+/**
+ * Task1032: 送り主が「この枠自身」かの判定。
+ * Tampermonkey などはスクリプトごとに window を包んで渡すことがあり、その場合は同じ枠からの
+ * メッセージでも event.source === w が成り立たない（実機で本体が hello を一度も受け取れなかった原因）。
+ * 包みがあっても判定できるよう、同一オブジェクトでなければ「同じ文書・同じ名前・同じURL」の窓かを確かめる。
+ * 送り主の origin が www.nicovideo.jp であることは別途確かめているので、外部サイトの親は通らない。
+ * 子の枠（API用など）は名前とURLが違うので通らない。
+ */
+function sameFrame(w, source) {
+    if (!source)
+        return false;
+    if (source === w)
+        return true;
+    try {
+        const s = source;
+        return s.document === w.document && s.name === w.name && s.location.href === w.location.href;
+    }
+    catch (_) {
+        return false;
+    }
+}
+function rejectReason(w, event) {
+    if (event.data?.protocol !== protocol)
+        return 'protocol';
+    if (event.origin !== w.location.origin)
+        return 'origin';
+    if (!sameFrame(w, event.source))
+        return 'source';
+    return null;
 }
 function createMainPlayerClient(w, options = {}) {
+    const diag = (event, data = {}) => { try {
+        options.onDiag?.(event, data);
+    }
+    catch (_) { /* 記録の失敗は無視 */ } };
+    let helloCount = 0, clientRejected = 0;
     let disposed = false, closing = false, connected = false, seq = 0, stageListener = (_) => { };
     const channel = w.crypto.randomUUID();
     let pending;
@@ -965,9 +999,21 @@ function createMainPlayerClient(w, options = {}) {
             task.resolve();
     }
     const receive = (event) => {
-        if (disposed || !accepts(w, event) || event.data.channel !== channel)
+        if (disposed)
+            return;
+        const reason = rejectReason(w, event);
+        if (reason) {
+            if (reason !== 'protocol' && clientRejected++ < 3)
+                diag('client-message-rejected', { reason,
+                    origin: event.origin, sourceIsSelf: event.source === w, type: event.data?.type ?? null });
+            return;
+        }
+        if (event.data.channel !== channel)
             return;
         const message = event.data;
+        if (message.type !== 'settings')
+            diag('client-receive', { type: message.type, stage: message.stage ?? null,
+                code: message.code ?? null, requestId: message.requestId ?? null, pending: !!pending, closing });
         if (closing && message.type !== 'stage')
             return;
         if (message.type === 'ready' && pending) {
@@ -1024,11 +1070,24 @@ function createMainPlayerClient(w, options = {}) {
                 throw Error('PLAYER_BUSY');
             return new Promise((resolve, reject) => {
                 const task = pending = { id, seq: ++seq, resolve, reject,
-                    timer: w.setTimeout(() => settle(Error('MAIN_PLAYER_UNAVAILABLE')), options.timeoutMs ?? 15000),
+                    timer: w.setTimeout(() => {
+                        // 本体（ZenzaWatch）がこの枠で動いていない・古い・無効のときにここへ来る。
+                        diag('client-timeout', { reason: 'MAIN_PLAYER_UNAVAILABLE', hellos: helloCount, connected });
+                        // 利用者向けの手がかり（設定に関係なく1行）。
+                        try {
+                            w.console.warn('[ZenzaBlogPartsButton] 再生用の枠で ZenzaWatch 本体が応答しません。本体がインストール・有効になっているか、Tampermonkey で本体がフレーム内（www.nicovideo.jp/robots.txt）でも動く設定かを確認してください。');
+                        }
+                        catch (_) { /* noop */ }
+                        settle(Error('MAIN_PLAYER_UNAVAILABLE'));
+                    }, options.timeoutMs ?? 15000),
                     retry: undefined };
+                diag('client-open', { id, seq: task.seq, timeoutMs: options.timeoutMs ?? 15000 });
                 const hello = () => {
                     if (pending !== task || disposed)
                         return;
+                    helloCount++;
+                    if (helloCount === 1 || helloCount % 20 === 0)
+                        diag('client-hello', { count: helloCount, connected });
                     send({ type: 'hello', snapshot: options.snapshot?.() });
                     task.retry = w.setTimeout(hello, options.retryMs ?? 250);
                 };
@@ -1057,8 +1116,15 @@ function createMainPlayerClient(w, options = {}) {
     };
 }
 function installMainPlayerProvider(w, session, options = {}) {
-    if (!eligible(w))
+    const diag = (event, data = {}) => { try {
+        options.onDiag?.(event, data);
+    }
+    catch (_) { /* 記録の失敗は無視 */ } };
+    if (!eligible(w)) {
+        diag('provider-not-eligible', { top: w === w.top, name: String(w.name).slice(0, 48), path: w.location.pathname });
         return () => { };
+    }
+    diag('provider-installed');
     let channel = '', last = 0, busy = false, disposed = false, closing = false;
     const send = (data) => {
         if (!disposed && channel)
@@ -1067,15 +1133,27 @@ function installMainPlayerProvider(w, session, options = {}) {
     session.setStageListener(stage => { if (stage === 'CLOSING' || stage === 'CLOSED')
         closing = true; send({ type: 'stage', stage }); });
     options.subscribeSettings?.(values => send({ type: 'settings', values }));
+    let rejected = 0;
     const receive = async (event) => {
-        if (disposed || !accepts(w, event))
+        if (disposed)
             return;
+        const reason = rejectReason(w, event);
+        if (reason) {
+            if (reason !== 'protocol' && rejected++ < 3)
+                diag('provider-message-rejected', { reason,
+                    origin: event.origin, sourceIsSelf: event.source === w, type: event.data?.type ?? null });
+            return;
+        }
         const m = event.data;
         if (typeof m.channel !== 'string' || !/^[a-f0-9-]{36}$/i.test(m.channel))
             return;
         if (m.type === 'hello') {
-            if (channel && channel !== m.channel)
+            if (channel && channel !== m.channel) {
+                diag('provider-hello-other-channel');
                 return;
+            }
+            if (!channel)
+                diag('provider-hello', { hasSnapshot: !!m.snapshot });
             if (!channel)
                 options.setup?.(m.snapshot);
             channel = m.channel;
@@ -1097,17 +1175,26 @@ function installMainPlayerProvider(w, session, options = {}) {
             return;
         }
         if (m.type !== 'open' || closing || busy || !Number.isSafeInteger(m.requestId) ||
-            m.requestId <= last || !(0, targets_1.validVideoId)(m.id))
+            m.requestId <= last || !(0, targets_1.validVideoId)(m.id)) {
+            if (m.type === 'open')
+                diag('provider-open-ignored', { closing, busy, requestId: m.requestId, last, validId: (0, targets_1.validVideoId)(m.id) });
             return;
+        }
         last = m.requestId;
         busy = true;
+        const started = Date.now();
+        diag('provider-open', { id: m.id, requestId: m.requestId });
         try {
             await session.open(m.id, { isTrusted: true });
+            diag('provider-opened', { id: m.id, ms: Date.now() - started });
             if (!closing)
                 send({ type: 'opened', requestId: m.requestId });
         }
         catch (e) {
             const error = e;
+            diag('provider-open-failed', { id: m.id, ms: Date.now() - started, code: String(error?.message || error),
+                stage: error?.stage ?? null, name: error?.name ?? null,
+                stack: typeof error?.stack === 'string' ? error.stack.split('\n').slice(0, 8).join(' | ') : null });
             send({ type: 'error', requestId: m.requestId, code: error.message, stage: error.stage });
         }
         finally {
@@ -1130,6 +1217,30 @@ function installMainPlayerProvider(w, session, options = {}) {
  const externalSlot='external-links-v1';
  const readExternalValues=()=>externalModules.settings.sanitizeExternal(gm.get(externalSlot));
  let notifySettings=()=>{};
+ // Task1032: 調査用の記録。上級者設定「外部サイトからの再生」の consoleLog がONのときだけ出す。
+ // どのスクリプト・どの枠の記録かを scope/frame で区別する。URLのクエリ・Cookie・認証情報は出さない。
+ const extDiagStart=Date.now();
+ const extDiagOn=()=>{try{return readExternalValues()['externalLinks.consoleLog']===true;}catch(_){return false;}};
+ // Task1034: 重さの調査用。10秒ごとに、主スレッドの詰まり・通信・保存・映像の状態をまとめて出す。
+ const createPerfMonitor=(scope,extra=()=>({}))=>{
+   let longCount=0,longMs=0,longMax=0,lagMax=0,last=performance.now(),timer=0,lagTimer=0,observer=null;
+   try{observer=new PerformanceObserver(list=>{for(const e of list.getEntries()){longCount++;longMs+=e.duration;longMax=Math.max(longMax,e.duration);}});
+     observer.observe({type:'longtask',buffered:false});}catch(_){observer=null;}
+   lagTimer=setInterval(()=>{const now=performance.now();lagMax=Math.max(lagMax,now-last-250);last=now;},250);
+   timer=setInterval(()=>{
+     const mem=performance.memory;
+     extDiag(scope,'perf',{longTasks:longCount,longTaskMs:Math.round(longMs),longTaskMaxMs:Math.round(longMax),
+       loopLagMaxMs:Math.round(Math.max(0,lagMax)),heapMB:mem?Math.round(mem.usedJSHeapSize/1048576):null,
+       domNodes:document.getElementsByTagName('*').length,...extra()});
+     longCount=0;longMs=0;longMax=0;lagMax=0;
+   },10000);
+   return ()=>{clearInterval(timer);clearInterval(lagTimer);observer?.disconnect();};
+ };
+ const extDiag=(scope,event,data={})=>{
+   if(!extDiagOn())return;
+   try{console.info('ZENZA_EXT',JSON.stringify({scope,event,ms:Date.now()-extDiagStart,host:location.hostname,
+     path:location.pathname.slice(0,40),frame:window===window.top?'top':(String(window.name||'child').slice(0,48)),...data}));}catch(_){}
+ };
  const writeExternal=patch=>{const current=readExternalValues(),next=externalModules.settings.sanitizeExternal({...current,...patch});if(JSON.stringify(current)!==JSON.stringify(next)){gm.set(externalSlot,next);notifySettings(next);}};
  'use strict';
 // Only registered preferences cross partitions; never arbitrary storage/history.
@@ -1219,10 +1330,12 @@ function createDisplaySettings(w, gm, registered=[]) {
     if(!gm.get(savedSlot)&&snapshot.saved?.version===2)
       gm.set(savedSlot,{version:2,official:clean(snapshot.saved.official),values:clean(snapshot.saved.values)});
   }
-  return {publish,apply,save,scheduleSave,diagnostics,migrate};
+  return {publish,apply,save,scheduleSave,diagnostics,migrate,
+    // Task1034: 計測用の軽い読み出し（diagnostics は保存領域を読み直すので定期計測には使わない）
+    storageTiming:()=>({saveCount:storageTiming.saveCount,totalSaveMs:Math.round(storageTiming.totalSaveMs),maxSaveMs:Math.round(storageTiming.maxSaveMs)})};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -1235,18 +1348,21 @@ function parseDirectLink(href, base) {
   } catch (_) { return null; }
 }
 
-async function verifyLogin(api) {
+async function verifyLogin(api, diag=()=>{}) {
   let response, body;
+  const started=Date.now();
   try {
     response = await api.fetch('https://nvapi.nicovideo.jp/v1/users/me/mylists', {
       credentials: 'include', cache: 'no-store', timeout: 15000,
       headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
     });
+    diag('auth-response',{status:response.status,ms:Date.now()-started});
     if (response.status === 401) throw new Error('LOGIN_REQUIRED');
     if (response.status === 403) throw new Error('AUTH_FORBIDDEN');
     if (response.status !== 200) throw new Error('AUTH_CHECK_FAILED');
     body = await response.json();
   } catch (error) {
+    diag('auth-error',{message:String(error?.message||error),name:error?.name||null,ms:Date.now()-started});
     const known=['LOGIN_REQUIRED','AUTH_FORBIDDEN','GM_NETWORK_ERROR','GM_DESTINATION_DENIED'];
     throw new Error(known.includes(error?.message) ? error.message : error?.name==='TimeoutError'?'AUTH_TIMEOUT':'AUTH_CHECK_FAILED');
   }
@@ -1255,11 +1371,12 @@ async function verifyLogin(api) {
   // Deliberately return neither account details nor private list names.
 }
 
-function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
+function createRuntimeSession({startRuntime, enable, hasExistingRuntime, diag=()=>{}}) {
+  const t0=Date.now();
   let runtime, loading, initializing, ready=false,closed=false;
   const ensureOpen=()=>{if(closed)throw Error('PLAYER_CLOSED');};
   let listener=()=>{},stage='BOOT';
-  const progress=value=>{stage=value;listener(value);};
+  const progress=value=>{stage=value;diag('stage',{stage:value,ms:Date.now()-t0});listener(value);};
   return {
     reportStage:progress,
     configure(value) {runtime=value;},
@@ -1268,17 +1385,18 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
     diagnostics() {return runtime?.diagnostics?.()||{runtimeReady:false};},
     async open(id,event) {
       try {
+      diag('session-open',{id,loading:!!loading,ready,runtime:!!runtime});
       ensureOpen();await enable(event);ensureOpen();
       progress('BOOT');
       if(!loading) {
-        if(hasExistingRuntime())throw Error('EXISTING_RUNTIME');
+        if(hasExistingRuntime()){diag('existing-runtime',{zenza:typeof window!=='undefined'&&!!window.ZenzaWatch});throw Error('EXISTING_RUNTIME');}
         // A failed bootstrap is not rerun over a partially initialized runtime.
         loading=Promise.resolve().then(startRuntime);
       }
       await loading;ensureOpen();
       if(!runtime)throw Error('RUNTIME_NOT_READY');
       progress('SETTINGS');await runtime.connect();ensureOpen();
-      progress('AUTH');await verifyLogin(runtime.api);ensureOpen();
+      progress('AUTH');await verifyLogin(runtime.api,diag);ensureOpen();
       runtime.setLogin();
       if(!ready) {
         progress('UI');
@@ -1286,7 +1404,16 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
         await initializing;ensureOpen();ready=true;
       }
       progress('VIDEO');await runtime.open(id);ensureOpen();progress('OPEN');
-      } catch(error) {throw Object.assign(error instanceof Error?error:Error('PLAYER_START_FAILED'),{stage});}
+      } catch(error) {
+        try{
+          const name=['TypeError','ReferenceError','RangeError'].includes(error?.name)?error.name:null;
+          const m=/of '([^']{1,80})' as it is|reading '([^']{1,80})'|^([A-Za-z_$][\w$.]{0,79}) is not defined/.exec(String(error?.message||''));
+          runtime?.journal?.(stage,String(error?.message||'PLAYER_START_FAILED').slice(0,60),name,m?(m[1]||m[2]||m[3]):null);
+        }catch(_){}
+        diag('session-failed',{stage,message:String(error?.message||error),name:error?.name||null,
+          stack:typeof error?.stack==='string'?error.stack.split('\n').slice(0,8).join(' | '):null});
+        throw Object.assign(error instanceof Error?error:Error('PLAYER_START_FAILED'),{stage});
+      }
     }
   };
 }
@@ -1614,9 +1741,65 @@ const RequestDiagnostics = (() => {
 				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
+				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除'
+		};
+		const modules = {
+				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'nico-src/CommentReadAdapter.ts',
+				'comment-key': 'nico-src/ThreadLoader.ts', 'video-session': 'nico-src/VideoSessionWorker.ts',
+				'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
+				search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
+				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
+				'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
+				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
+				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
+				'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts'
+		};
+		const moduleFor = (operation) => modules[operation] || 'nico-src/RequestDiagnostics.ts';
+		const fieldName = (value) => {
+				if (typeof value !== 'string') {
+						return undefined;
+				}
+				const cleaned = value.replace(/[^A-Za-z0-9_.$:\[\]-]/g, '').slice(0, 100);
+				return cleaned ? cleaned : undefined;
+		};
+		const missingFromMessage = (message) => {
+				if (typeof message !== 'string') {
+						return undefined;
+				}
+				const m = /of '([^']{1,100})' as it is (?:undefined|null)/.exec(message) ||
+						/Cannot read properties of (?:undefined|null) \(reading '([^']{1,100})'\)/.exec(message) ||
+						/^([A-Za-z_$][\w$.]{0,99}) is not defined/.exec(message) ||
+						/^([A-Za-z_$][\w$.]{0,99}) is not a function/.exec(message);
+				return m ? fieldName(m[1]) : undefined;
 		};
 		const activeTickets = new Map();
+		const SUSPECT_THRESHOLD = 3, SUSPECT_WINDOW_MS = 30 * 60 * 1000;
+		const suspects = new Map();
+		const suspectReported = new Map();
+		const suspectReason = (failure) => failure.reason === 'schema' ||
+				(failure.reason === 'http' && [400, 410, 422].includes(Number(failure.statusCode))) ||
+				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
+		const noteSuspect = (operation, key, failure, now) => {
+				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '');
+				const seen = suspects.get(group) || new Map();
+				seen.set(key, now);
+				for (const [k, at] of seen) {
+						if (now - at > SUSPECT_WINDOW_MS) {
+								seen.delete(k);
+						}
+				}
+				while (seen.size > 50) {
+						seen.delete(seen.keys().next().value);
+				}
+				suspects.set(group, seen);
+				const last = suspectReported.get(group);
+				if (seen.size >= SUSPECT_THRESHOLD && (last === undefined || now - last > SUSPECT_WINDOW_MS)) {
+						suspectReported.set(group, now);
+						return seen.size;
+				}
+				return 0;
+		};
 		const failures = new Map();
 		let sink;
 		const noop = { success() { }, failure() { }, response() { } };
@@ -1638,8 +1821,18 @@ const RequestDiagnostics = (() => {
 						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
 						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
 				};
+				const missing = fieldName(e.missing) ||
+						(e.kind === 'schema' || /_SCHEMA$/.test(String(e.errorCode)) ? fieldName(e.reasonCode) || fieldName(e.reason) : undefined);
+				if (missing) {
+						fields.missing = missing;
+				}
 				if (e.name === 'AbortError' || e.reason === 'cancelled') {
 						return { reason: 'cancelled' };
+				}
+				if (['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(String(e.name)) &&
+						typeof e.message === 'string' && !/JSON|Unexpected token|Unexpected end/i.test(e.message)) {
+						const where = missingFromMessage(e.message);
+						return { reason: 'script', errorName: String(e.name), ...(where ? { missing: where } : {}) };
 				}
 				if (e.reason === 'session-closed') {
 						return { reason: 'session-closed' };
@@ -1710,9 +1903,21 @@ const RequestDiagnostics = (() => {
 								const reasonLabels = {
 										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
 										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
-										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です'
+										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です',
+										script: 'プログラムの不具合（スクリプトエラー）'
 								};
-								sink?.({ key, operation, phase, outcome, ...failure,
+								const module = moduleFor(operation);
+								if (outcome === 'failed' && suspectReason(failure)) {
+										const distinctTargets = noteSuspect(operation, key, failure, Date.now());
+										if (distinctTargets) {
+												sink?.({ key: 'diag-spec-' + operation + '-' + failure.reason, operation, phase, outcome: 'failed', ...failure,
+														reason: 'spec-change', module, distinctTargets,
+														message: labels[operation] + '：ニコニコ側の仕様変更の可能性があります（別々の' + distinctTargets +
+																'件で同じ失敗）。修正箇所の目安: ' + module,
+														elapsedMs: 0 });
+										}
+								}
+								sink?.({ key, operation, phase, outcome, ...failure, module,
 										message: labels[operation] + '（' + (phase === 'transport' ? '通信' : phase === 'response' ? '応答の確認' : '処理') + '）' +
 												(outcome === 'recovered' ? '：復旧しました' : '：' + reasonLabels[failure.reason]),
 										elapsedMs: Math.max(0, Math.min(86400000, Date.now() - started)) });
@@ -1846,7 +2051,7 @@ const RequestDiagnostics = (() => {
 				return value;
 		};
 		const setSink = (next) => { sink = next; };
-		return { begin, startRequest, observe, setSink };
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage };
 })();
   const monkey = async (PRODUCT, START_PAGE_QUERY, externalTrial = null) /*** (｀・ω・´)9m ***/ => {
     const {displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged} = externalTrial || {};
@@ -1861,10 +2066,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.403-prefetch1028';
+    var VER = '2.7.427-task1039';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-14 08:40Z 450cfd5';
+    var BUILD = '2026-11-14 22:00Z b7fe12d';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5704,7 +5909,7 @@ class NgCompositeRules {
 }
 const Config = (() => {
 		const DEFAULT_CONFIG = {
-				"externalLinks.enabled": true, "externalLinks.siteMode": "all", "externalLinks.sites": "", "externalLinks.excludedSites": "", "externalLinks.displayMode": "inline", "externalLinks.size": "small", "externalLinks.redirects": false, "externalLinks.textIds": false, "externalLinks.prefixes": "sm\nnm\nso\nss", "externalLinks.preflight": "off",
+				"externalLinks.enabled": true, "externalLinks.siteMode": "all", "externalLinks.sites": "", "externalLinks.excludedSites": "", "externalLinks.displayMode": "inline", "externalLinks.size": "small", "externalLinks.redirects": false, "externalLinks.textIds": false, "externalLinks.prefixes": "sm\nnm\nso\nss", "externalLinks.preflight": "off", "externalLinks.consoleLog": false,
 				debug: false,
 				volume: 0.3,
 				showComment: true,
@@ -5774,6 +5979,11 @@ const Config = (() => {
 				'notificationHistory.record.related': true,
 				'notificationHistory.record.network': true,
 				'notificationHistory.record.system': true,
+				'notificationHistory.record.specChange': true,
+				'notificationHistory.record.scriptError': true,
+				'notificationHistory.record.commentAction': true,
+				'notificationHistory.maxRecords': 5000,
+				'notificationHistory.maxAgeDays': 90,
 				'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
 				videoInfoPanelTab: 'videoInfoTab',
 				fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
@@ -5819,6 +6029,7 @@ const Config = (() => {
 				videoOwnerFilter: '',
 				enableCommentPanel: true,
 				enableCommentPanelAutoScroll: true,
+				'commentPanel.nicoruStyle': 'dark', // Task1039: ニコるの見た目 dark=公式ダークモード / light=公式ライトモード / legacy=旧式
 				commentSpeedRate: 1.0,
 				autoCommentSpeedRate: false,
 				playlistLoop: false,
@@ -5837,6 +6048,7 @@ const Config = (() => {
 				'playlist.prefetchAhead.notifyHit': false,
 				'playlist.prefetchAhead.notifyMiss': false,
 				'playlist.prefetchAhead.notify': 'journal',
+				'playlist.prefetchAhead.consoleLog': false,
 				enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
 				debugCheckAdDecoration: false,
 				commentLanguage: 'ja-jp',
@@ -5860,10 +6072,11 @@ const Config = (() => {
 				'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
 				'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 				'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
-				overrideGinza: false, // Retired compatibility storage; never triggers automatic launch.
+				overrideGinza: false, // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
 				enableGinzaSlayer: false, // まだ実験中
 				lastPlayerId: '',
 				playbackRate: 1.0,
+				'playbackRate.respectExternal': true,
 				lastWatchId: 'sm9',
 				message: '',
 				enableVideoSession: true,
@@ -5888,6 +6101,7 @@ const Config = (() => {
 				'uaa.enable': true,
 				'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
 				'supporterCredit.enable': true, // 提供画面を表示する
+				'nicoadEnd.enable': true, // Task1038: 動画の最後にニコニ広告された動画を並べる
 				'supporterCredit.voice': true, // 提供音声（期間ごとに変わる読み上げ）を鳴らす
 				'supporterCredit.gift': true, // ギフトが落ちてくる演出を表示する
 				'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
@@ -6125,6 +6339,7 @@ const Config = (() => {
 								fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
 								pipPageThumbnailSource: ['smart', 'legacy'],
 								'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
+								'commentPanel.nicoruStyle': ['dark', 'light', 'legacy'],
 								'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
 								'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
 								'videoSearch.selectContentType': ['long', 'short'],
@@ -7347,7 +7562,8 @@ const NotificationJournalPolicy = (() => {
 		const safeKeys = new Set([
 				'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode',
 				'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
-				'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs'
+				'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs',
+				'module', 'missing', 'where', 'distinctTargets'
 		]);
 		const privatePath = (path) => path
 				.replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
@@ -7372,7 +7588,8 @@ const NotificationJournalPolicy = (() => {
 						.replace(/\b(token|(?:access|refresh)[_-]?token|secret|authorization|cookie|password|csrf|session)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
 						.slice(0, MAX_TEXT);
 		};
-		const code = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value) ? value : undefined;
+		const code = (value) => typeof value === 'string' && /^[a-z0-9_.$@<>[\]\/:-]{1,120}$/i.test(value) &&
+				!/\/\//.test(value) ? value : undefined;
 		const videoId = (value) => typeof value === 'string' && /^(?:sm|nm|so|ss)?\d{1,16}$/i.test(value) ? value : '';
 		const details = (data) => {
 				const result = {};
@@ -7399,13 +7616,23 @@ const NotificationJournalPolicy = (() => {
 				return result;
 		};
 		const activity = (entry) => {
-				if (entry.level !== 'success' || entry.category !== 'comment' ||
-						details(entry.details).outcome !== 'accepted' || !entry.activity || typeof entry.activity !== 'object')
+				if (entry.level !== 'success' || !entry.activity || typeof entry.activity !== 'object')
 						return;
 				const value = entry.activity;
-				if (value.kind !== 'comment-post' || typeof value.text !== 'string' || !value.text)
+				const kind = value.kind;
+				if (kind === 'like') {
+						if (entry.category !== 'like')
+								return;
+				}
+				else if (kind === 'nicoru' || kind === 'comment-post') {
+						if (entry.category !== 'comment' || details(entry.details).outcome !== 'accepted')
+								return;
+						if (typeof value.text !== 'string' || !value.text)
+								return;
+				}
+				else
 						return;
-				return { kind: 'comment-post', text: value.text.slice(0, 4096),
+				return { kind, text: typeof value.text === 'string' ? value.text.slice(0, 4096) : '',
 						...(typeof value.videoTitle === 'string' ? { videoTitle: value.videoTitle.slice(0, 512) } : {}),
 						...(typeof value.positionMs === 'number' && Number.isSafeInteger(value.positionMs) && value.positionMs >= 0 && value.positionMs <= 1e12 ?
 								{ positionMs: value.positionMs } : {}) };
@@ -7434,26 +7661,32 @@ const NotificationJournalPolicy = (() => {
 				};
 		};
 		const toDiagnosticEntry = (entry) => normalize({ ...entry, activity: undefined }, { id: entry.id, timestamp: entry.timestamp });
+		const isProtectedActivity = (entry) => !!entry && entry.level === 'success' && (entry.activity?.kind === 'like' || entry.activity?.kind === 'nicoru');
 		const recordingGroup = (entry) => {
+				if (entry.details.reason === 'spec-change') {
+						return 'specChange';
+				}
 				const operation = String(entry.details.operation || entry.source);
 				const groups = {
 						advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
 						'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
 						'comment-read': 'comment', 'comment-key': 'comment',
+						'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
 						like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
 						tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
 						recommend: 'related', owner: 'related', dictionary: 'related'
 				};
 				return groups[operation] || entry.category;
 		};
-		return { normalize, toDiagnosticEntry, recordingGroup };
+		return { normalize, toDiagnosticEntry, recordingGroup, isProtectedActivity };
 })();
 const NotificationJournalStore = (() => {
 		const create = (indexedDB) => {
 				const DB_NAME = 'zenza-notification-journal';
 				const STORE = 'entries';
 				const META = 'control';
-				const MAX_RECORDS = 2000;
+				let MAX_RECORDS = 5000;
+				let MAX_AGE_MS = 90 * 86400000;
 				let opening = null;
 				let connection = null;
 				let writes = 0;
@@ -7530,20 +7763,49 @@ const NotificationJournalStore = (() => {
 						} });
 						return attempt;
 				};
+				const isProtected = (value) => {
+						const v = value;
+						return !!v && v.level === 'success' && (v.activity?.kind === 'like' || v.activity?.kind === 'nicoru');
+				};
 				const prune = (db) => {
 						try {
 								const tx = db.transaction(STORE, 'readwrite');
-								let kept = 0;
-								const req = tx.objectStore(STORE).index('timestamp').openCursor(null, 'prev');
+								const store = tx.objectStore(STORE);
+								const rows = [];
+								const req = store.index('timestamp').openCursor(null, 'prev');
+								const oldest = MAX_AGE_MS > 0 ? Date.now() - MAX_AGE_MS : -Infinity;
 								req.onsuccess = () => {
 										const cursor = req.result;
-										if (!cursor) {
+										if (cursor) {
+												const timestamp = Number(cursor.value?.timestamp);
+												rows.push({ key: cursor.primaryKey, timestamp, keep: isProtected(cursor.value) });
+												cursor.continue();
 												return;
 										}
-										if (++kept > MAX_RECORDS) {
-												cursor.delete();
+										const removals = [];
+										const alive = rows.filter(row => {
+												if (!row.keep && Number.isFinite(row.timestamp) && row.timestamp < oldest) {
+														removals.push(row.key);
+														return false;
+												}
+												return true;
+										});
+										let excess = alive.length - MAX_RECORDS;
+										for (let i = alive.length - 1; i >= 0 && excess > 0; i--) {
+												if (!alive[i].keep) {
+														removals.push(alive[i].key);
+														excess--;
+												}
 										}
-										cursor.continue();
+										for (let i = alive.length - 1; i >= 0 && excess > 0; i--) {
+												if (alive[i].keep) {
+														removals.push(alive[i].key);
+														excess--;
+												}
+										}
+										for (const key of removals) {
+												store.delete(key);
+										}
 								};
 								req.onerror = () => { };
 								tx.onerror = () => { };
@@ -7680,7 +7942,16 @@ const NotificationJournalStore = (() => {
 								}
 						}).catch(() => false);
 				};
-				return { append, list, snapshot, clear };
+				const setRetention = (maxRecords, maxAgeDays) => {
+						const count = Number(maxRecords), days = Number(maxAgeDays);
+						MAX_RECORDS = Number.isFinite(count) ? Math.max(100, Math.min(50000, Math.round(count))) : 5000;
+						MAX_AGE_MS = Number.isFinite(days) && days > 0 ? Math.min(3650, days) * 86400000 : 0;
+						void open().then(db => { if (db) {
+								prune(db);
+						} }).catch(() => { });
+				};
+				const limits = () => ({ maxRecords: MAX_RECORDS, maxAgeMs: MAX_AGE_MS });
+				return { append, list, snapshot, clear, setRetention, limits };
 		};
 		return { create };
 })();
@@ -7711,8 +7982,8 @@ const NotificationJournal = (() => {
 						suppressed.length = 8;
 				}
 		};
-		const MAX_RECORDS = 2000;
-		const MAX_SESSION = 2000;
+		let MAX_RECORDS = 5000;
+		let MAX_SESSION = 5000;
 		const listeners = new Set();
 		const session = [];
 		const recent = [];
@@ -7801,8 +8072,7 @@ const NotificationJournal = (() => {
 				const duplicate = isDuplicate(entry, recent);
 				if (!duplicate) {
 						session.unshift(entry);
-						if (session.length > MAX_SESSION)
-								session.length = MAX_SESSION;
+						trimSession();
 						recent.unshift(entry);
 						if (recent.length > 8)
 								recent.length = 8;
@@ -7819,8 +8089,7 @@ const NotificationJournal = (() => {
 								confirmedRecent.length = 8;
 						if (duplicate) {
 								session.unshift(entry);
-								if (session.length > MAX_SESSION)
-										session.length = MAX_SESSION;
+								trimSession();
 								announce();
 						}
 						return entry;
@@ -7829,6 +8098,22 @@ const NotificationJournal = (() => {
 						announce();
 				return duplicate ? null : entry;
 		};
+		function trimSession(oldest = -Infinity) {
+				const keep = (entry) => NotificationJournalPolicy.isProtectedActivity(entry);
+				for (let i = session.length - 1; i >= 0; i--) {
+						if (!keep(session[i]) && session[i].timestamp < oldest) {
+								session.splice(i, 1);
+						}
+				}
+				for (let i = session.length - 1; i >= 0 && session.length > MAX_SESSION; i--) {
+						if (!keep(session[i])) {
+								session.splice(i, 1);
+						}
+				}
+				if (session.length > MAX_SESSION) {
+						session.length = MAX_SESSION;
+				}
+		}
 		const list = async (limit = 300) => {
 				const count = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, MAX_RECORDS)) : 300;
 				const snapshot = await store.snapshot();
@@ -7895,9 +8180,7 @@ const NotificationJournal = (() => {
 						session.splice(old, 1);
 				}
 				session.unshift(entry);
-				if (session.length > MAX_SESSION) {
-						session.length = MAX_SESSION;
-				}
+				trimSession();
 				store.append(epoch => {
 						acceptEpoch(epoch);
 						epochs.set(entry, epoch);
@@ -7965,7 +8248,18 @@ const NotificationJournal = (() => {
 				return () => listeners.delete(listener);
 		};
 		const toDiagnosticEntry = (entry) => NotificationJournalPolicy.toDiagnosticEntry(entry);
-		return { record, recordDiagnostic, list, clear, subscribe, configureBuild, configureRecording, toDiagnosticEntry };
+		const configureRetention = (maxRecords, maxAgeDays) => {
+				try {
+						store.setRetention(maxRecords, maxAgeDays);
+						const limits = store.limits();
+						MAX_RECORDS = MAX_SESSION = limits.maxRecords;
+						const oldest = limits.maxAgeMs > 0 ? Date.now() - limits.maxAgeMs : -Infinity;
+						trimSession(oldest);
+						announce();
+				}
+				catch (_) { /* 設定の反映に失敗しても記録は続ける */ }
+		};
+		return { record, recordDiagnostic, list, clear, subscribe, configureBuild, configureRecording, configureRetention, toDiagnosticEntry };
 })();
 const PopupMessage = (() => {
 		const __css__ = `
@@ -11889,6 +12183,12 @@ const { SettingPanelElement } = (() => {
 							連続再生中は提供画面を表示しない
 					</label>
 					</fieldset>
+					<label>
+						<input type="checkbox" class="checkbox"
+							data-setting-name="nicoadEnd.enable"
+							.checked=${conf['nicoadEnd.enable']}>
+							動画が最後で止まったとき、ニコニ広告された動画を表示する
+					</label>
 				</fieldset>
 				<div class="control">
 					<label>
@@ -12002,6 +12302,17 @@ const { SettingPanelElement } = (() => {
 						</select>
 						コメントの速度(倍率)
 							<small>※ コメントのレイアウトが一部崩れます</small>
+					</label>
+				</div>
+				<div class="control">
+					<label>
+						<select class="nicoruStyle" data-setting-name="commentPanel.nicoruStyle">
+								<option value="dark"   .selected=${conf['commentPanel.nicoruStyle'] !== 'light' && conf['commentPanel.nicoruStyle'] !== 'legacy'}>公式ダークモード風</option>
+								<option value="light"  .selected=${conf['commentPanel.nicoruStyle'] === 'light'}>公式ライトモード風</option>
+								<option value="legacy" .selected=${conf['commentPanel.nicoruStyle'] === 'legacy'}>旧式</option>
+						</select>
+						コメント一覧のニコるボタンの見た目
+							<small>（もう一度押すとニコるを取り消し）</small>
 					</label>
 				</div>
 				<div class="control">
@@ -12902,24 +13213,39 @@ const VideoInfoLoader = (function () {
 						throw cancelledError();
 				}
 		};
-		const validWatchV4Structure = (data) => {
+		const missingWatchV4Field = (data) => {
 				const record = (value) => value !== null && typeof value === 'object' &&
 						!Array.isArray(value);
-				return record(data) &&
-						record(data.client) &&
-						typeof data.client.watchId === 'string' && !!data.client.watchId &&
-						(data.client.watchTrackId === undefined ||
-								typeof data.client.watchTrackId === 'string') &&
-						record(data.video) && typeof data.video.id === 'string' && !!data.video.id &&
-						typeof data.video.title === 'string' &&
-						typeof data.video.duration === 'number' &&
-						Number.isFinite(data.video.duration) && data.video.duration >= 0 &&
-						record(data.video.count) &&
-						(data.video.thumbnail == null || record(data.video.thumbnail)) &&
-						record(data.player) && record(data.genre) &&
-						record(data.tags) && Array.isArray(data.tags.items) &&
-						data.tags.items.every(record);
+				const checks = [
+						['data', () => record(data)],
+						['data.client', () => record(data.client)],
+						['data.client.watchId', () => typeof data.client.watchId === 'string' && !!data.client.watchId],
+						['data.client.watchTrackId', () => data.client.watchTrackId === undefined || typeof data.client.watchTrackId === 'string'],
+						['data.video', () => record(data.video)],
+						['data.video.id', () => typeof data.video.id === 'string' && !!data.video.id],
+						['data.video.title', () => typeof data.video.title === 'string'],
+						['data.video.duration', () => typeof data.video.duration === 'number' &&
+										Number.isFinite(data.video.duration) && data.video.duration >= 0],
+						['data.video.count', () => record(data.video.count)],
+						['data.video.thumbnail', () => data.video.thumbnail == null || record(data.video.thumbnail)],
+						['data.player', () => record(data.player)],
+						['data.genre', () => record(data.genre)],
+						['data.tags', () => record(data.tags)],
+						['data.tags.items', () => Array.isArray(data.tags.items) && data.tags.items.every(record)]
+				];
+				for (const [path, ok] of checks) {
+						try {
+								if (!ok()) {
+										return path;
+								}
+						}
+						catch (_) {
+								return path;
+						}
+				}
+				return null;
 		};
+		const validWatchV4Structure = (data) => missingWatchV4Field(data) === null;
 		const normalizeWatchV4 = async (response, requestedWatchId) => {
 				const data = response?.$watchV4?.data;
 				if (!data || response.errorCode)
@@ -12927,7 +13253,7 @@ const VideoInfoLoader = (function () {
 				if (data.errorCode)
 						return data;
 				if (!validWatchV4Structure(data)) {
-						return { errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4' };
+						return { errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4', missing: missingWatchV4Field(data) || 'unknown' };
 				}
 				let lazy = {};
 				if (data.lazy?.authKey && typeof data.client.watchTrackId === 'string' &&
@@ -13051,7 +13377,8 @@ const VideoInfoLoader = (function () {
 								message,
 								statusCode,
 								errorCode,
-								reasonCode
+								reasonCode,
+								...(typeof response.missing === 'string' ? { missing: response.missing } : {})
 						};
 				}
 				const _data = response;
@@ -13450,6 +13777,7 @@ const VideoInfoLoader = (function () {
 								['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING'].includes(err.errorCode)) {
 								return Promise.reject({
 										watchId, reason: 'watch api', errorCode: err.errorCode,
+										...(typeof err.missing === 'string' ? { missing: err.missing } : {}),
 										message: err.message || '動画情報の形式が変更されました'
 								});
 						}
@@ -13511,6 +13839,26 @@ const VideoInfoLoader = (function () {
 						requireActive(options);
 						if (!data || data.reject || !data.isPlayable) {
 								throw Object.assign(new Error('Video unavailable for prefetch'), { name: 'PrefetchUnavailable' });
+						}
+						return data;
+				},
+				adoptPrefetched: async function (watchId, data, options) {
+						debug.watchApiData = undefined;
+						const generation = ++anonymousWatchLoadSerial;
+						const callerSignal = options?.signal;
+						const isCurrent = () => generation === anonymousWatchLoadSerial &&
+								!(callerSignal != null && typeof callerSignal === 'object' && callerSignal.aborted === true);
+						if (!data || data.reject || !data.isPlayable) {
+								throw Object.assign(new Error('Prefetched data is not playable'), { name: 'PrefetchUnavailable' });
+						}
+						requireActive(options || {});
+						if (data.csrfToken) {
+								emitter.emitAsync('csrfTokenUpdate', data.csrfToken);
+						}
+						await resolveMissingOwner(data).catch(() => window.console.warn('resolveMissingOwner failed'));
+						requireActive(options || {});
+						if (isCurrent()) {
+								emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);
 						}
 						return data;
 				},
@@ -20751,6 +21099,22 @@ const { ThreadLoader } = (() => {
 				return pending.finally(() => { challengeBusy = false; });
 		};
 		const commentSchemaError = (reason) => ({ kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason });
+		const observeAction = async (operation, msgInfo, run) => {
+				const info = msgInfo;
+				const scope = String(info?.threadInfo?.threadId ?? info?.videoId ?? '');
+				const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin(operation, scope, 'response');
+				try {
+						const value = await run();
+						ticket?.success();
+						return value;
+				}
+				catch (error) {
+						const bag = error;
+						ticket?.failure(bag && typeof bag === 'object' && bag.result && typeof bag.result === 'object' ? bag.result : error);
+						throw error;
+				}
+		};
 		let commentPostDiagnosticSeq = 0;
 		let threadLogSequence = 0;
 		const safeStatusCode = (value) => {
@@ -21045,7 +21409,7 @@ const { ThreadLoader } = (() => {
 						const { videoId, userId } = msgInfo;
 						const timeKey = `loadComment request ${++threadLogSequence}`;
 						console.time(timeKey);
-						const RETRY_DELAYS_MS = [3000, 6000];
+						const RETRY_DELAYS_MS = options.noRetry === true ? [] : [3000, 6000];
 						const isReload = options.manualReload === true;
 						let result;
 						let lastError;
@@ -21154,7 +21518,7 @@ const { ThreadLoader } = (() => {
 						return requestChallengeToken(siteKey);
 				}
 				async postChat(msgInfo, text, cmd, vpos, isOriginalVideo) {
-						return this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo);
+						return observeAction('comment-post', msgInfo, () => this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo));
 				}
 				async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo) {
 						diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
@@ -21399,6 +21763,9 @@ const { ThreadLoader } = (() => {
 						}
 				}
 				async deleteChat(msgInfo, chat) {
+						return observeAction('comment-delete', msgInfo, () => this._deleteChat(msgInfo, chat));
+				}
+				async _deleteChat(msgInfo, chat) {
 						const { videoId, threadId, language } = msgInfo.threadInfo;
 						const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
 						const fork = FORK_LABEL[chat.fork || 0];
@@ -21452,6 +21819,9 @@ const { ThreadLoader } = (() => {
 						}
 				}
 				async nicoru(msgInfo, chat) {
+						return observeAction('nicoru', msgInfo, () => this._nicoru(msgInfo, chat));
+				}
+				async _nicoru(msgInfo, chat) {
 						const { videoId, threadId, language } = msgInfo.threadInfo;
 						const url = new URL(`/v1/threads/${threadId}/nicorus`, msgInfo.nvComment.server);
 						const { nicoruKey } = await this.getNicoruKey(threadId, { language: language });
@@ -21478,6 +21848,38 @@ const { ThreadLoader } = (() => {
 										status: 'fail',
 										statusCode,
 										message: errorCode ? `ニコれなかった＞＜ ${errorCode}` : 'ニコれなかった＞＜'
+								};
+						}
+				}
+				async unNicoru(msgInfo, nicoruId) {
+						return observeAction('nicoru', msgInfo, () => this._unNicoru(nicoruId));
+				}
+				async _unNicoru(nicoruId) {
+						if (typeof nicoruId !== 'string' || !/^[0-9A-Za-z]+$/.test(nicoruId)) {
+								throw { status: 'fail', message: 'ニコるを取り消せなかった＞＜（IDが不正）' };
+						}
+						let statusCode = null;
+						try {
+								const res = await fetch('https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId), {
+										method: 'DELETE',
+										headers: { 'x-frontend-id': '6', 'x-frontend-version': '0', 'x-request-with': 'nicovideo' },
+										credentials: 'include'
+								});
+								statusCode = res.status;
+								const body = await res.json().catch(() => null);
+								const status = Number(body?.meta?.status ?? res.status);
+								if (!res.ok || status >= 300) {
+										throw { result: { status, errorCode: body?.meta?.errorCode } };
+								}
+								return { status: 'ok', message: 'ニコるを取り消した' };
+						}
+						catch (error) {
+								const result = error?.result;
+								throw {
+										status: 'fail',
+										statusCode: result?.status ?? statusCode,
+										result: result || error,
+										message: result?.errorCode ? `ニコるを取り消せなかった＞＜ ${result.errorCode}` : 'ニコるを取り消せなかった＞＜'
 								};
 						}
 				}
@@ -25551,6 +25953,67 @@ const SupporterCredit = (() => {
 		}
 		return { load, loadGiftAssets, CreditView, GiftLayer, GiftGrid, CANVAS_W, CANVAS_H };
 })();
+const MIN_RATE = 0.0625;
+const MAX_RATE = 16;
+const EPSILON = 1e-4;
+const normalizeRate = (value) => {
+		const rate = typeof value === 'number' ? value : Number.parseFloat(String(value));
+		if (!Number.isFinite(rate) || rate <= 0) {
+				return null;
+		}
+		if (rate < MIN_RATE - EPSILON || rate > MAX_RATE + EPSILON) {
+				return null;
+		}
+		return Math.min(Math.max(rate, MIN_RATE), MAX_RATE);
+};
+const sameRate = (a, b) => Math.abs(a - b) <= EPSILON;
+class PlaybackRateReconciler {
+		deps;
+		expected;
+		adoptedCount = 0;
+		constructor(deps, initialRate = 1) {
+				this.deps = deps;
+				this.expected = normalizeRate(initialRate) ?? 1;
+		}
+		noteApplied(value) {
+				const rate = normalizeRate(value);
+				if (rate === null) {
+						return;
+				}
+				this.expected = rate;
+		}
+		get currentRate() { return this.expected; }
+		get externalAdoptions() { return this.adoptedCount; }
+		observe(elementRate) {
+				const rate = normalizeRate(elementRate);
+				if (rate === null) {
+						return { kind: 'ignore', rate: this.expected, reason: 'out-of-range' };
+				}
+				if (sameRate(rate, this.expected)) {
+						return { kind: 'ignore', rate: this.expected, reason: 'self' };
+				}
+				if (!this.deps.respectExternal()) {
+						return { kind: 'reapply', rate: this.expected, reason: 'external-rejected' };
+				}
+				this.expected = rate;
+				this.adoptedCount += 1;
+				return { kind: 'adopt', rate, reason: 'external' };
+		}
+		reconcile(elementRate) {
+				const rate = normalizeRate(elementRate);
+				if (rate === null) {
+						return { kind: 'reapply', rate: this.expected, reason: 'unreadable' };
+				}
+				if (sameRate(rate, this.expected)) {
+						return { kind: 'ignore', rate: this.expected, reason: 'in-sync' };
+				}
+				return { kind: 'reapply', rate: this.expected, reason: 'drifted' };
+		}
+		requestRate(value) {
+				return normalizeRate(value);
+		}
+}
+const createPlaybackRateReconciler = (deps, initialRate) => new PlaybackRateReconciler(deps, initialRate);
 class NicoVideoPlayer extends Emitter {
 		constructor(params) {
 				super();
@@ -26674,6 +27137,7 @@ class VideoPlayer extends Emitter {
 				this._canPlay = false;
 				this.volume = volume;
 				this.muted = params.mute;
+				this._rateReconciler = this._createRateReconciler(playbackRate);
 				this.playbackRate = playbackRate;
 				this._touchWrapper = new TouchWrapper({
 						parentElement: body
@@ -26690,6 +27154,19 @@ class VideoPlayer extends Emitter {
 				Object.assign(global.external, { getVideoElement: () => this._video });
 		}
 		_initializeEvents() {
+				this._initializeVideoEvents();
+				const eventBridge = function (name, ...args) {
+						console.log('%c_on-%s:', 'background: cyan;', name, ...args);
+						this.emit(name, ...args);
+				};
+				const touch = util.$(this._touchWrapper.body);
+				touch
+						.on('click', eventBridge.bind(this, 'click'))
+						.on('dblclick', this._onDoubleClick.bind(this))
+						.on('contextmenu', eventBridge.bind(this, 'contextmenu'))
+						.on('wheel', this._onMouseWheel.bind(this), { passive: true });
+		}
+		_initializeVideoEvents() {
 				const eventBridge = function (name, ...args) {
 						console.log('%c_on-%s:', 'background: cyan;', name, ...args);
 						this.emit(name, ...args);
@@ -26723,18 +27200,13 @@ class VideoPlayer extends Emitter {
 						.on('seeking', fromNative(this._onSeeking.bind(this)))
 						.on('seeked', fromNative(this._onSeeked.bind(this)))
 						.on('volumechange', fromNative(this._onVolumeChange.bind(this)))
+						.on('ratechange', fromNative(this._onRateChange.bind(this)))
 						.on('contextmenu', eventBridge.bind(this, 'contextmenu'))
 						.on('click', eventBridge.bind(this, 'click'));
-				const touch = util.$(this._touchWrapper.body);
-				touch
-						.on('click', eventBridge.bind(this, 'click'))
-						.on('dblclick', this._onDoubleClick.bind(this))
-						.on('contextmenu', eventBridge.bind(this, 'contextmenu'))
-						.on('wheel', this._onMouseWheel.bind(this), { passive: true });
 		}
 		_onCanPlay(...args) {
 				console.log('%c_onCanPlay:', 'background: cyan; color: blue;', ...args);
-				this.playbackRate = this.playbackRate;
+				this._reconcilePlaybackRate();
 				if (!this._canPlay) {
 						this._canPlay = true;
 						this.removeClass('is-loading');
@@ -27086,13 +27558,77 @@ class VideoPlayer extends Emitter {
 		get isLoop() { return !!this._video.loop; }
 		set isLoop(v) { this._video.loop = !!v; }
 		set playbackRate(v) {
-				console.log('setPlaybackRate', v);
-				this._playbackRate = v;
-				const video = this._video;
-				video.playbackRate = 1;
-				window.setTimeout(() => video.playbackRate = parseFloat(v), 100);
+				const reconciler = this._rateReconciler;
+				const rate = reconciler ? reconciler.requestRate(v) : Number.parseFloat(v);
+				if (rate === null || !Number.isFinite(rate) || rate <= 0) {
+						return;
+				}
+				this._playbackRate = rate;
+				this._applyPlaybackRate(rate);
 		}
 		get playbackRate() { return this._playbackRate; }
+		_createRateReconciler(initialRate) {
+				if (typeof createPlaybackRateReconciler !== 'function') {
+						return null;
+				}
+				return createPlaybackRateReconciler({
+						respectExternal: () => {
+								try {
+										return Config.props['playbackRate.respectExternal'] !== false;
+								}
+								catch (_) {
+										return true;
+								}
+						}
+				}, initialRate);
+		}
+		_applyPlaybackRate(rate) {
+				const video = this._video;
+				if (!video) {
+						return;
+				}
+				if (this._rateReconciler) {
+						this._rateReconciler.noteApplied(rate);
+				}
+				try {
+						video.defaultPlaybackRate = rate;
+				}
+				catch (_) {
+				}
+				if (video.playbackRate !== rate) {
+						video.playbackRate = rate;
+				}
+		}
+		_reconcilePlaybackRate() {
+				const reconciler = this._rateReconciler;
+				const video = this._video;
+				if (!video) {
+						return;
+				}
+				if (!reconciler) {
+						this._applyPlaybackRate(this._playbackRate);
+						return;
+				}
+				const decision = reconciler.reconcile(video.playbackRate);
+				if (decision.kind === 'reapply') {
+						this._applyPlaybackRate(decision.rate);
+				}
+		}
+		_onRateChange() {
+				const reconciler = this._rateReconciler;
+				const video = this._video;
+				if (video && reconciler) {
+						const decision = reconciler.observe(video.playbackRate);
+						if (decision.kind === 'adopt') {
+								this._playbackRate = decision.rate;
+								this.emit('command', 'playbackRate', decision.rate);
+						}
+						else if (decision.kind === 'reapply') {
+								this._applyPlaybackRate(decision.rate);
+						}
+				}
+				this.emit('ratechange');
+		}
 		get bufferedRange() { return this._video.buffered; }
 		set isAutoPlay(v) { this._video.autoplay = !!v; }
 		get isAutoPlay() { return !!this._video.autoplay; }
@@ -35092,6 +35628,8 @@ class NicoChat {
 		const value=NicoChat.createBlank(data);
 		value.nicoruKnown=data.nicoruKnown===undefined?
 			data.nicoru!==undefined&&data.nicoru!==null:!!data.nicoruKnown;
+		value.nicoruId = typeof data.nicoruId === 'string' && data.nicoruId ? data.nicoruId : null;
+		value.nicotta = !!data.nicotta || !!value.nicoruId;
 		return new NicoChat(value, options);
 	}
 	static createFromChatElement(elm, options = {}) {
@@ -35371,6 +35909,8 @@ class NicoChat {
 			this.props.group._nicoChatFilter.updateCompositeChat(this);
 		}
 	}
+	get nicoruId() { return this.props.nicoruId || null; }
+	set nicoruId(v) { this.props.nicoruId = typeof v === 'string' && v ? v : null; }
 	get nicotta() { return !!this.props.nicotta;}
 	set nicotta(v) { this.props.nicotta = v;
 	}
@@ -36959,7 +37499,8 @@ class NicoCommentPlayer extends Emitter {
 				if (typeof vpos !== 'number') {
 						vpos = this.vpos;
 				}
-				const nicoChat = NicoChat.create(Object.assign({ text, cmd, vpos }, options));
+				const date = options && options.date !== undefined ? options.date : Math.floor(Date.now() / 1000);
+				const nicoChat = NicoChat.create(Object.assign({ text, cmd, vpos }, options, { date }));
 				this._model.addChat(nicoChat);
 				return nicoChat;
 		}
@@ -39985,6 +40526,7 @@ class CommentListView extends Emitter {
 				this._ItemView = CommentListItemView;
 				this._itemCss = CommentListItemView.CSS;
 				this._className = params.className || 'commentList';
+				this._config = params.config || null;
 				this._retryGetIframeCount = 0;
 				this._maxItems = 100000;
 				this._inviewItemList = new Map;
@@ -40025,6 +40567,18 @@ class CommentListView extends Emitter {
 				if (this._className) {
 						classList.add(this._className);
 				}
+				const applyNicoruStyle = () => {
+						const value = this._config?.props?.['commentPanel.nicoruStyle'];
+						const style = ['dark', 'light', 'legacy'].includes(value) ? value : 'dark';
+						for (const name of ['dark', 'light', 'legacy']) {
+								body.classList.toggle('nicoruStyle-' + name, name === style);
+						}
+				};
+				applyNicoruStyle();
+				try {
+						this._config?.onkey?.('commentPanel.nicoruStyle', applyNicoruStyle);
+				}
+				catch (_) { /* 設定が無い環境 */ }
 				this._container = doc.querySelector('#listContainer');
 				this._$container = uq(this._container);
 				this._list = doc.getElementById('listContainerInner');
@@ -40187,8 +40741,8 @@ class CommentListView extends Emitter {
 				}
 		}
 		_onItemClick(e, item) {
-				if (e.target.closest('.nicoru-icon')) {
-						this.emit('command', 'nicoru', item, item.dataset.itemId);
+				if (e.target.closest('.nicoru-icon, .nicoru-legacy-icon')) {
+						this.emit('command', item.classList.contains('nicotta') ? 'nicoru-cancel' : 'nicoru', item, item.dataset.itemId);
 						return;
 				}
 				this._$menu
@@ -40805,29 +41359,102 @@ const CommentListItemView = (() => {
 				font-size: 12px;
 				left: 80px;
 			}
+			/* Task1038: ニコるのアイコンと動きを公式と同じにする（形・色・1秒の動きは公式CSSに合わせた）。 */
+			/* Task1039: 色は設定で選ぶ。既定は公式のダークモードと同じ（線 #999 → ニコると #fcd842、地 #262626）。 */
+			body, body.nicoruStyle-dark {
+				--nicoru-off-fg: #999; --nicoru-off-bg: #262626; --nicoru-on-fg: #fcd842; --nicoru-on-bg: #262626;
+			}
+			body.nicoruStyle-light {
+				--nicoru-off-fg: #999; --nicoru-off-bg: #fff; --nicoru-on-fg: #262626; --nicoru-on-bg: #fcd842;
+			}
+			body:not(.nicoruStyle-legacy) .commentListItem .nicoru-legacy-icon,
+			body.nicoruStyle-legacy .commentListItem .nicoru-icon,
+			body.nicoruStyle-legacy .commentListItem .nicoru-effect { display: none; }
+			/* 旧式（以前の ZenzaWatch の画像アイコン）。ニコると270°回って金色に光る。 */
+			.commentListItem .nicoru-legacy-icon {
+				position: absolute; pointer-events: auto; display: inline-block; cursor: pointer; visibility: hidden;
+				transition: transform 0.2s linear, filter 0.2s; transform-origin: center;
+				left: 50px; top: -2px; width: 24px; height: 24px; contain: strict;
+			}
+			.commentListItem:hover .nicoru-legacy-icon { visibility: visible; }
+			.commentListItem.nicotta .nicoru-legacy-icon {
+				visibility: visible; transform: rotate(270deg); filter: drop-shadow(0px 0px 6px gold);
+			}
 			.commentListItem .nicoru-icon {
+				--nicoru-fg: var(--nicoru-off-fg);
+				--nicoru-bg: var(--nicoru-off-bg);
 				position: absolute;
 				pointer-events: auto;
 				display: inline-block;
 				cursor: pointer;
 				visibility: hidden;
-				transition: transform 0.2s linear, filter 0.2s;
+				transition: transform 0.2s ease-in;
 				transform-origin: center;
 				left: 50px;
-				top: -2px;
-				width: 24px;
-				height: 24px;
-				contain: strict;
+				top: 0;
+				width: 20px;
+				height: 20px;
+				overflow: visible;
 			}
+			.commentListItem .nicoru-icon .nicoru-background { fill: var(--nicoru-bg); }
+			.commentListItem .nicoru-icon .nicoru-frame,
+			.commentListItem .nicoru-icon .nicoru-mouth { fill: var(--nicoru-fg); }
+			.commentListItem .nicoru-icon .nicoru-left-eye,
+			.commentListItem .nicoru-icon .nicoru-right-eye,
+			.commentListItem .nicoru-icon .nicoru-right-eye-wink { stroke: var(--nicoru-fg); }
+			.commentListItem .nicoru-icon .nicoru-right-eye-wink {
+				transform-box: fill-box; transform-origin: left center; transform: scaleX(0);
+			}
+			.commentListItem .nicoru-icon .nicoru-right-eye { transform-box: fill-box; transform-origin: center bottom; }
+			.commentListItem .nicoru-effect {
+				position: absolute; left: 70px; top: -7px; width: 9px; height: 20px;
+				pointer-events: none; overflow: visible; visibility: hidden;
+			}
+			.commentListItem .nicoru-effect path { stroke: #fcd842; }
 			.commentListItem:hover .nicoru-icon {
 				visibility: visible;
 			}
+			/* ニコった状態は公式と同じく -90° に倒して色だけ変える（目は開いたまま）。
+				もう一度押すと取り消し、0.2秒で元の向きに戻る（公式の transition: transform 0.2s ease-in）。 */
 			.commentListItem.nicotta .nicoru-icon {
 				visibility: visible;
-				transform: rotate(270deg);
-				filter: drop-shadow(0px 0px 6px gold);
-				pointer-events: none;
+				transform: rotate(-90deg);
+				--nicoru-fg: var(--nicoru-on-fg);
+				--nicoru-bg: var(--nicoru-on-bg);
 			}
+			.commentListItem.is-nicoruPending .nicoru-icon,
+			.commentListItem.is-nicoruPending .nicoru-legacy-icon { pointer-events: none; opacity: .6; }
+			.commentListItem.nicoru-animated .nicoru-icon {
+				animation: zenzaNicoruRotate 1s ease-in-out forwards;
+			}
+			.commentListItem.nicoru-animated .nicoru-icon .nicoru-background { animation: zenzaNicoruBg 1s ease-in-out both; }
+			.commentListItem.nicoru-animated .nicoru-icon .nicoru-frame,
+			.commentListItem.nicoru-animated .nicoru-icon .nicoru-mouth { animation: zenzaNicoruFill 1s ease-in-out both; }
+			.commentListItem.nicoru-animated .nicoru-icon .nicoru-left-eye { animation: zenzaNicoruStroke 1s ease-in-out both; }
+			.commentListItem.nicoru-animated .nicoru-icon .nicoru-right-eye {
+				animation: zenzaNicoruEyeClose 1s ease-in-out forwards, zenzaNicoruStroke 1s ease-in-out both;
+			}
+			.commentListItem.nicoru-animated .nicoru-icon .nicoru-right-eye-wink {
+				animation: zenzaNicoruEyeOpen 1s ease-in-out forwards, zenzaNicoruStroke 1s ease-in-out both;
+			}
+			.commentListItem.nicoru-animated .nicoru-effect { visibility: visible; }
+			.commentListItem.nicoru-animated .nicoru-effect path { animation: zenzaNicoruEffect 1s ease-in-out forwards; }
+			@keyframes zenzaNicoruRotate {
+				0% { transform: rotate(0); } 25% { transform: rotate(-20deg); } 50% { transform: rotate(30deg); }
+				65% { transform: rotate(30deg); } 100% { transform: rotate(-90deg); }
+			}
+			@keyframes zenzaNicoruEyeClose {
+				0%, 35% { transform: scaleY(1); } 50%, 65% { transform: scaleY(0); } 85%, 100% { transform: scaleY(1); }
+			}
+			@keyframes zenzaNicoruEyeOpen {
+				0%, 35% { transform: scaleX(0); } 50%, 65% { transform: scaleX(1); } 85%, 100% { transform: scaleX(0); }
+			}
+			@keyframes zenzaNicoruEffect {
+				0%, 35% { stroke-dashoffset: -8px; } 50%, 65% { stroke-dashoffset: 0; } 85%, 100% { stroke-dashoffset: -8px; }
+			}
+			@keyframes zenzaNicoruFill { 0%, 49% { fill: var(--nicoru-off-fg); } 50%, 100% { fill: var(--nicoru-on-fg); } }
+			@keyframes zenzaNicoruStroke { 0%, 49% { stroke: var(--nicoru-off-fg); } 50%, 100% { stroke: var(--nicoru-on-fg); } }
+			@keyframes zenzaNicoruBg { 0%, 49% { fill: var(--nicoru-off-bg); } 50%, 100% { fill: var(--nicoru-on-bg); } }
 			.commentListItem.updating {
 				opacity: 0.5;
 				cursor: wait;
@@ -40929,7 +41556,8 @@ const CommentListItemView = (() => {
 		`).trim();
 		const TPL = (`
 			<div class="commentListItem" style="position: absolute;">
-				<img src="${NICORU}" class="nicoru-icon" data-command="nicoru" title="Nicorü">
+				<img src="${NICORU}" class="nicoru-legacy-icon" data-command="nicoru" title="Nicorü" alt="ニコる">
+				<svg class="nicoru-icon" data-command="nicoru" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ニコる"><title>ニコる</title><path class="nicoru-background" fill-rule="evenodd" d="M12 24a12.01 12.01 0 1 1 12-12c0 6.62-5.38 12-12 12"/><path class="nicoru-frame" fill-rule="evenodd" d="M2.45 12a9.56 9.56 0 0 0 19.1 0 9.56 9.56 0 0 0-19.1 0M0 12a12.01 12.01 0 1 1 12 12C5.38 24 0 18.62 0 12"/><path class="nicoru-left-eye" fill="none" stroke-linecap="round" stroke-width="2.4" d="M9 6.9v2.95"/><path class="nicoru-right-eye" fill="none" stroke-linecap="round" stroke-width="2.4" d="M15 6.9v2.95"/><path class="nicoru-right-eye-wink" fill="none" stroke-linecap="round" stroke-width="2.4" d="M17.68 9.85h-2.96"/><path class="nicoru-mouth" fill-rule="evenodd" d="M15 12.94c.66 0 1.2.54 1.2 1.2v3c0 .66-.54 1.2-1.2 1.2H9a1.2 1.2 0 0 1-1.2-1.2v-3a1.2 1.2 0 0 1 2.4 0v1.8h3.6v-1.8c0-.67.54-1.2 1.2-1.2"/></svg><svg class="nicoru-effect" viewBox="0 0 10.35 10.88" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path class="nicoru-effect2" fill="none" stroke-dasharray="8" stroke-dashoffset="8" stroke-linecap="round" stroke-width="2.4" d="M7.33 1.2 1.2 4.91"/><path class="nicoru-effect1" fill="none" stroke-dasharray="8" stroke-dashoffset="8" stroke-linecap="round" stroke-width="2.4" d="M9.15 7.79 2.24 9.68"/></svg>
 				<p class="info">
 					<span class="timepos"></span>&nbsp;&nbsp;<span class="date"></span>
 				</p>
@@ -40979,6 +41607,7 @@ const CommentListItemView = (() => {
 						commentListItem.className =
 								`commentListItem no${item.no} item${this._id} ${oden} fork${item.fork} font-${font} ${item.isSubThread ? 'subThread' : ''}`;
 						commentListItem.classList.toggle('nicotta', item.nicotta);
+						commentListItem.classList.remove('nicoru-animated');
 						commentListItem.style.cssText = `top: ${this.top}px; content-visibility: hidden;`;
 						/*--duration: ${item.duration}s;
 						--vpos-time: ${item.vpos / 100}s;*/
@@ -41096,6 +41725,8 @@ class CommentListItem {
 		get valhalla() { return this.nicoChat.valhalla; }
 		get nicotta() { return this.nicoChat.nicotta; }
 		set nicotta(v) { this.nicoChat.nicotta = v; }
+		get nicoruId() { return this.nicoChat.nicoruId; }
+		set nicoruId(v) { this.nicoChat.nicoruId = v; }
 		get isMine() { return this.nicoChat.isMine; }
 }
 CommentListItem._itemId = 0;
@@ -41131,7 +41762,8 @@ class CommentPanelView extends Emitter {
 						model: this.model,
 						className: 'commentList',
 						builder: CommentListItemView,
-						itemCss: CommentListItemView.__css__
+						itemCss: CommentListItemView.__css__,
+						config: this.commentPanel?._player?._playerConfig
 				});
 				listView.on('command', this._onCommand.bind(this));
 				this._timeMachineView = new TimeMachineView({
@@ -41376,7 +42008,7 @@ class CommentPanel extends Emitter {
 						item = this._model.findByItemId(itemId);
 				}
 				const needsItem = ['select', 'clipBoard', 'removeComment',
-						'addUserIdFilter', 'addWordFilter', 'nicoru', 'itemDetailRequest'].includes(command);
+						'addUserIdFilter', 'addWordFilter', 'nicoru', 'nicoru-cancel', 'itemDetailRequest'].includes(command);
 				if (!item && (hasItemId || needsItem)) {
 						return;
 				}
@@ -41451,10 +42083,64 @@ class CommentPanel extends Emitter {
 										item.nicotta = true;
 										chat.nicoru = count;
 										chat.nicotta = true;
+										const nicoruId = result?.id;
+										if (typeof nicoruId === 'string' && nicoruId) {
+												chat.nicoruId = nicoruId;
+										}
 										if (row?.isConnected !== false && row?.dataset &&
 												String(row.dataset.itemId) === String(itemId)) {
 												row.dataset.nicoru = count;
 												row.classList.add('nicotta');
+												row.classList.remove('nicoru-animated');
+												void row.offsetWidth;
+												row.classList.add('nicoru-animated');
+												setTimeout(() => row.classList.remove('nicoru-animated'), 1100);
+										}
+								})
+										.catch(() => { })
+										.finally(() => {
+										this._nicoruPending.delete(item);
+										if (row?.classList) {
+												row.classList.remove('is-nicoruPending');
+										}
+								});
+								break;
+						}
+						case 'nicoru-cancel': {
+								if (!this._nicoruPending) {
+										this._nicoruPending = new WeakSet();
+								}
+								if (this._nicoruPending.has(item) || !item.nicotta) {
+										break;
+								}
+								const chat = item.nicoChat;
+								const nicoruId = chat?.nicoruId;
+								if (typeof nicoruId !== 'string' || !nicoruId) {
+										this.emit('command', 'alert', 'このニコるは取り消せません（取り消しに必要な情報がありません。コメントを読み込み直すと取り消せます）');
+										break;
+								}
+								this._nicoruPending.add(item);
+								const row = param;
+								if (row?.classList) {
+										row.classList.add('is-nicoruPending');
+								}
+								const oldCount = Number(item.nicoru) || 0;
+								(new Promise((resolve, reject) => this.emit('command', command, chat, { resolve, reject })))
+										.then(() => {
+										if (this._model.findByItemId(itemId) !== item) {
+												return;
+										}
+										const count = Math.max(0, oldCount - 1);
+										item.nicoru = count;
+										item.nicotta = false;
+										chat.nicoru = count;
+										chat.nicotta = false;
+										chat.nicoruId = null;
+										if (row?.isConnected !== false && row?.dataset &&
+												String(row.dataset.itemId) === String(itemId)) {
+												row.classList.remove('nicoru-animated');
+												row.classList.remove('nicotta');
+												count > 0 ? (row.dataset.nicoru = count) : (delete row.dataset.nicoru);
 										}
 								})
 										.catch(() => { })
@@ -43270,6 +43956,7 @@ class RelatedVideoList extends VideoList {
 const PlayListSession = ((storage) => {
 		const KEY = 'ZenzaWatchPlaylist';
 		let lastJson = '';
+		let lastSavedMax = null;
 		const isQuotaError = (e) => e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22);
 		const trim = (data, max) => {
 				const items = data.items;
@@ -43302,28 +43989,54 @@ const PlayListSession = ((storage) => {
 						if (!data || !Array.isArray(data.items)) {
 								return;
 						}
-						let max = PlayListSession.MAX_ITEMS;
+						let max = lastSavedMax === null ? PlayListSession.MAX_ITEMS :
+								Math.min(lastSavedMax, PlayListSession.MAX_ITEMS);
 						let saveData = trim(data, max);
+						const diagStart = PlayListSession.diagnostics ? Date.now() : 0;
+						let attempts = 0;
+						let bytes = 0;
+						const report = (result) => {
+								if (!PlayListSession.diagnostics) {
+										return;
+								}
+								try {
+										window.console.info('ZENZA_PLAYLIST_SAVE', JSON.stringify({
+												result, attempts, max, bytes,
+												items: Array.isArray(data.items) ? data.items.length : null,
+												elapsedMs: Date.now() - diagStart
+										}));
+								}
+								catch (_) { /* 調査用の出力で本編を止めない。 */ }
+						};
 						for (;;) {
+								attempts++;
 								const json = JSON.stringify(saveData);
+								bytes = json.length;
 								if (lastJson === json) {
+										report('unchanged');
 										return;
 								}
 								try {
 										storage.setItem(KEY, json);
 										lastJson = json;
+										lastSavedMax = max;
+										report('saved');
 										return;
 								}
 								catch (e) {
 										if (!isQuotaError(e)) {
+												report('error');
 												window.console.error(e);
 												return;
 										}
 										if (max <= PlayListSession.MIN_ITEMS) {
+												lastSavedMax = PlayListSession.MIN_ITEMS;
+												report('quota-give-up');
 												window.console.warn('プレイリストをsessionStorageへ保存できませんでした（容量不足）');
 												return;
 										}
 										max = Math.max(PlayListSession.MIN_ITEMS, Math.floor(max / 2));
+										lastSavedMax = max;
 										saveData = trim(data, max);
 										window.console.warn('sessionStorageの容量が足りないため、保存するプレイリストを%d件に減らします', max);
 								}
@@ -43346,6 +44059,7 @@ const PlayListSession = ((storage) => {
 })(sessionStorage);
 PlayListSession.MAX_ITEMS = 10000;
 PlayListSession.MIN_ITEMS = 100;
+PlayListSession.diagnostics = false;
 const PlaylistSession = PlayListSession;
 class VideoListView extends Emitter {
 		constructor(...args) {
@@ -52508,13 +53222,18 @@ const NotificationHistoryPanel = (() => {
 				advertising: 'ニコニ広告', search: '検索', 'tag-suggest': 'タグ候補', tags: 'タグ',
 				'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー', 'video-info': '動画情報',
 				'video-session': '再生セッション', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-				'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
+				'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除', 'script-error': 'スクリプトエラー', 'external-playback': '外部サイトからの再生',
+				'session-state': '再生セッションの維持', storyboard: '場面画像の情報', mylist: 'マイリスト', playlist: 'プレイリスト',
+				like: 'いいね', 'tag-key': 'タグ編集キー', 'nico-api': 'ニコニコAPI'
 		};
 		const formatTime = (value) => typeof value === 'number' && Number.isFinite(value) &&
 				Math.abs(value) <= 8640000000000000 ? new Date(value).toLocaleString('ja-JP') : '記録なし（旧版など）';
-		const stateLabel = (entry) => entry.details?.outcome === 'recovered' ? '復旧済み' :
-				entry.details?.reason === 'not-found' ? '対象なし・要確認' :
-						entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
+		const stateLabel = (entry) => entry.details?.reason === 'spec-change' ? '仕様変更の疑い' :
+				entry.details?.reason === 'script' ? 'スクリプトエラー' :
+						entry.details?.outcome === 'recovered' ? '復旧済み' :
+								entry.details?.reason === 'not-found' ? '対象なし・要確認' :
+										entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
 		const description = (entry) => {
 				const d = entry.details || {};
 				if (d.outcome === 'recovered')
@@ -52527,7 +53246,9 @@ const NotificationHistoryPanel = (() => {
 						permission: 'アクセス権限またはログイン状態の確認が必要な応答です。',
 						'not-found': '要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
 						http: 'サーバーからエラー応答が返りました。HTTP状態を確認できます。',
-						network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。'
+						network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。',
+						'spec-change': '同じ機能で同じ種類の失敗が、別々の対象で続けて起きています。動画ごとの事情ではなく、ニコニコ側の仕様変更の可能性が高い状態です。「修正箇所の目安」のファイルと「読めなかった項目」から直す場所を探せます。',
+						script: 'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。'
 				};
 				return explanations[String(d.reason)] || 'この通知について記録された情報を表示しています。';
 		};
@@ -52615,6 +53336,13 @@ const NotificationHistoryPanel = (() => {
 								['機能', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'],
 								['段階', { transport: '通信', response: '応答の確認', session: '処理' }[String(entry.details?.phase)] || '記録なし'],
 								['発生回数', typeof entry.details?.count === 'number' ? entry.details.count + '回' : '1回'],
+								...(entry.details?.module ? [['修正箇所の目安', 'tools/typescript-stage1/' + String(entry.details.module)]] : []),
+								...(entry.details?.missing ? [['読めなかった項目', String(entry.details.missing)]] : []),
+								...(entry.details?.errorName ? [['エラーの種類', String(entry.details.errorName)]] : []),
+								...(entry.details?.where ? [['発生箇所', String(entry.details.where)]] : []),
+								...(typeof entry.details?.distinctTargets === 'number' ? [['同じ失敗が起きた対象', entry.details.distinctTargets + '件（30分以内）']] : []),
+								...(typeof entry.details?.statusCode === 'number' ? [['HTTP状態', String(entry.details.statusCode)]] : []),
+								...(entry.details?.errorCode ? [['エラーコード', String(entry.details.errorCode)]] : []),
 								['発生時の版', entry.version || '記録なし（旧版など）'], ['ビルド', entry.build || '記録なし（旧版など）'],
 								['初回発生', formatTime(entry.firstOccurredAt)], ['最終発生', formatTime(entry.lastOccurredAt)],
 								['復旧時刻', entry.recoveredAt === undefined ? (entry.details?.outcome === 'recovered' ? '記録なし（旧版など）' : '復旧の記録なし') : formatTime(entry.recoveredAt)]
@@ -52625,9 +53353,12 @@ const NotificationHistoryPanel = (() => {
 						for (const [name, value] of pairs)
 								grid.append(element('dt', '', name), element('dd', '', value));
 						detailNode.append(grid);
-						if (entry.activity?.kind === 'comment-post') {
+						if (entry.activity) {
+								const kind = entry.activity.kind;
 								const activity = element('section', 'znh-activity');
-								activity.append(element('h3', '', '投稿したコメント'), element('p', 'znh-activity-text', entry.activity.text));
+								activity.append(element('h3', '', kind === 'like' ? 'いいね！した動画' : kind === 'nicoru' ? 'ニコったコメント' : '投稿したコメント'));
+								if (kind !== 'like' || entry.activity.text)
+										activity.append(element('p', 'znh-activity-text', kind === 'like' ? 'お礼のメッセージ: ' + entry.activity.text : entry.activity.text));
 								if (/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/i.test(entry.videoId)) {
 										const link = element('a', '', entry.activity.videoTitle ? entry.activity.videoTitle + ' (' + entry.videoId + ')' : entry.videoId);
 										link.href = 'https://www.nicovideo.jp/watch/' + entry.videoId;
@@ -52637,11 +53368,11 @@ const NotificationHistoryPanel = (() => {
 								}
 								else if (entry.activity.videoTitle)
 										activity.append(element('p', '', entry.activity.videoTitle));
-								activity.append(element('p', '', '投稿日時: ' + formatTime(entry.timestamp)));
+								activity.append(element('p', '', (kind === 'like' ? 'いいね！した日時: ' : kind === 'nicoru' ? 'ニコった日時: ' : '投稿日時: ') + formatTime(entry.timestamp)));
 								const ms = entry.activity.positionMs;
 								if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) {
 										const seconds = Math.floor(ms / 1000);
-										activity.append(element('p', '', '動画内の位置: ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')));
+										activity.append(element('p', '', (kind === 'nicoru' ? 'コメントの再生位置: ' : '動画内の位置: ') + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')));
 								}
 								activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
 								detailNode.append(activity);
@@ -52692,7 +53423,7 @@ const NotificationHistoryPanel = (() => {
 				let scheduled = false;
 				let dirty = false;
 				let disposed = false;
-				const snapshot = async () => NotificationJournal.list(2000);
+				const snapshot = async () => NotificationJournal.list(Number.MAX_SAFE_INTEGER);
 				const matches = (entry) => {
 						if (filter.value === 'error') {
 								if (entry.level !== 'error' && entry.level !== 'warning') {
@@ -52706,7 +53437,9 @@ const NotificationHistoryPanel = (() => {
 						if (!needle) {
 								return true;
 						}
-						return [entry.message, entry.videoId, entry.source, entry.category, entry.activity?.text, entry.activity?.videoTitle,
+						const kindLabel = entry.activity?.kind === 'like' ? 'いいね' : entry.activity?.kind === 'nicoru' ? 'ニコる ニコった' :
+								entry.activity?.kind === 'comment-post' ? 'コメント投稿' : entry.category === 'like' ? 'いいね' : '';
+						return [kindLabel, entry.message, entry.videoId, entry.source, entry.category, entry.activity?.text, entry.activity?.videoTitle,
 								JSON.stringify(entry.details || {})].join(' ').toLocaleLowerCase().includes(needle);
 				};
 				const render = async (version) => {
@@ -52749,8 +53482,10 @@ const NotificationHistoryPanel = (() => {
 										detailNode.querySelector('[data-history-back]')?.focus({ preventScroll: true });
 								});
 								item.append(head, entryButton);
-								if (entry.activity?.kind === 'comment-post')
+								if (entry.activity?.kind === 'comment-post' || entry.activity?.kind === 'nicoru')
 										entryButton.append(element('span', 'znh-activity-preview', entry.activity.text));
+								else if (entry.activity?.kind === 'like' && entry.activity.videoTitle)
+										entryButton.append(element('span', 'znh-activity-preview', entry.activity.videoTitle));
 								const meta = entry.details || {};
 								if (typeof meta.count === 'number' && meta.count > 0) {
 										head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
@@ -55674,9 +56409,15 @@ NicoVideoPlayerDialogView.__css__ = `
 				background: none;
 			}
 		}
-		/* 縦長モニター */
+		/*
+			縦長モニター（情報パネルを動画の下に出す）。
+			Task1039: 幅が足りないだけの横長の画面（例: Firefox 100% で 1212x715）は縦長として扱わない。
+			以前は幅 1216px 未満・高さ 700px 以上なら横長でも下パネルの配置になり、動画が小さく情報パネルが
+			下に回って崩れていた。横長（縦横比 4:3 以上）の時は下の「高さが足りない時」と同じく、
+			情報パネルを右に置いたまま動画を縮める。
+		*/
 		@media
-			(width < 992px) and (min-height: 700px)
+			(width < 992px) and (min-height: 700px) and (aspect-ratio < 4/3)
 		{
 			.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
 				padding-bottom: 240px;
@@ -55684,7 +56425,7 @@ NicoVideoPlayerDialogView.__css__ = `
 			}
 		}
 		@media
-			(width < 1216px) and (min-height: 700px)
+			(width < 1216px) and (min-height: 700px) and (aspect-ratio < 4/3)
 		{
 			.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
 				padding-bottom: 240px;
@@ -55696,7 +56437,7 @@ NicoVideoPlayerDialogView.__css__ = `
 			information and comment tabs stay adjacent to the movie. Resize only
 			the video frame at its native aspect ratio, reserving header/toolbar room.
 		*/
-		@media (min-width: 640px) and (width < 992px) and (height < 700px) {
+		@media (min-width: 640px) and (width < 992px) and ((height < 700px) or (aspect-ratio >= 4/3)) {
 			body.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
 				padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
 				background: none;
@@ -55707,7 +56448,7 @@ NicoVideoPlayerDialogView.__css__ = `
 				aspect-ratio: 7 / 4;
 			}
 		}
-		@media (min-width: 640px) and (width < 1216px) and (height < 700px) {
+		@media (min-width: 640px) and (width < 1216px) and ((height < 700px) or (aspect-ratio >= 4/3)) {
 			body.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
 				padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
 				background: none;
@@ -55743,27 +56484,35 @@ NicoVideoPlayerDialogView.__css__ = `
 			The legacy below-video layout also exceeded the viewport at 700px
 			high when its fixed-size movie was wider/taller than the available
 			window. Keep the native bottom panel and scale the movie into it. */
-		@media (width < 992px) and (min-height: 700px) {
+		@media (width < 992px) and (min-height: 700px) and (aspect-ratio < 4/3) {
 			body.zenzaScreenMode_normal .zenzaPlayerContainer {
 				width: min(672px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.75));
 				height: auto;
 				aspect-ratio: 7 / 4;
 			}
 		}
-		@media (width < 1216px) and (min-height: 700px) {
+		@media (width < 1216px) and (min-height: 700px) and (aspect-ratio < 4/3) {
 			body.zenzaScreenMode_big .zenzaPlayerContainer {
 				width: min(896px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.8666667));
 				height: auto;
 				aspect-ratio: 28 / 15;
 			}
 		}
+		/*
+			Task1038: 大モードの固定サイズ（960x540 など）は、画面の高さがその段のぎりぎり（例: 高さ 700〜740px）だと
+			上のタイトル・タグ欄と下の再生バーが入りきらず、ヘッダーが動画に重なったり箱ごと押し下げられて崩れていた。
+			Firefox は 100% 表示のときにちょうどこの高さになりやすい（90%/110% では別の段になるので起きない）。
+			どの段でも「画面の高さ − 200px（ヘッダーと再生バーの分）」を超えない大きさに縮める（比率 28:15 は同じ）。
+			高さが十分ある時は従来と同じ大きさになるので、他のブラウザ・他の倍率の見た目は変わらない。
+		*/
 		/* 960x540 */
 		@media
 			(min-width: 1328px) and (min-height: 700px)
 		{
 			.zenzaScreenMode_big .zenzaPlayerContainer {
-				width: calc(960px * 1.05);
-				height: 540px;
+				width: min(calc(960px * 1.05), calc((100vh - 200px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
 			}
 		}
 		/* 1152x648 */
@@ -55771,8 +56520,9 @@ NicoVideoPlayerDialogView.__css__ = `
 			(min-width: 1530px) and (min-height: 900px)
 		{
 			.zenzaScreenMode_big .zenzaPlayerContainer {
-				width: calc(1152px * 1.05);
-				height: 648px;
+				width: min(calc(1152px * 1.05), calc((100vh - 200px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
 			}
 		}
 		/* 1280x720 */
@@ -55780,8 +56530,9 @@ NicoVideoPlayerDialogView.__css__ = `
 			(min-width: 1664px) and (min-height: 900px)
 		{
 			.zenzaScreenMode_big .zenzaPlayerContainer {
-				width: calc(1280px * 1.05);
-				height: 720px;
+				width: min(calc(1280px * 1.05), calc((100vh - 200px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
 			}
 		}
 		/* 1920x1080 */
@@ -55789,8 +56540,9 @@ NicoVideoPlayerDialogView.__css__ = `
 			(min-width: 2336px) and (min-height: 1200px)
 		{
 			.zenzaScreenMode_big .zenzaPlayerContainer {
-				width: calc(1920px * 1.05);
-				height: 1080px;
+				width: min(calc(1920px * 1.05), calc((100vh - 200px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
 			}
 		}
 		/* 2560x1440 */
@@ -55798,8 +56550,9 @@ NicoVideoPlayerDialogView.__css__ = `
 			(min-width: 2976px) and (min-height: 1660px)
 		{
 			.zenzaScreenMode_big .zenzaPlayerContainer {
-				width: calc(2560px * 1.05);
-				height: 1440px;
+				width: min(calc(2560px * 1.05), calc((100vh - 200px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
 			}
 		}
 	}
@@ -55818,6 +56571,7 @@ NicoVideoPlayerDialogView.__tpl__ = (`
 	`).trim();
 class NicoVideoPlayerDialog extends Emitter {
 		static get OPTIONAL_LOAD_TIMEOUT() { return 3000; }
+		static get PREFETCH_DATA_MAX_AGE_MS() { return 10 * 60 * 1000; }
 		constructor(params) {
 				super();
 				this.initialize(params);
@@ -56034,6 +56788,9 @@ class NicoVideoPlayerDialog extends Emitter {
 								case 'playlistSetCommonsTree':
 										this._onPlaylistSetCommonsTree();
 										break;
+								case 'playlistSetNicodic':
+										void this._onPlaylistSetNicodic(param);
+										break;
 								case 'playNextVideo':
 										this.playNextVideo();
 										break;
@@ -56212,13 +56969,53 @@ class NicoVideoPlayerDialog extends Emitter {
 										const msgInfo = videoInfo?.msgInfo;
 										const loader = this.threadLoader;
 										Promise.resolve().then(() => loader.nicoru(msgInfo, param))
-												.then(result => { request?.resolve?.(result); })
+												.then(result => {
+												request?.resolve?.(result);
+												const chat = param;
+												const text = typeof chat?.text === 'string' ? chat.text : '';
+												const title = typeof videoInfo?.title === 'string' ? videoInfo.title : '';
+												const vpos = Number(chat?.vpos);
+												this._recordDiagnostic({
+														category: 'comment', level: 'success', source: 'nicoru',
+														message: 'ニコりました' + (text ? '「' + text.slice(0, 80) + '」' : '') + (title ? '（' + title + '）' : ''),
+														videoId: videoInfo?.watchId || videoInfo?.videoId,
+														details: { operation: 'nicoru', outcome: 'accepted' },
+														activity: { kind: 'nicoru', text: text || '（本文なし）', videoTitle: title,
+																...(Number.isFinite(vpos) && vpos >= 0 ? { positionMs: Math.floor(vpos * 10) } : {}) }
+												});
+										})
 												.catch(e => {
 												request?.reject?.(e);
 												if (this._videoInfo !== videoInfo || this._requestId !== requestId || this._state?.isOpen === false) {
 														return;
 												}
 												this.execCommand('alert', e?.message || 'ニコれなかった＞＜');
+										});
+										break;
+								}
+								case 'nicoru-cancel': {
+										const videoInfo = this._videoInfo;
+										const requestId = this._requestId;
+										const loader = this.threadLoader;
+										const chat = param;
+										Promise.resolve().then(() => loader.unNicoru(videoInfo?.msgInfo, chat?.nicoruId))
+												.then(result => {
+												request?.resolve?.(result);
+												const text = typeof chat?.text === 'string' ? chat.text : '';
+												const title = typeof videoInfo?.title === 'string' ? videoInfo.title : '';
+												this._recordDiagnostic({
+														category: 'comment', level: 'success', source: 'nicoru',
+														message: 'ニコるを取り消しました' + (text ? '「' + text.slice(0, 80) + '」' : '') + (title ? '（' + title + '）' : ''),
+														videoId: videoInfo?.watchId || videoInfo?.videoId,
+														details: { operation: 'nicoru-cancel', outcome: 'accepted' }
+												});
+										})
+												.catch(e => {
+												request?.reject?.(e);
+												if (this._videoInfo !== videoInfo || this._requestId !== requestId || this._state?.isOpen === false) {
+														return;
+												}
+												this.execCommand('alert', e?.message || 'ニコるを取り消せなかった＞＜');
 										});
 										break;
 								}
@@ -56372,8 +57169,20 @@ class NicoVideoPlayerDialog extends Emitter {
 				e.stopPropagation();
 		}
 		_prefetchFeatureEnabled() {
+				if (NicoVideoPlayerDialog.isExternalPlayback()) {
+						return false;
+				}
 				const config = this._playerConfig;
 				return config?.getValue('playlist.prefetchAhead.enabled') === true;
+		}
+		static isExternalPlayback() {
+				try {
+						return window !== window.top && window.name === 'ZenzaWatchExternalTrialPlayer' &&
+								location.hostname === 'www.nicovideo.jp';
+				}
+				catch (_) {
+						return false;
+				}
 		}
 		_prefetchSettingsKey() {
 				const config = this._playerConfig;
@@ -56388,7 +57197,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (!runtime?.createReporter)
 						return null;
 				return this._prefetchReporter ||= runtime.createReporter({
-						diagnostics: () => runtime.trialDiagnostics === true,
+						diagnostics: () => runtime.trialDiagnostics === true ||
+								this._playerConfig.getValue('playlist.prefetchAhead.consoleLog') === true,
 						notifyMode: () => this._playerConfig.getValue('playlist.prefetchAhead.notify') || 'journal',
 						console: (name, payload) => window.console.info(name, JSON.stringify(payload)),
 						record: (entry) => this._recordDiagnostic(entry),
@@ -56425,7 +57235,7 @@ class NicoVideoPlayerDialog extends Emitter {
 										return null;
 								const msgInfo = Object.assign({}, info.msgInfo);
 								msgInfo.language = this._playerConfig.props.commentLanguage;
-								const result = await this.threadLoader.load(msgInfo, { signal: sig });
+								const result = await this.threadLoader.load(msgInfo, { signal: sig, noRetry: true });
 								return { comments: { language: msgInfo.language, result } };
 						}
 				});
@@ -56498,6 +57308,31 @@ class NicoVideoPlayerDialog extends Emitter {
 				return typeof performance !== 'undefined' && typeof performance.now === 'function' ?
 						performance.now() : Date.now();
 		}
+		_diagOpenTiming() {
+				const t = this._prefetchTiming;
+				if (!t || !this._prefetchConsoleLog()) {
+						return;
+				}
+				const hits = (() => {
+						try {
+								return global.debug?.playlistPrefetch?.bytes?.hits?.(t.source) ?? null;
+						}
+						catch (_) {
+								return null;
+						}
+				})();
+				this._diag('ZENZA_OPEN_TIMING', {
+						videoId: t.videoId || null,
+						prefetchUsed: !!t.used,
+						infoSource: t.infoSource || null,
+						infoReuseBlocked: t.infoReuseBlocked || null,
+						infoAgeSec: Number.isFinite(t.infoAgeSec) ? t.infoAgeSec : null,
+						cacheHits: hits,
+						totalMs: Math.round(this._prefetchNow() - t.started),
+						marks: t.marks || {},
+						readyCount: (this._playlistPrefetch?.readyIds?.() || []).length
+				});
+		}
 		_reportPrefetchTiming() {
 				const t = this._prefetchTiming;
 				if (!t || t.reported || t.requestId !== this._requestId)
@@ -56533,26 +57368,184 @@ class NicoVideoPlayerDialog extends Emitter {
 				runtime.markIds = ids;
 				global.emitter.emit?.('zenza-prefetch-marks', ids);
 		}
+		_markTiming(key) {
+				const t = this._prefetchTiming;
+				if (!t || t.requestId !== this._requestId) {
+						return;
+				}
+				t.marks ||= {};
+				if (t.marks[key] === undefined) {
+						t.marks[key] = Math.round(this._prefetchNow() - t.started);
+				}
+		}
+		_diag(name, payload) {
+				if (!this._prefetchConsoleLog()) {
+						return;
+				}
+				try {
+						window.console.info(name, JSON.stringify(payload));
+				}
+				catch (_) { /* 調査用の出力で本編を止めない。 */ }
+		}
+		_diagFirstPlaying() {
+				const t = this._prefetchTiming;
+				if (!t || t.requestId !== this._requestId || t.firstPlayingReported) {
+						return;
+				}
+				t.firstPlayingReported = true;
+				this._markTiming('playing');
+				if (!this._prefetchConsoleLog()) {
+						return;
+				}
+				const stats = (() => {
+						try {
+								return t.source ? global.debug?.playlistPrefetch?.bytes?.stats?.(t.source) ?? null : null;
+						}
+						catch (_) {
+								return null;
+						}
+				})();
+				const level = (() => {
+						try {
+								const hls = global.debug?.video?.hls || this._nicoVideoPlayer?._videoPlayer?._video?.hls;
+								return typeof hls?.currentLevel === 'number' ? hls.currentLevel : null;
+						}
+						catch (_) {
+								return null;
+						}
+				})();
+				this._diag('ZENZA_FIRST_PLAYING', {
+						videoId: t.videoId || null,
+						prefetchUsed: !!t.used,
+						infoSource: t.infoSource || null,
+						playingMs: Math.round(this._prefetchNow() - t.started),
+						marks: t.marks || {},
+						cache: stats,
+						currentLevel: level
+				});
+		}
+		_diagOnce(name, key, payload) {
+				if (!this._prefetchConsoleLog()) {
+						return;
+				}
+				this._diagSeen ||= new Map();
+				if (this._diagSeen.get(name) === key) {
+						return;
+				}
+				this._diagSeen.set(name, key);
+				this._diag(name, payload);
+		}
+		_diagEnvironment() {
+				if (!this._prefetchConsoleLog() || this._diagEnvDone) {
+						return;
+				}
+				this._diagEnvDone = true;
+				const config = this._playerConfig;
+				const keys = ['playlist.prefetchAhead.enabled', 'playlist.prefetchAhead.sourcePlaylist',
+						'playlist.prefetchAhead.sourceRelated', 'playlist.prefetchAhead.sourceDescription',
+						'playlist.prefetchAhead.order', 'playlist.prefetchAhead.window', 'playlist.prefetchAhead.cacheMB',
+						'playlist.prefetchAhead.pacingMs', 'playlist.prefetchAhead.companions',
+						'playbackRate.respectExternal', 'playbackRate',
+						'loop', 'playlistLoop', 'autoPlay', 'enableStoryboard', 'videoServerType', 'domandVideoQuality',
+						'playlist.prefetchAhead.showMark', 'playlist.prefetchAhead.notify'];
+				const settings = {};
+				for (const key of keys) {
+						try {
+								settings[key] = config.getValue(key);
+						}
+						catch (_) {
+								settings[key] = '?';
+						}
+				}
+				this._diag('ZENZA_DIAG_ENV', {
+						version: global.version || window.ZenzaWatch?.version || null,
+						saveData: navigator.connection?.saveData === true,
+						memoryGB: navigator.deviceMemory ?? null,
+						hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+						settings
+				});
+		}
+		_prefetchConsoleLog() {
+				const on = this._playerConfig?.getValue('playlist.prefetchAhead.consoleLog') === true ||
+						global.debug?.playlistPrefetch?.trialDiagnostics === true;
+				try {
+						if (typeof PlayListSession !== 'undefined' && PlayListSession.diagnostics !== on) {
+								PlayListSession.diagnostics = on;
+						}
+				}
+				catch (_) { /* 伝えられなくても本編には影響しない。 */ }
+				return on;
+		}
 		_updateNextPrefetch() {
 				try {
+						this._diagEnvironment();
 						if (!this._prefetchFeatureEnabled()) {
 								const cache = this._playlistPrefetch;
 								this._playlistPrefetch = null;
 								cache?.reset();
 								this._updatePrefetchMarks();
+								const gate = NicoVideoPlayerDialog.isExternalPlayback() ? 'external-site' : 'disabled';
+								this._diagOnce('ZENZA_PREFETCH_GATE', gate, { gate });
 								return;
 						}
 						const runtime = global.debug?.playlistPrefetch;
-						if (!runtime?.create || !this.isOpen || !this._playlist ||
-								navigator.connection?.saveData === true || !runtime.supported() ||
-								this._state.isError || this._playerConfig.getValue('loop') === true) {
+						const gate = !runtime?.create ? 'no-runtime' :
+								!this.isOpen ? 'player-closed' :
+										!this._playlist ? 'no-playlist' :
+												navigator.connection?.saveData === true ? 'data-saver' :
+														!runtime.supported() ? 'not-hls' :
+																this._state.isError ? 'video-error' :
+																		this._playerConfig.getValue('loop') === true ? 'loop-on' : null;
+						if (gate) {
 								this._playlistPrefetch?.interrupt?.('waiting');
+								this._diagOnce('ZENZA_PREFETCH_GATE', gate, {
+										gate,
+										playerMode: global.debug?.video?.playerMode ?? null,
+										supported: (() => {
+												try {
+														return global.debug?.playlistPrefetch?.supported?.() === true;
+												}
+												catch (_) {
+														return null;
+												}
+										})(),
+										sampleTime: (() => {
+												try {
+														return global.debug?.playlistPrefetch?.sample?.()?.currentTime ?? null;
+												}
+												catch (_) {
+														return null;
+												}
+										})(),
+										isOpen: !!this.isOpen,
+										playlistItems: this._playlist?.length ?? null,
+										watchId: this._watchId || null
+								});
 								return;
 						}
+						this._diagOnce('ZENZA_PREFETCH_GATE', 'open', { gate: 'open' });
 						const perSource = Math.max(1, Math.min(32, Number(this._playerConfig.getValue('playlist.prefetchAhead.window')) || 5));
 						const maxStoreBytes = Math.max(16, Math.min(512, Number(this._playerConfig.getValue('playlist.prefetchAhead.cacheMB')) || 128)) * 1048576;
 						const pacingMs = Math.max(0, Math.min(10000, Number(this._playerConfig.getValue('playlist.prefetchAhead.pacingMs')) || 0));
 						const candidates = this._collectPrefetchCandidates(perSource);
+						this._diagOnce('ZENZA_PREFETCH_CANDIDATES', candidates.join(','), {
+								current: this._watchId || null,
+								candidates,
+								perSource,
+								playlistItems: this._playlist?.length ?? null,
+								playlistIndex: this._playlist?.index ?? null,
+								playlistEnable: !!this.isPlaylistEnable,
+								peekNext: (() => {
+										try {
+												return this._playlist?.peekNextIds?.(5) || null;
+										}
+										catch (_) {
+												return 'error';
+										}
+								})(),
+								relatedCount: (this._videoInfo?.relatedVideoItems || []).length,
+								ready: this._playlistPrefetch?.readyIds?.() || []
+						});
 						if (!candidates.length) {
 								this._playlistPrefetch?.interrupt?.('not-playing');
 								this._updatePrefetchMarks();
@@ -56573,14 +57566,32 @@ class NicoVideoPlayerDialog extends Emitter {
 												break;
 										}
 								}
-						this._playlistPrefetch.update({
+						const schedulerInput = {
 								settings: this._prefetchSettingsKey(), candidates,
 								currentId: this._watchId || null, enabled: true,
 								playing: this.isPlaying, seeking: !!this._state.isSeeking, waiting: !!this._state.isStalled,
 								currentTime, duration: Number(sample?.duration), bufferEnd,
 								rate: Number(sample?.rate) || 1, ended: !!sample?.ended,
 								windowCount, maxStoreBytes, pacingMs
+						};
+						const ahead = Math.max(0, bufferEnd - currentTime) / Math.max(0.25, schedulerInput.rate);
+						const readyCount = (this._playlistPrefetch?.readyIds?.() || []).length;
+						const busy = this._playlistPrefetch?.isBusy?.() === true;
+						this._diagOnce('ZENZA_PREFETCH_INPUT', [schedulerInput.playing, schedulerInput.seeking, schedulerInput.waiting,
+								schedulerInput.ended, ahead >= 15, busy, readyCount].join('/'), {
+								playing: schedulerInput.playing, seeking: schedulerInput.seeking,
+								waiting: schedulerInput.waiting, ended: schedulerInput.ended,
+								currentTime: Number(currentTime.toFixed(1)),
+								bufferEnd: Number(bufferEnd.toFixed(1)),
+								aheadSec: Number(ahead.toFixed(1)),
+								aheadEnough: ahead >= 15,
+								duration: Number(sample?.duration) || null,
+								rate: schedulerInput.rate,
+								busy, readyCount,
+								ready: this._playlistPrefetch?.readyIds?.() || [],
+								totalBytes: this._playlistPrefetch?.totalBytes?.() ?? null
 						});
+						this._playlistPrefetch.update(schedulerInput);
 						this._updatePrefetchMarks();
 				}
 				catch (_) {
@@ -57008,6 +58019,110 @@ class NicoVideoPlayerDialog extends Emitter {
 						complete: sides.length > 0 && sides.every(sd => sd.complete === true)
 				};
 		}
+		static extractNicodicVideoIds(html) {
+				const text = typeof html === 'string' ? html : '';
+				const pick = (re) => {
+						const seen = new Set(), ids = [];
+						for (const m of text.matchAll(re)) {
+								const id = m[1];
+								if (id && !seen.has(id)) {
+										seen.add(id);
+										ids.push(id);
+								}
+						}
+						return ids;
+				};
+				const marked = pick(/watch\/((?:sm|nm|so|ss)\d+)\?[^"'\s>]*nicopedia_from=nicopedia_article_body/g);
+				if (marked.length) {
+						return { ids: marked, marker: true };
+				}
+				const all = pick(/(?:www\.nicovideo\.jp\/watch|nico\.ms)\/((?:sm|nm|so|ss)\d+)(?![^"'\s>]*nicopedia_from=nicopedia_(?:bbs|article_nicoad))/g);
+				return { ids: all, marker: false };
+		}
+		_getNicodicGate() {
+				if (this._nicodicGate) {
+						return this._nicodicGate;
+				}
+				this._nicodicGate = new CrossDomainGate({
+						baseUrl: 'https://dic.nicovideo.jp/robots.txt',
+						origin: 'https://dic.nicovideo.jp/',
+						type: 'nicodic'
+				});
+				return this._nicodicGate;
+		}
+		async _onPlaylistSetNicodic(articleUrl) {
+				let url;
+				try {
+						url = new URL(String(articleUrl));
+				}
+				catch (_) {
+						return;
+				}
+				if (url.hostname !== 'dic.nicovideo.jp' || !/^\/(?:v|a)\/[^/]+\/?$/.test(url.pathname)) {
+						return;
+				}
+				const href = 'https://dic.nicovideo.jp' + url.pathname;
+				const requestId = this._requestId, watchId = this._watchId;
+				const token = this._nicodicPlaylistToken = {};
+				const isCurrent = () => this._nicodicPlaylistToken === token && this._requestId === requestId && this._watchId === watchId;
+				const articleName = decodeURIComponent(url.pathname.replace(/^\/(?:v|a)\//, '').replace(/\/$/, ''));
+				this.execCommand('notify', `大百科「${articleName}」の記事から動画を取得中...`);
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('dictionary', href, 'response', isCurrent);
+				let html = '';
+				try {
+						const gate = this._getNicodicGate();
+						const res = await gate.fetch(href, { _format: 'text', timeout: 30000 });
+						if (!res || typeof res.text !== 'function') {
+								throw Object.assign(new Error('NICODIC_GATE_UNAVAILABLE'), { status: 0 });
+						}
+						if (!res.ok) {
+								throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+						}
+						html = await res.text();
+				}
+				catch (e) {
+						diagnostic?.failure(e);
+						if (!isCurrent()) {
+								return;
+						}
+						window.console.warn('大百科記事の取得に失敗', e?.message);
+						return this.execCommand('alert', `大百科記事を取得できませんでした（${e?.message || '通信エラー'}）`);
+				}
+				if (!isCurrent()) {
+						return;
+				}
+				const { ids, marker } = NicoVideoPlayerDialog.extractNicodicVideoIds(html);
+				if (!ids.length) {
+						diagnostic?.failure({ kind: 'schema', missing: 'nicopedia_article_body links' });
+						return this.execCommand('notify', `大百科「${articleName}」の記事に動画は見つかりませんでした`);
+				}
+				if (marker) {
+						diagnostic?.success();
+				}
+				else {
+						diagnostic?.failure({ kind: 'schema', missing: 'nicopedia_from=nicopedia_article_body' });
+				}
+				const report = {};
+				const option = { watchId, isCancelled: () => !isCurrent(), deferDetails: true, report,
+						insert: this._playlist.isEnable };
+				this._state.currentTab = 'playlist';
+				const added = await this._playlist.appendWatchIds(ids, option);
+				if (added === null || !isCurrent()) {
+						return;
+				}
+				const overflow = Array.isArray(report.overflow) ? report.overflow : [];
+				const notes = [
+						report.existing ? `${report.existing}件は既にプレイリストにあります` : '',
+						overflow.length ? `プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加` : '',
+						marker ? '' : '記事の形式が想定と違うため、本文以外の動画も含まれる可能性があります'
+				].filter(Boolean);
+				this.execCommand('notify', `大百科「${articleName}」から${added}件をプレイリストに追加しました（記事内の動画${ids.length}件` +
+						(notes.length ? '／' + notes.join('／') : '') + '）');
+				if (this._videoInfo) {
+						this._playlist.insertCurrentVideo(this._videoInfo);
+				}
+		}
 		_abortCommonsTreeJob() {
 				const job = this._commonsTreeJob;
 				this._commonsTreeJob = null;
@@ -57163,9 +58278,13 @@ class NicoVideoPlayerDialog extends Emitter {
 				Promise.resolve(request).then(result => {
 						const message = result.data ? (result.data.thanksMessage || '') : '';
 						const popupText = message || (isLiked ? '(･A･)ﾉｼ' : '(･∀･)ｨｨﾈ!!');
+						const title = typeof videoInfo.title === 'string' ? videoInfo.title : '';
 						this._recordDiagnostic({
-								category: 'like', level: 'success', message: popupText,
-								videoId, source: 'like', details: { operation: isLiked ? 'unlike' : 'like' }
+								category: 'like', level: 'success',
+								message: (isLiked ? 'いいね！を取り消しました' : 'いいね！しました') + (title ? '「' + title + '」' : '') +
+										(message ? ' ' + message : ''),
+								videoId, source: 'like', details: { operation: isLiked ? 'unlike' : 'like' },
+								...(isLiked ? {} : { activity: { kind: 'like', text: message || '', videoTitle: title } })
 						});
 						if (this._videoInfo !== videoInfo) {
 								return;
@@ -57331,6 +58450,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (!watchId) {
 						return;
 				}
+				this._hideNicoadEndScreen();
 				if (Date.now() - this._lastOpenAt < 1500 && this._watchId === watchId) {
 						return;
 				}
@@ -57408,7 +58528,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						Promise.resolve().then(func).then(result => { window.clearTimeout(timer); resolve(result); }, () => { window.clearTimeout(timer); window.console.warn(`${label}: fail`); onGiveUp(); resolve(fallback); });
 				});
 				Promise.all([
-						VideoInfoLoader.load(watchId, options.videoLoadOptions),
+						this._loadVideoInfoForOpen(watchId, options, prepared),
 						optional('WatchInfoCacheDb.get', () => WatchInfoCacheDb.get(watchId), null),
 						optional('initializePlaylist', () => this._initializePlaylist(), undefined, () => this.emitResolve('playlist-ready')) //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
 				]).then(this._onVideoInfoLoaderLoad.bind(this, requestId)).catch(this._onVideoInfoLoaderFail.bind(this, requestId));
@@ -57460,11 +58580,59 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._playerConfig.props.lastPlayerId = '';
 				this._playerConfig.props.lastPlayerId = this.id;
 		}
+		_loadVideoInfoForOpen(watchId, options, prepared) {
+				const reason = this._prefetchDataReuseBlock(watchId, options, prepared);
+				const timing = this._prefetchTiming;
+				if (reason) {
+						if (timing) {
+								timing.infoSource = 'network';
+								timing.infoReuseBlocked = reason;
+						}
+						return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+				}
+				if (timing) {
+						timing.infoSource = 'prefetch';
+						timing.infoAgeSec = Math.round((Date.now() - prepared.dataAt) / 1000);
+				}
+				return VideoInfoLoader.adoptPrefetched(watchId, prepared.data, options.videoLoadOptions)
+						.catch((error) => {
+						if (timing) {
+								timing.infoSource = 'network';
+								timing.infoReuseBlocked = 'adopt-failed';
+						}
+						this._diag('ZENZA_INFO_REUSE', { watchId, fallback: true,
+								error: String(error?.name || error?.message || error).slice(0, 80) });
+						return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+				});
+		}
+		_prefetchDataReuseBlock(watchId, options, prepared) {
+				if (!prepared) {
+						return 'not-prefetched';
+				}
+				if (typeof VideoInfoLoader?.adoptPrefetched !== 'function') {
+						return 'unsupported';
+				}
+				if (prepared.watchId !== watchId || !prepared.data) {
+						return 'mismatch';
+				}
+				if (options?.videoLoadOptions?.economy) {
+						return 'economy';
+				}
+				const age = Date.now() - Number(prepared.dataAt);
+				if (!Number.isFinite(age) || age < 0) {
+						return 'no-timestamp';
+				}
+				if (age > NicoVideoPlayerDialog.PREFETCH_DATA_MAX_AGE_MS) {
+						return 'stale';
+				}
+				return null;
+		}
 		async _onVideoInfoLoaderLoad(requestId, [videoInfoData, localCacheData]) {
 				console.log('Video info load completed');
 				if (this._requestId !== requestId) {
 						return;
 				}
+				this._markTiming('videoInfo');
 				const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
 				this._watchId = videoInfo.watchId;
 				WatchInfoCacheDb.putBestEffort(this._watchId, { videoInfo });
@@ -57572,7 +58740,9 @@ class NicoVideoPlayerDialog extends Emitter {
 						if (isStale()) {
 								return;
 						}
+						this._markTiming('session');
 						this.setVideo(sessionInfo.url);
+						this._markTiming('setVideo');
 						videoInfo.setCurrentVideo(sessionInfo.url);
 						this.emit('videoServerType', sessionInfo.type, sessionInfo, videoInfo);
 				}
@@ -57609,6 +58779,12 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._cancelCommentLoad();
 				const companion = this._takePrefetchComments(msgInfo, loadOptions);
 				if (companion) {
+						if (msgInfo && companion.threadInfo) {
+								msgInfo.threadInfo = companion.threadInfo;
+								if (companion.threadInfo.language) {
+										msgInfo.language = companion.threadInfo.language;
+								}
+						}
 						const heldRequestId = this._requestId;
 						return Promise.resolve().then(() => {
 								if (this._requestId === heldRequestId)
@@ -57830,6 +59006,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (!this._state.isLoading) {
 						return;
 				}
+				this._markTiming('canPlay');
+				this._diagOpenTiming();
 				this._reportPrefetchTiming();
 				const requestId = this._requestId;
 				const watchId = this._watchId;
@@ -57897,6 +59075,8 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		_onVideoPlaying() {
 				this._state.setPlaying();
+				this._hideNicoadEndScreen();
+				this._diagFirstPlaying();
 				this.emit('playing');
 				this._updateNextPrefetch();
 		}
@@ -58039,6 +59219,161 @@ class NicoVideoPlayerDialog extends Emitter {
 						Fullscreen.cancel();
 				}
 				global.emitter.emitAsync('videoEnded');
+				void this._showNicoadEndScreen();
+		}
+		static nicoadEndItems(body) {
+				const list = Array.isArray(body?.data?.nicoads) ? body.data.nicoads : [];
+				return list.filter((ad) => ad && typeof ad.contentId === 'string' && /^(?:sm|nm|so|ss)\d+$/.test(ad.contentId) &&
+						ad.contentType !== 'live').slice(0, 10).map((ad) => ({
+						id: ad.contentId,
+						title: typeof ad.title === 'string' ? ad.title : ad.contentId,
+						thumbnail: typeof ad.thumbnailUrl === 'string' && /^https:\/\//.test(ad.thumbnailUrl) ? ad.thumbnailUrl : '',
+						supporter: typeof ad.userName === 'string' && ad.userName ? ad.userName : 'ゲスト',
+						point: Number.isFinite(Number(ad.activePoint)) ? Number(ad.activePoint) : Number(ad.totalPoint) || 0,
+						decoration: ['gold', 'silver', 'bronze'].includes(ad.decoration) ? ad.decoration : '',
+						mask: ad.mustMask === true
+				}));
+		}
+		async _showNicoadEndScreen() {
+				const props = this._playerConfig?.props || {};
+				if (!props['uaa.enable'] || props['nicoadEnd.enable'] === false) {
+						return;
+				}
+				if (NicoVideoPlayerDialog.isExternalPlayback()) {
+						return;
+				}
+				const videoInfo = this._videoInfo;
+				const parent = this._nicoVideoPlayer?._videoPlayer?._body;
+				if (!videoInfo || !parent || this._nicoVideoPlayer?._videoPlayer?._isYouTube) {
+						return;
+				}
+				const videoId = videoInfo.videoId;
+				if (!/^[a-z]{2}\d+$/.test(String(videoId))) {
+						return;
+				}
+				const requestId = this._requestId;
+				const tags = (videoInfo.tagList || []).map((t) => t && (t.name || t.tag || t.text))
+						.filter((t) => typeof t === 'string' && t).slice(0, 30);
+				const url = 'https://api.nicoad.nicovideo.jp/v1/nicoad?frameId=12&limit=10' +
+						'&tags=' + encodeURIComponent(tags.join(',')) + '&excludeVideoIds=' + encodeURIComponent(videoId) +
+						'&allowSensitiveContents=true&decoration=video';
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('advertising', 'nicoad-end:' + videoId, 'response', () => this._requestId === requestId);
+				let items = [];
+				try {
+						const res = await fetch(url, { credentials: 'include', headers: { 'x-frontend-id': '6', 'x-frontend-version': '0' } });
+						if (!res.ok) {
+								diagnostic?.failure({ status: res.status });
+								return;
+						}
+						const body = await res.json();
+						if (!Array.isArray(body?.data?.nicoads)) {
+								diagnostic?.failure({ kind: 'schema', missing: 'data.nicoads' });
+								return;
+						}
+						diagnostic?.success();
+						items = NicoVideoPlayerDialog.nicoadEndItems(body);
+				}
+				catch (e) {
+						diagnostic?.failure(e);
+						return;
+				}
+				if (this._requestId !== requestId || !this._state?.isEnded || this.isPlaying || !items.length) {
+						return;
+				}
+				this._hideNicoadEndScreen();
+				NicoVideoPlayerDialog.ensureNicoadEndStyle();
+				const view = document.createElement('div');
+				view.className = 'zenzaNicoadEnd';
+				view.setAttribute('role', 'region');
+				view.setAttribute('aria-label', 'ニコニ広告された動画');
+				const header = document.createElement('div');
+				header.className = 'zenzaNicoadEnd-header';
+				const title = document.createElement('span');
+				title.textContent = 'ニコニ広告';
+				const close = document.createElement('button');
+				close.type = 'button';
+				close.className = 'zenzaNicoadEnd-close';
+				close.textContent = '×';
+				close.title = '閉じる';
+				close.addEventListener('click', e => { e.stopPropagation(); this._hideNicoadEndScreen(); });
+				header.append(title, close);
+				const list = document.createElement('div');
+				list.className = 'zenzaNicoadEnd-list';
+				for (const item of items) {
+						const card = document.createElement('button');
+						card.type = 'button';
+						card.className = 'zenzaNicoadEnd-item' + (item.decoration ? ' is-' + item.decoration : '');
+						card.title = item.title;
+						const thumb = document.createElement('div');
+						thumb.className = 'zenzaNicoadEnd-thumb' + (item.mask ? ' is-mask' : '');
+						if (item.thumbnail) {
+								thumb.style.backgroundImage = 'url("' + item.thumbnail.replace(/["\\]/g, '') + '")';
+						}
+						const name = document.createElement('div');
+						name.className = 'zenzaNicoadEnd-title';
+						name.textContent = item.title;
+						const by = document.createElement('div');
+						by.className = 'zenzaNicoadEnd-by';
+						by.textContent = '提供：' + item.supporter;
+						const pt = document.createElement('div');
+						pt.className = 'zenzaNicoadEnd-pt';
+						pt.textContent = item.point.toLocaleString('ja-JP') + 'pt';
+						card.append(thumb, name, by, pt);
+						card.addEventListener('click', e => {
+								e.stopPropagation();
+								this._hideNicoadEndScreen();
+								this.open(item.id, { openNow: true });
+						});
+						list.append(card);
+				}
+				view.append(header, list);
+				for (const type of ['mousedown', 'dblclick', 'wheel']) {
+						view.addEventListener(type, e => e.stopPropagation());
+				}
+				parent.append(view);
+				this._nicoadEnd = view;
+		}
+		_hideNicoadEndScreen() {
+				const view = this._nicoadEnd;
+				this._nicoadEnd = null;
+				try {
+						view?.remove();
+				}
+				catch (_) { /* noop */ }
+		}
+		static ensureNicoadEndStyle() {
+				if (document.getElementById('zenzaNicoadEndStyle')) {
+						return;
+				}
+				const style = document.createElement('style');
+				style.id = 'zenzaNicoadEndStyle';
+				style.textContent = `
+			.zenzaNicoadEnd { position:absolute; inset:0; z-index:200; display:flex; flex-direction:column; gap:1.5%;
+				padding:2% 2.5%; box-sizing:border-box; background:rgba(0,0,0,.82); color:#fff; overflow:auto;
+				font-family:YuGothic,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif; container-type:inline-size; }
+			.zenzaNicoadEnd-header { display:flex; align-items:center; justify-content:space-between; font-weight:bold;
+				font-size:clamp(12px,2.2cqw,22px); }
+			.zenzaNicoadEnd-close { background:none; border:0; color:#fff; font-size:1.4em; cursor:pointer; line-height:1; }
+			.zenzaNicoadEnd-list { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:2cqw 1.6cqw; }
+			.zenzaNicoadEnd-item { all:unset; cursor:pointer; display:flex; flex-direction:column; gap:.3em; min-width:0;
+				font-size:clamp(10px,1.35cqw,15px); }
+			.zenzaNicoadEnd-item:focus-visible { outline:2px solid #fcd842; outline-offset:2px; }
+			.zenzaNicoadEnd-thumb { position:relative; aspect-ratio:16/9; background:#222 center/cover no-repeat; border-radius:4px; overflow:hidden; }
+			.zenzaNicoadEnd-thumb.is-mask { filter:blur(10px) brightness(.7); }
+			.zenzaNicoadEnd-item.is-gold .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #e8c13a; }
+			.zenzaNicoadEnd-item.is-silver .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #c9ccd1; }
+			.zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #c58a54; }
+			.zenzaNicoadEnd-thumb::before { content:"📣"; position:absolute; left:0; top:0; padding:.15em .35em;
+				background:#fcd842; border-bottom-right-radius:6px; font-size:.9em; }
+			.zenzaNicoadEnd-item:hover .zenzaNicoadEnd-title { text-decoration:underline; }
+			.zenzaNicoadEnd-title { font-weight:bold; line-height:1.3; display:-webkit-box; -webkit-box-orient:vertical;
+				-webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; }
+			.zenzaNicoadEnd-by { color:#f0b400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+			.zenzaNicoadEnd-pt { color:#f0b400; }
+			.zenzaNicoadEnd-pt::before { content:"📣 "; }
+		`;
+				(document.head || document.documentElement).append(style);
 		}
 		_clearCompletedAutoResume() {
 				if (this._playerConfig?.getValue('resume.clearOnComplete') === false ||
@@ -58238,6 +59573,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				});
 		}
 		close() {
+				this._hideNicoadEndScreen();
 				this._view?.manualBookmarkDock?.deactivate();
 				this._keyEmitter?.releaseTemporaryPlaybackRate?.();
 				if (this.isPlaying) {
@@ -59531,11 +60867,18 @@ class VariablesMapper {
 * - 表示中のコメントは開始時刻順の配列を二分探索して探す（全コメントを毎フレーム走査しない）
 * - タブが裏に回ってもrequestAnimationFrameが止まらないよう、Workerのタイマーで描画する
 * - 一時停止中で時刻も大きさも変わらない時は描き直さない
+* Task1038（カクつき対策）:
+* - video.currentTime はブラウザによって数十ms単位でしか進まないため、再生中は前回の値から経過時間で補間した時刻で描く
+* - 表に出ている間は requestAnimationFrame（画面の更新に合わせる）で描き、裏タブの時だけ Worker のタイマーで描く
+* - コメント一覧の並べ替えは件数が変わった時だけにする（以前は2秒ごとに全件を並べ替えて一瞬止まっていた）
+* - これから流れてくるコメントの文字画像を少しずつ先に作っておき、出始めの瞬間に重くならないようにする
+* - 流れるコメントの横位置は整数に丸めない（1pxずつ跳ねて見えるのを防ぐ）
 */
 const CommentPictureInPicture = (() => {
 	const SCREEN = CommentLayer.SCREEN;
 	const FPS = 60;
 	const MAX_DRAW_COMMENTS = 200;
+	const PREWARM_PER_FRAME = 4;
 	const DEFAULT_FONT = `'ＭＳ Ｐゴシック', 'MS PGothic', 'IPAMonaPGothic', 'Hiragino Sans', 'Yu Gothic', sans-serif, Arial`;
 	const COMMAND_FONT = {
 		gothic: `'游ゴシック', 'Yu Gothic', 'YuGothic', Simsun, 'ＭＳ ゴシック', 'IPAMonaPGothic', sans-serif, Arial`,
@@ -59710,7 +61053,7 @@ const CommentPictureInPicture = (() => {
 				.filter(Boolean);
 			const key = groups.map(g => (g.members || []).length).join(',');
 			const snapshot = this.snapshot;
-			if (snapshot.viewModel === viewModel && snapshot.key === key && now - snapshot.updatedAt < 2000) {
+			if (snapshot.viewModel === viewModel && snapshot.key === key) {
 				return snapshot;
 			}
 			const list = groups.flatMap(g => g.members || []);
@@ -59735,10 +61078,11 @@ const CommentPictureInPicture = (() => {
 				const mid = (lo + hi) >> 1;
 				list[mid].beginLeftTiming < from ? (lo = mid + 1) : (hi = mid);
 			}
-			const naka = [], fixed = [];
+			const naka = [], fixed = [], upcoming = [];
 			for (let i = lo; i < list.length; i++) {
 				const chat = list[i];
-				if (chat.beginLeftTiming > sec + 1) { break; }
+				if (chat.beginLeftTiming > sec + 1.5) { break; }
+				if (chat.beginLeftTiming > sec + 0.2) { chat.isInvisible || upcoming.push(chat); continue; }
 				if (chat.isInvisible) { continue; }
 				if (chat.isFixed) {
 					sec >= chat.beginLeftTiming && sec <= chat.endRightTiming && chat.isInViewBySecond(sec) && fixed.push(chat);
@@ -59746,7 +61090,7 @@ const CommentPictureInPicture = (() => {
 					naka.push(chat);
 				}
 			}
-			return {naka, fixed};
+			return {naka, fixed, upcoming};
 		}
 		draw(ctx, {viewModel, sec, width, height, now}) {
 			if (!viewModel) {
@@ -59760,7 +61104,7 @@ const CommentPictureInPicture = (() => {
 			const layerOpacity = typeof props.commentLayerOpacity === 'number' ? props.commentLayerOpacity : 1;
 			const easyOpacity = props['commentLayer.easyCommentOpacity'];
 			const aiOpacity = props['commentLayer.aiCommentOpacity'];
-			const {naka, fixed} = this._getInView(viewModel, sec, now);
+			const {naka, fixed, upcoming} = this._getInView(viewModel, sec, now);
 			const chats = naka.concat(fixed);
 			const start = Math.max(0, chats.length - MAX_DRAW_COMMENTS);
 			for (let i = start; i < chats.length; i++) {
@@ -59798,9 +61142,16 @@ const CommentPictureInPicture = (() => {
 				chat.fork === 3 && typeof aiOpacity === 'number' && (alpha *= aiOpacity);
 				if (alpha <= 0) { continue; }
 				ctx.globalAlpha = Math.min(1, alpha);
-				ctx.drawImage(bitmap.canvas, Math.round(dx), Math.round(offsetY + y * scale - bitmap.margin));
+				ctx.drawImage(bitmap.canvas, chat.isFixed ? Math.round(dx) : dx, Math.round(offsetY + y * scale - bitmap.margin));
 			}
 			ctx.globalAlpha = 1;
+			let warmed = 0;
+			for (let i = 0; i < upcoming.length && warmed < PREWARM_PER_FRAME; i++) {
+				const cache = this.bitmaps.get(upcoming[i]);
+				if (cache && cache.scale === scale) { continue; }
+				try { this._getBitmap(upcoming[i], scale); } catch (e) { /* 描く時にもう一度試す */ }
+				warmed++;
+			}
 			if (this.frame % 600 === 0) {
 				for (const [chat, bitmap] of this.bitmaps) {
 					this.frame - bitmap.lastUsed > 600 && this.bitmaps.delete(chat);
@@ -59844,6 +61195,23 @@ const CommentPictureInPicture = (() => {
 			this._onVideoSeeked = this._onVideoSeeked.bind(this);
 			this._onResize = this._onResize.bind(this);
 			this.draw = this.draw.bind(this);
+			this._rafAt = 0;
+			this._raf = 0;
+			this._onWorkerTick = () => {
+				if (performance.now() - this._rafAt < 100) { return; }
+				this.draw();
+			};
+			this._onRaf = () => {
+				this._raf = 0;
+				if (this.isStopped) { return; }
+				this._rafAt = performance.now();
+				this.draw();
+				this._startRaf();
+			};
+		}
+		_startRaf() {
+			if (this.isStopped || this._raf || typeof requestAnimationFrame !== 'function') { return; }
+			this._raf = requestAnimationFrame(this._onRaf);
 		}
 		_bindVideo(video) {
 			if (this.video === video) { return; }
@@ -59895,6 +61263,34 @@ const CommentPictureInPicture = (() => {
 				this.lastKey = '';
 			}
 		}
+		_getSmoothTime(video, now) {
+			const raw = video ? video.currentTime : 0;
+			if (!video || video.paused || video.seeking || video.readyState < 3 || !isFinite(raw)) {
+				this._clock = null;
+				return raw;
+			}
+			const rate = video.playbackRate || 1;
+			const c = this._clock;
+			if (!c) {
+				this._clock = {raw, base: raw, at: now, last: raw};
+				return raw;
+			}
+			let predicted = c.base + (now - c.at) / 1000 * rate;
+			if (raw !== c.raw) {
+				const diff = raw - predicted;
+				if (Math.abs(diff) > 0.3) {
+					this._clock = {raw, base: raw, at: now, last: raw};
+					return raw;
+				}
+				predicted += diff * 0.2;
+				c.raw = raw; c.base = predicted; c.at = now;
+			} else if (predicted - raw > 0.3) {
+				predicted = raw + 0.3;
+			}
+			const sec = Math.max(c.last, predicted);
+			c.last = sec;
+			return sec;
+		}
 		_resizeCanvas(video) {
 			const vw = video && video.videoWidth || 16;
 			const vh = video && video.videoHeight || 9;
@@ -59920,7 +61316,8 @@ const CommentPictureInPicture = (() => {
 				const resized = this._resizeCanvas(video);
 				const canvas = this.canvas, ctx = this.ctx;
 				const width = canvas.width, height = canvas.height;
-				const sec = video ? video.currentTime : 0;
+				const now = performance.now();
+				const sec = this._getSmoothTime(video, now);
 				const showComment = !!this.config.props.showComment;
 				const viewModel = this.getViewModel();
 				const filterKey = `${ScreenFilter.buildFilter()}:${ScreenFilter.flipH}:${ScreenFilter.flipV}`;
@@ -59929,7 +61326,6 @@ const CommentPictureInPicture = (() => {
 					return;
 				}
 				this.lastKey = key;
-				const now = performance.now();
 				ctx.globalAlpha = 1;
 				ctx.fillStyle = '#000';
 				ctx.fillRect(0, 0, width, height);
@@ -59993,7 +61389,8 @@ const CommentPictureInPicture = (() => {
 			});
 			document.body.append(pip);
 			pip.srcObject = stream;
-			this.ticker = createTicker(Math.floor(1000 / FPS), this.draw);
+			this.ticker = createTicker(Math.floor(1000 / FPS), this._onWorkerTick);
+			this._startRaf();
 			const metadata = pip.readyState >= 1 ? Promise.resolve(true) : waitEvent(pip, 'loadedmetadata', 3000, this._abort.signal);
 			this.lastKey = '';
 			this.draw();
@@ -60031,6 +61428,8 @@ const CommentPictureInPicture = (() => {
 			this.isStopped = true;
 			this._abort.abort();
 			this.ticker && this.ticker.stop();
+			this._raf && typeof cancelAnimationFrame === 'function' && cancelAnimationFrame(this._raf);
+			this._raf = 0;
 			this._bindVideo(null);
 			this.pipWindow && this.pipWindow.removeEventListener('resize', this._onResize);
 			const pip = this.pipVideo;
@@ -62924,6 +64323,44 @@ class VideoInfoPanel extends Emitter {
 						link.replaceWith(wrapper);
 						wrapper.append(link, button);
 				};
+				/*
+				* Task1037: 大百科の記事（動画記事 /v/… ・単語記事 /a/…）へのリンクにも「プレイリストで開く」を付ける。
+				* ランキング動画などは「全ランクイン動画リスト」を大百科の記事に載せていることがある。
+				*/
+				const nicodicArticleUrl = (link) => {
+						try {
+								const url = new URL(link.href);
+								if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+										return null;
+								}
+								if (url.hostname !== 'dic.nicovideo.jp') {
+										return null;
+								}
+								if (!/^\/(?:v|a)\/[^/]+\/?$/.test(url.pathname)) {
+										return null;
+								}
+								return 'https://dic.nicovideo.jp' + url.pathname;
+						}
+						catch (_) {
+								return null;
+						}
+				};
+				const nicodicLink = (link) => {
+						const url = nicodicArticleUrl(link);
+						if (!url) {
+								return;
+						}
+						link.classList.add('nicodicLink');
+						const wrapper = document.createElement('zenza-nicodic-link');
+						wrapper.dataset.nicodicUrl = url;
+						const button = document.createElement('zenza-playlist-append');
+						button.className = 'playlistSetNicodic clickable-item';
+						button.title = 'この大百科記事に載っている動画をプレイリストで開く';
+						Object.assign(button.dataset, { command: 'playlistSetNicodic', param: url });
+						button.textContent = '▶';
+						link.replaceWith(wrapper);
+						wrapper.append(link, button);
+				};
 				const mylistLink = (link) => playlistLink(link, { kind: 'mylist', tag: 'zenza-mylist-link', idKey: 'mylistId', command: 'playlistSetMylist' });
 				const seriesLink = (link) => playlistLink(link, { kind: 'series', tag: 'zenza-series-link', idKey: 'seriesId', command: 'playlistSetSeries' });
 				/*
@@ -62980,6 +64417,9 @@ class VideoInfoPanel extends Emitter {
 						}
 						else if (/^series\//.test(a.textContent)) {
 								seriesLink(a);
+						}
+						else if (nicodicArticleUrl(a)) {
+								nicodicLink(a);
 						}
 						else if (/^https?:\/\/((www\.|)youtube\.com\/watch|youtu\.be)/.test(href)) {
 								youtube(a);
@@ -63494,6 +64934,7 @@ css.addStyle(`
 	.zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetMylist,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetSeries,
+	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetNicodic,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .pocket-info,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetUploadedVideo {
 		display: inline-block;
@@ -63542,6 +64983,7 @@ css.addStyle(`
 	.zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd:hover,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetMylist:hover,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetSeries:hover,
+	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetNicodic:hover,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetUploadedVideo:hover {
 		transform: scale(1.5);
 	}
@@ -63550,6 +64992,7 @@ css.addStyle(`
 	.zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd:active,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetMylist:active,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetSeries:active,
+	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetNicodic:active,
 	.zenzaWatchVideoInfoPanel .videoInfoTab .playlistSetUploadedVideo:active {
 		transform: scale(1.2);
 		border: 1px inset;
@@ -63944,7 +65387,7 @@ css.addStyle(`
 		}
 		/* 縦長モニター */
 		@media
-			(width < 992px) and (min-height: 700px)
+			(width < 992px) and (min-height: 700px) and (aspect-ratio < 4/3)
 		{
 			.zenzaScreenMode_normal .zenzaWatchVideoInfoPanel {
 				display: inherit;
@@ -63969,7 +65412,7 @@ css.addStyle(`
 			}
 		}
 		@media
-			(width < 1216px) and (min-height: 700px) {
+			(width < 1216px) and (min-height: 700px) and (aspect-ratio < 4/3) {
 			.zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
 				display: inherit;
 				top: 100%;
@@ -63990,6 +65433,19 @@ css.addStyle(`
 			}
 			.zenzaScreenMode_big .zenzaWatchVideoHeaderPanel {
 				width: 100% !important;
+			}
+		}
+	}
+	/* Task1039: 幅が足りないだけの横長の画面でも、情報パネルは動画の右に置く（下パネルにしない） */
+	@media screen and (min-width: 640px) and (aspect-ratio >= 4/3) {
+		@media (width < 992px) {
+			body.zenzaScreenMode_normal .zenzaWatchVideoInfoPanel {
+				display: inherit;
+			}
+		}
+		@media (width < 1216px) {
+			body.zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
+				display: inherit;
 			}
 		}
 	}
@@ -64818,6 +66274,9 @@ class VideoSearchForm extends Emitter {
 										if (item.name === 'selectContentType') {
 												this._syncContentTypeControls();
 												this._refreshWordCountsAfterFilterChange();
+										}
+										if (item.name === 'mode' || item.name === 'selectContentType') {
+												return;
 										}
 										submit();
 								});
@@ -70161,6 +71620,9 @@ class PlaylistPreloader {
 		readyIds() {
 				return [...this.ready.keys()];
 		}
+		isBusy() {
+				return this.busy;
+		}
 		expireStale() {
 				for (const [id, entry] of this.ready) {
 						if (this.now() >= entry.deadline) {
@@ -70286,6 +71748,13 @@ class PlaylistPreloader {
 						this.inflightId = '';
 				});
 		}
+		peek(id) {
+				const entry = this.ready.get(id);
+				if (!entry || this.now() >= entry.deadline) {
+						return null;
+				}
+				return entry.value;
+		}
 		take(id) {
 				const entry = this.ready.get(id);
 				if (!entry) {
@@ -70325,13 +71794,16 @@ const parseAttributes = (line) => {
 		}
 		return out;
 };
-const chooseStartVariant = (variants, startLevel, bandwidthEstimate) => {
+const chooseStartVariant = (variants, startLevel, bandwidthEstimate, preferHighest = false) => {
 		const sorted = variants.slice().sort((a, b) => a.bandwidth - b.bandwidth || a.index - b.index);
 		if (!sorted.length)
 				return null;
 		let level = 0;
 		if (typeof startLevel === 'number' && Number.isFinite(startLevel) && startLevel >= 0) {
 				level = Math.min(Math.round(startLevel), sorted.length - 1);
+		}
+		else if (preferHighest) {
+				level = sorted.length - 1;
 		}
 		else if (typeof bandwidthEstimate === 'number' && bandwidthEstimate > 0) {
 				const budget = bandwidthEstimate * BANDWIDTH_FACTOR;
@@ -70524,7 +71996,7 @@ const HlsPrefetch = (() => {
 								await media(source, 'media');
 						}
 						else {
-								const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate);
+								const choice = chooseStartVariant(variants, options.startLevel, options.bandwidthEstimate, options.preferHighest === true);
 								if (!choice)
 										throw fail('invalid variant');
 								startLevel = choice.level;
@@ -70540,7 +72012,9 @@ const HlsPrefetch = (() => {
 								await media(chosen.uri, 'video');
 						}
 						check();
-						return { source, entries, bytes, startLevel, stages, hits: 0, dispose() { entries.clear(); } };
+						return { source, entries, bytes, startLevel, stages, hits: 0,
+								...(typeof options.bandwidthEstimate === 'number' && options.bandwidthEstimate > 0 ? { bandwidthEstimate: options.bandwidthEstimate } : {}),
+								dispose() { entries.clear(); } };
 				}
 				catch (error) {
 						entries.clear();
@@ -70554,6 +72028,15 @@ const HlsPrefetch = (() => {
 						load(context, config, callbacks) {
 								const hit = !context.rangeStart && !context.rangeEnd ? active?.entries.get(context.url) : undefined;
 								if (!hit) {
+										if (active) {
+												active.misses = (active.misses || 0) + 1;
+												const kinds = active.missKinds ||= [];
+												if (kinds.length < 12) {
+														const type = context.type;
+														kinds.push(`${typeof type === 'string' ? type : 'frag'}:${context.responseType || 'text'}` +
+																(context.rangeStart || context.rangeEnd ? ':range' : ''));
+												}
+										}
 										super.load(context, config, callbacks);
 										return;
 								}
@@ -70563,9 +72046,13 @@ const HlsPrefetch = (() => {
 								this.context = context;
 								const data = context.responseType === 'arraybuffer' ? hit.data.slice(0) : new TextDecoder().decode(hit.data);
 								const t = performance.now();
+								const measured = hit.data.byteLength * 8000 / Math.max(1, hit.elapsed);
+								const floor = active?.bandwidthEstimate || 0;
+								const bw = Math.max(measured, floor);
+								const elapsed = hit.data.byteLength * 8000 / Math.max(1, bw);
 								Object.assign(this.stats, { aborted: false, loaded: hit.data.byteLength, total: hit.data.byteLength, retry: 0,
-										bwEstimate: hit.data.byteLength * 8000 / hit.elapsed });
-								Object.assign(this.stats.loading, { start: t - hit.elapsed, first: t - hit.elapsed, end: t });
+										bwEstimate: bw });
+								Object.assign(this.stats.loading, { start: t - elapsed, first: t - elapsed, end: t });
 								queueMicrotask(() => {
 										if (this.canceled)
 												return;
@@ -70582,7 +72069,13 @@ const HlsPrefetch = (() => {
 				prepare, wrapLoader, clear,
 				activate(value) { clear(); active = value; expires = setTimeout(clear, 45000); },
 				startLevel(source) { return active?.source === source ? active.startLevel : undefined; },
-				hits(source) { return active?.source === source ? active.hits : 0; }
+				hits(source) { return active?.source === source ? active.hits : 0; },
+				stats(source) {
+						if (!active || active.source !== source)
+								return null;
+						return { hits: active.hits, misses: active.misses || 0, missKinds: (active.missKinds || []).slice(),
+								entries: new Set([...active.entries.values()]).size, startLevel: active.startLevel };
+				}
 		};
 })();
 const sessionExpiresAt = (sessionInfo) => {
@@ -70668,6 +72161,7 @@ const createPlaylistStartupPreparer = (deps) => {
 				try {
 						check();
 						const data = await deps.loadVideoInfo(watchId, signal);
+						const dataAt = Date.now();
 						check();
 						stage = 'eligibility';
 						const info = deps.createModel(data);
@@ -70717,7 +72211,7 @@ const createPlaylistStartupPreparer = (deps) => {
 								report('prepared', { bytes: preparedBytes.bytes, startLevel: preparedBytes.startLevel, stages: preparedBytes.stages,
 										companions: companions ? Object.keys(companions).join(',') : '', expiresInSec });
 								const prepared = { watchId, data, session, sessionInfo, bytes: preparedBytes, settings,
-										expiresAt, companions, adopted: false,
+										expiresAt, companions, dataAt, adopted: false,
 										dispose() { if (!this.adopted)
 												close(); } };
 								return prepared;
@@ -71066,7 +72560,8 @@ const HlsRuntime = {
 												describeError,
 												create: (prepare, onReady, onEvent) => new PlaylistPreloader(prepare, undefined, onReady, onEvent, (value) => value?.bytes?.bytes || 0, (value) => value?.expiresAt),
 												bytes: Object.assign({}, HlsPrefetch, { prepare: (source, signal) => HlsPrefetch.prepare(source, signal, {
-																startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate'))
+																startLevel: Number(Config.get('startLevel')), bandwidthEstimate: Number(Config.get('abrEwmaDefaultEstimate')),
+																preferHighest: true
 														}) }),
 												supported: () => window.location.hostname === 'www.nicovideo.jp' && primaryVideo?.playerMode === 'HLS-JS',
 												sample: () => ({ currentTime: primaryVideo?.currentTime, duration: primaryVideo?.duration,
@@ -71633,6 +73128,54 @@ class HoverMenu {
 		}
 }
 // already required
+		const ZENZA_SOURCE = /ZenzaWatchRuntime\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
+		const scriptErrorWhere = (stack) => {
+				if (typeof stack !== 'string') {
+						return '';
+				}
+				for (const line of stack.split('\n').slice(1, 8)) {
+						if (!ZENZA_SOURCE.test(line)) {
+								continue;
+						}
+						const fn = /at (?:async )?([A-Za-z_$][\w$.<>]*) /.exec(line);
+						const pos = /:(\d+):\d+\)?\s*$/.exec(line);
+						return (fn ? fn[1] : 'anonymous') + (pos ? '@' + pos[1] : '');
+				}
+				return '';
+		};
+		let scriptErrorInstalled = false;
+		const installScriptErrorJournal = () => {
+				if (scriptErrorInstalled) {
+						return;
+				}
+				scriptErrorInstalled = true;
+				const recordError = (error, filename) => {
+						try {
+								const stack = typeof error?.stack === 'string' ? error.stack : '';
+								if (!ZENZA_SOURCE.test(String(filename || '')) && !ZENZA_SOURCE.test(stack)) {
+										return;
+								}
+								const name = typeof error?.name === 'string' && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'Error';
+								const message = String(error?.message ?? error ?? '').slice(0, 300);
+								const where = scriptErrorWhere(stack).replace(/[^A-Za-z0-9_.$@<>-]/g, '').slice(0, 100);
+								const missing = RequestDiagnostics?.missingFromMessage?.(message);
+								NotificationJournal.recordDiagnostic('script-error-' + name + '-' + (where || message.slice(0, 40)), {
+										category: 'system', source: 'script-error', level: 'error',
+										message: 'ZenzaWatch のスクリプトエラー: ' + name + ': ' + message,
+										details: { operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name,
+												...(where ? { where } : {}), ...(missing ? { missing } : {}) }
+								});
+						}
+						catch (_) { /* 記録の失敗で本体を止めない */ }
+				};
+				window.addEventListener('error', (e) => recordError(e.error || { message: e.message, name: 'Error' }, e.filename));
+				window.addEventListener('unhandledrejection', (e) => {
+						const reason = e.reason;
+						if (reason instanceof Error) {
+								recordError(reason, '');
+						}
+				});
+		};
 		const overrideGinza = async (dialog, query) => {
 				if (OfficialPlayerRoute.isOfficialRequest(query) || window.name === 'watchGinza') {
 						if (window.name === 'watchGinza') {
@@ -71640,7 +73183,44 @@ class HoverMenu {
 						}
 						return;
 				}
-				return;
+				if (!Config.props.overrideGinza) {
+						return;
+				}
+				initializeGinzaSlayer(dialog, query);
+				await uq.complete();
+				const stopPlayer = (ev) => {
+						if (!document.body.classList.contains('showNicoVideoPlayerDialog')) {
+								return;
+						}
+						if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className)) {
+								return;
+						}
+						ev.target.pause();
+				};
+				const video = document.querySelector('.grid-area_\\[player\\] video');
+				if (video !== null) {
+						video.addEventListener('play', stopPlayer);
+						video.pause();
+						return;
+				}
+				const root = document.getElementById('root');
+				if (!root) {
+						return;
+				}
+				new MutationObserver((records, observer) => {
+						for (const record of records) {
+								if (record.addedNodes.length === 0) {
+										continue;
+								}
+								const found = record.target.querySelector('.grid-area_\\[player\\] video');
+								if (found === null) {
+										continue;
+								}
+								found.addEventListener('play', stopPlayer);
+								found.pause();
+								observer.disconnect();
+						}
+				}).observe(root, { childList: true, subtree: true });
 		};
 		const readyContent = (timeoutMs = 15000) => {
 				if (document.querySelector('[aria-label="nicovideo-content"]') != null) {
@@ -71898,18 +73478,30 @@ const replaceRedirectLinks = async () => {
 				}
 				if (typeof NotificationJournal !== 'undefined') {
 						NotificationJournal.configureRecording?.(key => Config.getValue(key));
+						const applyRetention = () => NotificationJournal.configureRetention?.(Config.getValue('notificationHistory.maxRecords'), Config.getValue('notificationHistory.maxAgeDays'));
+						applyRetention();
+						Config.onkey?.('notificationHistory.maxRecords', applyRetention);
+						Config.onkey?.('notificationHistory.maxAgeDays', applyRetention);
 				}
 				if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
 						NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
 						RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
 								category: 'network', source: event.operation, message: event.message,
 								level: event.outcome === 'recovered' ? 'success' :
-										['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
+										['spec-change', 'script'].includes(event.reason) ? 'error' :
+												['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
 								details: { operation: event.operation, phase: event.phase, outcome: event.outcome,
 										reason: event.reason, elapsedMs: event.elapsedMs,
 										...(event.statusCode === undefined ? {} : { statusCode: event.statusCode }),
-										...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }) }
+										...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }),
+										...(event.missing === undefined ? {} : { missing: event.missing }),
+										...(event.errorName === undefined ? {} : { errorName: event.errorName }),
+										...(event.module === undefined ? {} : { module: event.module }),
+										...(event.distinctTargets === undefined ? {} : { distinctTargets: event.distinctTargets }) }
 						}));
+				}
+				if (typeof NotificationJournal !== 'undefined') {
+						installScriptErrorJournal();
 				}
 				await HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
 				window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
@@ -72116,7 +73708,7 @@ const replaceRedirectLinks = async () => {
 				}
 		};
 		const initializeLastSession = (dialog) => {
-				if (util.isGinzaWatchUrl()) {
+				if (util.isGinzaWatchUrl() && !Config.props.overrideGinza) {
 						return;
 				}
 				window.addEventListener('beforeunload', () => {
@@ -72979,6 +74571,15 @@ class ModernAdvancedSettingsModel {
 								"category": "外部サイトからの再生",
 								"subcategory": "基本設定",
 								"dependsOn": "externalLinks.enabled"
+						},
+						{
+								"id": "externalLinks.consoleLog",
+								"label": "外部サイト再生の動作をコンソールに詳しく出力",
+								"type": "boolean",
+								"description": "初期値OFF。調査用です。外部サイトのページと、再生用の枠（www.nicovideo.jp/robots.txt）の両方で、ボタンの検出・クリック・枠の作成・本体との接続・ログイン確認・動画を開く各段階と失敗理由を、開発者ツールのコンソール（F12）へ ZENZA_EXT として出します。",
+								"descriptionDetails": "本体とZenzaBlogPartsButtonの両方へ設定が届くよう、ONにしたらニコニコ動画のページを一度再読み込みしてから外部サイトを開いてください。再生用の枠の記録は、コンソール上部の「top」を robots.txt の枠に切り替えると見えます（「すべてのコンテキスト」表示でも出ます）。URLのクエリ・Cookie・認証情報は出しません。",
+								"category": "外部サイトからの再生",
+								"subcategory": "基本設定"
 						}
 				];
 		}
@@ -73020,6 +74621,19 @@ class ModernAdvancedSettingsModel {
 								['notificationHistory.record.related', '関連動画・投稿者情報・大百科', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '関連動画やシリーズ、投稿者情報、大百科の取得に関する問題と復旧を記録します。' }],
 								['notificationHistory.record.network', 'その他の通信', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '上の種類に分類できない通信の問題と復旧を記録します。この項目をOFFにしても、上でONにした種類の通信記録は残ります。' }],
 								['notificationHistory.record.system', 'システム通知', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'システムとして分類された内部処理の通知を記録します。ブラウザのConsoleに出るすべてのログを取り込む機能ではありません。' }],
+								['notificationHistory.record.specChange', '仕様変更の疑い', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期値ON。同じ機能で「応答の形式を読み取れない」などの失敗が、30分以内に別々の動画などで3件以上起きたとき、ニコニコ側の仕様変更の可能性として1件にまとめて記録します。詳細に「修正箇所の目安」（直すべきソースファイル）と「読めなかった項目」が出ます。' }],
+								['notificationHistory.record.scriptError', 'スクリプトエラー', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期値ON。ZenzaWatch 自身のコードで起きた想定外のエラー（TypeError など）を、エラーの種類と発生箇所つきで記録します。ニコニコのページ自体のエラーは記録しません。同じエラーは1件にまとめて回数を数えます。' }],
+								['notificationHistory.record.commentAction', 'コメント投稿・ニコる・削除', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期値ON。コメントの投稿・ニコる・自分のコメントの削除が失敗したとき、理由と欠けていた項目を記録します（成功は記録しません。投稿したコメントの履歴は別の項目です）。' }],
+								['notificationHistory.maxRecords', '記録する上限件数', {
+												...select([[1000, '1,000件'], [2000, '2,000件'], [5000, '5,000件（初期値）'], [10000, '10,000件'], [20000, '20,000件']]),
+												dependsOn: 'notificationHistory.enabled',
+												description: '上限を超えると古い記録から自動で消します。1件は数百バイト程度の文字列なので、20,000件でも数MB程度です。'
+										}],
+								['notificationHistory.maxAgeDays', '記録を残す期間', {
+												...select([[7, '7日'], [30, '30日'], [90, '90日（初期値）'], [180, '180日'], [365, '1年'], [0, '無期限（上限件数のみ）']]),
+												dependsOn: 'notificationHistory.enabled',
+												description: 'これより古い記録は自動で消します。上限件数と両方が適用されます。'
+										}],
 						]),
 						...group('再生・音声', '再生動作', [
 								['autoPlay', '動画を自動再生'],
@@ -73029,6 +74643,9 @@ class ModernAdvancedSettingsModel {
 								['loop', '動画をループ再生'],
 								['autoPauseCommentInput', 'コメント入力中に動画を一時停止'],
 								['playbackRate', '再生速度', { type: 'number' }],
+								['playbackRate.respectExternal', '拡張機能による再生速度の変更を受け入れる', {
+												description: '初期値ON。Video Speed Controller のような拡張機能が再生速度を変えたとき、その速度をそのまま使い、上の「再生速度」の表示とコメントの流れる速さもその速度に合わせます。OFFにすると、拡張機能が変えてもZenza側の設定値へ戻します（従来の動作）。'
+										}],
 								['enableSingleton', '複数のプレイヤーを同時起動しない']
 						]),
 						...group('再生・音声', 'ここまで見た・しおり・ABリピート', [
@@ -73083,7 +74700,7 @@ class ModernAdvancedSettingsModel {
 										])]
 						]),
 						...group('再生・音声', '公式プレイヤー連携', [
-								['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { hidden: true }]
+								['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { description: '視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。初期値OFF。' }]
 						]),
 						...group('画面・映像', '画面フィルター', [
 								['screenFilter.showDescriptions', '画面フィルターの説明を表示'],
@@ -73294,7 +74911,10 @@ class ModernAdvancedSettingsModel {
 						]),
 						...group('コメント表示', 'コメント一覧', [
 								['enableCommentPanel', 'コメント一覧を表示'],
-								['enableCommentPanelAutoScroll', 'コメント一覧を自動スクロール']
+								['enableCommentPanelAutoScroll', 'コメント一覧を自動スクロール'],
+								['commentPanel.nicoruStyle', 'ニコるボタンの見た目', { ...select([
+														['dark', '公式ダークモード風（既定）'], ['light', '公式ライトモード風'], ['legacy', '旧式（以前のZenzaWatch）']
+												]), description: 'コメント一覧のニコるボタンの色と動きです。どれでもニコった後にもう一度押すとニコるを取り消せます。' }]
 						]),
 						...group('コメント表示', '文字・装飾', [
 								['commentLanguage', 'コメントの言語', select([
@@ -73384,7 +75004,7 @@ class ModernAdvancedSettingsModel {
 						]),
 						...group('プレイリスト・検索', '動画の先読み', [
 								['playlist.prefetchAhead.enabled', '動画を先読みする', {
-												description: '初期値ON。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間は先読みしません。失敗・期限切れ時は通常どおり読み込みます。'
+												description: '初期値ON。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間と、外部サイトからの再生（ZenzaBlogPartsButton で開いたプレイヤー）では先読みしません（他サイトに埋め込まれた状態では先読みデータを取得できず、通信とメモリを無駄に使うため）。失敗・期限切れ時は通常どおり読み込みます。'
 										}],
 								['playlist.prefetchAhead.sourcePlaylist', 'プレイリストの動画を先読み', {
 												dependsOn: 'playlist.prefetchAhead.enabled',
@@ -73437,6 +75057,10 @@ class ModernAdvancedSettingsModel {
 								['playlist.prefetchAhead.notifyMiss', '先読みなしの再生も画面に通知', {
 												dependsOn: 'playlist.prefetchAhead.enabled',
 												description: '初期値OFF。先読みを使えなかった再生でも秒数を表示します。上の通知と両方ONにすると、効いたときと効かなかったときの秒数を見比べられます。'
+										}],
+								['playlist.prefetchAhead.consoleLog', '先読みの動きをコンソールに詳しく出力', {
+												dependsOn: 'playlist.prefetchAhead.enabled',
+												description: '初期値OFF。調査用です。動画の切り替えに関わる判断と時間を、ブラウザの開発者ツールのコンソール（F12）へ細かく出します。出る行は、ZENZA_DIAG_ENV（版と設定の一覧）、ZENZA_PREFETCH_GATE（先読みを止めている条件）、ZENZA_PREFETCH_CANDIDATES（先読みの対象に選んだ動画・一覧の件数と位置）、ZENZA_PREFETCH_INPUT（再生が安定しているかの判断に使った値）、ZENZA_PREFETCH_PREPARE／_READY／_EVENT（先読みの準備の経過）、ZENZA_OPEN_TIMING（1回の切り替えの内訳。どの区間で何ms使ったか）、ZENZA_PLAYLIST_SAVE（プレイリスト保存のやり直し回数と所要時間）です。速くならないときは、この行をそのままコピーして開発者へ渡してください。出力量が多いので普段はOFFのままに。'
 										}],
 								['playlist.prefetchAhead.notify', '先読みの通知', {
 												...select([['off', '通知しない'], ['journal', '通知履歴のみ'], ['popup', '失敗を画面にも表示']]),
@@ -73527,7 +75151,7 @@ class ModernAdvancedSettingsModel {
 				if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) {
 						return ['再生・音声', 'ここまで見た・しおり・ABリピート'];
 				}
-				if (/^supporterCredit\./.test(key)) {
+				if (/^supporterCredit\./.test(key) || key === 'nicoadEnd.enable') {
 						return ['再生・音声', '提供画面'];
 				}
 				if (/^audio\./.test(key) || /^(volume|mute|speakLark)/.test(key)) {
@@ -73589,6 +75213,7 @@ class ModernAdvancedSettingsModel {
 				}
 				const direct = {
 						'supporterCredit.enable': 'uaa.enable',
+						'nicoadEnd.enable': 'uaa.enable',
 						'sceneSearch.commentPreviewVisible': 'sceneSearch.enabled',
 						'sceneSearch.miniCommentVisible': 'sceneSearch.commentPreviewVisible',
 						'sceneSearch.commentListVisible': 'sceneSearch.commentPreviewVisible',
@@ -73598,6 +75223,7 @@ class ModernAdvancedSettingsModel {
 						'touch.tap2command': 'touch.enable', 'touch.tap3command': 'touch.enable',
 						'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
 						'enableCommentPanelAutoScroll': 'enableCommentPanel',
+						'commentPanel.nicoruStyle': 'enableCommentPanel',
 						'pipPageThumbnailSource': 'pipPageThumbnail',
 						'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',
 						'speakLarkVolume': 'speakLark'
@@ -78637,6 +80263,16 @@ class NgCompositeRuleEditor {
 						(プレイリストの広告表示など)と同じ、チェックボックスでの
 						直接切り替えをここに追加した。ショートカット自体も
 						引き続きショートカットキー設定パネルから利用できる。 -->
+					<div class="nicoruStyleControl control toggle">
+						<label>
+							コメント一覧のニコるボタンの見た目
+							<select data-setting-name="commentPanel.nicoruStyle">
+								<option value="dark">公式ダークモード風（既定）</option>
+								<option value="light">公式ライトモード風</option>
+								<option value="legacy">旧式（以前のZenzaWatchの画像）</option>
+							</select>
+						</label>
+					</div>
 					<div class="videoHeaderPositionControl control toggle">
 						<label>
 							動画ヘッダー（タイトル・タグ欄）の表示位置（通常・大モード）
@@ -78697,6 +80333,15 @@ class NgCompositeRuleEditor {
 							<input type="checkbox" class="checkbox" data-setting-name="supporterCredit.skipInPlaylist">
 							連続再生中は提供画面を表示しない（すぐ次の動画へ進む）
 						</label>
+					</div>
+					<div class="supporterCreditControl control toggle">
+						<label>
+							<input type="checkbox" class="checkbox" data-setting-name="nicoadEnd.enable">
+							動画が最後で止まったとき、ニコニ広告された動画（最大10件）を表示する
+						</label>
+						<div class="settingNote">
+							リピート再生・連続再生で次へ進むときは表示しません。提供した人と宣伝ポイントも表示し、クリックするとその動画を開きます。
+						</div>
 					</div>
 					<div class="relatedMenuCustomLinksContainer"></div>
 					<div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>
@@ -79350,7 +80995,13 @@ ZenzaWatch.modules.TextLabel = TextLabel;
         connect:async()=>{},setLogin:()=>{nicoUtil.isLogin=util.isLogin=()=>true;},
         initialize:async()=>{await initialize();},
         close:()=>ZenzaWatch.external.execCommand('close'),
-        open:id=>ZenzaWatch.external.open(id,{autoCloseFullScreen:false})
+        open:id=>ZenzaWatch.external.open(id,{autoCloseFullScreen:false}),
+        // Task1036: 外部再生の失敗を通知履歴へ（この枠の中の履歴。外部ページごとに保存領域が分かれる）。
+        journal:(stage,code,errorName,missing)=>{try{if(typeof NotificationJournal!=='undefined')NotificationJournal.recordDiagnostic('external-'+stage+'-'+code,{
+          category:'player',source:'external-playback',level:'error',
+          message:'外部サイトからの再生に失敗しました（'+stage+'）: '+code,
+          details:{operation:'external-playback',outcome:'failed',reason:errorName?'script':'external',errorCode:/^[A-Z_]{1,40}$/.test(code)?code:'OTHER',
+            phase:stage.toLowerCase(),module:'packages/external-playback/launcher.cjs',...(errorName?{errorName}:{}),...(missing?{missing}:{})}});}catch(_){}}
       });
       Config.on('update',()=>displaySettings.scheduleSave());
       Config.on('update',(key)=>{if(typeof key==='string'&&key.startsWith('externalLinks.'))writeExternal({[key]:Config.getValue(key)});});
@@ -79808,7 +81459,7 @@ const workerUtil = (() => {
 				bindFunc(self);
 				self.xFetch = async (url, options = {}) => {
 						options = { ...options, ...{ signal: null } }; // remove AbortController
-						if (!externalTrial && url.startsWith(location.origin)) {
+						if ((typeof PRODUCT === 'undefined' || PRODUCT !== 'ZenzaWatchExternalTrial') && url.startsWith(location.origin)) {
 								return fetch(url, options);
 						}
 						const result = await self.post({ command: 'fetch', params: { url, options } });
@@ -83256,7 +84907,7 @@ const ThumbInfoCacheDb = (() => {
 						const p = parseUrl(params.url);
 						if (TOKEN !== token ||
 								p.hostname !== location.host ||
-								!p.pathname.startsWith('/a/')) {
+								!/^\/(?:a|v)\//.test(p.pathname)) {
 								console.log('invalid msg: ', { origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command });
 								return;
 						}
@@ -83446,30 +85097,62 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 
 })(window);
  }
+ // Task1032: 再生用の枠・API用の枠の中だけは、設定に関係なく記録する（本体の設定は接続後にしか届かず、
+ // 「本体が枠で動いていない」のか「動いて落ちた」のかを区別できなかったため）。枠は利用者の画面に出ない。
+ const frameDiag=(event,data={})=>{try{console.info('ZENZA_EXT',JSON.stringify({scope:'main',event,ms:Date.now()-extDiagStart,
+   host:location.hostname,path:location.pathname.slice(0,40),frame:String(window.name||'child').slice(0,48),...data}));}catch(_){}};
+ if(playerFrame||loader){
+   window.addEventListener('error',e=>frameDiag('frame-error',{message:String(e.message||'').slice(0,200),
+     source:String(e.filename||'').replace(/[?#].*$/,'').slice(-80),line:e.lineno||null}));
+   window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
+ }
+ if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
+   version:"2.7.427-task1039",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}
    // The ordinary player remains in the page realm, with no GM capabilities.
    // Keep lodash lexical to avoid overwriting the site's own lodash instance.
    const dependency=GM_getResourceText('zenzaLodash');
    if(!dependency)throw Error('ZenzaWatch lodash resource unavailable');
-   const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>console.error("ZenzaWatch initialization failed",error));})();';
+   // Task1036: sourceURL を付けて、ZenzaWatch 自身のエラーをページのエラーと区別できるようにする（通知履歴のスクリプトエラー記録）。
+   const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>console.error("ZenzaWatch initialization failed",error));})();\n//# sourceURL=ZenzaWatchRuntime.js';
    const script=GM_addElement(document.head||document.documentElement,'script',{textContent:source});
    script?.remove();
    return;
  }
+ try{
  const privateTransport=createPrivateTransport(window,gm,()=>externalTrial.gm?.dispose());
  const externalTrial=createRuntimeSession({
    startRuntime,
    hasExistingRuntime:()=>!!window.ZenzaWatch||!!document.querySelector('.zenzaPlayerContainer,#ZenzaWatchLoader'),
-   enable:async event=>{if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');}
+   enable:async event=>{if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');},
+   diag:(event,data)=>extDiag('main-session',event,data)
  });
  Object.assign(externalTrial,privateTransport,{displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged});
- externalTrial.gm=createGmNetwork(options=>GM_xmlhttpRequest(options));
+ const gmStats={count:0,bytes:0,ms:0,maxMs:0,errors:0,active:0,maxActive:0};
+ externalTrial.gm=createGmNetwork(options=>{
+   const started=performance.now();gmStats.count++;gmStats.active++;gmStats.maxActive=Math.max(gmStats.maxActive,gmStats.active);
+   const end=(bytes,error)=>{gmStats.active=Math.max(0,gmStats.active-1);const ms=performance.now()-started;gmStats.ms+=ms;gmStats.maxMs=Math.max(gmStats.maxMs,ms);
+     if(error)gmStats.errors++;else gmStats.bytes+=bytes||0;};
+   const wrap=(fn,error)=>fn?(r=>{end(r?.response?.byteLength||0,error);return fn(r);}):fn;
+   return GM_xmlhttpRequest({...options,onload:wrap(options.onload,false),onerror:wrap(options.onerror,true),
+     ontimeout:wrap(options.ontimeout,true),onabort:wrap(options.onabort,true)});
+ });
  const settingsListener=gm.listen(externalSlot,()=>externalTrial.onExternalSettings?.());
  window.addEventListener('pagehide',()=>gm.unlisten(settingsListener),{once:true});
  async function startRuntime(){
+   extDiag('main','runtime-start',{playerFrame,loader});
    if(playerFrame){displaySettings.apply();for(const [key,value] of Object.entries(readExternalValues()))localStorage.setItem('ZenzaWatchExternalTrial_'+key,JSON.stringify(value));}
-   return runRuntime(window,externalTrial);
+   const started=Date.now();
+   const failed=error=>{
+     // 失敗は設定に関係なく1行は出す（以前は握りつぶしていて原因が追えなかった）。
+     console.warn('ZenzaWatch external runtime failed',String(error?.message||error));
+     extDiag('main','runtime-failed',{ms:Date.now()-started,message:String(error?.message||error),name:error?.name||null,
+       stack:typeof error?.stack==='string'?error.stack.split('\n').slice(0,10).join(' | '):null});
+     throw error;
+   };
+   return runRuntime(window,externalTrial).then(result=>{extDiag('main','runtime-ready',{ms:Date.now()-started});return result;},failed);
  }
  let closing;
  externalTrial.closeOverlay=pendingSaves=>{
@@ -83485,9 +85168,32 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    externalModules.mainBridge.installMainPlayerProvider(window,externalTrial,{
      setup:snapshot=>{displaySettings.migrate(snapshot);writeExternal(externalModules.settings.sanitizeExternal(snapshot?.external));},
      onSettings:values=>{writeExternal(externalModules.settings.sanitizeExternal(values));externalTrial.onExternalSettings?.();},
-     subscribeSettings:send=>{notifySettings=send;}
+     subscribeSettings:send=>{notifySettings=send;},
+     onDiag:(event,data)=>{if(event==='provider-opened'&&extDiagOn()&&!externalTrial.perfStop){
+       // 再生が始まったら計測を始める（設定ONのときだけ）。
+       externalTrial.perfStop=createPerfMonitor('main-perf',()=>{
+         const v=document.querySelector('zenza-video')||document.querySelector('video');const q=(v?.getVideoPlaybackQuality||v?.video?.getVideoPlaybackQuality)?.call(v?.getVideoPlaybackQuality?v:v.video);
+         let ahead=null;try{if(v&&v.buffered.length){for(let i=0;i<v.buffered.length;i++)if(v.buffered.start(i)<=v.currentTime+0.1&&v.buffered.end(i)>v.currentTime)ahead=+(v.buffered.end(i)-v.currentTime).toFixed(1);}}catch(_){}
+         const out={gm:{...gmStats,mbps:gmStats.ms?+((gmStats.bytes*8/1e6)/(gmStats.ms/1000)).toFixed(1):null,mb:+(gmStats.bytes/1048576).toFixed(1)},
+           settingsSaves:displaySettings.storageTiming?.()??null,
+           video:v?{t:+v.currentTime.toFixed(1),paused:v.paused,rate:v.playbackRate,w:v.videoWidth,h:v.videoHeight,ahead,
+             dropped:q?.droppedVideoFrames??null,frames:q?.totalVideoFrames??null}:null,
+           comments:document.querySelectorAll('.nicoChat,.chat').length};
+         for(const k of ['count','bytes','ms','maxMs','errors','maxActive'])gmStats[k]=0;
+         return out;
+       });
+     }
+     if(/^provider-(installed|not-eligible|hello|open-failed|message-rejected)$/.test(event))frameDiag(event,data);else extDiag('main-provider',event,data);}
    });
  }else if(privateTransport.acceptFrame()){
-   void startRuntime().catch(()=>console.warn('ZenzaWatch: external bridge unavailable'));
+   extDiag('main','loader-accepted',{});
+   void startRuntime().catch(error=>console.warn('ZenzaWatch: external bridge unavailable',String(error?.message||error)));
+ }else if(loader){
+   extDiag('main','loader-rejected',{});
+ }
+ }catch(error){
+   frameDiag('setup-failed',{message:String(error?.message||error),name:error?.name||null,
+     stack:typeof error?.stack==='string'?error.stack.split('\n').slice(0,10).join(' | '):null});
+   throw error;
  }
 })();

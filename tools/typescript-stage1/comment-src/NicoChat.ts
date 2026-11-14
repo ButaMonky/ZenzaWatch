@@ -48,6 +48,9 @@ class NicoChat {
     const value=NicoChat.createBlank(data);
     value.nicoruKnown=data.nicoruKnown===undefined?
       data.nicoru!==undefined&&data.nicoru!==null:!!data.nicoruKnown;
+    // Task1039: 自分がニコったコメントには nicoruId が付く（取り消しに使う）。読み込み時点でニコった状態にする。
+    value.nicoruId = typeof data.nicoruId === 'string' && data.nicoruId ? data.nicoruId : null;
+    value.nicotta = !!data.nicotta || !!value.nicoruId;
     return new NicoChat(value, options);
   }
 
@@ -358,6 +361,8 @@ class NicoChat {
       this.props.group._nicoChatFilter.updateCompositeChat(this);
     }
   }
+  get nicoruId() { return this.props.nicoruId || null; }
+  set nicoruId(v) { this.props.nicoruId = typeof v === 'string' && v ? v : null; }
   get nicotta() { return !!this.props.nicotta;}
   set nicotta(v) { this.props.nicotta = v;
     // this.onChange();

@@ -16,21 +16,14 @@ session/*
 .idea/*
 ./lib/*
 ./botsu/*
-# 開発用の内部ツール・公開状態の記録は公開しない
-/tools/*
-!/tools/typescript-stage1/
-/tools/typescript-stage1/.generated/
-/.publish-state/
 
-!/tools/check-root-test-generated.cjs
-/qa-profiles/
+# Generated QA runtime output (not source code or approved UI design assets).
+# Browser profiles can contain cookies, credentials and browsing history.
 /verify-logs/
 /test-results/
+/playwright-report/
+/qa-profiles/
 *.har
-
-!/tools/qa/
-/tools/qa/*
-!/tools/qa/scene-vcb-real-source.cjs
-!/tools/qa/scui-native-css-extractor.cjs
+*.crdownload
 
 !/tools/generate-watch-click-navigation.cjs

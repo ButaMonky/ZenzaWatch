@@ -68,9 +68,14 @@ describe('Task350 official NicoNico player routing',()=>{
     assert(template.includes('*?*zenza_official=1*'));
     assert(template.includes("window.name === 'watchGinza'"));
   });
-  it('does not replace watch pages even when the retired saved setting is true',async()=>{
+  it('replaces watch pages only when the opt-in setting is true (Task1030 restored)',async()=>{
     const test=loadGinzaOverride();
     await test.fn({}, {zenza_official:'0'});
+    assert.strictEqual(test.calls.length,1);
+  });
+  it('an explicit official request still wins over the opt-in setting',async()=>{
+    const test=loadGinzaOverride();
+    await test.fn({}, {zenza_official:'1'});
     assert.strictEqual(test.calls.length,0);
   });
   it('preserves the existing watchGinza window-name fallback',async()=>{

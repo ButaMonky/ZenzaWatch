@@ -66,13 +66,18 @@ const NotificationHistoryPanel = (() => {
         advertising: 'ニコニ広告', search: '検索', 'tag-suggest': 'タグ候補', tags: 'タグ',
         'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー', 'video-info': '動画情報',
         'video-session': '再生セッション', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-        'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
+        'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+        'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除', 'script-error': 'スクリプトエラー', 'external-playback': '外部サイトからの再生',
+        'session-state': '再生セッションの維持', storyboard: '場面画像の情報', mylist: 'マイリスト', playlist: 'プレイリスト',
+        like: 'いいね', 'tag-key': 'タグ編集キー', 'nico-api': 'ニコニコAPI'
     };
     const formatTime = (value) => typeof value === 'number' && Number.isFinite(value) &&
         Math.abs(value) <= 8640000000000000 ? new Date(value).toLocaleString('ja-JP') : '記録なし（旧版など）';
-    const stateLabel = (entry) => entry.details?.outcome === 'recovered' ? '復旧済み' :
-        entry.details?.reason === 'not-found' ? '対象なし・要確認' :
-            entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
+    const stateLabel = (entry) => entry.details?.reason === 'spec-change' ? '仕様変更の疑い' :
+        entry.details?.reason === 'script' ? 'スクリプトエラー' :
+            entry.details?.outcome === 'recovered' ? '復旧済み' :
+                entry.details?.reason === 'not-found' ? '対象なし・要確認' :
+                    entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
     const description = (entry) => {
         const d = entry.details || {};
         if (d.outcome === 'recovered')
@@ -85,7 +90,10 @@ const NotificationHistoryPanel = (() => {
             permission: 'アクセス権限またはログイン状態の確認が必要な応答です。',
             'not-found': '要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
             http: 'サーバーからエラー応答が返りました。HTTP状態を確認できます。',
-            network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。'
+            network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。',
+            // Task1036
+            'spec-change': '同じ機能で同じ種類の失敗が、別々の対象で続けて起きています。動画ごとの事情ではなく、ニコニコ側の仕様変更の可能性が高い状態です。「修正箇所の目安」のファイルと「読めなかった項目」から直す場所を探せます。',
+            script: 'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。'
         };
         return explanations[String(d.reason)] || 'この通知について記録された情報を表示しています。';
     };
@@ -173,6 +181,14 @@ const NotificationHistoryPanel = (() => {
                 ['機能', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'],
                 ['段階', { transport: '通信', response: '応答の確認', session: '処理' }[String(entry.details?.phase)] || '記録なし'],
                 ['発生回数', typeof entry.details?.count === 'number' ? entry.details.count + '回' : '1回'],
+                // Task1036: 直す場所の手がかり（記録があるときだけ）。
+                ...(entry.details?.module ? [['修正箇所の目安', 'tools/typescript-stage1/' + String(entry.details.module)]] : []),
+                ...(entry.details?.missing ? [['読めなかった項目', String(entry.details.missing)]] : []),
+                ...(entry.details?.errorName ? [['エラーの種類', String(entry.details.errorName)]] : []),
+                ...(entry.details?.where ? [['発生箇所', String(entry.details.where)]] : []),
+                ...(typeof entry.details?.distinctTargets === 'number' ? [['同じ失敗が起きた対象', entry.details.distinctTargets + '件（30分以内）']] : []),
+                ...(typeof entry.details?.statusCode === 'number' ? [['HTTP状態', String(entry.details.statusCode)]] : []),
+                ...(entry.details?.errorCode ? [['エラーコード', String(entry.details.errorCode)]] : []),
                 ['発生時の版', entry.version || '記録なし（旧版など）'], ['ビルド', entry.build || '記録なし（旧版など）'],
                 ['初回発生', formatTime(entry.firstOccurredAt)], ['最終発生', formatTime(entry.lastOccurredAt)],
                 ['復旧時刻', entry.recoveredAt === undefined ? (entry.details?.outcome === 'recovered' ? '記録なし（旧版など）' : '復旧の記録なし') : formatTime(entry.recoveredAt)]
@@ -183,9 +199,12 @@ const NotificationHistoryPanel = (() => {
             for (const [name, value] of pairs)
                 grid.append(element('dt', '', name), element('dd', '', value));
             detailNode.append(grid);
-            if (entry.activity?.kind === 'comment-post') {
+            if (entry.activity) {
+                const kind = entry.activity.kind;
                 const activity = element('section', 'znh-activity');
-                activity.append(element('h3', '', '投稿したコメント'), element('p', 'znh-activity-text', entry.activity.text));
+                activity.append(element('h3', '', kind === 'like' ? 'いいね！した動画' : kind === 'nicoru' ? 'ニコったコメント' : '投稿したコメント'));
+                if (kind !== 'like' || entry.activity.text)
+                    activity.append(element('p', 'znh-activity-text', kind === 'like' ? 'お礼のメッセージ: ' + entry.activity.text : entry.activity.text));
                 if (/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/i.test(entry.videoId)) {
                     const link = element('a', '', entry.activity.videoTitle ? entry.activity.videoTitle + ' (' + entry.videoId + ')' : entry.videoId);
                     link.href = 'https://www.nicovideo.jp/watch/' + entry.videoId;
@@ -195,11 +214,11 @@ const NotificationHistoryPanel = (() => {
                 }
                 else if (entry.activity.videoTitle)
                     activity.append(element('p', '', entry.activity.videoTitle));
-                activity.append(element('p', '', '投稿日時: ' + formatTime(entry.timestamp)));
+                activity.append(element('p', '', (kind === 'like' ? 'いいね！した日時: ' : kind === 'nicoru' ? 'ニコった日時: ' : '投稿日時: ') + formatTime(entry.timestamp)));
                 const ms = entry.activity.positionMs;
                 if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) {
                     const seconds = Math.floor(ms / 1000);
-                    activity.append(element('p', '', '動画内の位置: ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')));
+                    activity.append(element('p', '', (kind === 'nicoru' ? 'コメントの再生位置: ' : '動画内の位置: ') + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')));
                 }
                 activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
                 detailNode.append(activity);
@@ -250,7 +269,8 @@ const NotificationHistoryPanel = (() => {
         let scheduled = false;
         let dirty = false;
         let disposed = false;
-        const snapshot = async () => NotificationJournal.list(2000);
+        // Task1038: 上級者設定の上限件数まで読み込む（以前は2,000件固定で、それより古い記録は検索できなかった）。
+        const snapshot = async () => NotificationJournal.list(Number.MAX_SAFE_INTEGER);
         const matches = (entry) => {
             if (filter.value === 'error') {
                 if (entry.level !== 'error' && entry.level !== 'warning') {
@@ -264,7 +284,9 @@ const NotificationHistoryPanel = (() => {
             if (!needle) {
                 return true;
             }
-            return [entry.message, entry.videoId, entry.source, entry.category, entry.activity?.text, entry.activity?.videoTitle,
+            const kindLabel = entry.activity?.kind === 'like' ? 'いいね' : entry.activity?.kind === 'nicoru' ? 'ニコる ニコった' :
+                entry.activity?.kind === 'comment-post' ? 'コメント投稿' : entry.category === 'like' ? 'いいね' : '';
+            return [kindLabel, entry.message, entry.videoId, entry.source, entry.category, entry.activity?.text, entry.activity?.videoTitle,
                 JSON.stringify(entry.details || {})].join(' ').toLocaleLowerCase().includes(needle);
         };
         const render = async (version) => {
@@ -307,8 +329,10 @@ const NotificationHistoryPanel = (() => {
                     detailNode.querySelector('[data-history-back]')?.focus({ preventScroll: true });
                 });
                 item.append(head, entryButton);
-                if (entry.activity?.kind === 'comment-post')
+                if (entry.activity?.kind === 'comment-post' || entry.activity?.kind === 'nicoru')
                     entryButton.append(element('span', 'znh-activity-preview', entry.activity.text));
+                else if (entry.activity?.kind === 'like' && entry.activity.videoTitle)
+                    entryButton.append(element('span', 'znh-activity-preview', entry.activity.videoTitle));
                 const meta = entry.details || {};
                 if (typeof meta.count === 'number' && meta.count > 0) {
                     head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +

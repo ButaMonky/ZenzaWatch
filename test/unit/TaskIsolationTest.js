@@ -15,7 +15,7 @@ function withCleanHeadWorktree(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zenza-builder-head-'));
   // git worktree add は空ディレクトリを受け付ける。現在のdirty Taskではなく
   // HEADそのものからsandbox builderの自己テストを行う。
-  const add = spawnSync('git', ['-C', REPO_ROOT, 'worktree', 'add', '--detach', dir, 'HEAD'], {
+  const add = spawnSync('git', ['-c', 'core.autocrlf=false', '-C', REPO_ROOT, 'worktree', 'add', '--detach', dir, 'HEAD'], {
     encoding: 'utf-8'
   });
   assert.equal(add.status, 0, `${add.stdout || ''}${add.stderr || ''}`);

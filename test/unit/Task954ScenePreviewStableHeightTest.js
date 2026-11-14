@@ -17,7 +17,7 @@ const scene=(patch={})=>({
 describe('Task954: stable preview baseline and fullscreen center',function(){
   it('keeps the browser geometry regression in private CI',()=>{
     const {readFileSync}=require('fs');
-    const workflow=readFileSync('.github/workflows/quality.yml','utf8');
+    const workflow=readFileSync('.github/workflows/ci.yml','utf8');
     assert(workflow.includes('run: node test/browser/task954-scene-preview-vertical.cjs'));
   });
   it('keeps the same vertical position across all seek positions',()=>{

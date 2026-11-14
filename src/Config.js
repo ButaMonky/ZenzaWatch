@@ -28,7 +28,7 @@ const window = { console: console };
 //@require NgCompositeRules
 const Config = (() => {
     const DEFAULT_CONFIG = {
-        "externalLinks.enabled": true, "externalLinks.siteMode": "all", "externalLinks.sites": "", "externalLinks.excludedSites": "", "externalLinks.displayMode": "inline", "externalLinks.size": "small", "externalLinks.redirects": false, "externalLinks.textIds": false, "externalLinks.prefixes": "sm\nnm\nso\nss", "externalLinks.preflight": "off",
+        "externalLinks.enabled": true, "externalLinks.siteMode": "all", "externalLinks.sites": "", "externalLinks.excludedSites": "", "externalLinks.displayMode": "inline", "externalLinks.size": "small", "externalLinks.redirects": false, "externalLinks.textIds": false, "externalLinks.prefixes": "sm\nnm\nso\nss", "externalLinks.preflight": "off", "externalLinks.consoleLog": false,
         debug: false,
         volume: 0.3,
         showComment: true,
@@ -101,6 +101,12 @@ const Config = (() => {
         'notificationHistory.record.related': true,
         'notificationHistory.record.network': true,
         'notificationHistory.record.system': true,
+        // Task1036: 仕様変更の疑い・スクリプトエラー・コメント操作の失敗、上限件数と保存期間。
+        'notificationHistory.record.specChange': true,
+        'notificationHistory.record.scriptError': true,
+        'notificationHistory.record.commentAction': true,
+        'notificationHistory.maxRecords': 5000,
+        'notificationHistory.maxAgeDays': 90,
         'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
         videoInfoPanelTab: 'videoInfoTab',
         fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
@@ -156,6 +162,7 @@ const Config = (() => {
         videoOwnerFilter: '',
         enableCommentPanel: true,
         enableCommentPanelAutoScroll: true,
+        'commentPanel.nicoruStyle': 'dark', // Task1039: ニコるの見た目 dark=公式ダークモード / light=公式ライトモード / legacy=旧式
         commentSpeedRate: 1.0,
         autoCommentSpeedRate: false,
         playlistLoop: false,
@@ -177,6 +184,8 @@ const Config = (() => {
         'playlist.prefetchAhead.notifyHit': false,
         'playlist.prefetchAhead.notifyMiss': false,
         'playlist.prefetchAhead.notify': 'journal',
+        // Task1029: 先読みとウォームスワップの判断経過をコンソールへ細かく出す（調査用）。
+        'playlist.prefetchAhead.consoleLog': false,
         enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
         // Task 055: デバッグ用。読み込み済みの全動画について、都度サーバーへ
         // 問い合わせ直して広告装飾の表示がズレていないか確認し、コンソールへ
@@ -207,10 +216,14 @@ const Config = (() => {
         'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
         'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
         'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
-        overrideGinza: false, // Retired compatibility storage; never triggers automatic launch.
+        overrideGinza: false, // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
         enableGinzaSlayer: false, // まだ実験中
         lastPlayerId: '',
         playbackRate: 1.0,
+        // Task1029: Video Speed Controller などの拡張機能が <video>.playbackRate を
+        // 直接書き換えたとき、その値を利用者の意図として受け入れる。
+        // OFF にすると Zenza が自分の設定値へ戻す（従来の挙動）。
+        'playbackRate.respectExternal': true,
         lastWatchId: 'sm9',
         message: '',
         enableVideoSession: true,
@@ -258,6 +271,7 @@ const Config = (() => {
         // Task 080: 動画の最後に流れる「提供」画面（ニコニ広告・ギフトの支援者クレジット）
         // （packages/zenza/src/videoPlayer/SupporterCredit.js）
         'supporterCredit.enable': true, // 提供画面を表示する
+        'nicoadEnd.enable': true, // Task1038: 動画の最後にニコニ広告された動画を並べる
         'supporterCredit.voice': true, // 提供音声（期間ごとに変わる読み上げ）を鳴らす
         'supporterCredit.gift': true, // ギフトが落ちてくる演出を表示する
         'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
@@ -562,6 +576,7 @@ const Config = (() => {
                 fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
                 pipPageThumbnailSource: ['smart', 'legacy'],
                 'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
+                'commentPanel.nicoruStyle': ['dark', 'light', 'legacy'],
                 'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
                 'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
                 'videoSearch.selectContentType': ['long', 'short'],

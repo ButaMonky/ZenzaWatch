@@ -10,6 +10,8 @@ export interface PlaylistSessionData {items: unknown[]; index?: unknown; [key: s
 export interface PlayListSessionApi {
   MAX_ITEMS: number;
   MIN_ITEMS: number;
+  /** Task1029: 調査用。保存のやり直し回数と所要時間をコンソールへ出す。 */
+  diagnostics: boolean;
   isExist(): boolean;
   save(data: PlaylistSessionData | null | undefined): void;
   restore(): PlaylistSessionData | null;
@@ -18,6 +20,8 @@ export interface PlayListSessionApi {
 const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
   const KEY = 'ZenzaWatchPlaylist';
   let lastJson = '';
+  /** Task1029: 前回 sessionStorage へ入りきった件数。null は未測定。 */
+  let lastSavedMax: number | null = null;
 
   const isQuotaError = (e: Loose) =>
     e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22);
@@ -59,17 +63,42 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
       //  2. 容量超過でも前回の保存値は消さず、件数を半分にして原子的な置換を再試行する
       //  3. 最小件数でも入らなければ保存を諦める（プレイリスト本体には影響しない）
       if (!data || !Array.isArray(data.items)) { return; }
-      let max = PlayListSession.MAX_ITEMS;
+      // Task1029: 前回入りきった件数から始める。
+      // 以前は毎回 MAX_ITEMS から試していたため、容量に入らない大きさの一覧では
+      // クリックのたびに「巨大なJSONを作って失敗」を数回繰り返していた
+      // （実機ログ: 10000→5000→2500→1250 の4回。1250でようやく成功）。
+      // JSON化と保存は同期処理なので、この無駄が動画の切り替えを待たせていた。
+      let max = lastSavedMax === null ? PlayListSession.MAX_ITEMS :
+        Math.min(lastSavedMax, PlayListSession.MAX_ITEMS);
       let saveData = trim(data, max);
+      // Task1029: 調査用。何回やり直したか・何msかかったかを出す。
+      const diagStart = PlayListSession.diagnostics ? Date.now() : 0;
+      let attempts = 0;
+      let bytes = 0;
+      const report = (result: string) => {
+        if (!PlayListSession.diagnostics) { return; }
+        try {
+          window.console.info('ZENZA_PLAYLIST_SAVE', JSON.stringify({
+            result, attempts, max, bytes,
+            items: Array.isArray(data.items) ? data.items.length : null,
+            elapsedMs: Date.now() - diagStart
+          }));
+        } catch (_) { /* 調査用の出力で本編を止めない。 */ }
+      };
       for (;;) {
+        attempts++;
         const json = JSON.stringify(saveData);
-        if (lastJson === json) { return; }
+        bytes = json.length;
+        if (lastJson === json) { report('unchanged'); return; }
         try {
           storage.setItem(KEY, json);
           lastJson = json;
+          lastSavedMax = max;
+          report('saved');
           return;
         } catch(e) {
           if (!isQuotaError(e)) {
+            report('error');
             window.console.error(e);
             return;
           }
@@ -77,10 +106,13 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
           // Never remove it: a subsequent failed retry must not lose the last
           // successfully saved playlist or its cached lastJson.
           if (max <= PlayListSession.MIN_ITEMS) {
+            lastSavedMax = PlayListSession.MIN_ITEMS;
+            report('quota-give-up');
             window.console.warn('プレイリストをsessionStorageへ保存できませんでした（容量不足）');
             return;
           }
           max = Math.max(PlayListSession.MIN_ITEMS, Math.floor(max / 2));
+          lastSavedMax = max;
           saveData = trim(data, max);
           window.console.warn('sessionStorageの容量が足りないため、保存するプレイリストを%d件に減らします', max);
         }
@@ -103,6 +135,7 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
 // Task 073: セッション（リロード後の復元）に保存するプレイリストの最大件数
 PlayListSession.MAX_ITEMS = 10000;
 PlayListSession.MIN_ITEMS = 100;
+PlayListSession.diagnostics = false;
 const PlaylistSession = PlayListSession;
 
 export {PlayListSession, PlaylistSession};

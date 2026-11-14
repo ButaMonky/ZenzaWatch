@@ -138,6 +138,15 @@ class PlaylistPreloader<T extends Disposable = Disposable> {
     return [...this.ready.keys()];
   }
 
+  /**
+   * いま先読みの通信を行っているか。
+   * Task1029: ウォームスワップが同時に通信すると本編の再生が待機状態になり、
+   * その結果この先読み自身が中断されて復帰しなくなるため、温める側が見て譲る。
+   */
+  isBusy(): boolean {
+    return this.busy;
+  }
+
   private expireStale(): void {
     for (const [id, entry] of this.ready) {
       if (this.now() >= entry.deadline) {
@@ -248,6 +257,18 @@ class PlaylistPreloader<T extends Disposable = Disposable> {
       this.controller = null;
       this.inflightId = '';
     });
+  }
+
+  /**
+   * 指定の動画の準備済みを「取り出さずに」見る。
+   * Task1029（ウォームスワップ）が、先読み済みの署名付きURLを使って
+   * 2つ目のプレーヤーを温めるために使う。期限切れはここでは破棄せず null を返すだけで、
+   * 実際の破棄は expireStale / take に任せる（所有権を動かさない）。
+   */
+  peek(id: string): T | null {
+    const entry = this.ready.get(id);
+    if (!entry || this.now() >= entry.deadline) { return null; }
+    return entry.value;
   }
 
   /** 指定の動画の準備済みを取り出す（他の項目は残す）。 */

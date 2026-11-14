@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaBlogPartsButton
 // @namespace    https://github.com/segabito/
-// @version      1.1.1-task1024
+// @version      1.1.11-task1039
 // @description  ブログパーツや外部サイトの動画リンクから、そのページ上でZenzaWatchを開く
 // @match        https://*/*
 // @match        http://ext.nicovideo.jp/thumb/*
@@ -22,8 +22,8 @@
 // @connect      dmc.nico
 // @sandbox      DOM
 // ==/UserScript==
-// build: 2026-11-14 08:40Z 450cfd5
-// Shared runtime normalized SHA256: 025907ab9ad6a484a4fe9fdf8dd19d3cd91bd1ca2c6706040e81b1059ec6ddad
+// build: 2026-11-14 22:00Z b7fe12d
+// Shared runtime normalized SHA256: 0112cdf64ccf20e100ea9bdf951dbe63bb86a146933382741d58f0312c39500f
 
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
@@ -110,7 +110,9 @@ exports.externalDefaults = {
     'externalLinks.redirects': false,
     'externalLinks.textIds': false,
     'externalLinks.prefixes': 'sm\nnm\nso\nss',
-    'externalLinks.preflight': 'off'
+    'externalLinks.preflight': 'off',
+    // Task1032: 調査用。外部サイト再生の各段階をコンソールへ詳しく出す。
+    'externalLinks.consoleLog': false
 };
 const choice = (items) => items.map(([value, label]) => ({ value, label }));
 exports.externalDescriptors = [
@@ -123,7 +125,8 @@ exports.externalDescriptors = [
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
     { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'textarea', description: '1行に1種類。初期値はsm・nm・so・ssです。', descriptionDetails: '数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。' },
-    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '既定は追加通信なし。確認するタイミングを選べます。', descriptionDetails: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) }
+    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '既定は追加通信なし。確認するタイミングを選べます。', descriptionDetails: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) },
+    { id: 'externalLinks.consoleLog', label: '外部サイト再生の動作をコンソールに詳しく出力', type: 'boolean', dependsOn: undefined, description: '初期値OFF。調査用です。外部サイトのページと、再生用の枠（www.nicovideo.jp/robots.txt）の両方で、ボタンの検出・クリック・枠の作成・本体との接続・ログイン確認・動画を開く各段階と失敗理由を、開発者ツールのコンソール（F12）へ ZENZA_EXT として出します。', descriptionDetails: '本体とZenzaBlogPartsButtonの両方へ設定が届くよう、ONにしたらニコニコ動画のページを一度再読み込みしてから外部サイトを開いてください。再生用の枠の記録は、コンソール上部の「top」を robots.txt の枠に切り替えると見えます（「すべてのコンテキスト」表示でも出ます）。URLのクエリ・Cookie・認証情報は出しません。' }
 ].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : ('dependsOn' in d ? d.dependsOn : 'externalLinks.enabled') }));
 const tokens = (v) => typeof v === 'string' ? v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean) : [];
 function sanitizeExternal(values) {
@@ -912,11 +915,42 @@ function eligible(w) {
     return w !== w.top && w.name === 'ZenzaWatchExternalTrialPlayer' &&
         w.location.origin === 'https://www.nicovideo.jp' && w.location.pathname === '/robots.txt';
 }
-function accepts(w, event) {
-    return event.source === w && event.origin === w.location.origin &&
-        event.data?.protocol === protocol;
+/**
+ * Task1032: 送り主が「この枠自身」かの判定。
+ * Tampermonkey などはスクリプトごとに window を包んで渡すことがあり、その場合は同じ枠からの
+ * メッセージでも event.source === w が成り立たない（実機で本体が hello を一度も受け取れなかった原因）。
+ * 包みがあっても判定できるよう、同一オブジェクトでなければ「同じ文書・同じ名前・同じURL」の窓かを確かめる。
+ * 送り主の origin が www.nicovideo.jp であることは別途確かめているので、外部サイトの親は通らない。
+ * 子の枠（API用など）は名前とURLが違うので通らない。
+ */
+function sameFrame(w, source) {
+    if (!source)
+        return false;
+    if (source === w)
+        return true;
+    try {
+        const s = source;
+        return s.document === w.document && s.name === w.name && s.location.href === w.location.href;
+    }
+    catch (_) {
+        return false;
+    }
+}
+function rejectReason(w, event) {
+    if (event.data?.protocol !== protocol)
+        return 'protocol';
+    if (event.origin !== w.location.origin)
+        return 'origin';
+    if (!sameFrame(w, event.source))
+        return 'source';
+    return null;
 }
 function createMainPlayerClient(w, options = {}) {
+    const diag = (event, data = {}) => { try {
+        options.onDiag?.(event, data);
+    }
+    catch (_) { /* 記録の失敗は無視 */ } };
+    let helloCount = 0, clientRejected = 0;
     let disposed = false, closing = false, connected = false, seq = 0, stageListener = (_) => { };
     const channel = w.crypto.randomUUID();
     let pending;
@@ -934,9 +968,21 @@ function createMainPlayerClient(w, options = {}) {
             task.resolve();
     }
     const receive = (event) => {
-        if (disposed || !accepts(w, event) || event.data.channel !== channel)
+        if (disposed)
+            return;
+        const reason = rejectReason(w, event);
+        if (reason) {
+            if (reason !== 'protocol' && clientRejected++ < 3)
+                diag('client-message-rejected', { reason,
+                    origin: event.origin, sourceIsSelf: event.source === w, type: event.data?.type ?? null });
+            return;
+        }
+        if (event.data.channel !== channel)
             return;
         const message = event.data;
+        if (message.type !== 'settings')
+            diag('client-receive', { type: message.type, stage: message.stage ?? null,
+                code: message.code ?? null, requestId: message.requestId ?? null, pending: !!pending, closing });
         if (closing && message.type !== 'stage')
             return;
         if (message.type === 'ready' && pending) {
@@ -993,11 +1039,24 @@ function createMainPlayerClient(w, options = {}) {
                 throw Error('PLAYER_BUSY');
             return new Promise((resolve, reject) => {
                 const task = pending = { id, seq: ++seq, resolve, reject,
-                    timer: w.setTimeout(() => settle(Error('MAIN_PLAYER_UNAVAILABLE')), options.timeoutMs ?? 15000),
+                    timer: w.setTimeout(() => {
+                        // 本体（ZenzaWatch）がこの枠で動いていない・古い・無効のときにここへ来る。
+                        diag('client-timeout', { reason: 'MAIN_PLAYER_UNAVAILABLE', hellos: helloCount, connected });
+                        // 利用者向けの手がかり（設定に関係なく1行）。
+                        try {
+                            w.console.warn('[ZenzaBlogPartsButton] 再生用の枠で ZenzaWatch 本体が応答しません。本体がインストール・有効になっているか、Tampermonkey で本体がフレーム内（www.nicovideo.jp/robots.txt）でも動く設定かを確認してください。');
+                        }
+                        catch (_) { /* noop */ }
+                        settle(Error('MAIN_PLAYER_UNAVAILABLE'));
+                    }, options.timeoutMs ?? 15000),
                     retry: undefined };
+                diag('client-open', { id, seq: task.seq, timeoutMs: options.timeoutMs ?? 15000 });
                 const hello = () => {
                     if (pending !== task || disposed)
                         return;
+                    helloCount++;
+                    if (helloCount === 1 || helloCount % 20 === 0)
+                        diag('client-hello', { count: helloCount, connected });
                     send({ type: 'hello', snapshot: options.snapshot?.() });
                     task.retry = w.setTimeout(hello, options.retryMs ?? 250);
                 };
@@ -1026,8 +1085,15 @@ function createMainPlayerClient(w, options = {}) {
     };
 }
 function installMainPlayerProvider(w, session, options = {}) {
-    if (!eligible(w))
+    const diag = (event, data = {}) => { try {
+        options.onDiag?.(event, data);
+    }
+    catch (_) { /* 記録の失敗は無視 */ } };
+    if (!eligible(w)) {
+        diag('provider-not-eligible', { top: w === w.top, name: String(w.name).slice(0, 48), path: w.location.pathname });
         return () => { };
+    }
+    diag('provider-installed');
     let channel = '', last = 0, busy = false, disposed = false, closing = false;
     const send = (data) => {
         if (!disposed && channel)
@@ -1036,15 +1102,27 @@ function installMainPlayerProvider(w, session, options = {}) {
     session.setStageListener(stage => { if (stage === 'CLOSING' || stage === 'CLOSED')
         closing = true; send({ type: 'stage', stage }); });
     options.subscribeSettings?.(values => send({ type: 'settings', values }));
+    let rejected = 0;
     const receive = async (event) => {
-        if (disposed || !accepts(w, event))
+        if (disposed)
             return;
+        const reason = rejectReason(w, event);
+        if (reason) {
+            if (reason !== 'protocol' && rejected++ < 3)
+                diag('provider-message-rejected', { reason,
+                    origin: event.origin, sourceIsSelf: event.source === w, type: event.data?.type ?? null });
+            return;
+        }
         const m = event.data;
         if (typeof m.channel !== 'string' || !/^[a-f0-9-]{36}$/i.test(m.channel))
             return;
         if (m.type === 'hello') {
-            if (channel && channel !== m.channel)
+            if (channel && channel !== m.channel) {
+                diag('provider-hello-other-channel');
                 return;
+            }
+            if (!channel)
+                diag('provider-hello', { hasSnapshot: !!m.snapshot });
             if (!channel)
                 options.setup?.(m.snapshot);
             channel = m.channel;
@@ -1066,17 +1144,26 @@ function installMainPlayerProvider(w, session, options = {}) {
             return;
         }
         if (m.type !== 'open' || closing || busy || !Number.isSafeInteger(m.requestId) ||
-            m.requestId <= last || !(0, targets_1.validVideoId)(m.id))
+            m.requestId <= last || !(0, targets_1.validVideoId)(m.id)) {
+            if (m.type === 'open')
+                diag('provider-open-ignored', { closing, busy, requestId: m.requestId, last, validId: (0, targets_1.validVideoId)(m.id) });
             return;
+        }
         last = m.requestId;
         busy = true;
+        const started = Date.now();
+        diag('provider-open', { id: m.id, requestId: m.requestId });
         try {
             await session.open(m.id, { isTrusted: true });
+            diag('provider-opened', { id: m.id, ms: Date.now() - started });
             if (!closing)
                 send({ type: 'opened', requestId: m.requestId });
         }
         catch (e) {
             const error = e;
+            diag('provider-open-failed', { id: m.id, ms: Date.now() - started, code: String(error?.message || error),
+                stage: error?.stage ?? null, name: error?.name ?? null,
+                stack: typeof error?.stack === 'string' ? error.stack.split('\n').slice(0, 8).join(' | ') : null });
             send({ type: 'error', requestId: m.requestId, code: error.message, stage: error.stage });
         }
         finally {
@@ -1215,6 +1302,30 @@ function installMainPlayerProvider(w, session, options = {}) {
  const externalSlot='external-links-v1';
  const readExternalValues=()=>externalModules.settings.sanitizeExternal(gm.get(externalSlot));
  let notifySettings=()=>{};
+ // Task1032: 調査用の記録。上級者設定「外部サイトからの再生」の consoleLog がONのときだけ出す。
+ // どのスクリプト・どの枠の記録かを scope/frame で区別する。URLのクエリ・Cookie・認証情報は出さない。
+ const extDiagStart=Date.now();
+ const extDiagOn=()=>{try{return readExternalValues()['externalLinks.consoleLog']===true;}catch(_){return false;}};
+ // Task1034: 重さの調査用。10秒ごとに、主スレッドの詰まり・通信・保存・映像の状態をまとめて出す。
+ const createPerfMonitor=(scope,extra=()=>({}))=>{
+   let longCount=0,longMs=0,longMax=0,lagMax=0,last=performance.now(),timer=0,lagTimer=0,observer=null;
+   try{observer=new PerformanceObserver(list=>{for(const e of list.getEntries()){longCount++;longMs+=e.duration;longMax=Math.max(longMax,e.duration);}});
+     observer.observe({type:'longtask',buffered:false});}catch(_){observer=null;}
+   lagTimer=setInterval(()=>{const now=performance.now();lagMax=Math.max(lagMax,now-last-250);last=now;},250);
+   timer=setInterval(()=>{
+     const mem=performance.memory;
+     extDiag(scope,'perf',{longTasks:longCount,longTaskMs:Math.round(longMs),longTaskMaxMs:Math.round(longMax),
+       loopLagMaxMs:Math.round(Math.max(0,lagMax)),heapMB:mem?Math.round(mem.usedJSHeapSize/1048576):null,
+       domNodes:document.getElementsByTagName('*').length,...extra()});
+     longCount=0;longMs=0;longMax=0;lagMax=0;
+   },10000);
+   return ()=>{clearInterval(timer);clearInterval(lagTimer);observer?.disconnect();};
+ };
+ const extDiag=(scope,event,data={})=>{
+   if(!extDiagOn())return;
+   try{console.info('ZENZA_EXT',JSON.stringify({scope,event,ms:Date.now()-extDiagStart,host:location.hostname,
+     path:location.pathname.slice(0,40),frame:window===window.top?'top':(String(window.name||'child').slice(0,48)),...data}));}catch(_){}
+ };
  const writeExternal=patch=>{const current=readExternalValues(),next=externalModules.settings.sanitizeExternal({...current,...patch});if(JSON.stringify(current)!==JSON.stringify(next)){gm.set(externalSlot,next);notifySettings(next);}};
  'use strict';
 // Only registered preferences cross partitions; never arbitrary storage/history.
@@ -1304,16 +1415,19 @@ function createDisplaySettings(w, gm, registered=[]) {
     if(!gm.get(savedSlot)&&snapshot.saved?.version===2)
       gm.set(savedSlot,{version:2,official:clean(snapshot.saved.official),values:clean(snapshot.saved.values)});
   }
-  return {publish,apply,save,scheduleSave,diagnostics,migrate};
+  return {publish,apply,save,scheduleSave,diagnostics,migrate,
+    // Task1034: 計測用の軽い読み出し（diagnostics は保存領域を読み直すので定期計測には使わない）
+    storageTiming:()=>({saveCount:storageTiming.saveCount,totalSaveMs:Math.round(storageTiming.totalSaveMs),maxSaveMs:Math.round(storageTiming.maxSaveMs)})};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  if(official&&!playerFrame){
    const disconnect=typeof GM_addValueChangeListener==='function'?externalModules.officialSettings.connectOfficialExternalSettings(window,gm):()=>{};
    displaySettings.publish();window.addEventListener('pagehide',()=>{disconnect();displaySettings.publish();},{once:true});return;
  }
  if(window!==window.top&&!playerFrame)return;
+ extDiag('companion','boot',{playerFrame,version:"1.1.11-task1039",readyState:document.readyState});
  'use strict';
 
 // Private userscript storage carries messages. No ports, API responses or
@@ -1540,12 +1654,13 @@ async function finishPlayerClose(pendingSaves, actions, timeoutMs = 2000) {
 const {installPlayerBackground}=externalModules.background;
 const {validVideoId}=externalModules.targets;
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
-function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
+function createPlayerHost(w,gm,transport,session,onStopped=()=>{},diag=()=>{}) {
   let frame,port,ticketKey,pending,sequence=0,closing=false,closeTimer,closingTask;
   const stop=(error=Error('PLAYER_CLOSED'))=>{
     const closingPort=port,closingFrame=frame,closingTicket=ticketKey,request=pending;
     port=null;frame=null;ticketKey=null;pending=null;closing=false;
     clearTimeout(closeTimer);
+    if(request||closingFrame)diag('host-stop',{reason:String(error?.message||error),hadRequest:!!request,hadFrame:!!closingFrame});
     request?.reject(error);closingPort?.close();closingFrame?.remove();
     if(closingTicket)gm.remove(closingTicket);
     if(closingFrame)onStopped();
@@ -1557,7 +1672,8 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     if(frame&&!frame.isConnected)stop();
     return new Promise((resolve,reject)=>{
       const requestId=++sequence;
-      const timer=w.setTimeout(()=>{stop(Error('PLAYER_TIMEOUT'));},60000);
+      diag('host-open',{id,requestId,reuseFrame:!!frame});
+      const timer=w.setTimeout(()=>{diag('host-timeout',{id,requestId,frame:!!frame,port:!!port});stop(Error('PLAYER_TIMEOUT'));},60000);
       pending={resolve:()=>{w.clearTimeout(timer);pending=null;resolve();},reject:e=>{w.clearTimeout(timer);pending=null;reject(e);}};
       const send=()=>port.postMessage(closing?{type:'request-close'}:{type:'open',id,requestId});
       if(frame){send();return;}
@@ -1567,6 +1683,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
       port=transport.port(channel,'parent',()=>stop());
       port.addEventListener('message',e=>{
         const data=e.data;
+        diag('host-receive',{type:data?.type||null,requestId:data?.requestId??null,code:data?.code??null,stage:data?.stage??null});
         if(data?.type==='ready'){gm.remove(ticketKey);send();}
         else if(data?.type==='closing' && frame){
           closing=true;frame.style.setProperty('display','none','important');
@@ -1585,13 +1702,20 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
       frame.src='https://www.nicovideo.jp/robots.txt#'+token;
       for(const [key,value] of Object.entries({all:'initial',position:'fixed',inset:'0',width:'100vw',height:'100vh',border:'0',margin:'0',padding:'0',display:'block',background:'transparent','z-index':'2147483646'}))frame.style.setProperty(key,value,'important');
       w.document.body.append(frame);
+      diag('host-frame-created',{src:'https://www.nicovideo.jp/robots.txt',origin:w.location.origin});
+      frame.addEventListener('load',()=>diag('host-frame-load',{}),{once:true});
     });
   }
   function accept() {
-    if(w===w.top||w.name!=='ZenzaWatchExternalTrialPlayer'||w.location.origin!=='https://www.nicovideo.jp'||w.location.pathname!=='/robots.txt')return false;
+    if(w===w.top||w.name!=='ZenzaWatchExternalTrialPlayer'||w.location.origin!=='https://www.nicovideo.jp'||w.location.pathname!=='/robots.txt'){diag('accept-rejected',{reason:'not-player-frame'});return false;}
     const key='player:'+w.location.hash.slice(1),ticket=gm.get(key);
-    let origin;try{origin=new URL(w.document.referrer).origin;}catch(_){return false;}
-    if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.origin!==origin)return false;
+    let origin;try{origin=new URL(w.document.referrer).origin;}catch(_){diag('accept-rejected',{reason:'no-referrer',referrer:String(w.document.referrer).slice(0,80)});return false;}
+    if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.origin!==origin){
+      diag('accept-rejected',{reason:!ticket?'no-ticket':ticket.claimed?'ticket-claimed':ticket.expires<Date.now()?'ticket-expired':'origin-mismatch',
+        referrerOrigin:origin,ticketOrigin:ticket?.origin??null,hasHash:w.location.hash.length>1});
+      return false;
+    }
+    diag('accept-ok',{origin});
     gm.set(key,{...ticket,claimed:true});port=transport.port(ticket.channel,'frame',()=>transport.dispose?.());
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
@@ -1600,13 +1724,13 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     const status=w.document.createElement('div');status.style.cssText='position:fixed;top:24px;left:24px;z-index:2147483647;color:#eee;background:#17212d;padding:16px;font:16px sans-serif';
     const labels={BOOT:'本体を準備しています',SETTINGS:'設定を接続しています',AUTH:'ログイン状態を確認しています',UI:'画面を準備しています',VIDEO:'動画を開いています'};
     status.textContent=labels.BOOT;w.document.body.append(status);
-    session.setStageListener?.(stage=>{if(stage==='OPEN')status.remove();else status.textContent=labels[stage]||labels.BOOT;});
+    session.setStageListener?.(stage=>{diag('frame-stage',{stage});if(stage==='OPEN')status.remove();else status.textContent=labels[stage]||labels.BOOT;});
     let busy=false,last=0;
     port.addEventListener('message',async e=>{
       const m=e.data;if(m?.type==='request-close'){closing=true;if(!session.close?.())void closePlayer();return;}if(m?.type!=='open'||busy||!Number.isSafeInteger(m.requestId)||m.requestId<=last||!validVideoId(m.id))return;
       busy=true;last=m.requestId;const requestPort=port;
       try{await session.open(m.id,{isTrusted:true});if(closing||port!==requestPort)return;port.postMessage({type:'opened',requestId:m.requestId});}
-      catch(error){if(closing||port!==requestPort)return;w.console?.warn('[Zenza external trial] startup failed',error.stage||'BOOT',error.name||'Error');port.postMessage({type:'error',requestId:m.requestId,code:error.message,stage:error.stage});}
+      catch(error){diag('frame-open-failed',{code:String(error?.message||error),stage:error?.stage||null,name:error?.name||null});if(closing||port!==requestPort)return;w.console?.warn('[Zenza external trial] startup failed',error.stage||'BOOT',error.name||'Error',String(error?.message||''));port.postMessage({type:'error',requestId:m.requestId,code:error.message,stage:error.stage});}
       finally{busy=false;}
     });
     port.postMessage({type:'ready'});
@@ -1639,14 +1763,15 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
    snapshot:()=>({official:gm.get('settings-v2'),saved:gm.get('trial-settings-v2'),external:readExternalValues()}),
    onSettings:values=>writeExternal(externalModules.settings.sanitizeExternal(values)),
    onClosing:()=>{void playerHost.close([closed]);},
-   onClosed:()=>{closedResolve();void playerHost.close();}
+   onClosed:()=>{closedResolve();void playerHost.close();},
+   onDiag:(event,data)=>extDiag('companion-client',event,data)
  }):null;
- const playerHost=createPlayerHost(window,gm,privateTransport,mainClient);
+ const playerHost=createPlayerHost(window,gm,privateTransport,mainClient,undefined,(event,data)=>extDiag('companion-host',event,data));
  if(playerFrame){
    notifySettings=values=>mainClient.updateSettings(values);
    const listener=gm.listen(externalSlot,()=>mainClient.updateSettings(readExternalValues()));
    window.addEventListener('pagehide',()=>{gm.unlisten(listener);mainClient.dispose();},{once:true});
-   playerHost.accept();return;
+   const accepted=playerHost.accept();extDiag('companion','frame-accept',{accepted});return;
  }
  // Only optional availability checking remains in the launcher. Playback,
  // account operations and HLS networking are exclusively in the main script.
@@ -1655,20 +1780,31 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
  const mount=()=>{
    launcherHandle?.dispose();openVideo=null;if(legacyActive)return;
    const settings=externalModules.settings.readExternal(readExternalValues());
+   extDiag('companion','mount',{enabled:settings.enabled,siteMode:settings.siteMode,siteEnabled:externalModules.settings.siteEnabled?.(location.hostname,settings)??null,
+     activation:settings.activation,preflight:settings.preflight,textIds:settings.textIds,redirects:settings.redirects,prefixes:settings.prefixes,
+     links:document.querySelectorAll('a[href*="nicovideo.jp/watch/"],a[href*="nico.ms/"]').length});
    const preflight=externalModules.preflight.createPreflight(preflightNetwork.fetch,DOMParser);
    let active=true;
    const open=async(id,event)=>{
+     extDiag('companion','click',{id,trusted:!!event?.isTrusted,preflight:settings.preflight});
      if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
-     if(settings.preflight!=='off'&&await preflight.check(id)==='unavailable')throw Error('VIDEO_UNAVAILABLE');
-     if(!active)throw Error('CLOSED');return playerHost.open(id,event);
+     if(settings.preflight!=='off'){const result=await preflight.check(id);extDiag('companion','preflight',{id,result});if(result==='unavailable')throw Error('VIDEO_UNAVAILABLE');}
+     if(!active)throw Error('CLOSED');
+     const started=Date.now();
+     try{await playerHost.open(id,event);extDiag('companion','opened',{id,ms:Date.now()-started});
+       if(extDiagOn()&&!window.__zenzaExtPerf)window.__zenzaExtPerf=createPerfMonitor('companion-page-perf',()=>({
+         playerFrames:document.querySelectorAll('[data-zenza-player-host]').length}));}
+     catch(error){extDiag('companion','open-failed',{id,ms:Date.now()-started,code:String(error?.message||error),stage:error?.stage||null});throw error;}
    };
    const overlay=externalModules.overlay.mountOverlay(window,settings,open,preflight.check);
    const inline=externalModules.inline.mountInlineButtons(window,settings,open,preflight.check);
+   setTimeout(()=>extDiag('companion','buttons',{inline:document.querySelectorAll('[data-zenza-external-inline]').length,
+     overlay:document.querySelectorAll('[data-zenza-external-overlay]').length}),1500);
    openVideo=open;launcherHandle={dispose(){active=false;preflight.dispose();overlay.dispose();inline.dispose();}};
  };
  const stopBlog=externalModules.blog.receiveBlogClicks(window,{get:GM_getValue,set:GM_setValue,remove:GM_deleteValue},readExternalValues,(id,event)=>openVideo&&!legacyActive?openVideo(id,event):Promise.reject(Error('LAUNCHER_UNAVAILABLE')));
  mount();
- const stopCoexistence=externalModules.coexistence.watchLegacyTrial(window,()=>{legacyActive=true;launcherHandle?.dispose();openVideo=null;playerHost.requestClose();});
+ const stopCoexistence=externalModules.coexistence.watchLegacyTrial(window,()=>{extDiag('companion','legacy-trial-detected',{});legacyActive=true;launcherHandle?.dispose();openVideo=null;playerHost.requestClose();});
  const listener=typeof GM_addValueChangeListener==='function'?gm.listen(externalSlot,mount):null;
  if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('外部サイトからの再生設定',()=>externalModules.panel.openExternalSettings(document,readExternalValues(),values=>{writeExternal(values);mount();}));
  window.addEventListener('pagehide',()=>{stopCoexistence();stopBlog();launcherHandle?.dispose();preflightNetwork.dispose();if(listener!==null)gm.unlisten(listener);},{once:true});

@@ -5,7 +5,7 @@ const {extract, createContext, run} = require('../helpers/extractSource');
 const {describe, it} = typeof global.describe === 'function' ? global : require('node:test');
 const overrideCode = extract('src/initializer.js', 'overrideGinza', 'var');
 
-function setup(root) {
+function setup(root, overrideGinza=true) {
   const calls=[];
   const video = {addEventListener:(...a)=>calls.push(['on', ...a]),pause:()=>calls.push(['pause'])};
   const document={
@@ -19,7 +19,7 @@ function setup(root) {
   }
   const ctx=createContext({document,MutationObserver,
     OfficialPlayerRoute:{isOfficialRequest:()=>false},
-    Config:{props:{overrideGinza:true}},
+    Config:{props:{overrideGinza}},
     initializeGinzaSlayer:()=>calls.push(['slayer']),
     uq:{complete:async()=>{}}, window:{name:''}});
   run('globalThis.overrideGinza='+overrideCode,ctx);
@@ -30,13 +30,20 @@ describe('#212 strict entry null boundaries',()=>{
   it('missing SPA root does not create an observer or throw',async()=>{
     const {ctx,calls}=setup(null);
     await ctx.overrideGinza({}, {});
-    assert.deepEqual(calls,[]);
+    // Task1030: 設定ONなら起動するが、#root が無ければ監視は作らない。
+    assert.deepEqual(calls,[['slayer']]);
   });
-  it('a stored replacement preference never creates an observer, even with a mounted root',async()=>{
+  it('the replacement preference (Task1030 restored, opt-in) observes a mounted root',async()=>{
     const root={nodeType:1,id:'synthetic-root'};
     const {ctx,calls}=setup(root);
     await ctx.overrideGinza({}, {});
-    assert.deepEqual(calls,[]); // Retired override creates no player or observer.
+    assert.deepEqual(calls.map(c=>c[0]),['slayer','observer.construct','observe']);
+  });
+  it('with the preference OFF (default) the watch page is left to the official player',async()=>{
+    const root={nodeType:1,id:'synthetic-root'};
+    const {ctx,calls}=setup(root,false);
+    await ctx.overrideGinza({}, {});
+    assert.deepEqual(calls,[]);
   });
   it('storage JSON parsing retains legacy null coercion and malformed input behavior',()=>{
     for(const value of [null,'null','0','false','""','{}','broken','']){

@@ -13,7 +13,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaGamePad.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaGamePad.user.js
 // ==/UserScript==
-// build: 2026-11-14 08:40Z 450cfd5
+// build: 2026-11-14 22:00Z b7fe12d
 /* eslint-disable */
 
 

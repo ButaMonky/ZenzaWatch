@@ -400,10 +400,10 @@ const GateAPI = (() => {
                 return;
             }
             const p = parseUrl(params.url);
-            // 代理するのは記事ページ(/a/...)だけに限定する
+            // 代理するのは記事ページだけに限定する（単語記事 /a/… と、Task1037 で動画記事 /v/… を追加）
             if (TOKEN !== token ||
                 p.hostname !== location.host ||
-                !p.pathname.startsWith('/a/')) {
+                !/^\/(?:a|v)\//.test(p.pathname)) {
                 console.log('invalid msg: ', { origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command });
                 return;
             }

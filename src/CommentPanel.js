@@ -153,6 +153,7 @@ class CommentListView extends Emitter {
         this._ItemView = CommentListItemView;
         this._itemCss = CommentListItemView.CSS;
         this._className = params.className || 'commentList';
+        this._config = params.config || null;
         this._retryGetIframeCount = 0;
         this._maxItems = 100000;
         this._inviewItemList = new Map;
@@ -194,6 +195,19 @@ class CommentListView extends Emitter {
         if (this._className) {
             classList.add(this._className);
         }
+        // Task1039: ニコるの見た目（dark=公式ダークモード・既定 / light=公式ライトモード / legacy=旧式の画像）
+        const applyNicoruStyle = () => {
+            const value = this._config?.props?.['commentPanel.nicoruStyle'];
+            const style = ['dark', 'light', 'legacy'].includes(value) ? value : 'dark';
+            for (const name of ['dark', 'light', 'legacy']) {
+                body.classList.toggle('nicoruStyle-' + name, name === style);
+            }
+        };
+        applyNicoruStyle();
+        try {
+            this._config?.onkey?.('commentPanel.nicoruStyle', applyNicoruStyle);
+        }
+        catch (_) { /* 設定が無い環境 */ }
         this._container = doc.querySelector('#listContainer');
         this._$container = uq(this._container);
         this._list = doc.getElementById('listContainerInner');
@@ -371,9 +385,10 @@ class CommentListView extends Emitter {
         }
     }
     _onItemClick(e, item) {
-        if (e.target.closest('.nicoru-icon')) {
+        if (e.target.closest('.nicoru-icon, .nicoru-legacy-icon')) {
             // Display state is committed only after the server accepts the Nicoru.
-            this.emit('command', 'nicoru', item, item.dataset.itemId);
+            // Task1039: ニコった後にもう一度押すとニコるを取り消す（公式と同じ。旧式のアイコンでも同じ）。
+            this.emit('command', item.classList.contains('nicotta') ? 'nicoru-cancel' : 'nicoru', item, item.dataset.itemId);
             return;
         }
         this._$menu
@@ -1032,29 +1047,102 @@ const CommentListItemView = (() => {
         font-size: 12px;
         left: 80px;
       }
+      /* Task1038: ニコるのアイコンと動きを公式と同じにする（形・色・1秒の動きは公式CSSに合わせた）。 */
+      /* Task1039: 色は設定で選ぶ。既定は公式のダークモードと同じ（線 #999 → ニコると #fcd842、地 #262626）。 */
+      body, body.nicoruStyle-dark {
+        --nicoru-off-fg: #999; --nicoru-off-bg: #262626; --nicoru-on-fg: #fcd842; --nicoru-on-bg: #262626;
+      }
+      body.nicoruStyle-light {
+        --nicoru-off-fg: #999; --nicoru-off-bg: #fff; --nicoru-on-fg: #262626; --nicoru-on-bg: #fcd842;
+      }
+      body:not(.nicoruStyle-legacy) .commentListItem .nicoru-legacy-icon,
+      body.nicoruStyle-legacy .commentListItem .nicoru-icon,
+      body.nicoruStyle-legacy .commentListItem .nicoru-effect { display: none; }
+      /* 旧式（以前の ZenzaWatch の画像アイコン）。ニコると270°回って金色に光る。 */
+      .commentListItem .nicoru-legacy-icon {
+        position: absolute; pointer-events: auto; display: inline-block; cursor: pointer; visibility: hidden;
+        transition: transform 0.2s linear, filter 0.2s; transform-origin: center;
+        left: 50px; top: -2px; width: 24px; height: 24px; contain: strict;
+      }
+      .commentListItem:hover .nicoru-legacy-icon { visibility: visible; }
+      .commentListItem.nicotta .nicoru-legacy-icon {
+        visibility: visible; transform: rotate(270deg); filter: drop-shadow(0px 0px 6px gold);
+      }
       .commentListItem .nicoru-icon {
+        --nicoru-fg: var(--nicoru-off-fg);
+        --nicoru-bg: var(--nicoru-off-bg);
         position: absolute;
         pointer-events: auto;
         display: inline-block;
         cursor: pointer;
         visibility: hidden;
-        transition: transform 0.2s linear, filter 0.2s;
+        transition: transform 0.2s ease-in;
         transform-origin: center;
         left: 50px;
-        top: -2px;
-        width: 24px;
-        height: 24px;
-        contain: strict;
+        top: 0;
+        width: 20px;
+        height: 20px;
+        overflow: visible;
       }
+      .commentListItem .nicoru-icon .nicoru-background { fill: var(--nicoru-bg); }
+      .commentListItem .nicoru-icon .nicoru-frame,
+      .commentListItem .nicoru-icon .nicoru-mouth { fill: var(--nicoru-fg); }
+      .commentListItem .nicoru-icon .nicoru-left-eye,
+      .commentListItem .nicoru-icon .nicoru-right-eye,
+      .commentListItem .nicoru-icon .nicoru-right-eye-wink { stroke: var(--nicoru-fg); }
+      .commentListItem .nicoru-icon .nicoru-right-eye-wink {
+        transform-box: fill-box; transform-origin: left center; transform: scaleX(0);
+      }
+      .commentListItem .nicoru-icon .nicoru-right-eye { transform-box: fill-box; transform-origin: center bottom; }
+      .commentListItem .nicoru-effect {
+        position: absolute; left: 70px; top: -7px; width: 9px; height: 20px;
+        pointer-events: none; overflow: visible; visibility: hidden;
+      }
+      .commentListItem .nicoru-effect path { stroke: #fcd842; }
       .commentListItem:hover .nicoru-icon {
         visibility: visible;
       }
+      /* ニコった状態は公式と同じく -90° に倒して色だけ変える（目は開いたまま）。
+         もう一度押すと取り消し、0.2秒で元の向きに戻る（公式の transition: transform 0.2s ease-in）。 */
       .commentListItem.nicotta .nicoru-icon {
         visibility: visible;
-        transform: rotate(270deg);
-        filter: drop-shadow(0px 0px 6px gold);
-        pointer-events: none;
+        transform: rotate(-90deg);
+        --nicoru-fg: var(--nicoru-on-fg);
+        --nicoru-bg: var(--nicoru-on-bg);
       }
+      .commentListItem.is-nicoruPending .nicoru-icon,
+      .commentListItem.is-nicoruPending .nicoru-legacy-icon { pointer-events: none; opacity: .6; }
+      .commentListItem.nicoru-animated .nicoru-icon {
+        animation: zenzaNicoruRotate 1s ease-in-out forwards;
+      }
+      .commentListItem.nicoru-animated .nicoru-icon .nicoru-background { animation: zenzaNicoruBg 1s ease-in-out both; }
+      .commentListItem.nicoru-animated .nicoru-icon .nicoru-frame,
+      .commentListItem.nicoru-animated .nicoru-icon .nicoru-mouth { animation: zenzaNicoruFill 1s ease-in-out both; }
+      .commentListItem.nicoru-animated .nicoru-icon .nicoru-left-eye { animation: zenzaNicoruStroke 1s ease-in-out both; }
+      .commentListItem.nicoru-animated .nicoru-icon .nicoru-right-eye {
+        animation: zenzaNicoruEyeClose 1s ease-in-out forwards, zenzaNicoruStroke 1s ease-in-out both;
+      }
+      .commentListItem.nicoru-animated .nicoru-icon .nicoru-right-eye-wink {
+        animation: zenzaNicoruEyeOpen 1s ease-in-out forwards, zenzaNicoruStroke 1s ease-in-out both;
+      }
+      .commentListItem.nicoru-animated .nicoru-effect { visibility: visible; }
+      .commentListItem.nicoru-animated .nicoru-effect path { animation: zenzaNicoruEffect 1s ease-in-out forwards; }
+      @keyframes zenzaNicoruRotate {
+        0% { transform: rotate(0); } 25% { transform: rotate(-20deg); } 50% { transform: rotate(30deg); }
+        65% { transform: rotate(30deg); } 100% { transform: rotate(-90deg); }
+      }
+      @keyframes zenzaNicoruEyeClose {
+        0%, 35% { transform: scaleY(1); } 50%, 65% { transform: scaleY(0); } 85%, 100% { transform: scaleY(1); }
+      }
+      @keyframes zenzaNicoruEyeOpen {
+        0%, 35% { transform: scaleX(0); } 50%, 65% { transform: scaleX(1); } 85%, 100% { transform: scaleX(0); }
+      }
+      @keyframes zenzaNicoruEffect {
+        0%, 35% { stroke-dashoffset: -8px; } 50%, 65% { stroke-dashoffset: 0; } 85%, 100% { stroke-dashoffset: -8px; }
+      }
+      @keyframes zenzaNicoruFill { 0%, 49% { fill: var(--nicoru-off-fg); } 50%, 100% { fill: var(--nicoru-on-fg); } }
+      @keyframes zenzaNicoruStroke { 0%, 49% { stroke: var(--nicoru-off-fg); } 50%, 100% { stroke: var(--nicoru-on-fg); } }
+      @keyframes zenzaNicoruBg { 0%, 49% { fill: var(--nicoru-off-bg); } 50%, 100% { fill: var(--nicoru-on-bg); } }
 
       .commentListItem.updating {
         opacity: 0.5;
@@ -1165,7 +1253,8 @@ const CommentListItemView = (() => {
     `).trim();
     const TPL = (`
       <div class="commentListItem" style="position: absolute;">
-        <img src="${NICORU}" class="nicoru-icon" data-command="nicoru" title="Nicorü">
+        <img src="${NICORU}" class="nicoru-legacy-icon" data-command="nicoru" title="Nicorü" alt="ニコる">
+        <svg class="nicoru-icon" data-command="nicoru" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ニコる"><title>ニコる</title><path class="nicoru-background" fill-rule="evenodd" d="M12 24a12.01 12.01 0 1 1 12-12c0 6.62-5.38 12-12 12"/><path class="nicoru-frame" fill-rule="evenodd" d="M2.45 12a9.56 9.56 0 0 0 19.1 0 9.56 9.56 0 0 0-19.1 0M0 12a12.01 12.01 0 1 1 12 12C5.38 24 0 18.62 0 12"/><path class="nicoru-left-eye" fill="none" stroke-linecap="round" stroke-width="2.4" d="M9 6.9v2.95"/><path class="nicoru-right-eye" fill="none" stroke-linecap="round" stroke-width="2.4" d="M15 6.9v2.95"/><path class="nicoru-right-eye-wink" fill="none" stroke-linecap="round" stroke-width="2.4" d="M17.68 9.85h-2.96"/><path class="nicoru-mouth" fill-rule="evenodd" d="M15 12.94c.66 0 1.2.54 1.2 1.2v3c0 .66-.54 1.2-1.2 1.2H9a1.2 1.2 0 0 1-1.2-1.2v-3a1.2 1.2 0 0 1 2.4 0v1.8h3.6v-1.8c0-.67.54-1.2 1.2-1.2"/></svg><svg class="nicoru-effect" viewBox="0 0 10.35 10.88" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path class="nicoru-effect2" fill="none" stroke-dasharray="8" stroke-dashoffset="8" stroke-linecap="round" stroke-width="2.4" d="M7.33 1.2 1.2 4.91"/><path class="nicoru-effect1" fill="none" stroke-dasharray="8" stroke-dashoffset="8" stroke-linecap="round" stroke-width="2.4" d="M9.15 7.79 2.24 9.68"/></svg>
         <p class="info">
           <span class="timepos"></span>&nbsp;&nbsp;<span class="date"></span>
         </p>
@@ -1216,6 +1305,7 @@ const CommentListItemView = (() => {
             commentListItem.className =
                 `commentListItem no${item.no} item${this._id} ${oden} fork${item.fork} font-${font} ${item.isSubThread ? 'subThread' : ''}`;
             commentListItem.classList.toggle('nicotta', item.nicotta);
+            commentListItem.classList.remove('nicoru-animated');
             commentListItem.style.cssText = `top: ${this.top}px; content-visibility: hidden;`;
             /*--duration: ${item.duration}s;
             --vpos-time: ${item.vpos / 100}s;*/
@@ -1335,6 +1425,8 @@ class CommentListItem {
     get valhalla() { return this.nicoChat.valhalla; }
     get nicotta() { return this.nicoChat.nicotta; }
     set nicotta(v) { this.nicoChat.nicotta = v; }
+    get nicoruId() { return this.nicoChat.nicoruId; }
+    set nicoruId(v) { this.nicoChat.nicoruId = v; }
     get isMine() { return this.nicoChat.isMine; }
 }
 CommentListItem._itemId = 0;
@@ -1370,7 +1462,8 @@ class CommentPanelView extends Emitter {
             model: this.model,
             className: 'commentList',
             builder: CommentListItemView,
-            itemCss: CommentListItemView.__css__
+            itemCss: CommentListItemView.__css__,
+            config: this.commentPanel?._player?._playerConfig
         });
         listView.on('command', this._onCommand.bind(this));
         this._timeMachineView = new TimeMachineView({
@@ -1629,7 +1722,7 @@ class CommentPanel extends Emitter {
             item = this._model.findByItemId(itemId);
         }
         const needsItem = ['select', 'clipBoard', 'removeComment',
-            'addUserIdFilter', 'addWordFilter', 'nicoru', 'itemDetailRequest'].includes(command);
+            'addUserIdFilter', 'addWordFilter', 'nicoru', 'nicoru-cancel', 'itemDetailRequest'].includes(command);
         // A menu event can outlive its row after a reload, filter, or video change.
         if (!item && (hasItemId || needsItem)) {
             return;
@@ -1711,14 +1804,71 @@ class CommentPanel extends Emitter {
                     // A test or third-party model need not use the normal property proxies.
                     chat.nicoru = count;
                     chat.nicotta = true;
+                    // Task1039: 取り消し（DELETE /v1/users/me/nicoru/send/{nicoruId}）に使う
+                    const nicoruId = result?.id;
+                    if (typeof nicoruId === 'string' && nicoruId) {
+                        chat.nicoruId = nicoruId;
+                    }
                     if (row?.isConnected !== false && row?.dataset &&
                         String(row.dataset.itemId) === String(itemId)) {
                         row.dataset.nicoru = count;
                         row.classList.add('nicotta');
+                        // Task1038: 公式と同じ1秒の動き。終わったら外す（行は使い回されるため）。
+                        row.classList.remove('nicoru-animated');
+                        void row.offsetWidth;
+                        row.classList.add('nicoru-animated');
+                        setTimeout(() => row.classList.remove('nicoru-animated'), 1100);
                     }
                 })
                     // The dialog already displays the server failure. Leave the row
                     // and its model unchanged so the user can retry.
+                    .catch(() => { })
+                    .finally(() => {
+                    this._nicoruPending.delete(item);
+                    if (row?.classList) {
+                        row.classList.remove('is-nicoruPending');
+                    }
+                });
+                break;
+            }
+            case 'nicoru-cancel': {
+                // Task1039: ニコるの取り消し。サーバーが受け付けてから表示を戻す。
+                if (!this._nicoruPending) {
+                    this._nicoruPending = new WeakSet();
+                }
+                if (this._nicoruPending.has(item) || !item.nicotta) {
+                    break;
+                }
+                const chat = item.nicoChat;
+                const nicoruId = chat?.nicoruId;
+                if (typeof nicoruId !== 'string' || !nicoruId) {
+                    this.emit('command', 'alert', 'このニコるは取り消せません（取り消しに必要な情報がありません。コメントを読み込み直すと取り消せます）');
+                    break;
+                }
+                this._nicoruPending.add(item);
+                const row = param;
+                if (row?.classList) {
+                    row.classList.add('is-nicoruPending');
+                }
+                const oldCount = Number(item.nicoru) || 0;
+                (new Promise((resolve, reject) => this.emit('command', command, chat, { resolve, reject })))
+                    .then(() => {
+                    if (this._model.findByItemId(itemId) !== item) {
+                        return;
+                    }
+                    const count = Math.max(0, oldCount - 1);
+                    item.nicoru = count;
+                    item.nicotta = false;
+                    chat.nicoru = count;
+                    chat.nicotta = false;
+                    chat.nicoruId = null;
+                    if (row?.isConnected !== false && row?.dataset &&
+                        String(row.dataset.itemId) === String(itemId)) {
+                        row.classList.remove('nicoru-animated');
+                        row.classList.remove('nicotta');
+                        count > 0 ? (row.dataset.nicoru = count) : (delete row.dataset.nicoru);
+                    }
+                })
                     .catch(() => { })
                     .finally(() => {
                     this._nicoruPending.delete(item);

@@ -7,7 +7,9 @@ const NotificationJournalPolicy = (() => {
     const safeKeys = new Set([
         'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode',
         'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
-        'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs'
+        'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs',
+        // Task1036: 修正箇所の目安・読めなかった項目・発生箇所・仕様変更の疑いの件数。
+        'module', 'missing', 'where', 'distinctTargets'
     ]);
     const privatePath = (path) => path
         .replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
@@ -32,7 +34,9 @@ const NotificationJournalPolicy = (() => {
             .replace(/\b(token|(?:access|refresh)[_-]?token|secret|authorization|cookie|password|csrf|session)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
             .slice(0, MAX_TEXT);
     };
-    const code = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value) ? value : undefined;
+    // Task1036: 項目名（a.b.c）・ファイル（nico-src/X.ts）・発生箇所（fn@123）も通す。値・URLは通さない。
+    const code = (value) => typeof value === 'string' && /^[a-z0-9_.$@<>[\]\/:-]{1,120}$/i.test(value) &&
+        !/\/\//.test(value) ? value : undefined;
     const videoId = (value) => typeof value === 'string' && /^(?:sm|nm|so|ss)?\d{1,16}$/i.test(value) ? value : '';
     const details = (data) => {
         const result = {};
@@ -59,13 +63,24 @@ const NotificationJournalPolicy = (() => {
         return result;
     };
     const activity = (entry) => {
-        if (entry.level !== 'success' || entry.category !== 'comment' ||
-            details(entry.details).outcome !== 'accepted' || !entry.activity || typeof entry.activity !== 'object')
+        if (entry.level !== 'success' || !entry.activity || typeof entry.activity !== 'object')
             return;
         const value = entry.activity;
-        if (value.kind !== 'comment-post' || typeof value.text !== 'string' || !value.text)
+        const kind = value.kind;
+        // Task1038: いいね（動画タイトル）とニコる（コメント本文・位置・動画タイトル）も記録する。
+        if (kind === 'like') {
+            if (entry.category !== 'like')
+                return;
+        }
+        else if (kind === 'nicoru' || kind === 'comment-post') {
+            if (entry.category !== 'comment' || details(entry.details).outcome !== 'accepted')
+                return;
+            if (typeof value.text !== 'string' || !value.text)
+                return;
+        }
+        else
             return;
-        return { kind: 'comment-post', text: value.text.slice(0, 4096),
+        return { kind, text: typeof value.text === 'string' ? value.text.slice(0, 4096) : '',
             ...(typeof value.videoTitle === 'string' ? { videoTitle: value.videoTitle.slice(0, 512) } : {}),
             ...(typeof value.positionMs === 'number' && Number.isSafeInteger(value.positionMs) && value.positionMs >= 0 && value.positionMs <= 1e12 ?
                 { positionMs: value.positionMs } : {}) };
@@ -97,19 +112,26 @@ const NotificationJournalPolicy = (() => {
     // arbitrary persisted fields. This also protects reports from future fields.
     const toDiagnosticEntry = (entry) => normalize({ ...entry, activity: undefined }, { id: entry.id, timestamp: entry.timestamp });
     // Classify by structured operation/category, never by translated message text.
+    /** Task1038: いいね・ニコるの記録は、上限や期間による自動削除を最後に回す（後で活用するため）。 */
+    const isProtectedActivity = (entry) => !!entry && entry.level === 'success' && (entry.activity?.kind === 'like' || entry.activity?.kind === 'nicoru');
     const recordingGroup = (entry) => {
+        // Task1036: 新しい種類は個別にON/OFFできる。
+        if (entry.details.reason === 'spec-change') {
+            return 'specChange';
+        }
         const operation = String(entry.details.operation || entry.source);
         const groups = {
             advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
             'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
             'comment-read': 'comment', 'comment-key': 'comment',
+            'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
             like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
             tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
             recommend: 'related', owner: 'related', dictionary: 'related'
         };
         return groups[operation] || entry.category;
     };
-    return { normalize, toDiagnosticEntry, recordingGroup };
+    return { normalize, toDiagnosticEntry, recordingGroup, isProtectedActivity };
 })();
 //===END===
 export {NotificationJournalPolicy};

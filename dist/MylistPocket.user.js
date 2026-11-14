@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-14 08:40Z 450cfd5
+// build: 2026-11-14 22:00Z b7fe12d
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -3044,9 +3044,65 @@ const RequestDiagnostics = (() => {
 				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
+				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除'
+		};
+		const modules = {
+				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'nico-src/CommentReadAdapter.ts',
+				'comment-key': 'nico-src/ThreadLoader.ts', 'video-session': 'nico-src/VideoSessionWorker.ts',
+				'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
+				search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
+				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
+				'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
+				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
+				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
+				'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts'
+		};
+		const moduleFor = (operation) => modules[operation] || 'nico-src/RequestDiagnostics.ts';
+		const fieldName = (value) => {
+				if (typeof value !== 'string') {
+						return undefined;
+				}
+				const cleaned = value.replace(/[^A-Za-z0-9_.$:\[\]-]/g, '').slice(0, 100);
+				return cleaned ? cleaned : undefined;
+		};
+		const missingFromMessage = (message) => {
+				if (typeof message !== 'string') {
+						return undefined;
+				}
+				const m = /of '([^']{1,100})' as it is (?:undefined|null)/.exec(message) ||
+						/Cannot read properties of (?:undefined|null) \(reading '([^']{1,100})'\)/.exec(message) ||
+						/^([A-Za-z_$][\w$.]{0,99}) is not defined/.exec(message) ||
+						/^([A-Za-z_$][\w$.]{0,99}) is not a function/.exec(message);
+				return m ? fieldName(m[1]) : undefined;
 		};
 		const activeTickets = new Map();
+		const SUSPECT_THRESHOLD = 3, SUSPECT_WINDOW_MS = 30 * 60 * 1000;
+		const suspects = new Map();
+		const suspectReported = new Map();
+		const suspectReason = (failure) => failure.reason === 'schema' ||
+				(failure.reason === 'http' && [400, 410, 422].includes(Number(failure.statusCode))) ||
+				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
+		const noteSuspect = (operation, key, failure, now) => {
+				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '');
+				const seen = suspects.get(group) || new Map();
+				seen.set(key, now);
+				for (const [k, at] of seen) {
+						if (now - at > SUSPECT_WINDOW_MS) {
+								seen.delete(k);
+						}
+				}
+				while (seen.size > 50) {
+						seen.delete(seen.keys().next().value);
+				}
+				suspects.set(group, seen);
+				const last = suspectReported.get(group);
+				if (seen.size >= SUSPECT_THRESHOLD && (last === undefined || now - last > SUSPECT_WINDOW_MS)) {
+						suspectReported.set(group, now);
+						return seen.size;
+				}
+				return 0;
+		};
 		const failures = new Map();
 		let sink;
 		const noop = { success() { }, failure() { }, response() { } };
@@ -3068,8 +3124,18 @@ const RequestDiagnostics = (() => {
 						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
 						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
 				};
+				const missing = fieldName(e.missing) ||
+						(e.kind === 'schema' || /_SCHEMA$/.test(String(e.errorCode)) ? fieldName(e.reasonCode) || fieldName(e.reason) : undefined);
+				if (missing) {
+						fields.missing = missing;
+				}
 				if (e.name === 'AbortError' || e.reason === 'cancelled') {
 						return { reason: 'cancelled' };
+				}
+				if (['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(String(e.name)) &&
+						typeof e.message === 'string' && !/JSON|Unexpected token|Unexpected end/i.test(e.message)) {
+						const where = missingFromMessage(e.message);
+						return { reason: 'script', errorName: String(e.name), ...(where ? { missing: where } : {}) };
 				}
 				if (e.reason === 'session-closed') {
 						return { reason: 'session-closed' };
@@ -3140,9 +3206,21 @@ const RequestDiagnostics = (() => {
 								const reasonLabels = {
 										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
 										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
-										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です'
+										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です',
+										script: 'プログラムの不具合（スクリプトエラー）'
 								};
-								sink?.({ key, operation, phase, outcome, ...failure,
+								const module = moduleFor(operation);
+								if (outcome === 'failed' && suspectReason(failure)) {
+										const distinctTargets = noteSuspect(operation, key, failure, Date.now());
+										if (distinctTargets) {
+												sink?.({ key: 'diag-spec-' + operation + '-' + failure.reason, operation, phase, outcome: 'failed', ...failure,
+														reason: 'spec-change', module, distinctTargets,
+														message: labels[operation] + '：ニコニコ側の仕様変更の可能性があります（別々の' + distinctTargets +
+																'件で同じ失敗）。修正箇所の目安: ' + module,
+														elapsedMs: 0 });
+										}
+								}
+								sink?.({ key, operation, phase, outcome, ...failure, module,
 										message: labels[operation] + '（' + (phase === 'transport' ? '通信' : phase === 'response' ? '応答の確認' : '処理') + '）' +
 												(outcome === 'recovered' ? '：復旧しました' : '：' + reasonLabels[failure.reason]),
 										elapsedMs: Math.max(0, Math.min(86400000, Date.now() - started)) });
@@ -3276,7 +3354,7 @@ const RequestDiagnostics = (() => {
 				return value;
 		};
 		const setSink = (next) => { sink = next; };
-		return { begin, startRequest, observe, setSink };
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage };
 })();
 const netUtil = {
 		abortableFetch: async (url, params = {}) => {

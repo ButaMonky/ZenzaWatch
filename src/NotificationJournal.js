@@ -33,8 +33,9 @@ const NotificationJournal = (() => {
             suppressed.length = 8;
         }
     };
-    const MAX_RECORDS = 2000;
-    const MAX_SESSION = 2000;
+    // Task1036: 表示・セッション保持の上限は保存側の上限に合わせる（setRetention で変わる）。
+    let MAX_RECORDS = 5000;
+    let MAX_SESSION = 5000;
     const listeners = new Set();
     const session = [];
     const recent = [];
@@ -125,8 +126,7 @@ const NotificationJournal = (() => {
         const duplicate = isDuplicate(entry, recent);
         if (!duplicate) {
             session.unshift(entry);
-            if (session.length > MAX_SESSION)
-                session.length = MAX_SESSION;
+            trimSession();
             recent.unshift(entry);
             if (recent.length > 8)
                 recent.length = 8;
@@ -145,8 +145,7 @@ const NotificationJournal = (() => {
                 confirmedRecent.length = 8;
             if (duplicate) {
                 session.unshift(entry);
-                if (session.length > MAX_SESSION)
-                    session.length = MAX_SESSION;
+                trimSession();
                 announce();
             }
             return entry;
@@ -155,6 +154,23 @@ const NotificationJournal = (() => {
             announce();
         return duplicate ? null : entry;
     };
+    /** Task1038: セッション内の記録も、いいね・ニコるを最後に回して上限・期間を守る。 */
+    function trimSession(oldest = -Infinity) {
+        const keep = (entry) => NotificationJournalPolicy.isProtectedActivity(entry);
+        for (let i = session.length - 1; i >= 0; i--) {
+            if (!keep(session[i]) && session[i].timestamp < oldest) {
+                session.splice(i, 1);
+            }
+        }
+        for (let i = session.length - 1; i >= 0 && session.length > MAX_SESSION; i--) {
+            if (!keep(session[i])) {
+                session.splice(i, 1);
+            }
+        }
+        if (session.length > MAX_SESSION) {
+            session.length = MAX_SESSION;
+        }
+    }
     const list = async (limit = 300) => {
         const count = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, MAX_RECORDS)) : 300;
         const snapshot = await store.snapshot();
@@ -223,9 +239,7 @@ const NotificationJournal = (() => {
             session.splice(old, 1);
         }
         session.unshift(entry);
-        if (session.length > MAX_SESSION) {
-            session.length = MAX_SESSION;
-        }
+        trimSession();
         store.append(epoch => {
             acceptEpoch(epoch);
             epochs.set(entry, epoch);
@@ -297,7 +311,19 @@ const NotificationJournal = (() => {
         return () => listeners.delete(listener);
     };
     const toDiagnosticEntry = (entry) => NotificationJournalPolicy.toDiagnosticEntry(entry);
-    return { record, recordDiagnostic, list, clear, subscribe, configureBuild, configureRecording, toDiagnosticEntry };
+    /** Task1036: 通知履歴の上限件数と保存期間（日）。設定変更時にも呼ぶ。 */
+    const configureRetention = (maxRecords, maxAgeDays) => {
+        try {
+            store.setRetention(maxRecords, maxAgeDays);
+            const limits = store.limits();
+            MAX_RECORDS = MAX_SESSION = limits.maxRecords;
+            const oldest = limits.maxAgeMs > 0 ? Date.now() - limits.maxAgeMs : -Infinity;
+            trimSession(oldest);
+            announce();
+        }
+        catch (_) { /* 設定の反映に失敗しても記録は続ける */ }
+    };
+    return { record, recordDiagnostic, list, clear, subscribe, configureBuild, configureRecording, configureRetention, toDiagnosticEntry };
 })();
 //===END===
 export {NotificationJournal};

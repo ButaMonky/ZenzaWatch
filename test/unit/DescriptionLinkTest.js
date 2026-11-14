@@ -130,4 +130,19 @@ describe('説明文のリンク装飾が文字列を HTML にしない（ZW-052�
     assert.ok(!allAttributes(root).some(n => /^on/i.test(n)));
     s.close();
   });
+
+  // Task1037: 大百科の記事リンクにも ▶（記事に載っている動画をプレイリストで開く）を付ける。
+  it('大百科の動画記事・単語記事のリンクに ▶ が付き、記事以外のページには付かない', async function() {
+    const s = subject();
+    await s.update('<a href="https://dic.nicovideo.jp/v/sm47034168">https://dic.nicovideo.jp/v/sm47034168</a>' +
+      '<a href="https://dic.nicovideo.jp/a/%E3%83%86%E3%82%B9%E3%83%88">記事</a>' +
+      '<a href="https://dic.nicovideo.jp/b/a/x/1-">掲示板</a><a href="https://example.com/v/sm1">他サイト</a>');
+    const wraps = [...s.doc.querySelectorAll('zenza-nicodic-link')];
+    assert.equal(wraps.length, 2);
+    const btn = wraps[0].querySelector('zenza-playlist-append');
+    assert.equal(btn.dataset.command, 'playlistSetNicodic');
+    assert.equal(btn.dataset.param, 'https://dic.nicovideo.jp/v/sm47034168');
+    assert.equal(wraps[1].dataset.nicodicUrl, 'https://dic.nicovideo.jp/a/%E3%83%86%E3%82%B9%E3%83%88');
+    s.close();
+  });
 });

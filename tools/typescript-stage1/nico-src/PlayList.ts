@@ -601,11 +601,48 @@ class PlayList extends VideoList {
     window.console.time(timeKey);
 
     const additiveOwner = this._beginAdditiveLoad(options);
-    const network = this._playlistApiLoader.load({...playlist,
-      // Independent collection safety budget, never the rolling preference.
-      maxItems: 10000,
-      isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
-    }, msgInfo);
+    const loadCurrent = () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner);
+    // Task1040: 投稿動画一覧は、投稿ショート動画も一緒に読み込み、投稿日時の順に並べる。
+    // playlist.contentType: 'all'（既定）/ 'long'（動画のみ）/ 'short'（ショートのみ）
+    const isUploader = playlist?.type === 'user-uploaded';
+    const contentType = isUploader && ['long', 'short'].includes(playlist.contentType) ? playlist.contentType : 'all';
+    const {contentType: _ignored, ...apiRequest} = playlist || {};
+    let shortsNotice = '';
+    const loadShorts = (): Promise<Loose[]> => {
+      const loader = this._playlistApiLoader as Loose;
+      if (!isUploader || contentType === 'long' || typeof loader.loadUserShorts !== 'function') { return Promise.resolve([]); }
+      return loader.loadUserShorts(playlist.id, {maxItems: 10000, isCurrent: loadCurrent}).catch((error: unknown) => {
+        if (contentType === 'short') { throw error; }
+        window.console.warn('投稿ショート動画の取得に失敗しました', error);
+        shortsNotice = '（ショート動画は取得できませんでした）';
+        return [];
+      });
+    };
+    const loadLong = (): Promise<Loose> => contentType === 'short' ? Promise.resolve([]) :
+      this._playlistApiLoader.load({...apiRequest,
+        // Independent collection safety budget, never the rolling preference.
+        maxItems: 10000,
+        isCurrent: loadCurrent
+      }, msgInfo);
+    const network = Promise.all([loadLong(), loadShorts()]).then(([long, shorts]: [Loose, Loose[]]) => {
+      if (!shorts.length) { return long; }
+      const seen = new Set<string>();
+      const time = (item: Loose) => {
+        const t = Date.parse(item?.content?.registeredAt || '');
+        return Number.isFinite(t) ? t : 0;
+      };
+      const merged = [...(Array.isArray(long) ? long : []), ...shorts].filter((item: Loose) => {
+        const id = item?.content?.id || item?.watchId;
+        if (!id || seen.has(id)) { return false; }
+        seen.add(id);
+        return true;
+      });
+      // 新しい順（/v1/playlist/user-uploaded の既定と同じ）。下で古い順に反転される。
+      merged.sort((a: Loose, b: Loose) => time(b) - time(a));
+      const info = long?.playlistLoadInfo;
+      if (info) { Object.defineProperty(merged, 'playlistLoadInfo', {value: info, enumerable: false}); }
+      return merged;
+    });
     return this._waitForAdditiveTurn(network, additiveOwner).then<ZenzaPlaylistLoadResult, ZenzaPlaylistLoadResult>(items => {
         if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
           return {status: 'superseded', message: ''};
@@ -668,7 +705,7 @@ class PlayList extends VideoList {
           message:
             (added !== null ?
               `プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
-              'プレイリストに読み込みしました') + capacityNotice
+              'プレイリストに読み込みしました') + capacityNotice + shortsNotice
         });
       }, error => {
         if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {

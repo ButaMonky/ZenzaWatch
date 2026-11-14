@@ -63,7 +63,7 @@ const NotificationHistoryPanel = (() => {
         return node;
     };
     const featureLabels = {
-        advertising: 'ニコニ広告', search: '検索', 'tag-suggest': 'タグ候補', tags: 'タグ',
+        advertising: 'ニコニ広告', 'nicoad-end': '動画の最後のニコニ広告', search: '検索', 'tag-suggest': 'タグ候補', tags: 'タグ',
         'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー', 'video-info': '動画情報',
         'video-session': '再生セッション', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
         'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',

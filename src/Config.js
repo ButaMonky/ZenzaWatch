@@ -98,6 +98,7 @@ const Config = (() => {
         'notificationHistory.record.storyboard': true,
         'notificationHistory.record.tags': true,
         'notificationHistory.record.advertising': false,
+        'notificationHistory.record.nicoadEnd': true, // Task1040: 動画の最後のニコニ広告一覧の取得エラー
         'notificationHistory.record.related': true,
         'notificationHistory.record.network': true,
         'notificationHistory.record.system': true,

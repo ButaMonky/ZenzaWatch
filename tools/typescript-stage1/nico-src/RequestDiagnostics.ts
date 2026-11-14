@@ -3,7 +3,7 @@ export type DiagnosticOperation = 'video-info' | 'comment-read' | 'comment-key' 
   'video-session' | 'session-state' | 'storyboard' | 'search' | 'mylist' |
   'playlist' | 'like' | 'tags' | 'nico-api' | 'tag-suggest' | 'tag-key' |
   'advertising' | 'ad-decoration' | 'supporters' | 'gifts' | 'dictionary' | 'recommend' | 'owner' |
-  'comment-post' | 'nicoru' | 'comment-delete';
+  'comment-post' | 'nicoru' | 'comment-delete' | 'nicoad-end';
 export type DiagnosticPhase = 'transport' | 'response' | 'session';
 export interface DiagnosticEvent {
   key: string;
@@ -39,7 +39,8 @@ const RequestDiagnostics = (() => {
     'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
     'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
     dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
-    'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除'
+    'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
+    'nicoad-end': '動画の最後のニコニ広告'
   };
   /**
    * Task1036: 失敗したときに最初に見るべき TypeScript 正本（tools/typescript-stage1/）。
@@ -54,7 +55,8 @@ const RequestDiagnostics = (() => {
     'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
     'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
     dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
-    'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts'
+    'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
+    'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts'
   };
   const moduleFor = (operation: DiagnosticOperation): string => modules[operation] || 'nico-src/RequestDiagnostics.ts';
   /** 項目名として安全な文字だけにする（値は持たない）。 */
@@ -215,6 +217,7 @@ const RequestDiagnostics = (() => {
       if (url.hostname === 'api.nicoad.nicovideo.jp') {
         if (/pickup_supporters/.test(p)) { return 'supporters'; }
         if (/\/gift\//.test(p)) { return 'gifts'; }
+        if (/^\/v1\/nicoad$/.test(p) && url.searchParams.get('frameId') === '12') { return 'nicoad-end'; }
         return /\/decoration$/.test(p) ? 'ad-decoration' : 'advertising';
       }
       if (/\/recommend$/.test(p)) { return 'recommend'; }

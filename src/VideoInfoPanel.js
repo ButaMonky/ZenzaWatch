@@ -2421,6 +2421,8 @@ class VideoSearchForm extends Emitter {
         // Keep one viewport-bounded scroll container, including the filters.
         const fitSearch = () => this._updateFocus();
         this._view.addEventListener('focusin', fitSearch);
+        // Task1040: マウスを乗せた時点で、画面の上にはみ出していないか確かめる
+        this._view.addEventListener('pointerenter', () => this._keepSearchPanelInView());
         // A label's mousedown normally blurs the input before activating its radio.
         // Keep focus within the panel through that native click, without hover-opening it.
         this._view.querySelector('.searchInputHead').addEventListener('mousedown', (event) => {
@@ -3400,7 +3402,32 @@ class VideoSearchForm extends Emitter {
     _hasFocus() {
         return !!document.activeElement.closest('#zenzaVideoSearchPanel');
     }
+    /**
+     * Task1040: 検索欄が画面の上にはみ出したら、はみ出した分だけ下げる（ブラウザ名では分けない）。
+     * Firefox ではヘッダーの位置が数px上になり、検索欄の上段（キーワード/タグ・動画/ショート）が欠けていた。
+     * 位置は CSS 変数 --search-top-offset（margin-top）だけで調整するので、配置の CSS 自体は変えない。
+     * 実際の位置を測って決めるため、ブラウザ・拡大率・ヘッダー配置が変わっても同じ処理で収まる。
+     */
+    _keepSearchPanelInView() {
+        const panel = this._view;
+        if (!panel?.isConnected) {
+            return;
+        }
+        const current = parseFloat(panel.style.getPropertyValue('--search-top-offset')) || 0;
+        const rect = panel.getBoundingClientRect();
+        if (!rect.height) {
+            return;
+        }
+        const scale = panel.offsetHeight > 0 ? rect.height / panel.offsetHeight : 1;
+        const viewportTop = (window.visualViewport ? window.visualViewport.offsetTop : 0) + 2; // 画面の上端との最小の間隔（px）
+        // はみ出し量（正）または余裕（負）。余裕があるときは下げた分を戻す。
+        const next = Math.max(0, Math.round(current + (viewportTop - rect.top) / (scale || 1)));
+        if (next !== current) {
+            next ? panel.style.setProperty('--search-top-offset', next + 'px') : panel.style.removeProperty('--search-top-offset');
+        }
+    }
     _updateFocus() {
+        this._keepSearchPanelInView();
         const panel = this._view;
         if (!panel?.isConnected || !panel.matches(':focus-within')) {
             return;
@@ -3524,7 +3551,9 @@ VideoSearchForm.__css__ = (`
       box-sizing: border-box;
       z-index: 1000;
       --search-controls-height: 32px;
-      margin-top: calc(0px - var(--search-controls-height));
+      /* Task1040: --search-top-offset は画面の上にはみ出した分（_keepSearchPanelInView が実測して設定）。
+         transform は中の固定配置の基準を変えるので使わず、margin で下げる。 */
+      margin-top: calc(var(--search-top-offset, 0px) - var(--search-controls-height));
       max-height: var(--search-available-height, calc(100dvh - 80px));
       overflow-y: auto;
       overflow-x: hidden;

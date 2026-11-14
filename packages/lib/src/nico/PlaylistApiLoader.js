@@ -235,7 +235,61 @@ const PlaylistApiLoader = (() => {
             return { url, cacheKey: `playlist; ${url}` };
         }
     }
-    return new PlaylistApiLoader();
+    /**
+     * Task1040: 投稿者のショート動画一覧。公式のユーザーページ（/user/{id}/shorts）と同じ
+     * GET https://nvapi.nicovideo.jp/v3/users/{id}/videos?selectContentType=short&sortKey=registeredAt&sortOrder=desc&pageSize=100&page=N
+     * 応答 data.items[] = {series, essential:{id, title, registeredAt, duration, count, thumbnail, ...}}, data.totalCount。
+     * プレイリストの読み込み処理（VideoListItem.createByMylistItem）がそのまま使えるよう {watchId, content} に直す。
+     */
+    const loadUserShorts = async (userId, { maxItems = 10000, isCurrent } = {}) => {
+        if (!/^\d+$/.test(String(userId))) {
+            throw new Error('ショート動画の取得失敗（投稿者IDが不正）');
+        }
+        const execute = async () => {
+            const pageSize = 100, out = [], seen = new Set();
+            let total = null;
+            for (let page = 1; page <= Math.ceil(maxItems / pageSize) + 1; page++) {
+                if (isCurrent && !isCurrent()) {
+                    throw new Error('ショート動画の取得中止（表示対象が変更されました）');
+                }
+                const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?selectContentType=short&sortKey=registeredAt&sortOrder=desc&sensitiveContents=mask&pageSize=${pageSize}&page=${page}`;
+                const result = await netUtil.fetch(url, {
+                    headers: { 'X-Frontend-Id': 6, 'X-Frontend-Version': 0 },
+                    credentials: 'include', timeout: 15000,
+                    ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+                }).then((r) => r.json());
+                if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
+                    throw new Error(`ショート動画の取得失敗(1) (${page}ページ目)`);
+                }
+                const count = Number(result.data.totalCount);
+                if (Number.isSafeInteger(count) && count >= 0) {
+                    total = count;
+                }
+                const batch = result.data.items;
+                for (const row of batch) {
+                    const content = row?.essential;
+                    const id = typeof content?.id === 'string' ? content.id : '';
+                    if (!id || seen.has(id)) {
+                        continue;
+                    }
+                    seen.add(id);
+                    out.push({ watchId: id, content });
+                    if (out.length >= maxItems) {
+                        return out;
+                    }
+                }
+                if (batch.length < pageSize || (total !== null && out.length >= total)) {
+                    break;
+                }
+            }
+            return out;
+        };
+        return typeof RequestDiagnostics === 'undefined' ? execute() :
+            RequestDiagnostics.observe('playlist', 'user-shorts:' + userId, execute, Array.isArray, () => !isCurrent || isCurrent());
+    };
+    const loader = new PlaylistApiLoader();
+    loader.loadUserShorts = loadUserShorts;
+    return loader;
 })();
 //===END===
 export {PlaylistApiLoader};

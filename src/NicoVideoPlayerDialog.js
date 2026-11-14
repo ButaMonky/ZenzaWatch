@@ -6114,7 +6114,7 @@ class NicoVideoPlayerDialog extends Emitter {
             '&tags=' + encodeURIComponent(tags.join(',')) + '&excludeVideoIds=' + encodeURIComponent(videoId) +
             '&allowSensitiveContents=true&decoration=video';
         const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
-            RequestDiagnostics.begin('advertising', 'nicoad-end:' + videoId, 'response', () => this._requestId === requestId);
+            RequestDiagnostics.begin('nicoad-end', videoId, 'response', () => this._requestId === requestId);
         let items = [];
         try {
             const res = await fetch(url, { credentials: 'include', headers: { 'x-frontend-id': '6', 'x-frontend-version': '0' } });

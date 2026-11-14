@@ -122,6 +122,8 @@ const NotificationJournalPolicy = (() => {
         const operation = String(entry.details.operation || entry.source);
         const groups = {
             advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
+            // Task1040: 動画の最後のニコニ広告一覧は、広告・ギフト・提供情報とは別にON/OFFする（初期値ON）
+            'nicoad-end': 'nicoadEnd',
             'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
             'comment-read': 'comment', 'comment-key': 'comment',
             'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',

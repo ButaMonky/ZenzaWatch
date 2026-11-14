@@ -114,7 +114,9 @@ describe('Task972 collection pagination',function(){
   const current=await p.load({type:'mylist',id:2});assert.strictEqual(current.status,'ok');
   finish({meta:{status:200},data:{totalCount:1082,items:rows(500)}});
   assert.strictEqual((await old).status,'superseded');
-  assert.strictEqual(p.model.items[0].watchId,'sm99999');assert.strictEqual(requests.length,2);
+  assert.strictEqual(p.model.items[0].watchId,'sm99999');
+  // Task1040: the uploader load also asks for the uploader's shorts once (v3 users videos, short).
+  assert.strictEqual(requests.filter(u=>!String(u).includes('/v3/users/')).length,2);
  });
  it('the installable userscript includes full pagination, not just the source helper',async()=>{
   const h=loader({source:'dist/ZenzaWatch-dev.user.js',total:1082});

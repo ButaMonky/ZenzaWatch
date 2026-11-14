@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/uQuery.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/uQuery.user.js
 // ==/UserScript==
-// build: 2026-11-14 08:19Z 70a6d07
+// build: 2026-11-14 08:40Z 450cfd5
 /* eslint-disable */
 // GENERATED FROM tools/typescript-stage1/nico-src/UQueryEntry.ts (Task966). Edit the .ts and run npm run nico:sync.
 const AntiPrototypeJs = function () {

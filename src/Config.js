@@ -161,8 +161,9 @@ const Config = (() => {
         playlistLoop: false,
         // Task974: rolling single-video accumulation, not a bulk-import truncation cap.
         'playlist.maxItems': 3000,
-        // Task1028: Explicit opt-in only. Prefetch never starts on an existing install.
-        'playlist.prefetchAhead.enabled': false,
+        // Task1028: On by default. Users who turned it off keep their stored choice;
+        // the runtime still refuses to prefetch while the data saver is on.
+        'playlist.prefetchAhead.enabled': true,
         'playlist.prefetchAhead.sourcePlaylist': true,
         'playlist.prefetchAhead.sourceRelated': false,
         'playlist.prefetchAhead.sourceDescription': false,

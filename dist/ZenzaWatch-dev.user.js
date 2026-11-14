@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.402-prefetch1028
+// @version        2.7.403-prefetch1028
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-14 08:19Z 70a6d07
+// build: 2026-11-14 08:40Z 450cfd5
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.402-prefetch1028';
+    var VER = '2.7.403-prefetch1028';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-14 08:19Z 70a6d07';
+    var BUILD = '2026-11-14 08:40Z 450cfd5';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5823,7 +5823,7 @@ const Config = (() => {
 				autoCommentSpeedRate: false,
 				playlistLoop: false,
 				'playlist.maxItems': 3000,
-				'playlist.prefetchAhead.enabled': false,
+				'playlist.prefetchAhead.enabled': true,
 				'playlist.prefetchAhead.sourcePlaylist': true,
 				'playlist.prefetchAhead.sourceRelated': false,
 				'playlist.prefetchAhead.sourceDescription': false,
@@ -73384,7 +73384,7 @@ class ModernAdvancedSettingsModel {
 						]),
 						...group('プレイリスト・検索', '動画の先読み', [
 								['playlist.prefetchAhead.enabled', '動画を先読みする', {
-												description: '検証中の機能（初期値OFF）。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間は先読みしません。失敗・期限切れ時は通常どおり読み込みます。'
+												description: '初期値ON。次に見そうな動画の動画情報・再生許可・冒頭の映像音声をあらかじめ用意し、その動画を開いた瞬間にキャッシュを使って速く再生を始めます。連続再生・プレイリストのクリック・関連動画からの移動など、開き方を問わず効きます。どの一覧から先読みするかは下の3つで選べます。現在の動画の再生が安定しているときだけ1本ずつ順に通信します。追加の通信が発生します。データセーバーがONの間は先読みしません。失敗・期限切れ時は通常どおり読み込みます。'
 										}],
 								['playlist.prefetchAhead.sourcePlaylist', 'プレイリストの動画を先読み', {
 												dependsOn: 'playlist.prefetchAhead.enabled',

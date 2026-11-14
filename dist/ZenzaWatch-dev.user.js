@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.431-task1043
+// @version        2.7.432-task1044
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-14 23:29Z 95d3d52
+// build: 2026-11-14 23:36Z 0bc4043
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2071,10 +2071,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.431-task1043';
+    var VER = '2.7.432-task1044';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-14 23:29Z 95d3d52';
+    var BUILD = '2026-11-14 23:36Z 0bc4043';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -76791,6 +76791,10 @@ class ModernAdvancedSettingsUI {
 						const stage = this.doc.createElement('div');
 						stage.className = 'zw-example-screen zw-example-ownerkinds';
 						stage.style.flexDirection = 'column';
+						stage.style.height = 'auto';
+						stage.style.minHeight = '124px';
+						stage.style.padding = '12px 10px 40px';
+						stage.style.overflow = 'visible';
 						stage.innerHTML = '<div style="width:44px;height:44px;border-radius:4px;background:#8d8d8d"></div>' +
 								'<div class="zw-ok-row" style="position:relative;display:flex;align-items:center;gap:8px;color:#ddd;font-size:15px">' +
 								'<span>投稿者名</span><span class="zw-ok-play" style="position:relative;width:20px;height:20px;background:#666;border:1px outset #999;' +
@@ -85474,7 +85478,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.431-task1043",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.432-task1044",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

@@ -19,3 +19,7 @@ test('setting is in 画面・映像 with preview and description, default row',(
  const u=read('advanced-src/ModernAdvancedSettingsUI.ts');
  assert(u.includes("'videoHeader.position','videoInfo.ownerVideoKindsStyle',"));assert(u.includes('zw-example-ownerkinds'));
 });
+test('Task1044: preview stage grows to fit the lower row instead of clipping',()=>{
+ const u=read('advanced-src/ModernAdvancedSettingsUI.ts');
+ assert(u.includes("stage.style.height='auto';"));assert(u.includes("stage.style.overflow='visible';"));
+});

@@ -761,6 +761,11 @@ class ModernAdvancedSettingsUI {
             const stage = this.doc.createElement('div');
             stage.className = 'zw-example-screen zw-example-ownerkinds';
             stage.style.flexDirection = 'column';
+            // Task1044: 下の段・▶ の下に出る形でもはみ出さないよう、高さを中身に合わせて下に余白を取る
+            stage.style.height = 'auto';
+            stage.style.minHeight = '124px';
+            stage.style.padding = '12px 10px 40px';
+            stage.style.overflow = 'visible';
             stage.innerHTML = '<div style="width:44px;height:44px;border-radius:4px;background:#8d8d8d"></div>' +
                 '<div class="zw-ok-row" style="position:relative;display:flex;align-items:center;gap:8px;color:#ddd;font-size:15px">' +
                 '<span>投稿者名</span><span class="zw-ok-play" style="position:relative;width:20px;height:20px;background:#666;border:1px outset #999;' +

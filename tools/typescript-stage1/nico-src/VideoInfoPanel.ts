@@ -137,6 +137,16 @@ class VideoInfoPanel extends Emitter {
     // Task1042: ▶ にマウスを乗せたら「動画」「ショート」のボタンを横に出す。小さいので一度出したら出したままにする。
     const ownerVideoButton = view.querySelector('.playlistSetUploadedVideo');
     const revealOwnerVideoKinds = () => view.querySelector('.ownerVideoKinds')?.classList.add('is-revealed');
+    // Task1043: ボタンの形・位置は上級者設定「画面・映像 › プレイヤーの操作表示」で選ぶ（CSS の data-kinds-style で切り替え）
+    const applyOwnerVideoKindsStyle = () => {
+      const value = Config.props['videoInfo.ownerVideoKindsStyle'];
+      const style = ['row', 'stack', 'square', 'shape', 'below', 'off'].includes(value) ? value : 'row';
+      view.querySelector('.ownerVideoKinds')?.setAttribute('data-kinds-style', style);
+      // 名前の下の段に出すときは、投稿者名の欄にその段の場所を空ける
+      view.querySelector('.videoOwnerInfoContainer .owner')?.setAttribute('data-kinds-style', style);
+    };
+    applyOwnerVideoKindsStyle();
+    Config.onkey('videoInfo.ownerVideoKindsStyle', applyOwnerVideoKindsStyle);
     ownerVideoButton?.addEventListener('mouseenter', revealOwnerVideoKinds);
     ownerVideoButton?.addEventListener('focus', revealOwnerVideoKinds);
     view.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -982,53 +992,93 @@ css.addStyle(`
   .zenzaWatchVideoInfoPanel .videoInfoTab .deflistAdd {
     display: none;
   }
-  /* Task1042: ▶ の横の「動画」「ショート」。▶ にマウスを乗せると右から出てきて、そのまま残る */
+  /*
+   * Task1042/1043: ▶ の横の「投稿動画だけ」「ショートだけ」。▶ にマウスを乗せると出てきて、そのまま残る。
+   * ボタンは ▶ を基準に重ねて置く（position:absolute）ので、出る前も出た後も名前の行の幅・位置は変わらない。
+   * 形と位置は data-kinds-style で切り替える（stack / square / shape / below / off）。案を増やす時はここに1組足す。
+   */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoAnchor {
+    position: relative;
+    display: inline-block;
+  }
   .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds {
-    display: inline-flex;
+    position: absolute;
+    z-index: 2;
+    display: flex;
     gap: 4px;
-    margin-left: 6px;
-    vertical-align: middle;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translate(-6px, -50%);
     visibility: hidden;
     opacity: 0;
-    transform: translateX(-8px);
+    pointer-events: none;
     transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
   }
   .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds.is-revealed {
     visibility: visible;
     opacity: 1;
-    transform: none;
+    pointer-events: auto;
+    transform: translate(0, -50%);
     transition: opacity 0.2s ease, transform 0.2s ease;
   }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="off"] { display: none; }
   .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind {
-    display: inline-block;
-    padding: 0 7px;
-    height: 20px;
-    line-height: 20px;
-    font-size: 12px;
-    border-radius: 10px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
     background: #444;
     color: #ddd;
     border: 1px solid #777;
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 1;
     cursor: pointer;
     user-select: none;
-    white-space: nowrap;
   }
-  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind::before {
-    margin-right: 3px;
-    font-size: 10px;
-  }
-  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-long::before { content: '▭'; }
-  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-short::before { content: '▯'; }
   .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:hover,
   .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:focus-visible {
     background: #666;
     color: #fff;
-    border-color: #aaa;
+    border-color: #bbb;
     outline: none;
   }
-  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:active {
-    transform: scale(0.94);
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind:active { transform: scale(0.92); }
+  /* 中身の記号（文字は出さない）。投稿動画=映画、ショート=縦長の画面 */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-long::before { content: '🎬'; font-size: 12px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKind.is-short::before { content: '📱'; font-size: 12px; }
+  /* stack（既定）: ▶ の右に小さく縦2段。見た目は小さいが、押せる範囲は ::after で上下左右に広げる */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="stack"] { flex-direction: column; gap: 2px; left: calc(100% + 4px); }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="stack"] .ownerVideoKind { width: 20px; height: 12px; border-radius: 2px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="stack"] .ownerVideoKind::after {
+    content: ''; position: absolute; inset: -2px -6px;
   }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="stack"] .ownerVideoKind.is-long::before { content: '▶'; font-size: 7px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="stack"] .ownerVideoKind.is-short::before { content: '▯'; font-size: 9px; }
+  /* shape: 横長の枠=投稿動画、縦長の枠=ショート */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="shape"] { align-items: center; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="shape"] .ownerVideoKind.is-long { width: 30px; height: 18px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="shape"] .ownerVideoKind.is-short { width: 16px; height: 26px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="shape"] .ownerVideoKind::before { content: '▶'; font-size: 8px; }
+  /* row（既定）: 名前の下の段の中央に「動画」「ショート」の札。段の場所は最初から空けておき、出ても下の内容は動かない */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .owner[data-kinds-style="row"] { position: relative; padding-bottom: 30px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .owner[data-kinds-style="row"] .ownerVideoAnchor { position: static; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="row"] {
+    left: 50%; top: auto; bottom: 2px; gap: 6px; transform: translate(-50%, -4px);
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="row"].is-revealed { transform: translate(-50%, 0); }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="row"] .ownerVideoKind {
+    width: auto; height: 22px; padding: 0 10px; border-radius: 11px; font-size: 12px; white-space: nowrap;
+  }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="row"] .ownerVideoKind.is-long::before { content: '▭ 動画'; font-size: 12px; }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="row"] .ownerVideoKind.is-short::before { content: '▯ ショート'; font-size: 12px; }
+  /* below: ▶ の真下に丸いボタン（横にはみ出さない） */
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="below"] { left: 50%; top: calc(100% + 6px); transform: translate(-50%, -6px); }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="below"].is-revealed { transform: translate(-50%, 0); }
+  .zenzaWatchVideoInfoPanel .videoInfoTab .ownerVideoKinds[data-kinds-style="below"] .ownerVideoKind { border-radius: 50%; }
 
   .zenzaWatchVideoInfoPanel .videoInfoTab .owner:hover .playlistAppend,
   .zenzaWatchVideoInfoPanel .videoInfoTab .watch:hover .playlistAppend,
@@ -1628,14 +1678,16 @@ VideoInfoPanel.__tpl__ = (`
               </a>
               <span class="owner">
                 <span class="ownerName"></span>
-                <zenza-playlist-append class="playlistSetUploadedVideo userVideo"
-                  data-command="ownerVideo"
-                  title="投稿動画一覧をプレイリストで開く（動画とショートの両方。投稿日時の順）">▶</zenza-playlist-append>
-                <span class="ownerVideoKinds" role="group" aria-label="種類を選んで投稿動画一覧を開く">
-                  <span class="ownerVideoKind is-long" data-command="ownerVideoLong" role="button" tabindex="0"
-                    title="投稿動画だけをプレイリストで開く（ショートを除く）">動画</span>
-                  <span class="ownerVideoKind is-short" data-command="ownerVideoShort" role="button" tabindex="0"
-                    title="投稿ショート動画だけをプレイリストで開く">ショート</span>
+                <span class="ownerVideoAnchor">
+                  <zenza-playlist-append class="playlistSetUploadedVideo userVideo"
+                    data-command="ownerVideo"
+                    title="投稿動画一覧をプレイリストで開く（動画とショートの両方。投稿日時の順）">▶</zenza-playlist-append>
+                  <span class="ownerVideoKinds" data-kinds-style="row" role="group" aria-label="種類を選んで投稿動画一覧を開く">
+                    <span class="ownerVideoKind is-long" data-command="ownerVideoLong" role="button" tabindex="0"
+                      title="投稿動画だけをプレイリストで開く（ショートを除く）" aria-label="投稿動画だけ"></span>
+                    <span class="ownerVideoKind is-short" data-command="ownerVideoShort" role="button" tabindex="0"
+                      title="投稿ショート動画だけをプレイリストで開く" aria-label="投稿ショート動画だけ"></span>
+                  </span>
                 </span>
               </span>
             </div>

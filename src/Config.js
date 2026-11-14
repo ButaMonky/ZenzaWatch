@@ -163,6 +163,8 @@ const Config = (() => {
         videoOwnerFilter: '',
         enableCommentPanel: true,
         enableCommentPanelAutoScroll: true,
+        // Task1043: 投稿者の ▶ に出す「動画のみ」「ショートのみ」ボタンの形 row=名前の下の段の中央（既定）/ stack=右に縦2段 / square=四角 / shape=横長と縦長 / below=▶ の下 / off=出さない
+        'videoInfo.ownerVideoKindsStyle': 'row',
         'commentPanel.nicoruStyle': 'dark', // Task1039: ニコるの見た目 dark=公式ダークモード / light=公式ライトモード / legacy=旧式
         commentSpeedRate: 1.0,
         autoCommentSpeedRate: false,
@@ -578,6 +580,7 @@ const Config = (() => {
                 pipPageThumbnailSource: ['smart', 'legacy'],
                 'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
                 'commentPanel.nicoruStyle': ['dark', 'light', 'legacy'],
+                'videoInfo.ownerVideoKindsStyle': ['row', 'stack', 'square', 'shape', 'below', 'off'],
                 'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
                 'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
                 'videoSearch.selectContentType': ['long', 'short'],

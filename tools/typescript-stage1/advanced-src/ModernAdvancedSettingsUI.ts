@@ -767,7 +767,7 @@ declare panel: HTMLElement;
     const id=descriptor.id;
     if(![
       'screenMode','screenMode:ginza','screenMode:others',
-      'fullscreenControlBarMode','videoHeader.position',
+      'fullscreenControlBarMode','videoHeader.position','videoInfo.ownerVideoKindsStyle',
       'commentLayer.textShadowType','commentLayer.ownerCommentShadowColor',
       'cssFontWeight','baseFontFamily','baseChatScale','screenshot.prefix',
       'screenshot.filenameTemplate'
@@ -790,6 +790,17 @@ declare panel: HTMLElement;
         '<div class="zw-example-fly">サンプルコメント　→</div>'+
         '<div class="zw-example-controlbar">▶ ━━━━━━━━━━ ◖ ))</div>'+
         '</div><div class="zw-example-sidebar">情報・タグ</div>';
+      area.append(stage);
+    }else if(id==='videoInfo.ownerVideoKindsStyle'){
+      // Task1043: 投稿者名・▶・2つのボタンの模式図（実際の動画情報と同じ配置）
+      const stage=this.doc.createElement('div');
+      stage.className='zw-example-screen zw-example-ownerkinds';
+      stage.style.flexDirection='column';
+      stage.innerHTML='<div style="width:44px;height:44px;border-radius:4px;background:#8d8d8d"></div>'+
+        '<div class="zw-ok-row" style="position:relative;display:flex;align-items:center;gap:8px;color:#ddd;font-size:15px">'+
+        '<span>投稿者名</span><span class="zw-ok-play" style="position:relative;width:20px;height:20px;background:#666;border:1px outset #999;'+
+        'border-radius:3px;font-size:10px;display:flex;align-items:center;justify-content:center">▶'+
+        '<span class="zw-ok-kinds" style="position:absolute;display:flex;gap:4px"></span></span></div>';
       area.append(stage);
     }else if(id==='screenshot.prefix' || id==='screenshot.filenameTemplate'){
       const code=this.doc.createElement('code');
@@ -848,6 +859,42 @@ declare panel: HTMLElement;
         overlay:'動画に重ね、操作時にだけ表示します。',
         'overlay-visible':'動画に重ね、常時表示します。'
       })[value]||'動画ヘッダーの配置例です。';
+    }else if(id==='videoInfo.ownerVideoKindsStyle'){
+      const kinds=area.querySelector<HTMLElement>('.zw-ok-kinds');
+      if(kinds){
+        const box=(w:number,h:number,r:number,text:string)=>'<span style="width:'+w+'px;height:'+h+'px;border-radius:'+r+
+          'px;background:#444;border:1px solid #777;color:#ddd;font-size:8px;display:flex;align-items:center;justify-content:center">'+text+'</span>';
+        const pill=(text:string)=>'<span style="padding:0 7px;height:16px;border-radius:8px;background:#444;border:1px solid #777;color:#ddd;'+
+          'font-size:10px;display:flex;align-items:center;white-space:nowrap">'+text+'</span>';
+        const layout: Record<string,[string,string]>={
+          row:['top:calc(100% + 6px);left:50%;transform:translateX(-50%);gap:5px',pill('▭ 動画')+pill('▯ ショート')],
+          stack:['left:calc(100% + 4px);top:-3px;flex-direction:column;gap:2px',box(18,11,2,'▶')+box(18,11,2,'▯')],
+          square:['left:calc(100% + 6px);top:0',box(20,20,3,'🎬')+box(20,20,3,'📱')],
+          shape:['left:calc(100% + 6px);top:50%;transform:translateY(-50%);align-items:center',box(24,14,2,'▶')+box(13,20,2,'▶')],
+          below:['top:calc(100% + 5px);left:50%;transform:translateX(-50%)',box(20,20,10,'🎬')+box(20,20,10,'📱')],
+          off:['',''],
+        };
+        const [style,html]=layout[value]||layout.row;
+        // 名前の下の段は、名前と ▶ の組の中央に置く
+        if(value==='row'){
+          const row=area.querySelector<HTMLElement>('.zw-ok-row');
+          if(row&&kinds.parentElement!==row){row.style.paddingBottom='24px';row.append(kinds);}
+        }else{
+          const row=area.querySelector<HTMLElement>('.zw-ok-row'),play=area.querySelector<HTMLElement>('.zw-ok-play');
+          if(row)row.style.paddingBottom='';
+          if(play&&kinds.parentElement!==play)play.append(kinds);
+        }
+        kinds.setAttribute('style','position:absolute;display:flex;gap:4px;'+style);
+        kinds.innerHTML=html;
+      }
+      caption.textContent=({
+        row:'名前の下の段の中央に「動画」「ショート」。いちばん分かりやすい形です（段の場所は最初から空けておきます）。',
+        stack:'▶ の右に小さく縦2段。いちばん目立ちません（上が投稿動画、下がショート）。',
+        square:'▶ と同じ大きさの四角いボタン。映画は投稿動画、スマホはショート。',
+        shape:'横長の枠は投稿動画、縦長の枠はショート。形だけで区別します。',
+        below:'▶ の真下に丸いボタン。名前が長くても横にはみ出しません。',
+        off:'ボタンを出しません。▶ で動画とショートの両方を読み込みます。'
+      } as Record<string,string>)[value]||'投稿者の ▶ の横に出るボタンの例です。';
     }else if(id==='screenshot.prefix' || id==='screenshot.filenameTemplate'){
       const prefix=String(this.model.get('screenshot.prefix')??'');
       const template=String(this.model.get('screenshot.filenameTemplate')??'');

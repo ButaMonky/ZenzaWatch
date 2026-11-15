@@ -63,6 +63,7 @@ const Config = (() => {
     autoPauseCommentInput: true, // コメント入力時に自動停止する
     sharedNgLevel: 'MID',      // NG共有の強度 NONE, LOW, MID, HIGH, MAX
     enablePushState: true,     // ブラウザの履歴に乗せる
+    'historyExtension.enable': true, // Task1046: 視聴履歴の拡張機能（ニコつべSaver など）に再生中の動画の情報を渡す
     enableHeatMap: true,
     // Original-page still image shown while native/comment PiP plays.
     pipPageThumbnail: true,

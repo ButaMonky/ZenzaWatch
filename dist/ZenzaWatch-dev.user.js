@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.432-task1044
+// @version        2.7.434-task1046
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-14 23:36Z 0bc4043
+// build: 2026-11-15 10:37Z 340cf51
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1335,7 +1335,7 @@ function createDisplaySettings(w, gm, registered=[]) {
     storageTiming:()=>({saveCount:storageTiming.saveCount,totalSaveMs:Math.round(storageTiming.totalSaveMs),maxSaveMs:Math.round(storageTiming.maxSaveMs)})};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.nicoadEnd","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","videoInfo.ownerVideoKindsStyle","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","historyExtension.enable","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.nicoadEnd","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","videoInfo.ownerVideoKindsStyle","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -2071,10 +2071,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.432-task1044';
+    var VER = '2.7.434-task1046';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-14 23:36Z 0bc4043';
+    var BUILD = '2026-11-15 10:37Z 340cf51';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5943,6 +5943,7 @@ const Config = (() => {
 				autoPauseCommentInput: true, // コメント入力時に自動停止する
 				sharedNgLevel: 'MID', // NG共有の強度 NONE, LOW, MID, HIGH, MAX
 				enablePushState: true, // ブラウザの履歴に乗せる
+				'historyExtension.enable': true, // Task1046: 視聴履歴の拡張機能（ニコつべSaver など）に再生中の動画の情報を渡す
 				enableHeatMap: true,
 				pipPageThumbnail: true,
 				pipPageThumbnailSource: 'smart',
@@ -9090,7 +9091,72 @@ const WatchPageHistory = (() => {
 		let isPushed = false;
 		let pushedUrl = null;
 		let navigationGeneration = 0;
+		/*
+		* Task1046: 視聴履歴の拡張機能（ニコつべSaver など）への情報の受け渡し。
+		* こうした拡張機能は「URL が /watch/… になった」ことを見て、視聴ページの部品
+		* （document.title・投稿者名・ジャンル・タグ・og:image・JSON-LD）から履歴を作る。
+		* ZenzaWatch は既読リンクの着色のために URL を3秒だけ動画のものにしているが、
+		* 検索・タグページなどにはその部品が無いので、従来は記録されないか、ページ側の
+		* ジャンル・タグ・サムネイルが混ざっていた。URL を書き換えている間だけ、公式の
+		* 視聴ページと同じ名前の部品を見えない形で置き、URL を戻すときに取り除く。
+		* 置くのは公開情報（題名・投稿者名・ジャンル・タグ・サムネイル・長さ）だけ。
+		* 設定 historyExtension.enable（初期値ON）で止められる。
+		*/
+		const MARK = 'data-zenza-history-bridge';
+		const removeHistoryBridge = () => {
+				for (const el of Array.from(document.querySelectorAll(`[${MARK}]`))) {
+						el.remove();
+				}
+		};
+		const isHistoryBridgeEnabled = () => dialog?._playerConfig?.getValue?.('historyExtension.enable') !== false;
+		const isoDuration = (sec) => {
+				const n = Math.max(0, Math.floor(Number(sec) || 0));
+				return `PT${Math.floor(n / 3600) ? Math.floor(n / 3600) + 'H' : ''}${Math.floor(n % 3600 / 60)}M${n % 60}S`;
+		};
+		const putHistoryBridge = (info) => {
+				removeHistoryBridge();
+				const head = document.head, body = document.body;
+				if (!head || !body) {
+						return;
+				}
+				const ld = document.createElement('script');
+				ld.type = 'application/ld+json';
+				ld.setAttribute(MARK, '');
+				ld.textContent = JSON.stringify({
+						'@context': 'https://schema.org', '@type': 'VideoObject', name: info.title,
+						url: `https://www.nicovideo.jp/watch/${info.watchId}`,
+						...(info.thumbnail ? { thumbnailUrl: [info.thumbnail] } : {}),
+						...(info.duration > 0 ? { duration: isoDuration(info.duration) } : {}),
+						...(info.owner ? { author: { '@type': 'Person', name: info.owner } } : {})
+				});
+				const og = document.createElement('meta');
+				og.setAttribute('property', 'og:image');
+				og.setAttribute('content', info.thumbnail || '');
+				og.setAttribute(MARK, '');
+				head.prepend(og, ld);
+				const box = document.createElement('div');
+				box.setAttribute(MARK, '');
+				box.hidden = true;
+				box.setAttribute('aria-hidden', 'true');
+				box.style.display = 'none';
+				const add = (className, text) => {
+						const el = document.createElement('span');
+						el.className = className;
+						el.textContent = text;
+						box.append(el);
+				};
+				if (info.owner) {
+						add('VideoOwnerInfo-pageLink', info.owner);
+				}
+				add('GenreRankLabel', info.genre || '未設定');
+				for (const tag of info.tags) {
+						add('TagItem-name', tag);
+				}
+				body.prepend(box);
+		};
+		let bridgeInfo = null;
 		const restore = () => {
+				removeHistoryBridge();
 				if (isPushed) {
 						if (window.location.href === pushedUrl) {
 								history.replaceState(history.state, null, originalUrl);
@@ -9115,8 +9181,15 @@ const WatchPageHistory = (() => {
 						updateOriginal();
 				history.replaceState(history.state, null, path);
 				pushedUrl = window.location.href;
-				document.title = (isOpen ? '📺' : '') + title.replace(/^📺/, '');
+				const bridge = bridgeInfo && path === `/watch/${bridgeInfo.watchId}` && isHistoryBridgeEnabled() ? bridgeInfo : null;
+				document.title = bridge ? `${bridge.title} - ニコニコ動画` : (isOpen ? '📺' : '') + title.replace(/^📺/, '');
 				isPushed = true;
+				if (bridge) {
+						putHistoryBridge(bridge);
+				}
+				else {
+						removeHistoryBridge();
+				}
 				bouncedRestore();
 		};
 		const updateOriginal = () => {
@@ -9129,12 +9202,13 @@ const WatchPageHistory = (() => {
 				originalUrl = window && window.location && window.location.href;
 				originalTitle = window && window.document && window.document.title;
 		};
-		const onVideoInfoLoad = _.debounce(({ watchId, title, owner, generation, requestId }) => {
+		const onVideoInfoLoad = _.debounce(({ watchId, title, owner, generation, requestId, bridge }) => {
 				if (dialog?._playerConfig?.getValue('enablePushState') === false || !watchId || !isOpen || generation !== navigationGeneration ||
 						requestId !== dialog?._requestId) {
 						return;
 				}
 				const name = owner?.name;
+				bridgeInfo = bridge || null;
 				title = `${title}${name ? ` by ${name}` : ''} - ${PRODUCT}`;
 				path = `/watch/${watchId}`;
 				if (location.host === 'www.nicovideo.jp') {
@@ -9146,8 +9220,23 @@ const WatchPageHistory = (() => {
 		});
 		const onDialogVideoInfoLoad = (info) => {
 				const { watchId, title, owner } = info;
+				let bridge = null;
+				try {
+						const tags = (Array.isArray(info.tagList) ? info.tagList : [])
+								.map((t) => typeof t === 'string' ? t : (t?.tag || t?.name || ''))
+								.filter((t) => typeof t === 'string' && t).slice(0, 100);
+						const thumb = [info.betterThumbnail, info.thumbnail].find((u) => typeof u === 'string' && /^https:\/\//.test(u)) || '';
+						bridge = watchId ? {
+								watchId: String(watchId), title: String(title || ''), owner: typeof owner?.name === 'string' ? owner.name : '',
+								genre: typeof info.genre?.label === 'string' ? info.genre.label : '', tags, thumbnail: thumb,
+								duration: Number(info.duration) || 0
+						} : null;
+				}
+				catch (_e) {
+						bridge = null;
+				}
 				onVideoInfoLoad({ watchId, title, owner: { name: owner?.name },
-						generation: navigationGeneration, requestId: dialog?._requestId });
+						generation: navigationGeneration, requestId: dialog?._requestId, bridge });
 		};
 		const onDialogOpen = () => {
 				navigationGeneration++;
@@ -9158,6 +9247,8 @@ const WatchPageHistory = (() => {
 		const onDialogClose = () => {
 				navigationGeneration++;
 				onVideoInfoLoad.cancel();
+				removeHistoryBridge();
+				bridgeInfo = null;
 				isOpen = false;
 				watchId = title = path = null;
 				if (isPushed)
@@ -59531,6 +59622,9 @@ class NicoVideoPlayerDialog extends Emitter {
 			.zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #c58a54; }
 			.zenzaNicoadEnd-thumb::before { content:"📣"; position:absolute; left:0; top:0; padding:.15em .35em;
 				background:#fcd842; border-bottom-right-radius:6px; font-size:.9em; }
+			/* Task1045: 左上のマークも装飾の色に合わせる（以前は銀・銅でも金色だった） */
+			.zenzaNicoadEnd-item.is-silver .zenzaNicoadEnd-thumb::before { background:#c9ccd1; }
+			.zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb::before { background:#c58a54; }
 			.zenzaNicoadEnd-item:hover .zenzaNicoadEnd-title { text-decoration:underline; }
 			.zenzaNicoadEnd-title { font-weight:bold; line-height:1.3; display:-webkit-box; -webkit-box-orient:vertical;
 				-webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; }
@@ -75429,6 +75523,8 @@ class ModernAdvancedSettingsModel {
 										}],
 								['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く', { hidden: true }],
 								['enablePushState', 'ブラウザの履歴への反映を利用'],
+								['historyExtension.enable', '視聴履歴の拡張機能（ニコつべSaver など）に記録させる', { dependsOn: 'enablePushState',
+												description: '初期状態はONです。ZenzaWatch で動画を開いたとき、URL を動画のページに書き換えている約3秒の間だけ、公式の視聴ページと同じ形で題名・投稿者名・ジャンル・タグ・サムネイル・長さをページに置き、視聴履歴を保存する拡張機能が正しく記録できるようにします。その間だけタブの題名も「動画の題名 - ニコニコ動画」になります。置くのは公開されている動画の情報だけで、外部へは何も送りません。「ブラウザの履歴への反映を利用」がOFFのときは働きません。' }],
 								['allowOtherDomain', '外部サイトの連携を許可'],
 								['loadLinkedChannelVideo', 'チャンネル動画のリンクを取得']
 						]),
@@ -75537,6 +75633,7 @@ class ModernAdvancedSettingsModel {
 						'touch.tap2command': 'touch.enable', 'touch.tap3command': 'touch.enable',
 						'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
 						'enableCommentPanelAutoScroll': 'enableCommentPanel',
+						'historyExtension.enable': 'enablePushState',
 						'commentPanel.nicoruStyle': 'enableCommentPanel',
 						'pipPageThumbnailSource': 'pipPageThumbnail',
 						'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',
@@ -85478,7 +85575,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.432-task1044",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.434-task1046",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

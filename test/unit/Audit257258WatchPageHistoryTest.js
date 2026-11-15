@@ -19,7 +19,8 @@ function fixture(file){
     timers.push(call);return call;
   };
   let enabled=true; const settingListeners={};
-  const config={getValue:()=>enabled,onkey:(key,fn)=>{settingListeners[key]=fn;}};
+  // Task1046: 履歴拡張機能向けの受け渡し（題名を公式の形にする）は別の試験で確かめるので、ここでは止める
+  const config={getValue:key=>key==='historyExtension.enable'?false:enabled,onkey:(key,fn)=>{settingListeners[key]=fn;}};
   const events={},dialog={_playerConfig:config,_requestId:'A',_watchId:'smA',on(name,callback){events[name]=callback;}};
   const ctx=createContext({window:dom.window,document,location:dom.window.location,
     history,navigator:{locks:null},PRODUCT:'ZenzaWatch',NicoVideoApi:{},

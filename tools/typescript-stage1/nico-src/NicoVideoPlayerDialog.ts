@@ -6087,6 +6087,9 @@ class NicoVideoPlayerDialog extends Emitter {
       .zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb { box-shadow:0 0 0 3px #c58a54; }
       .zenzaNicoadEnd-thumb::before { content:"📣"; position:absolute; left:0; top:0; padding:.15em .35em;
         background:#fcd842; border-bottom-right-radius:6px; font-size:.9em; }
+      /* Task1045: 左上のマークも装飾の色に合わせる（以前は銀・銅でも金色だった） */
+      .zenzaNicoadEnd-item.is-silver .zenzaNicoadEnd-thumb::before { background:#c9ccd1; }
+      .zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb::before { background:#c58a54; }
       .zenzaNicoadEnd-item:hover .zenzaNicoadEnd-title { text-decoration:underline; }
       .zenzaNicoadEnd-title { font-weight:bold; line-height:1.3; display:-webkit-box; -webkit-box-orient:vertical;
         -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; }

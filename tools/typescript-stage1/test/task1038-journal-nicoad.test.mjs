@@ -67,3 +67,7 @@ test('posted comment gets the current date instead of 1970 and nicoru uses anima
  const panel=readFileSync(new URL('../nico-src/CommentPanel.ts',import.meta.url),'utf8');
  assert(panel.includes('nicoru-animated'));assert(panel.includes('zenzaNicoruRotate'));assert(/<svg[^>]*class="nicoru-icon"/.test(panel));
 });
+test('Task1045: corner mark color follows gold/silver/bronze decoration',()=>{
+ assert(dialogSrc.includes('.zenzaNicoadEnd-item.is-silver .zenzaNicoadEnd-thumb::before { background:#c9ccd1; }'));
+ assert(dialogSrc.includes('.zenzaNicoadEnd-item.is-bronze .zenzaNicoadEnd-thumb::before { background:#c58a54; }'));
+});

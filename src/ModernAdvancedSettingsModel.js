@@ -720,6 +720,8 @@ class ModernAdvancedSettingsModel {
                     }],
                 ['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く', { hidden: true }],
                 ['enablePushState', 'ブラウザの履歴への反映を利用'],
+                ['historyExtension.enable', '視聴履歴の拡張機能（ニコつべSaver など）に記録させる', { dependsOn: 'enablePushState',
+                        description: '初期状態はONです。ZenzaWatch で動画を開いたとき、URL を動画のページに書き換えている約3秒の間だけ、公式の視聴ページと同じ形で題名・投稿者名・ジャンル・タグ・サムネイル・長さをページに置き、視聴履歴を保存する拡張機能が正しく記録できるようにします。その間だけタブの題名も「動画の題名 - ニコニコ動画」になります。置くのは公開されている動画の情報だけで、外部へは何も送りません。「ブラウザの履歴への反映を利用」がOFFのときは働きません。' }],
                 ['allowOtherDomain', '外部サイトの連携を許可'],
                 ['loadLinkedChannelVideo', 'チャンネル動画のリンクを取得']
             ]),
@@ -829,6 +831,7 @@ class ModernAdvancedSettingsModel {
             'touch.tap2command': 'touch.enable', 'touch.tap3command': 'touch.enable',
             'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
             'enableCommentPanelAutoScroll': 'enableCommentPanel',
+            'historyExtension.enable': 'enablePushState',
             'commentPanel.nicoruStyle': 'enableCommentPanel',
             'pipPageThumbnailSource': 'pipPageThumbnail',
             'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',

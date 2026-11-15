@@ -15,8 +15,11 @@ class HoverMenu {
     initialize(param) {
         this._playerConfig = param.playerConfig;
         const $view = this._$view = uq('<zen-button class="ZenButton"><div class="ZenButtonInner scalingUI">Zen</div></zen-button>');
-        if (!nicoUtil.isGinzaWatchUrl() &&
-            this._playerConfig.props.overrideWatchLink &&
+        // Task1048: 公式の視聴ページ（/watch/・/shorts/）でも「クリックで ZenzaWatch を開く」を使う。
+        // 以前は視聴ページだけ除外して Zen ボタンの方式に戻していたため、この設定をONにしていても
+        // 視聴ページでは関連動画などをクリックすると公式のページ遷移になり、Zen ボタンも出ない設定の人は
+        // ZenzaWatch を呼び出せなかった。
+        if (this._playerConfig.props.overrideWatchLink &&
             location && location.host.endsWith('.nicovideo.jp')) {
             this._overrideWatchLink();
         }
@@ -334,6 +337,17 @@ class HoverMenu {
         }
         return { target, ...ref };
     }
+    /** Task1048: 公式の視聴ページの動画（公式プレイヤー）を一時停止する。ZenzaWatch の動画には触れない */
+    static pauseOfficialPlayer() {
+        try {
+            for (const video of Array.from(document.querySelectorAll('.grid-area_\\[player\\] video'))) {
+                if (!video.paused) {
+                    video.pause();
+                }
+            }
+        }
+        catch (_e) { /* 公式の画面構成が変わっていても ZenzaWatch を開く処理は止めない */ }
+    }
     _overrideWatchLink() {
         // Task202 / issue #1: claim a real video click before page/React navigation.
         // Late mouseover-installed handlers can run after the official header handler.
@@ -350,6 +364,10 @@ class HoverMenu {
             // The existing preview guard only pauses page media; it does not seek Zenza.
             WatchClickNavigation.begin(window, e, watchId, () => {
                 this._pagePreviewGuard?.claim(target);
+                // Task1048: 公式の視聴ページでは、公式プレイヤーの再生を止めてから開く（二重に音が出ないように）
+                if (nicoUtil.isGinzaWatchUrl()) {
+                    HoverMenu.pauseOfficialPlayer();
+                }
                 this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
                 if (e.shiftKey) {
                     this._send(watchId);

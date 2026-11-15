@@ -30,7 +30,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // ==/UserScript==
-// build: 2026-11-15 11:03Z 27570b2
+// build: 2026-11-15 16:05Z 3c3e39f
 /* eslint-disable */
 
 

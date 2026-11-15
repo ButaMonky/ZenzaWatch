@@ -713,7 +713,7 @@ class ModernAdvancedSettingsModel {
             ]),
             ...group('プレイリスト・検索', 'リンク・移動', [
                 ['overrideWatchLink', '動画リンクをZenzaWatchで開く', {
-                        description: 'ニコニコ動画内のリンクが対象です。外部サイトの直接クリック切替は非対応です。'
+                        description: 'ニコニコ動画内のリンクが対象です。公式の視聴ページ（動画を再生しているページ）でも働き、そのときは公式プレイヤーを一時停止してから ZenzaWatch で開きます。外部サイトの直接クリック切替は非対応です。'
                     }],
                 ['overrideWatchLink:allowPropagation', '動画リンクのクリックを他のスクリプトにも伝える', {
                         hidden: true, description: 'クリック伝播は自動で管理します。'

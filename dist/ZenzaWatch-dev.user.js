@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.435-task1047
+// @version        2.7.436-task1048
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-15 11:03Z 27570b2
+// build: 2026-11-15 16:05Z 3c3e39f
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2071,10 +2071,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.435-task1047';
+    var VER = '2.7.436-task1048';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-15 11:03Z 27570b2';
+    var BUILD = '2026-11-15 16:05Z 3c3e39f';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -73287,8 +73287,7 @@ class HoverMenu {
 		initialize(param) {
 				this._playerConfig = param.playerConfig;
 				const $view = this._$view = uq('<zen-button class="ZenButton"><div class="ZenButtonInner scalingUI">Zen</div></zen-button>');
-				if (!nicoUtil.isGinzaWatchUrl() &&
-						this._playerConfig.props.overrideWatchLink &&
+				if (this._playerConfig.props.overrideWatchLink &&
 						location && location.host.endsWith('.nicovideo.jp')) {
 						this._overrideWatchLink();
 				}
@@ -73583,6 +73582,16 @@ class HoverMenu {
 				}
 				return { target, ...ref };
 		}
+		static pauseOfficialPlayer() {
+				try {
+						for (const video of Array.from(document.querySelectorAll('.grid-area_\\[player\\] video'))) {
+								if (!video.paused) {
+										video.pause();
+								}
+						}
+				}
+				catch (_e) { /* 公式の画面構成が変わっていても ZenzaWatch を開く処理は止めない */ }
+		}
 		_overrideWatchLink() {
 				if (this._watchLinkClick) {
 						return;
@@ -73595,6 +73604,9 @@ class HoverMenu {
 						const { target, watchId, url } = intent;
 						WatchClickNavigation.begin(window, e, watchId, () => {
 								this._pagePreviewGuard?.claim(target);
+								if (nicoUtil.isGinzaWatchUrl()) {
+										HoverMenu.pauseOfficialPlayer();
+								}
 								this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
 								if (e.shiftKey) {
 										this._send(watchId);
@@ -75594,7 +75606,7 @@ class ModernAdvancedSettingsModel {
 						]),
 						...group('プレイリスト・検索', 'リンク・移動', [
 								['overrideWatchLink', '動画リンクをZenzaWatchで開く', {
-												description: 'ニコニコ動画内のリンクが対象です。外部サイトの直接クリック切替は非対応です。'
+												description: 'ニコニコ動画内のリンクが対象です。公式の視聴ページ（動画を再生しているページ）でも働き、そのときは公式プレイヤーを一時停止してから ZenzaWatch で開きます。外部サイトの直接クリック切替は非対応です。'
 										}],
 								['overrideWatchLink:allowPropagation', '動画リンクのクリックを他のスクリプトにも伝える', {
 												hidden: true, description: 'クリック伝播は自動で管理します。'
@@ -85678,7 +85690,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.435-task1047",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.436-task1048",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

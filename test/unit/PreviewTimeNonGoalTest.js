@@ -11,7 +11,9 @@ function fixture(path, singleton = false) {
   const claims=[];
   const nicoUtil = {
     getWatchId:url=>(/\/watch\/(sm\d+)/.exec(url)||[])[1]||null,
-    parseWatchQuery:query=>({from:query})
+    parseWatchQuery:query=>({from:query}),
+    // Task1048: 視聴ページでは公式プレイヤーを止めてから開く。この試験は検索ページ
+    isGinzaWatchUrl:()=>false
   };
   const ctx=createContext({window:win,document:win.document,location:win.location,
     URL:win.URL,nicoUtil,ZenzaWatch:{emitter:{emit(){}},external:{

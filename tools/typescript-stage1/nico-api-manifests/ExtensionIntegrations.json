@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/ExtensionIntegrations.ts",
+  "runtime": "packages/zenza/src/init/ExtensionIntegrations.js",
+  "sourceSha256": "72d2430573e713d35f59e6fba545d966cf150a2a9d5a17a865dd529526a9983b",
+  "runtimeSha256": "a251dfa5dd998ed024cd21998d3c6d7b8f5340730ad5dfd0e325fce9bf938c6b"
+}

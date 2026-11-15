@@ -3,7 +3,7 @@
   "source": "tools/typescript-stage1/advanced-src/ModernAdvancedSettingsUI.ts",
   "emitted": "tools/typescript-stage1/.generated/advanced/ModernAdvancedSettingsUI.js",
   "runtime": "src/ModernAdvancedSettingsUI.js",
-  "sourceSha256": "c9b35bf812e48c5452c9370258c7e386c27549c27a9778b32ca4c716d63a8666",
-  "runtimeSha256": "bcee689cf7ceb64786d1a1e811f42cbb086f6ae7b547d10485c5e124bbc568ce",
-  "semanticSha256": "af4560ae116b83cd71574c00fa1394c06fb69ef5e4afc3cf3acc4dae816d07fc"
+  "sourceSha256": "315f62a4c60802d32a01391b7a55116f7783ed23e53c148e26c0a82f724039f5",
+  "runtimeSha256": "16e975d5fbbf092b06416c7d7367ecf7a66ce727b39c56600e984e3eb58845c9",
+  "semanticSha256": "b38d0c9163d7ada7b9a45c55d9f0b1764cbdb781f64be8cc69f6241d9514c0f3"
 }

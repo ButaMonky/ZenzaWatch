@@ -1581,6 +1581,23 @@ class ModernAdvancedSettingsUI {
             summary.textContent = summaryText.length > 120 ? summaryText.slice(0, 120) + '…' : summaryText;
             card.append(summary);
         }
+        // Task1047: 説明の下に関連リンク（拡張機能のストアなど）。https のものだけ、新しいタブで開く
+        const links = Array.isArray(descriptor.links) ? descriptor.links : [];
+        const safeLinks = links.filter(link => typeof link?.url === 'string' && /^https:\/\//.test(link.url) && typeof link.label === 'string');
+        if (safeLinks.length) {
+            const box = this.doc.createElement('p');
+            box.className = 'zw-modern-links';
+            for (const link of safeLinks) {
+                const a = this.doc.createElement('a');
+                a.href = link.url;
+                a.textContent = link.label + ' ↗';
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.style.cssText = 'color:#7cb4ff;margin-right:12px;text-decoration:underline;';
+                box.append(a);
+            }
+            card.append(box);
+        }
         if (descriptor.descriptionDetails || descriptor.description) {
             const note = this.doc.createElement('p');
             note.className = 'zw-modern-note';

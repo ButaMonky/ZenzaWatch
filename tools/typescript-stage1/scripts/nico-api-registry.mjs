@@ -1021,12 +1021,22 @@ export const NICO_API_MODULES=Object.freeze([
     shape:'iife',
     task:'taskNLOG20261023'
   }),
+  // Task1047: adapters for third-party browser extensions (e.g. history savers), used by WatchPageHistory.
+  api({
+    name:'ExtensionIntegrations',
+    runtime:'packages/zenza/src/init/ExtensionIntegrations.js',
+    originalSha256:'e83e2547ea32d24b19419c7ae0f2185205b108adb16bdbda68f61d4663c6c394',
+    preamble:[],
+    shape:'iife',
+    task:'task1047'
+  }),
   // Task902: hover menu, base view and page helpers (dev build).
   api({
     name:"WatchPageHistory",
     runtime:"packages/zenza/src/init/WatchPageHistory.js",
     originalSha256:"75e18a9b66e94b75126789d18c90348d2eb522ee2c5abf437cdcc818b111febd",
-    preamble:["import {nicoUtil} from '../../../lib/src/nico/nicoUtil';","import {PRODUCT} from '../../../../src/ZenzaWatchIndex';","const NicoVideoApi = {};",""],
+    preamble:["import {nicoUtil} from '../../../lib/src/nico/nicoUtil';","import {PRODUCT} from '../../../../src/ZenzaWatchIndex';","import {ExtensionIntegrations} from './ExtensionIntegrations';","const NicoVideoApi = {};",""],
+    beginLines:['//@require ExtensionIntegrations'],
     shape:'declarations',
     topLevel:["const WatchPageHistory = (() => {","})();"],
     exportNames:["WatchPageHistory"],

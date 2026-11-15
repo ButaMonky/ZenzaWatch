@@ -57,7 +57,10 @@ const Config = (() => {
         autoPauseCommentInput: true, // コメント入力時に自動停止する
         sharedNgLevel: 'MID', // NG共有の強度 NONE, LOW, MID, HIGH, MAX
         enablePushState: true, // ブラウザの履歴に乗せる
-        'historyExtension.enable': true, // Task1046: 視聴履歴の拡張機能（ニコつべSaver など）に再生中の動画の情報を渡す
+        'historyExtension.enable': true, // Task1046 の旧キー（Task1047 以降は extensionIntegration.nicotubeSaver。OFF にしていた人はニコつべSaver 連携も OFF のまま）
+        // Task1047: 外部のブラウザ拡張機能との連携（nico-src/ExtensionIntegrations.ts）
+        'extensionIntegration.enable': true, // 外部連携の全体
+        'extensionIntegration.nicotubeSaver': true, // ニコつべSaver
         enableHeatMap: true,
         // Original-page still image shown while native/comment PiP plays.
         pipPageThumbnail: true,

@@ -12,6 +12,12 @@ declare const _: {debounce<T extends (...args: Loose[]) => unknown>(fn: T, wait?
 declare const PRODUCT: string;
 /** Defined as an empty object next to this module; pushHistory is never installed today. */
 declare const NicoVideoApi: {pushHistory?(path: string, title: string): unknown};
+/** Task1047: 外部のブラウザ拡張機能との連携（nico-src/ExtensionIntegrations.ts） */
+declare const ExtensionIntegrations: {
+  snapshotFromVideoInfo(info: Loose): {watchId: string; title: string; owner: string; genre: string; tags: string[]; thumbnail: string; duration: number} | null;
+  onWatchUrlPushed(video: ReturnType<typeof ExtensionIntegrations.snapshotFromVideoInfo>, read: (key: string) => unknown): string | null;
+  onWatchUrlRestored(): void;
+};
 
 /**
  *  pushStateを使ってブラウザバックの履歴に載せようと思ったけど、
@@ -52,67 +58,16 @@ const WatchPageHistory = (() => {
   let navigationGeneration = 0;
 
   /*
-   * Task1046: 視聴履歴の拡張機能（ニコつべSaver など）への情報の受け渡し。
-   * こうした拡張機能は「URL が /watch/… になった」ことを見て、視聴ページの部品
-   * （document.title・投稿者名・ジャンル・タグ・og:image・JSON-LD）から履歴を作る。
-   * ZenzaWatch は既読リンクの着色のために URL を3秒だけ動画のものにしているが、
-   * 検索・タグページなどにはその部品が無いので、従来は記録されないか、ページ側の
-   * ジャンル・タグ・サムネイルが混ざっていた。URL を書き換えている間だけ、公式の
-   * 視聴ページと同じ名前の部品を見えない形で置き、URL を戻すときに取り除く。
-   * 置くのは公開情報（題名・投稿者名・ジャンル・タグ・サムネイル・長さ）だけ。
-   * 設定 historyExtension.enable（初期値ON）で止められる。
+   * Task1046/1047: 外部のブラウザ拡張機能（ニコつべSaver など）との連携は ExtensionIntegrations に任せる。
+   * ここでは「URL を動画のものにした直後」と「元に戻すとき」に知らせるだけ。
+   * 連携の中身・対応している拡張機能・アダプターの足し方は nico-src/ExtensionIntegrations.ts の先頭を参照。
    */
-  const MARK = 'data-zenza-history-bridge';
-  const removeHistoryBridge = () => {
-    for (const el of Array.from(document.querySelectorAll(`[${MARK}]`))) { el.remove(); }
-  };
-  const isHistoryBridgeEnabled = () =>
-    dialog?._playerConfig?.getValue?.('historyExtension.enable') !== false;
-  const isoDuration = (sec: unknown) => {
-    const n = Math.max(0, Math.floor(Number(sec) || 0));
-    return `PT${Math.floor(n / 3600) ? Math.floor(n / 3600) + 'H' : ''}${Math.floor(n % 3600 / 60)}M${n % 60}S`;
-  };
-  const putHistoryBridge = (info: {watchId: string; title: string; owner: string; genre: string; tags: string[]; thumbnail: string; duration: number}) => {
-    removeHistoryBridge();
-    const head = document.head, body = document.body;
-    if (!head || !body) { return; }
-    // 拡張機能は最初に見つかったものを使うので、ページ側の要素より前に置く
-    const ld = document.createElement('script');
-    ld.type = 'application/ld+json';
-    ld.setAttribute(MARK, '');
-    ld.textContent = JSON.stringify({
-      '@context': 'https://schema.org', '@type': 'VideoObject', name: info.title,
-      url: `https://www.nicovideo.jp/watch/${info.watchId}`,
-      ...(info.thumbnail ? {thumbnailUrl: [info.thumbnail]} : {}),
-      ...(info.duration > 0 ? {duration: isoDuration(info.duration)} : {}),
-      ...(info.owner ? {author: {'@type': 'Person', name: info.owner}} : {})
-    });
-    const og = document.createElement('meta');
-    og.setAttribute('property', 'og:image');
-    og.setAttribute('content', info.thumbnail || '');
-    og.setAttribute(MARK, '');
-    head.prepend(og, ld);
-    const box = document.createElement('div');
-    box.setAttribute(MARK, '');
-    box.hidden = true;
-    box.setAttribute('aria-hidden', 'true');
-    box.style.display = 'none';
-    const add = (className: string, text: string) => {
-      const el = document.createElement('span');
-      el.className = className;
-      el.textContent = text;
-      box.append(el);
-    };
-    if (info.owner) { add('VideoOwnerInfo-pageLink', info.owner); }
-    // ジャンルが無い動画は「未設定」（拡張機能は「その他」を読み込み途中とみなして待つため）
-    add('GenreRankLabel', info.genre || '未設定');
-    for (const tag of info.tags) { add('TagItem-name', tag); }
-    body.prepend(box);
-  };
-  let bridgeInfo: Parameters<typeof putHistoryBridge>[0] | null = null;
+  type VideoSnapshot = ReturnType<typeof ExtensionIntegrations.snapshotFromVideoInfo>;
+  let integrationVideo: VideoSnapshot = null;
+  const readSetting = (key: string): unknown => dialog?._playerConfig?.getValue?.(key);
 
   const restore = () => {
-    removeHistoryBridge();
+    ExtensionIntegrations.onWatchUrlRestored();
     if (isPushed) {
       // Another script may have navigated to a different route in the meantime.
       if (window.location.href === pushedUrl) {
@@ -135,12 +90,13 @@ const WatchPageHistory = (() => {
     // Retain the current route state, including changes made by other scripts.
     history.replaceState(history.state, null as unknown as string, path);
     pushedUrl = window.location.href;
-    const bridge = bridgeInfo && path === `/watch/${bridgeInfo.watchId}` && isHistoryBridgeEnabled() ? bridgeInfo : null;
-    // 履歴の拡張機能は題名の末尾「 - ニコニコ動画」を取り除いて保存する。URL を書き換えている間だけ公式と同じ形にする
-    document.title = bridge ? `${bridge.title} - ニコニコ動画` : (isOpen ? '📺' : '') + title.replace(/^📺/, '');
+    const video = integrationVideo && path === `/watch/${integrationVideo.watchId}` ? integrationVideo : null;
+    document.title = (isOpen ? '📺' : '') + title.replace(/^📺/, '');
     isPushed = true;
-    // URL と題名を変えた後で置く（拡張機能はページ本体の変化をきっかけに URL を確かめるため）
-    if (bridge) { putHistoryBridge(bridge); } else { removeHistoryBridge(); }
+    // URL と題名を変えた後に知らせる（拡張機能はページ本体の変化をきっかけに URL を確かめるため）。
+    // 連携先がタブの題名の形を指定したら、URL を書き換えている間だけその題名にする。
+    const integrationTitle = ExtensionIntegrations.onWatchUrlPushed(video, readSetting);
+    if (integrationTitle) { document.title = integrationTitle; }
     bouncedRestore();
   };
 
@@ -173,13 +129,13 @@ const WatchPageHistory = (() => {
     originalTitle = window && window.document && window.document.title;
   };
 
-  const onVideoInfoLoad = _.debounce(({watchId, title, owner, generation, requestId, bridge}: {watchId?: string; title: string; owner?: {name?: string}|null; generation: number; requestId: Loose; bridge?: Parameters<typeof putHistoryBridge>[0] | null}): Loose => {
+  const onVideoInfoLoad = _.debounce(({watchId, title, owner, generation, requestId, video}: {watchId?: string; title: string; owner?: {name?: string}|null; generation: number; requestId: Loose; video?: VideoSnapshot}): Loose => {
     if (dialog?._playerConfig?.getValue('enablePushState') === false || !watchId || !isOpen || generation !== navigationGeneration ||
         requestId !== dialog?._requestId) {
       return;
     }
     const name = owner?.name;
-    bridgeInfo = bridge || null;
+    integrationVideo = video || null;
     title = `${title}${name ? ` by ${name}` : ''} - ${PRODUCT}`;
     path = `/watch/${watchId}`;
 
@@ -195,20 +151,10 @@ const WatchPageHistory = (() => {
     // VideoInfoModel exposes these as prototype getters: object spread loses them.
     // Snapshot only the public values now, before debounce or model mutation.
     const {watchId, title, owner} = info;
-    let bridge: Parameters<typeof putHistoryBridge>[0] | null = null;
-    try {
-      const tags = (Array.isArray(info.tagList) ? info.tagList : [])
-        .map((t: Loose) => typeof t === 'string' ? t : (t?.tag || t?.name || ''))
-        .filter((t: unknown) => typeof t === 'string' && t).slice(0, 100);
-      const thumb = [info.betterThumbnail, info.thumbnail].find((u: unknown) => typeof u === 'string' && /^https:\/\//.test(u)) || '';
-      bridge = watchId ? {
-        watchId: String(watchId), title: String(title || ''), owner: typeof owner?.name === 'string' ? owner.name : '',
-        genre: typeof info.genre?.label === 'string' ? info.genre.label : '', tags, thumbnail: thumb,
-        duration: Number(info.duration) || 0
-      } : null;
-    } catch (_e) { bridge = null; }
+    // 外部連携に渡す公開情報も、この時点で写し取っておく（モデルは後で変わることがある）
+    const video = ExtensionIntegrations.snapshotFromVideoInfo(info);
     onVideoInfoLoad({watchId, title, owner: {name: owner?.name},
-      generation: navigationGeneration, requestId: dialog?._requestId, bridge});
+      generation: navigationGeneration, requestId: dialog?._requestId, video});
   };
   const onDialogOpen = () => {
     navigationGeneration++;
@@ -220,8 +166,8 @@ const WatchPageHistory = (() => {
   const onDialogClose = () => {
     navigationGeneration++;
     onVideoInfoLoad.cancel();
-    removeHistoryBridge();
-    bridgeInfo = null;
+    ExtensionIntegrations.onWatchUrlRestored();
+    integrationVideo = null;
     isOpen = false;
     watchId = title = path = null;
     if (isPushed) restore();

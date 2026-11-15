@@ -97,7 +97,7 @@ class ModernAdvancedSettingsModel {
   static get CATEGORIES() {
     return [
       '再生・音声','画面・映像','コメント表示',
-      'NG・表示対象','プレイリスト・検索','ショートカット','マウス・タッチ','通知履歴','外部サイトからの再生'
+      'NG・表示対象','プレイリスト・検索','ショートカット','マウス・タッチ','通知履歴','外部連携','外部サイトからの再生'
     ];
   }
   static _clone<T>(value: T): T {
@@ -771,10 +771,19 @@ class ModernAdvancedSettingsModel {
           hidden:true, description:'クリック伝播は自動で管理します。'}],
         ['overrideWatchLink:others','外部サイトの動画リンクをZenzaWatchで開く',{hidden:true}],
         ['enablePushState','ブラウザの履歴への反映を利用'],
-        ['historyExtension.enable','視聴履歴の拡張機能（ニコつべSaver など）に記録させる',{dependsOn:'enablePushState',
-          description:'初期状態はONです。ZenzaWatch で動画を開いたとき、URL を動画のページに書き換えている約3秒の間だけ、公式の視聴ページと同じ形で題名・投稿者名・ジャンル・タグ・サムネイル・長さをページに置き、視聴履歴を保存する拡張機能が正しく記録できるようにします。その間だけタブの題名も「動画の題名 - ニコニコ動画」になります。置くのは公開されている動画の情報だけで、外部へは何も送りません。「ブラウザの履歴への反映を利用」がOFFのときは働きません。'}],
+        ['historyExtension.enable','旧：視聴履歴の拡張機能に記録させる',{hidden:true,description:'Task1046 の旧設定です。「外部連携」の各項目に置き換わりました。'}],
         ['allowOtherDomain','外部サイトの連携を許可'],
         ['loadLinkedChannelVideo','チャンネル動画のリンクを取得']
+      ]),
+      // Task1047: 外部のブラウザ拡張機能との連携。中身は nico-src/ExtensionIntegrations.ts（アダプターを足したらここにも1行足す）
+      ...group('外部連携','ブラウザ拡張機能',[
+        ['extensionIntegration.enable','外部のブラウザ拡張機能との連携を使う',{dependsOn:'enablePushState',
+          description:'初期状態はONです。ZenzaWatch は公式の視聴ページを開かずに、検索・タグ・ランキングなどのページの上で動画を再生します。そのため「公式の視聴ページを読んで動く」ブラウザ拡張機能（視聴履歴を保存するものなど）は、ZenzaWatch で見た動画に気づけないことがあります。この設定をONにすると、下で選んだ拡張機能が ZenzaWatch で見た動画も扱えるよう、拡張機能ごとに必要な情報をページに用意します。',
+          descriptionDetails:'しくみ：ZenzaWatch は動画を開くと、既読リンクの色を変えるために URL を約3秒だけ動画のページ（/watch/動画ID）に書き換えます（「プレイリスト・検索 › リンク・移動」の「ブラウザの履歴への反映を利用」）。外部連携はこの約3秒の間だけ働き、URL を元に戻すとき・ZenzaWatch を閉じたときに、用意したものを必ず取り除きます。ページの見た目やほかの機能には影響しません。\n用意するのは、題名・投稿者名・ジャンル・タグ・サムネイル・長さといった、動画ページで公開されている情報だけです。ZenzaWatch から外部へ何かを送ることはありません。\n「ブラウザの履歴への反映を利用」がOFFのときは URL を書き換えないため、外部連携も働きません。\n拡張機能側の仕様が変わると、連携が効かなくなることがあります（その場合も ZenzaWatch の動作は変わりません）。'}],
+        ['extensionIntegration.nicotubeSaver','ニコつべSaver で ZenzaWatch の視聴を記録する',{dependsOn:'extensionIntegration.enable',
+          links:[{label:'ニコつべSaver（Chrome ウェブストア）',url:'https://chromewebstore.google.com/detail/%E3%83%8B%E3%82%B3%E3%81%A4%E3%81%B9saver/aghilngeclanbmagpeacpecnpachdpbc'}],
+          description:'初期状態はONです。視聴履歴を保存する拡張機能「ニコつべSaver」が、ZenzaWatch で見た動画も記録できるようにします。ニコつべSaver を入れていない場合は何も起きません。',
+          descriptionDetails:'ニコつべSaver は、URL が動画のページになったときに、そのページから題名・投稿者・ジャンル・タグ・サムネイル・長さを読み取って記録します。検索ページなどにはこれらの部品が無いため、以前は ZenzaWatch で見た動画が記録されませんでした。\nONのとき、URL を書き換えている約3秒の間だけ、公式の視聴ページと同じ名前の部品を見えない形でページに置きます。その間はタブの題名も「動画の題名 - ニコニコ動画」になります（ニコつべSaver が題名をこの形で読み取るため）。ジャンルが無い動画は「未設定」として渡します。\n対応を確認したバージョン：ニコつべSaver 4.1（2026年11月）。\n参考：「ニコ動アーカイブ」は URL の書き換えだけで記録されるため、この設定は不要です（ただし拡張機能側の制限で、ショート動画は記録されず、5秒以内に次の動画へ進むと前の動画が記録されません）。'}]
       ]),
       ...group('マウス・タッチ','マウス',[
         ['enableTogglePlayOnClick','動画クリックで再生・停止']
@@ -863,7 +872,8 @@ class ModernAdvancedSettingsModel {
       'touch.tap2command':'touch.enable','touch.tap3command':'touch.enable',
       'touch.tap4command':'touch.enable','touch.tap5command':'touch.enable',
       'enableCommentPanelAutoScroll':'enableCommentPanel',
-      'historyExtension.enable':'enablePushState',
+      'extensionIntegration.enable':'enablePushState',
+      'extensionIntegration.nicotubeSaver':'extensionIntegration.enable',
       'commentPanel.nicoruStyle':'enableCommentPanel',
       'pipPageThumbnailSource':'pipPageThumbnail',
       'bookmark.thumbnailWidth':'bookmark.showVideoThumbnails',

@@ -29,7 +29,12 @@ function fixture(file){
   const token='const WatchPageHistory = (() => {';
   const start=source.indexOf(token),end=source.indexOf('\n})();',start);
   assert(start>=0&&end>start,'real history runtime exists');
-  run(source.slice(start,end+'\n})();'.length)+';globalThis.Subject=WatchPageHistory;',ctx);
+  // Task1047: WatchPageHistory は外部連携（ExtensionIntegrations）を呼ぶので先に読み込む
+  const integ=file.startsWith('dist/')?source:read('packages/zenza/src/init/ExtensionIntegrations.js');
+  const itoken='const ExtensionIntegrations = (() => {';
+  const istart=integ.indexOf(itoken),iend=integ.indexOf('\n})();',istart);
+  assert(istart>=0&&iend>istart,'extension integrations runtime exists');
+  run(integ.slice(istart,iend+'\n})();'.length)+';'+source.slice(start,end+'\n})();'.length)+';globalThis.Subject=WatchPageHistory;',ctx);
   ctx.Subject.initialize(dialog);
   return {setEnabled(value){enabled=value;settingListeners.enablePushState?.(value);},dom,history,originalUrl,events,dialog,timers,service:ctx.Subject,close:()=>dom.window.close()};
 }

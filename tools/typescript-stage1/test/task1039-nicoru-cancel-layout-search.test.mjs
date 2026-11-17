@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {readNicoFamily} from './dialog-roles.mjs';
 // Task1039: ニコるの取り消し・見た目の設定（既定はダークモード風・旧式あり）・横長の狭い画面の大モード・検索の切り替えで検索しない
-const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+// Task1060: NicoVideoPlayerDialog は部品に分割したので、分割先も含めて読む。
+const read=readNicoFamily; // Task1063: 分割したモジュールは分割先も含めて読む
 test('un-nicoru uses the official DELETE endpoint with frontend headers and credentials',()=>{
  const s=read('nico-src/ThreadLoader.ts');
  assert(s.includes("'https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId)"));

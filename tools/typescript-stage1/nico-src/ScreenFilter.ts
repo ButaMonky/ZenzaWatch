@@ -9,6 +9,8 @@
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 
+/** 利用者が保存したプリセット（Task1058: 型宣言ファイルに出せるよう外へ出した）。 */
+export interface UserPreset {id:string; label:string; values:Record<string,number|string|boolean>}
 /*
  * Task 077 / 077b / 077c: 画面フィルター（バックログ D-34）
  *
@@ -476,7 +478,6 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
     return Math.abs(a - b) < 1e-6;
   };
 
-  interface UserPreset {id:string; label:string; values:Record<string,number|string|boolean>}
   const getUserPresets = ():UserPreset[] => {
     const invalid=()=>new Error('保存されたマイプリセットを読み込めません。データは変更していません。');
     let raw=prop('userPresets');
@@ -759,7 +760,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
     let input = 'SourceGraphic';
     const m = buildColorMatrix(values);
     if (m) {
-      const v = m.map(row => [row[0], row[1], row[2], 0, row[3]].map(n => +n.toFixed(5)).join(' ')).join('  ');
+      const v = m.map(row => [row[0], row[1], row[2], 0, row[3]].map(n => +n!.toFixed(5)).join(' ')).join('  ');
       parts.push(`<feColorMatrix type="matrix" values="${v}  0 0 0 1 0" result="sfColor"/>`);
       input = 'sfColor';
     }
@@ -785,7 +786,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
     if (typeof document === 'undefined') { return; }
     if (markup === lastSvgKey && document.getElementById(SVG_ID)) { return; }
     lastSvgKey = markup;
-    let svg = document.getElementById(`${SVG_ID}-root`);
+    let svg: Loose = document.getElementById(`${SVG_ID}-root`);
     if (!svg) {
       svg = (document.createElementNS('http://www.w3.org/2000/svg', 'svg') as Loose);
       svg.id = `${SVG_ID}-root`;
@@ -927,13 +928,13 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
       const data = ctx.getImageData(0, 0, AUTO_W, AUTO_H).data;
       const hist = new Uint32Array(256);
       for (let i = 0; i < data.length; i += 4) {
-        hist[(data[i] * 54 + data[i + 1] * 183 + data[i + 2] * 19) >> 8]++;
+        hist[(data[i]! * 54 + data[i + 1]! * 183 + data[i + 2]! * 19) >> 8]!++;
       }
       const total = AUTO_W * AUTO_H, cut = total * 0.005;
       let low = 0, high = 255, acc = 0;
-      for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > cut) { low = i; break; } }
+      for (let i = 0; i < 256; i++) { acc += hist[i]!; if (acc > cut) { low = i; break; } }
       acc = 0;
-      for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > cut) { high = i; break; } }
+      for (let i = 255; i >= 0; i--) { acc += hist[i]!; if (acc > cut) { high = i; break; } }
       // 伸ばしすぎない（黒点は最大25%、白点は最小75%、幅は最低40%）
       let b = Math.min(low / 255, 0.25), w = Math.max(high / 255, 0.75);
       if (w - b < 0.4) { return; }
@@ -946,7 +947,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
     } catch (e) {
       // 配信元の許可（CORS）が無い映像では調べられない。以後は止める
       auto.available = false;
-      window.console.warn('ScreenFilter: 自動レベル補正はこの映像では使えません', e && e.name);
+      window.console.warn('ScreenFilter: 自動レベル補正はこの映像では使えません', e && (e as Loose).name);
       stopAutoLevels();
       emitChange();
     }
@@ -1015,7 +1016,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
   const nextPreset = () => {
     const current = detectPreset();
     const index = PRESETS.findIndex(p => p.id === current);
-    const next = PRESETS[(index + 1) % PRESETS.length];
+    const next = PRESETS[(index + 1) % PRESETS.length]!;
     return applyPreset(next.id);
   };
 
@@ -1030,7 +1031,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
 
   /** 'brightness:+5' のような文字列で値を増減する（ショートカット用） */
   const adjust = (param?: Loose) => {
-    const [key, deltaText] = String(param || '').split(':');
+    const [key = '', deltaText = ''] = String(param || '').split(':');
     const p = (PARAM_MAP as Loose)[key];
     if (!p || p.type === 'boolean' || p.type === 'select') { return null; }
     const delta = parseFloat(deltaText) || 0;
@@ -1459,7 +1460,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
  */
 const ScreenFilterPanel = (() => {
   const esc = (s?: Loose) => String(s).replace(/[&<>"']/g, c => (
-    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'}[c]
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'} as Record<string, string>)[c]!
   ));
 
   const CSS = `
@@ -1805,15 +1806,15 @@ const ScreenFilterPanel = (() => {
   `;
 
   class Panel {
-    private _geometryResize:ResizeObserver|null=null;
-    private _geometryMutation:MutationObserver|null=null;
-    private _geometryNodes:Element[]=[];
-    private readonly _onGeometryChange=(event?:Event):void=>{
+    _geometryResize:ResizeObserver|null=null;
+    _geometryMutation:MutationObserver|null=null;
+    _geometryNodes:Element[]=[];
+    readonly _onGeometryChange=(event?:Event):void=>{
       if(!this.isOpen)return;
       if(event?.type==='transitionend'&&!this._geometryNodes.includes(event.target as Element))return;
       this._observeGeometry();this._updatePosition();this._updateOrigin();
     };
-    private _updatePosition():void {
+    _updatePosition():void {
       if(!this.view)return;
       const button=document.querySelector('.commentHistorySwitch');
       const rect=button?.getBoundingClientRect();
@@ -1822,7 +1823,7 @@ const ScreenFilterPanel = (() => {
       this.view.style.top='auto';this.view.style.bottom=bottom+'px';
       this.view.style.maxHeight=Math.max(1,window.innerHeight-bottom-16)+'px';
     }
-    private _observeGeometry():void {
+    _observeGeometry():void {
       const nodes:Element[]=[];
       let node:Element|null=document.querySelector('.commentHistorySwitch');
       while(node){nodes.push(node);if(node===document.body)break;node=node.parentElement;}
@@ -1839,14 +1840,14 @@ const ScreenFilterPanel = (() => {
         item.addEventListener('transitionend',this._onGeometryChange);
       }
     }
-    private _startGeometry():void {
+    _startGeometry():void {
       window.addEventListener('resize',this._onGeometryChange);
       window.visualViewport?.addEventListener('resize',this._onGeometryChange);
       document.addEventListener('fullscreenchange',this._onFullscreenChange);
       document.addEventListener('webkitfullscreenchange',this._onFullscreenChange);
       this._observeGeometry();this._updatePosition();
     }
-    private _stopGeometry():void {
+    _stopGeometry():void {
       window.removeEventListener('resize',this._onGeometryChange);
       window.visualViewport?.removeEventListener('resize',this._onGeometryChange);
       document.removeEventListener('fullscreenchange',this._onFullscreenChange);
@@ -1855,9 +1856,9 @@ const ScreenFilterPanel = (() => {
       this._geometryMutation?.disconnect();this._geometryMutation=null;
       this._geometryNodes.forEach(item=>item.removeEventListener('transitionend',this._onGeometryChange));this._geometryNodes=[];
     }
-    private _presetEditing=false;
-    private _editingPresetId='';
-    private _pendingPresetAction:{action:string;id:string}|null=null;
+    _presetEditing=false;
+    _editingPresetId='';
+    _pendingPresetAction:{action:string;id:string}|null=null;
     declare _closeTimer: Loose;
     declare _onOutsidePointerDown: Loose;
     declare config: Loose;
@@ -1882,14 +1883,14 @@ const ScreenFilterPanel = (() => {
       // pointer-events: none にしている（裏のページの無効化）。付けないとパネルが操作できない。
       view.className = 'zenzaScreenFilterPanel zen-family';
       view.innerHTML = TEMPLATE();
-      const header=view.querySelector('.sfHead');
+      const header=view.querySelector('.sfHead')!;
       const titleRow=document.createElement('div');titleRow.className='sfTitleRow';
-      titleRow.append(header.querySelector('.sfTitle'));header.append(titleRow);
-      const actions=view.querySelector('.sfFoot');
+      titleRow.append(header.querySelector('.sfTitle')!);header.append(titleRow);
+      const actions=view.querySelector('.sfFoot')!;
       header.append(actions);
       const descriptions=document.createElement('button');descriptions.type='button';
       descriptions.dataset.action='toggle-descriptions';actions.append(descriptions);
-      for(const [action,label,title] of [['toggle-adjustments','調整欄を隠す','調整欄の表示を切り替える'],['undo','↶','一つ前に戻す'],['redo','↷','一つ先に進む'],['toggle-changed-only','変更した項目だけ表示','変更した項目だけ表示']]){
+      for(const [action,label,title] of [['toggle-adjustments','調整欄を隠す','調整欄の表示を切り替える'],['undo','↶','一つ前に戻す'],['redo','↷','一つ先に進む'],['toggle-changed-only','変更した項目だけ表示','変更した項目だけ表示']] as Array<[string,string,string]>){
         const button=document.createElement('button');button.type='button';button.dataset.action=action;
         button.textContent=label;button.title=title;button.setAttribute('aria-label',title);
         (action==='toggle-changed-only'?actions:titleRow).append(button);
@@ -1897,7 +1898,7 @@ const ScreenFilterPanel = (() => {
       const body=document.createElement('div');body.className='sfBody';
       const presets=document.createElement('div');presets.className='sfPresetColumn';
       const adjustments=document.createElement('div');adjustments.className='sfAdjustColumn';
-      presets.append(view.querySelector('.sfIntro'));
+      presets.append(view.querySelector('.sfIntro')!);
       const quality=document.createElement('div');quality.className='sfQuality';
       quality.innerHTML='<label>追加エフェクトの描画品質 <select data-render-quality><option value="normal">通常（元の解像度）</option><option value="light">軽量（最大480p・30fps）</option></select></label><span data-render-status role="status" aria-live="polite"></span>';
       header.after(quality);
@@ -1909,7 +1910,7 @@ const ScreenFilterPanel = (() => {
         if(rows.childElementCount)section.append(rows);
         if(index>2){
           const details=document.createElement('details');details.className='sfSection sfFold';
-          const title=section.querySelector('.sfSectionTitle');
+          const title=section.querySelector('.sfSectionTitle')!;
           const summary=document.createElement('summary');summary.textContent=title.textContent;title.remove();
           section.classList.remove('sfSection');details.append(summary,section);adjustments.append(details);
         }else adjustments.append(section);
@@ -1944,7 +1945,7 @@ const ScreenFilterPanel = (() => {
             this.config.props['screenFilter.renderQuality']=value;
             if(this.config.props['screenFilter.renderQuality']!==value)throw new Error();
             ScreenFilter.apply();this._refresh();
-          }catch{view.querySelector('[data-render-status]').textContent='描画品質を保存できませんでした。';}
+          }catch{view.querySelector('[data-render-status]')!.textContent='描画品質を保存できませんでした。';}
           return;
         }
         const {param, setting, num} = (e.target as Loose).dataset;

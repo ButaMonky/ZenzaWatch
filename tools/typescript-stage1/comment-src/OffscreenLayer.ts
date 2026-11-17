@@ -121,13 +121,14 @@ const OffscreenLayer = (config: OffscreenConfigContract): OffscreenLayerContract
     update();
     config.onkey('baseFontFamily', update);
     config.onkey('baseFontBolder', update);
+    config.onkey('cssFontWeight', update);
   };
 
   const initialize = () => {
     if (offScreenFrame) {
       return;
     }
-    window.console.time('createOffscreenLayer');
+    console.time('createOffscreenLayer');
     const frame = document.createElement('iframe');
     offScreenFrame = frame;
     frame.loading = 'eager';
@@ -161,7 +162,7 @@ const OffscreenLayer = (config: OffscreenConfigContract): OffscreenLayerContract
         get optionCss() { return optionStyle.innerHTML;}
       };
 
-      window.console.timeEnd('createOffscreenLayer');
+      console.timeEnd('createOffscreenLayer');
       emt.emitResolve('GetReady!', offScreenLayer);
     };
 

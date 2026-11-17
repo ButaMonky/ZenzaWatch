@@ -909,7 +909,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
       }
 
       async _createSession(): Promise<Loose> {
-        console.time('create Domand session');
+        const sessionStart = Date.now();
         if (!this._useHLS) {
           throw new Error('HLSに未対応');
         }
@@ -963,7 +963,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
           audioFormat,
           lastResponse: result
         };
-        console.timeEnd('create Domand session');
+        console.debug('create Domand session', (Date.now() - sessionStart) + 'ms');
         return this.info;
       }
 

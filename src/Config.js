@@ -86,6 +86,17 @@ const Config = (() => {
         'popup.notifyColor': '#00cc00',
         'popup.alertColor': '#cc0000',
         'popup.warningColor': '#cc6600',
+        // Task1052: 診断（上級者向け）。不具合調査用の詳細ログをコンソールへ出す。全体スイッチは初期 OFF。
+        'diagnostics.console.enabled': false,
+        'diagnostics.console.errors': true,
+        'diagnostics.console.startup': true,
+        'diagnostics.console.player': true,
+        'diagnostics.console.network': true,
+        'diagnostics.console.notifications': true,
+        'diagnostics.console.settings': true,
+        'diagnostics.console.events': false,
+        'diagnostics.console.performance': true,
+        'diagnostics.console.intervalSec': 30,
         'notificationHistory.enabled': true,
         'notificationHistory.commentText': true,
         'notificationHistory.level.info': true,
@@ -193,6 +204,10 @@ const Config = (() => {
         'playlist.prefetchAhead.notify': 'journal',
         // Task1029: 先読みとウォームスワップの判断経過をコンソールへ細かく出す（調査用）。
         'playlist.prefetchAhead.consoleLog': false,
+        // Task1055: 先読みを止める条件は、どれも選んだ時だけ（初期値は先読みする）。
+        'playlist.prefetchAhead.skipWhenLoop': false,
+        'playlist.prefetchAhead.skipWhenPaused': false,
+        'playlist.prefetchAhead.skipWhenDataSaver': false,
         enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
         // Task 055: デバッグ用。読み込み済みの全動画について、都度サーバーへ
         // 問い合わせ直して広告装飾の表示がズレていないか確認し、コンソールへ

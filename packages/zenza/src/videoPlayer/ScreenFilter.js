@@ -1,6 +1,5 @@
 // GENERATED FROM tools/typescript-stage1/nico-src/ScreenFilter.ts (Task963). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-// legacy-to-ts: names provided by other bundled modules
 /*
  * Task 077 / 077b / 077c: 画面フィルター（バックログ D-34）
  *
@@ -1183,7 +1182,7 @@ const ScreenFilter = (() => {
     };
     /** 'brightness:+5' のような文字列で値を増減する（ショートカット用） */
     const adjust = (param) => {
-        const [key, deltaText] = String(param || '').split(':');
+        const [key = '', deltaText = ''] = String(param || '').split(':');
         const p = PARAM_MAP[key];
         if (!p || p.type === 'boolean' || p.type === 'select') {
             return null;

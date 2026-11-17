@@ -8,8 +8,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const cssUtil: Loose;
-declare const workerUtil: Loose;
+declare const cssUtil: typeof import('./css').cssUtil;
+declare const workerUtil: typeof import('./workerUtil').workerUtil;
 
 (() => {
   const PRODUCT = 'CapTube';
@@ -73,6 +73,7 @@ declare const workerUtil: Loose;
           case 'fromDataURL':
             return fromDataURL(params);
         }
+        return undefined;
       };
     };
 
@@ -225,7 +226,7 @@ declare const workerUtil: Loose;
   const getVideoId = () => {
     let id = '';
     location.search.substring(1).split('&').forEach(item => {
-      if (item.split('=')[0] === 'v') { id = item.split('=')[1]; }
+      if (item.split('=')[0] === 'v') { id = item.split('=')[1] ?? ''; }
     });
     return id;
   };
@@ -276,7 +277,7 @@ declare const workerUtil: Loose;
     const thumbnail = document.createElement('canvas');
     thumbnail.width = 256;
     thumbnail.height = canvas.height * (256 / canvas.width);
-    thumbnail.getContext('2d', {alpha: false, desynchronized: true})
+    thumbnail.getContext('2d', {alpha: false, desynchronized: true})!
       .drawImage(bitmap || canvas, 0, 0, thumbnail.width, thumbnail.height);
     console.timeEnd('createCanvasFromVideo');
 
@@ -353,7 +354,7 @@ declare const workerUtil: Loose;
     canvas.width = dw;
     canvas.height = dh;
     canvas
-      .getContext('2d', {alpha: false, desynchronized: true})
+      .getContext('2d', {alpha: false, desynchronized: true})!
       .drawImage((video as Loose), 0, 0, dw, dh);
     return canvas.toDataURL(type);
   };

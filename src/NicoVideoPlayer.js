@@ -544,6 +544,7 @@ class NicoVideoPlayer extends Emitter {
             return Promise.resolve(e.promise).then(apply);
         }
         apply(e.url || url);
+        return undefined;
     }
     setThumbnail(url) {
         this._videoPlayer.thumbnail = url;
@@ -694,17 +695,17 @@ class NicoVideoPlayer extends Emitter {
     set videoInfo(info) { this._videoInfo = info; }
     getMymemory() { return this._commentPlayer.getMymemory(); }
     getScreenShot() {
-        window.console.time('screenShot');
+        console.time('screenShot');
         const fileName = this._getSaveFileName();
         const video = this._videoPlayer.videoElement;
         // Task 077: 画面フィルター（明るさ・反転など）を反映する（設定でOFFにできる）
         return VideoCaptureUtil.videoToCanvas(video).then(({ canvas }) => {
             VideoCaptureUtil.saveToFile(ScreenFilter.processCanvas(canvas, { target: 'screenshot' }), fileName);
-            window.console.timeEnd('screenShot');
+            console.timeEnd('screenShot');
         });
     }
     getScreenShotWithComment() {
-        window.console.time('screenShotWithComment');
+        console.time('screenShotWithComment');
         const fileName = this._getSaveFileName({ suffix: 'C' });
         const video = this._videoPlayer.videoElement;
         const html = this._commentPlayer.getCurrentScreenHtml();
@@ -712,7 +713,7 @@ class NicoVideoPlayer extends Emitter {
         const processVideoCanvas = (canvas) => ScreenFilter.processCanvas(canvas, { target: 'screenshot' });
         return VideoCaptureUtil.nicoVideoToCanvas({ video, html, processVideoCanvas }).then(({ canvas }) => {
             VideoCaptureUtil.saveToFile(canvas, fileName);
-            window.console.timeEnd('screenShotWithComment');
+            console.timeEnd('screenShotWithComment');
         });
     }
     _getSaveFileName({ suffix = '' } = {}) {
@@ -894,16 +895,16 @@ class ContextMenu extends BaseViewComponent {
 ContextMenu.__css__ = (`
   .zenzaPlayerContextMenu {
     position: fixed;
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--zt-overlay-light, rgba(255, 255, 255, 0.8));
     overflow: visible;
     padding: 8px;
-    border: 1px outset #333;
-    box-shadow: 2px 2px 4px #000;
+    border: 1px outset var(--zt-border-dark, #333);
+    box-shadow: 2px 2px 4px var(--zt-shadow, #000);
     transition: opacity 0.3s ease;
     min-width: 200px;
     z-index: 150000;
     user-select: none;
-    color: #000;
+    color: var(--zt-text-inverse, #000);
   }
   .zenzaPlayerContextMenu.is-Open {
     display: block;
@@ -945,12 +946,12 @@ ContextMenu.__css__ = (`
   .zenzaPlayerContextMenu ul                 li.selected:before {
     content: '✔';
     left: -10px;
-    color: #000 !important;
+    color: var(--zt-text-inverse, #000) !important;
     position: absolute;
   }
   .zenzaPlayerContextMenu ul li:hover {
-    background: #336;
-    color: #fff;
+    background: var(--zt-info-strong, #336);
+    color: var(--zt-text-0, #fff);
   }
   .zenzaPlayerContextMenu ul li.separator {
     border: 1px outset;
@@ -982,8 +983,8 @@ ContextMenu.__css__ = (`
     line-height: 46px;
     border: 1px solid;
     border-radius: 4px;
-    color: #333;
-    background: rgba(192, 192, 192, 0.95);
+    color: var(--zt-text-inverse, #333);
+    background: var(--zt-overlay-light, rgba(192, 192, 192, 0.95));
     cursor: pointer;
     transition: transform 0.1s, box-shadow 0.1s;
     box-shadow: 0 0 0;
@@ -1014,7 +1015,7 @@ ContextMenu.__css__ = (`
   }
   .zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton:hover {
     transform: translate(0px, -4px);
-    box-shadow: 0px 4px 2px #666;
+    box-shadow: 0px 4px 2px var(--zt-shadow, #666);
   }
   .zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton:active {
     transform: none;
@@ -1200,7 +1201,7 @@ class VideoPlayer extends Emitter {
         video.pause();
         this._video = video;
         this._video.className = 'zenzaWatchVideoElement';
-        video.controlslist = 'nodownload';
+        video.setAttribute('controlslist', 'nodownload');
         video.controls = false;
         video.autoplay = !!params.autoPlay;
         video.loop = !!params.loop;
@@ -1648,7 +1649,7 @@ class VideoPlayer extends Emitter {
             return this.currentTime = sec;
         }
         // dmc動画はキーフレーム間隔が1秒とか意味不明な仕様なのでcurrentTimeでいい
-        if (this._src.indexOf('dmc.nico') >= 0) {
+        if ((this._src || '').indexOf('dmc.nico') >= 0) {
             return this.currentTime = sec;
         }
         this._video.fastSeek(sec);
@@ -2018,7 +2019,7 @@ class TouchWrapper extends Emitter {
         if (!this._isMoved && this.touchCount === 0) {
             const config = this._config;
             this._lastTap = this._maxCount;
-            window.console.info('touchEnd', this._maxCount, this._isMoved);
+            console.info('touchEnd', this._maxCount, this._isMoved);
             switch (this._maxCount) {
                 case 2:
                     this._execCommand(config.props.tap2command);
@@ -2045,7 +2046,7 @@ class TouchWrapper extends Emitter {
             return touch.identifier;
         });
         let currentTouches = [];
-        window.console.log('onTouchCancel', this._isMoved, e.changedTouches.length);
+        console.log('onTouchCancel', this._isMoved, e.changedTouches.length);
         currentTouches = this._currentPointers.filter((touch) => {
             return !identifiers.includes(touch.identifier);
         });

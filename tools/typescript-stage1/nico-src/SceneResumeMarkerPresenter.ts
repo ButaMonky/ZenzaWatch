@@ -11,7 +11,7 @@ export interface TimelineIntervalProjection {
   start:TimelinePointProjection|null;end:TimelinePointProjection|null;
   band:{left:string;width:string}|null;
 }
-type ResumePointer = {hidden: boolean; setAttribute(name: string, value: string): void; removeAttribute(name: string): void};
+type ResumePointer = {hidden: boolean; readonly style: CSSStyleDeclaration; setAttribute(name: string, value: string): void; removeAttribute(name: string): void};
 type ResumePoint = {time?: unknown; now?: unknown};
 type StyleTask = [ResumePointer, string, string | number];
 export class SceneResumeMarkerPresenter {

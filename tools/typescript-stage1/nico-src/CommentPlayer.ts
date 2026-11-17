@@ -9,19 +9,19 @@
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const Config: Loose;
-declare const Emitter: Loose;
-declare const NicoChat: Loose;
-declare const NicoChatFilter: Loose;
-declare const NicoChatGroup: Loose;
-declare const NicoChatGroupViewModel: Loose;
-declare const NicoChatViewModel: Loose;
-declare const NicoComment: Loose;
-declare const NicoCommentCss3PlayerView: Loose;
-declare const NicoCommentViewModel: Loose;
-declare const OffscreenLayer: Loose;
+declare const Emitter: typeof import('./Emitter').Emitter;
+declare const NicoChat: typeof import('./external/NicoChat').NicoChat;
+declare const NicoChatFilter: typeof import('./external/NicoChatFilter').NicoChatFilter;
+declare const NicoChatGroup: typeof import('./external/NicoChatGroup').NicoChatGroup;
+declare const NicoChatGroupViewModel: typeof import('./external/NicoChatGroupViewModel').NicoChatGroupViewModel;
+declare const NicoChatViewModel: Loose; // 静的プロパティ（SPEED_RATE・emitter）を後から足しているので型を付けない
+declare const NicoComment: Loose; // 静的プロパティ（offscreenLayer）を後から足しているので型を付けない
+declare const NicoCommentCss3PlayerView: typeof import('./external/NicoCommentCss3PlayerView').NicoCommentCss3PlayerView;
+declare const NicoCommentViewModel: typeof import('./external/NicoCommentViewModel').NicoCommentViewModel;
+declare const OffscreenLayer: typeof import('./external/OffscreenLayer').OffscreenLayer;
 declare const ZenzaCommentHistoryCore: Loose;
-declare const _: Loose;
-declare const global: Loose;
+declare const _: import('./shared-types/Lodash').LodashSubset;
+declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
 
 
 //@require NicoChat

@@ -9,7 +9,7 @@
 type Loose = any;
 /** The lodash function used here. */
 declare const _: {debounce<T extends (...args: Loose[]) => unknown>(fn: T, wait?: number): T & {cancel(): void}};
-declare const uq: Loose;
+declare const uq: typeof import('./uQuery').uq;
 declare const textUtil: {parseUrl(url: Loose): {pathname: string}};
 declare const cssUtil: {px(v: number): unknown};
 declare const nicoUtil: {getMypageVer(): string};

@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.90-task1015
+// @version     0.5.93-task1062
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-15 16:05Z 3c3e39f
+// build: 2026-11-16 20:55Z e462aae6
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -779,7 +779,6 @@ const PocketCardMetadataLoader = (() => {
         font-size: 16px;
         line-height: 24px;
         -webkit-user-select: none;
-        -moz-use-select: none;
         user-select: none;
         outline: none;
       }
@@ -848,7 +847,7 @@ const PocketCardMetadataLoader = (() => {
       }
 
       .mylistPocketHoverMenu:hover {
-        font-weibht: bolder;
+        font-weight: bolder;
         opacity: 1;
       }
 
@@ -4262,24 +4261,29 @@ class DataStorage {
 		};
 	}
 	_makeProps(defaultData = {}, namespace = '') {
-		namespace = namespace ? `${namespace}.` : '';
+		const prefix = namespace ? `${namespace}.` : '';
 		const self = this;
-		const def = {};
+		const ignore = new Set(this._ignoreExportKeys);
 		const props = {};
-		Object.keys(defaultData).sort()
-			.filter(key => key.includes(namespace))
-			.forEach(key => {
-				const k = key.slice(namespace.length);
-				if (k.includes('.')) {
-					const ns = k.slice(0, k.indexOf('.'));
-					props[ns] = this._makeProps(defaultData, `${namespace}${ns}`);
-				}
-				def[k] = {
-					enumerable: !this._ignoreExportKeys.includes(key),
-					get() { return self.getValue(key); },
-					set(v) { self.setValue(key, v); }
-				};
-		});
+		const def = {};
+		const children = [];
+		for (const key of Object.keys(defaultData).sort()) {
+			if (!key.startsWith(prefix)) { continue; }
+			const k = key.slice(prefix.length);
+			const dot = k.indexOf('.');
+			if (dot >= 0) {
+				const ns = k.slice(0, dot);
+				if (!children.includes(ns)) { children.push(ns); }
+			}
+			def[k] = {
+				enumerable: !ignore.has(key),
+				get() { return self.getValue(key); },
+				set(v) { self.setValue(key, v); }
+			};
+		}
+		for (const ns of children) {
+			props[ns] = this._makeProps(defaultData, `${prefix}${ns}`);
+		}
 		Object.defineProperties(props, def);
 		return props;
 	}
@@ -4899,7 +4903,7 @@ class CrossDomainGate extends Emitter {
 				}
 		}
 		_initializeCrossDomainGate() {
-				window.console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
+				console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
 				const loaderFrame = this.loaderFrame = document.createElement('iframe');
 				loaderFrame.referrerPolicy = 'origin';
 				loaderFrame.sandbox = 'allow-scripts allow-same-origin';
@@ -4984,7 +4988,7 @@ class CrossDomainGate extends Emitter {
 										this._initializeStatus = 'done';
 										this._clearInitializeTimer();
 										const originalBody = params;
-										window.console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
+										console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
 										const result = originalBody && this._onCommand(originalBody, sessionId);
 										this.emitResolve('initialize', { status: 'ok' });
 										return result;
@@ -7403,7 +7407,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.90-task1015', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.93-task1062', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -7913,17 +7917,14 @@ const workerUtil = (() => {
 								self.post({ command: 'alert', params: { message } });
 						};
 						const ping = async function (self, options = {}) {
-								const timekey = `PING "${self.name}"`;
-								console.log(timekey);
+								const started = Date.now();
 								let result;
 								options.timeout = options.timeout || 10000;
 								try {
-										console.time(timekey);
 										result = await self.post({ command: 'ping', params: { now: Date.now(), NAME, PID, url: location.href } }, options);
-										console.timeEnd(timekey);
+										console.debug(`PING "${self.name}"`, (Date.now() - started) + 'ms');
 								}
 								catch (e) {
-										console.timeEnd(timekey);
 										console.warn('ping fail', e);
 								}
 								return result;
@@ -7973,7 +7974,7 @@ const workerUtil = (() => {
 								const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
 								const src = `
 				const PID = ${JSON.stringify(pid)};
-				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
+				console.debug('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
 								const blob = new Blob([src], { type: 'text/javascript' });
@@ -8102,17 +8103,14 @@ const workerUtil = (() => {
 										});
 								};
 								const ping = async function (self, options = {}) {
-										const timekey = `PING "${self.name}" total time`;
-										window.console.log(`PING "${self.name}"...`);
+										const started = Date.now();
 										let result;
 										options.timeout = options.timeout || 10000;
 										try {
-												window.console.time(timekey);
 												result = await self.post({ command: 'ping', params: { now: Date.now(), NAME: self.name, PID, url: location.href } }, options);
-												window.console.timeEnd(timekey);
+												console.debug(`PING "${self.name}" total time`, (Date.now() - started) + 'ms');
 										}
 										catch (e) {
-												console.timeEnd(timekey);
 												console.warn('ping fail', e);
 										}
 										return result;
@@ -9181,7 +9179,7 @@ const gate = () => {
 				const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
 				type = type || window.name.replace(new RegExp(`/(${PRODUCT}|)Loader$/`), '');
 				const origin = document.referrer || window.name.split('#')[1];
-				console.log('%cCrossDomainPort: host:%s window:%s', 'background: lightgreen;', location.host, window.name.split('#')[0]);
+				console.debug('%cCrossDomainPort: host:%s window:%s', 'background: lightgreen;', location.host, window.name.split('#')[0]);
 				if (!isWhiteHost(origin)) {
 						throw new Error(`disable bridge "${origin}"`);
 				}

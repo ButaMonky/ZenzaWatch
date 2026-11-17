@@ -1,3 +1,8 @@
+## Task1052 / 2.7.437-task1052 — 2026-11-16 — 上級者設定「診断（上級者向け）」の詳細ログ
+
+- 本家には無い機能です。上級者設定の「詳細な診断ログをコンソールに出す」をONにすると、不具合調査に使う情報（エラー、起動と環境、動画要素のイベントと止まり、ニコニコ関係の通信、通知、設定の変更、内部イベント、負荷）をブラウザのConsoleへ出します。初期状態はOFFで、OFFの間は何も記録しません。
+- キー・Cookie・コメント本文・ユーザーIDなどは伏せ字にし、URLのクエリは消します。`ZenzaWatch.debug.diagnostics.copy()` で記録をまとめてコピーできます。
+
 ## Task422 / ZenzaWatch 2.7.245-task422 — retry failed storyboard images without stale view leases
 
 Keep the Task420 shared-image ownership and GC contract, but discard a view-local page promise after its cache entry fails or disappears. A repeated same-time seek or one-page return may retry a failed decode, including failed prefetch; normal successful same-page requests stay coalesced. Release exact cache-generation identities for ThumbnailView and BoardView so old failed image completions cannot decrement a new same-URL entry. Add exact source/generated-dev regression tests for multiple failures, recovery, stale-generation release, and no closing of shared BLANK fallback. No live site actions or publication.

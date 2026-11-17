@@ -27,7 +27,7 @@ function world(opt={}){
     if(opt.workerFails)throw Error('worker blocked');
     // Run the Worker body in this realm with the injected factory, like workerUtil does.
     const self={xFetch:(u,p)=>{L('xFetch',u);return fetch(u,p);}};
-    const ctx=createContext({self,fetch,URL,URLSearchParams,console:{time(){},timeEnd(){},error:(...a)=>L('w.error',a[0])},
+    const ctx=createContext({self,fetch,URL,URLSearchParams,console:{time(){},timeEnd(){},debug(){},error:(...a)=>L('w.error',a[0])},
       location:{origin:'https://www.nicovideo.jp',href:'https://www.nicovideo.jp/watch/sm9'},AbortController,
       setTimeout:(fn,ms)=>{L('w.setTimeout',ms);return setTimeout(fn,0);},clearTimeout,setInterval:(fn,ms)=>{L('w.setInterval',ms);return 1;},clearInterval:()=>L('w.clearInterval'),
       Date:opt.dateConstructor || {now:()=>1000},Symbol,Object,Promise,JSON,Error,Number,Math,Array,isNaN});
@@ -38,7 +38,7 @@ function world(opt={}){
   const StoryboardCacheDb={get:async id=>{L('cache.get',id);return cache.has(id)?structuredClone(cache.get(id)):null;},
     put:async(id,v)=>{L('cache.put',id,v.status);},delete:async id=>{L('cache.delete',id);}};
   const globals={workerUtil,StoryboardCacheDb,fetch,URL,URLSearchParams,
-    console:{time(){},timeEnd(){},error:(...a)=>L('error',a[0]),warn:(...a)=>L('warn',a[0])},
+    console:{time(){},timeEnd(){},debug(){},error:(...a)=>L('error',a[0]),warn:(...a)=>L('warn',a[0])},
     setTimeout:(fn,ms)=>{L('setTimeout',ms);return setTimeout(fn,0);},clearTimeout,
     Promise,Object,JSON,Error,Number,Array,Symbol,Math};
   return {globals,log};

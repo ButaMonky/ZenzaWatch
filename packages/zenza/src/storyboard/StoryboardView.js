@@ -98,7 +98,7 @@ class StoryboardView extends Emitter {
         if (this._view) {
             return;
         }
-        window.console.log('%cStoryboardView.initializeStoryboard', 'background: lightgreen;');
+        console.log('%cStoryboardView.initializeStoryboard', 'background: lightgreen;');
         this._body = document.body;
         cssUtil.addStyle(StoryboardView.__css__);
         const view = this._view = uq.html(StoryboardView.__tpl__)[0];
@@ -259,9 +259,9 @@ class StoryboardView extends Emitter {
         const view = this._view;
         const cl = ClassList(view);
         cl.add('is-success');
-        window.console.time('createStoryboardDOM');
+        console.time('createStoryboardDOM');
         this._updateSuccessDom();
-        window.console.timeEnd('createStoryboardDOM');
+        console.timeEnd('createStoryboardDOM');
         if (!this.isEnable) {
             return;
         }

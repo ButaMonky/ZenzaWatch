@@ -20,7 +20,7 @@ function harness(scope){
   ctx.formatKeyCombo=ctx.RealFormat;
   const Registry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',ctx);
   const html=scope==='bar'?template('src/VideoControlBar.js','VideoControlBar'):
-    template('src/NicoVideoPlayerDialog.js','VideoHoverMenu');
+    template('src/VideoHoverMenu.js','VideoHoverMenu'); // Task1060: 分割先
   const dom=new JSDOM('<!doctype html><html><head></head><body>'+html+'</body></html>');
   const root=dom.window.document.querySelector(scope==='bar'?'.videoControlBar':'.hoverMenuContainer');
   assert(root,'real '+scope+' markup not present');

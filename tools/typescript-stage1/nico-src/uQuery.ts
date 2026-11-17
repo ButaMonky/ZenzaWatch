@@ -779,7 +779,18 @@ const uQuery = (() => {
     }
   });
 
-  return uQuery;
+  type UQueryStatics = {
+    $Array: {new (...args: Loose[]): Loose; from(value: Loose): Loose; prototype: Loose};
+    createDom: typeof createDom;
+    html(...args: [Loose, ...unknown[]]): Loose;
+    isTL: typeof isTagLiteral;
+    ready(func?: () => unknown): Promise<unknown>;
+    complete(func?: () => unknown): Promise<unknown>;
+    each(arr: Iterable<Loose> | ArrayLike<Loose>, callback: (this: Loose, index: number, item: Loose) => unknown): void;
+    proxy(func: Loose, ...args: Loose[]): Loose;
+    fn: Record<string, Loose>;
+  };
+  return uQuery as typeof uQuery & UQueryStatics;
 })();
 const uq = uQuery;
 

@@ -96,7 +96,7 @@ describe('Task189 search conditions end to end (Search audit Q01)', () => {
 
   it('the count request and the playlist notice use the same condition model', () => {
     const fs = require('fs'), path = require('path');
-    const panel = fs.readFileSync(path.join(__dirname, '../../src/VideoInfoPanel.js'), 'utf-8');
+    const panel = require('../helpers/extractSource').readFamily('src/VideoInfoPanel.js'); // Task1063: 分割先も含めて読む
     assert(panel.includes('nvapi.buildQuery(word, params)'), 'count reuses buildQuery');
     const c = createContext({});
     run(`${extract('packages/zenza/src/Playlist/PlayList.js', 'PlayList')};globalThis.P=PlayList;`, Object.assign(c, {VideoList: class {}}));

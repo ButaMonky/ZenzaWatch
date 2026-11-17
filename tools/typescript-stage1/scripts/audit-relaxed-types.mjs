@@ -11,7 +11,9 @@ import {fileURLToPath} from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const posix = value => value.replaceAll('\\', '/');
 const strict = JSON.parse(fs.readFileSync(path.join(root, 'tsconfig.nico.json'), 'utf8'));
-const relaxed = JSON.parse(fs.readFileSync(path.join(root, 'tsconfig.nico-legacy.json'), 'utf8'));
+// Task1058: 緩い設定のレーンは廃止した。ファイルが戻ってきたら下の上限（0件）で止める。
+const relaxedPath = path.join(root, 'tsconfig.nico-legacy.json');
+const relaxed = fs.existsSync(relaxedPath) ? JSON.parse(fs.readFileSync(relaxedPath, 'utf8')) : {files: []};
 const excluded = strict.exclude || [];
 const relaxedFiles = relaxed.files || [];
 const sort = values => [...values].sort();
@@ -19,7 +21,9 @@ if (JSON.stringify(sort(excluded)) !== JSON.stringify(sort(relaxedFiles)) ||
     new Set(relaxedFiles).size !== relaxedFiles.length) {
   throw Error('NICO_RELAXED_CONFIG_MISMATCH');
 }
-if (relaxedFiles.length !== 11) {
+// Ratchet: promotion to strict may only shrink this list. 11 → 10 (Task1051) → 0 (Task1058);
+// never add a file back to the relaxed set.
+if (relaxedFiles.length > 0) {
   throw Error('NICO_RELAXED_BASELINE_CHANGED: review Issue #185/#205 strict promotion');
 }
 for (const rel of relaxedFiles) {

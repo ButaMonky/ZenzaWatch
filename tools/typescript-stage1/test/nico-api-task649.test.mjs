@@ -60,7 +60,7 @@ function world(opt={}){
     CommentPostTarget:{select:(threads,issues)=>{L('select',threads.length,issues);const t=threads.find(x=>x.isDefaultPostTarget);
       return {defaultThread:t||null,threadId:t?t.id:null,canPost:!!t,postUnavailableReason:t?null:'no-target',optionalThreads:[]};}},
     URLSearchParams,
-    console:{log:()=>{}},
+    console:{log:()=>{},info:()=>{},time:()=>{},timeEnd:()=>{}},
     window:{console:{warn:(...a)=>diagnostic('warn',a),info:(...a)=>diagnostic('info',a),error:(...a)=>diagnostic('error',a),log:()=>{},time:()=>{},timeEnd:()=>{}}},
     setTimeout:(fn,ms)=>{L('setTimeout',ms);return setTimeout(fn,0);},
     Promise,Object,Array,String,Number,Error,JSON};
@@ -109,7 +109,12 @@ async function compare(label,watchId,opt={},options={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(before,'VideoInfoLoader',a.globals),B=loadLegacy(after,'VideoInfoLoader',b.globals);
   const ra=await settle(()=>A.load(watchId,{...options})),rb=await settle(()=>B.load(watchId,{...options}));
-  assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
+  // Task1036: 仕様変更の診断のため、WATCH_SCHEMA の失敗には壊れていた項目名（missing）が追加された。
+  // 旧版との比較では、この 1 項目だけを除いて他はすべて厳密に比べる。
+  const withoutMissing=r=>{const s=snapshot(r);
+    if(s&&s.error&&s.error.errorCode==='WATCH_SCHEMA'&&typeof s.error.missing==='string'){const {missing,...rest}=s.error;return {...s,error:rest};}
+    return s;};
+  assert.deepEqual(withoutMissing(rb),snapshot(ra),label+' result');
   // Task904 intentionally moved watch metadata from legacy JSON to the HTML page.
   // Keep every transport/rights/retry/cache/event comparison. Only the known
   // owner-label and bounded error diagnostic changes differ from the fixture.

@@ -8,8 +8,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const PromiseHandler: Loose;
-declare const _: Loose;
+declare const PromiseHandler: typeof import('./Emitter').PromiseHandler;
+declare const _: import('./shared-types/Lodash').LodashSubset;
 declare const selectAutoResume:(input:{
   videoId:string;duration:unknown;
   server?:{time:unknown;updatedAt?:unknown}|null;
@@ -322,7 +322,7 @@ class VideoInfoModel extends JSONable {
   declare _viewerInfo: Loose;
   declare _watchApiData: Loose;
   declare _watchAuthKey: Loose;
-  constructor(videoInfoData?: Loose, localCacheData = {}) {
+  constructor(videoInfoData?: Loose, localCacheData: Loose = {}) {
     super();
     this._update(videoInfoData, localCacheData);
     this._currentVideoPromise = null;

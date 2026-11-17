@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.nico.json",
+  "compilerOptions": {"noEmit": true, "rootDir": ".", "declaration": false},
+  "include": ["nico-src/**/*.ts", "type-tests/nico-boundaries.ts"]
+}

@@ -3,6 +3,7 @@ import {CrossDomainGate} from '../infra/CrossDomainGate';
 import {WindowMessageEmitter} from '../message/messageUtil';
 import {textUtil} from '../text/textUtil';
 import {sleep} from '../infra/sleep';
+import {netUtil} from '../infra/netUtil';
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoSearch.ts (Task643). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require RequestDiagnostics

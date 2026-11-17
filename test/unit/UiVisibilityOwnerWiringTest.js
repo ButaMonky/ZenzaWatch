@@ -3,9 +3,11 @@ const assert=require('assert');
 const {JSDOM}=require('jsdom');
 const {createContext,loadClass,read}=require('../helpers/extractSource');
 const required={
-  'src/NicoVideoPlayerDialog.js':["'hover'"],
+  'src/VideoHoverMenu.js':["'hover'"], // Task1060: ホバーメニューは分割先
   'src/VideoControlBar.js':["'bar'"],
-  'src/VideoInfoPanel.js':["'info'","'header'","'related'"],
+  'src/VideoInfoPanel.js':["'info'"],
+  'src/VideoHeaderPanel.js':["'header'"], // Task1063: VideoInfoPanel.js から分割
+  'src/RelatedInfoMenu.js':["'related'"], // Task1063: VideoInfoPanel.js から分割
   'src/CommentInputPanel.js':["'comment'"]
 };
 describe('Task318 visibility owner boundaries',()=>{

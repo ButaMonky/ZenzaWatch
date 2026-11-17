@@ -7,7 +7,7 @@ const path=require('path');
 const parser=require('@babel/parser');
 const {pathToFileURL}=require('url');
 const {JSDOM}=require('jsdom');
-const {beginSection,createContext,run}=require('../helpers/extractSource');
+const {beginSection,createContext,run,installDialogRoles}=require('../helpers/extractSource');
 const nico='tools/typescript-stage1/.generated/nico/';
 let BookmarkDock;
 before(async()=>{
@@ -101,12 +101,14 @@ function fixture({infoContent=true,firstBookmarkLoadFails=false}={}){
   run(beginSection('packages/lib/src/uQuery.js')+';globalThis.__uq=uq;',ctx);
   run(beginSection('packages/lib/src/dom/domEvent.js')+';globalThis.__domEvent=domEvent;',ctx);
   ctx.util=ctx.__domEvent;
-  run(canonicalClass('NicoVideoPlayerDialog','NicoVideoPlayerDialogView')+';'+
+  run(canonicalClass('NicoVideoPlayerDialogView','NicoVideoPlayerDialogView')+';'+
     canonicalClass('NicoVideoPlayerDialog','NicoVideoPlayerDialog')+';'+
     canonicalClass('VideoControlBar','VideoControlBar')+';'+
     'globalThis.__View=NicoVideoPlayerDialogView;'+
     'globalThis.__Dialog=NicoVideoPlayerDialog;'+
     'globalThis.__Bar=VideoControlBar;',ctx);
+  installDialogRoles(nico+'NicoVideoPlayerDialog.js',ctx.__Dialog,ctx); // Task1060: 役割ごとのメソッド
+  installDialogRoles(nico+'NicoVideoPlayerDialogView.js',ctx.__View,ctx,'NicoVideoPlayerDialogView'); // Task1063
   const view=Object.create(ctx.__View.prototype);
   const dialog=Object.create(ctx.__Dialog.prototype);
   dialog._view=view;

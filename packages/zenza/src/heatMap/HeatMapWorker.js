@@ -148,7 +148,6 @@ function HeatMapInitFunc(self) {
                 this.reset();
                 return true;
             }
-            console.time('draw HeatMap');
             // 一番コメント密度が高い所を100%として相対的な比率にする
             // 赤い所が常にピークになってわかりやすいが、
             // コメントが一カ所に密集している場合はそれ以外が薄くなってしまうのが欠点
@@ -174,7 +173,6 @@ function HeatMapInitFunc(self) {
                 const right = Math.floor((i + 1) * this.width / map.length);
                 context.fillRect(left, 0, right - left, this.height);
             }
-            console.timeEnd('draw HeatMap');
             context.commit && context.commit();
             return true;
         }

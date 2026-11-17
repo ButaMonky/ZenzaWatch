@@ -204,11 +204,11 @@ class SceneSearchLayoutCard {
   z-index:150;
   border-radius:5px;
   padding:4px;
-  border:1px solid rgba(204,204,204,.55);
-  background:#000;
-  color:#eee;
+  border:1px solid var(--zt-border-light, rgba(204,204,204,.55));
+  background:var(--zt-surface-0, #000);
+  color:var(--zt-text-0, #eee);
   font:12px/1.35 system-ui,sans-serif;
-  box-shadow:0 4px 14px rgba(0,0,0,.25);
+  box-shadow:0 4px 14px var(--zt-shadow, rgba(0,0,0,.25));
 }
 .zenzaSceneSearchHost[hidden],.zenzaSceneBtn[hidden]{display:none!important}
 .zenzaSceneImageBox{min-height:42px;overflow:hidden;display:grid;place-items:center;background:#17181b}

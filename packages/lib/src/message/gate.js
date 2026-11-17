@@ -175,7 +175,7 @@ const gate = () => {
         // console.info(`%c1. port open [${window.name.split('#')[0]} ${PRODUCT}]`, 'background: #039393; color: gold; font-size: 120%;');
         type = type || window.name.replace(new RegExp(`/(${PRODUCT}|)Loader$/`), '');
         const origin = document.referrer || window.name.split('#')[1];
-        console.log('%cCrossDomainPort: host:%s window:%s', 'background: lightgreen;', location.host, window.name.split('#')[0]);
+        console.debug('%cCrossDomainPort: host:%s window:%s', 'background: lightgreen;', location.host, window.name.split('#')[0]);
         if (!isWhiteHost(origin)) {
             throw new Error(`disable bridge "${origin}"`);
         }

@@ -42,10 +42,10 @@ class NicoChatGroupViewModel {
   }
   _onChange(e) {
     console.log('NicoChatGroupViewModel.onChange');
-    window.console.time('_onChange');
+    console.time('_onChange');
     this.reset();
     this.addChatArray(this._nicoChatGroup.members);
-    window.console.timeEnd('_onChange');
+    console.timeEnd('_onChange');
   }
   async _execCommentLayoutWorker() {
     const requestId = ++this._lastUpdate;
@@ -124,7 +124,7 @@ class NicoChatGroupViewModel {
   }
   addChat(nicoChat) {
     let timeKey = 'addChat:' + nicoChat.text;
-    window.console.time(timeKey);
+    console.time(timeKey);
     let nc = NicoChatViewModel.create(nicoChat, this._offScreen);
 
     ++this._lastUpdate;
@@ -137,7 +137,7 @@ class NicoChatGroupViewModel {
     this._members.push(nc);
 
     this._execCommentLayoutWorker();
-    window.console.timeEnd(timeKey);
+    console.timeEnd(timeKey);
   }
   reset() {
     let m = this._members;

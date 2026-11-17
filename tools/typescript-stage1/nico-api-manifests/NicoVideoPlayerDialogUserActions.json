@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogUserActions.ts",
+  "runtime": "src/NicoVideoPlayerDialogUserActions.js",
+  "sourceSha256": "55a65cfcfd17611fc6757c45b1e27c9efeb4d43e20af8441618fb5401fdfa7f7",
+  "runtimeSha256": "8433f92aa71b29d964e85cbf60e0b92b483cd2f5cd3d56f80bf69b1deaaa737a"
+}

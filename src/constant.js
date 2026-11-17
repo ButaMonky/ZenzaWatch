@@ -91,7 +91,7 @@ CONSTANT.COMMON_CSS = `
     }
     .ZenButton:active .ZenButtonInner {
       border: inset 1px;
-      transition: translate(2px, 2px);
+      transform: translate(2px, 2px);
       box-shadow: 0 0 rgba(0, 0, 0, 0.8);
     }
 

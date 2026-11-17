@@ -92,7 +92,7 @@ class NicoComment extends Emitter {
 
     this._options = options;
 
-    window.console.time('コメントのパース処理');
+    console.time('コメントのパース処理');
     const nicoScripter = this.nicoScripter;
     if (!options.append) {
       this._nicoScriptGeneration = (this._nicoScriptGeneration || 0) + 1;
@@ -130,14 +130,14 @@ class NicoComment extends Emitter {
         nicoChats.filter(c => (c.isPatissier || c.isCA) && c.fork !== 1 && !c.isSubThread)
           .slice(0, maxCommentsByDuration))
       .concat(...nicoChats.filter(c => !(c.isPatissier || c.isCA) || c.fork === 1));
-      window.console.timeLog && window.console.timeLog('コメントのパース処理', 'NicoChat created');
+      console.timeLog && console.timeLog('コメントのパース処理', 'NicoChat created');
     nicoChats.filter(chat => chat.fork === 2).forEach(chat => chat.size = NicoChat.SIZE.SMALL);
 
     if (_.isObject(options.replacement) && _.size(options.replacement) > 0) {
-      window.console.time('コメント置換フィルタ適用');
+      console.time('コメント置換フィルタ適用');
       this._wordReplacer = this.buildWordReplacer(options.replacement);
       this._preProcessWordReplacement(nicoChats, this._wordReplacer);
-      window.console.timeEnd('コメント置換フィルタ適用');
+      console.timeEnd('コメント置換フィルタ適用');
     } else {
       this._wordReplacer = null;
     }
@@ -163,11 +163,11 @@ class NicoComment extends Emitter {
     }
 
     if (!nicoScripter.isEmpty) {
-      window.console.time('ニコスクリプト適用');
+      console.time('ニコスクリプト適用');
       nicoScripter.apply(nicoChats);
-      window.console.timeEnd('ニコスクリプト適用');
+      console.timeEnd('ニコスクリプト適用');
       const nextVideo = nicoScripter.getNextVideo();
-      window.console.info('nextVideo', nextVideo);
+      console.info('nextVideo', nextVideo);
       if (nextVideo) {
         const generation = this._nicoScriptGeneration;
         setTimeout(() => {
@@ -202,7 +202,7 @@ class NicoComment extends Emitter {
     this.nakaGroup.addChatArray(naka);
     this.bottomGroup.addChatArray(bottom);
 
-    window.console.timeEnd('コメントのパース処理');
+    console.timeEnd('コメントのパース処理');
     console.log('chats: ', chatsData.length);
     console.log('top: ', this.topGroup.nonFilteredMembers.length);
     console.log('naka: ', this.nakaGroup.nonFilteredMembers.length);
@@ -231,7 +231,7 @@ class NicoComment extends Emitter {
         continue;
       }
       const val = replacement[key];
-      window.console.log('コメント置換フィルタ: "%s" => "%s"', key, val);
+      console.log('コメント置換フィルタ: "%s" => "%s"', key, val);
 
       if (key.charAt(0) === '*') {
         func = makeFullReplacement(func, key.substr(1), val);
@@ -278,9 +278,9 @@ class NicoComment extends Emitter {
     }
 
     if (!this.nicoScripter.isEmpty) {
-      window.console.time('ニコスクリプト適用');
+      console.time('ニコスクリプト適用');
       this.nicoScripter.apply([nicoChat]);
-      window.console.timeEnd('ニコスクリプト適用');
+      console.timeEnd('ニコスクリプト適用');
     }
 
     let group;

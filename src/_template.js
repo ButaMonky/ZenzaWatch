@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.436-task1048
+// @version        2.7.449-task1065
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -68,6 +68,9 @@ import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit
 import {NicoVideoPlayer} from './NicoVideoPlayer';
 import {StoryboardModel} from './StoryBoard';
 import {VideoControlBar} from './VideoControlBar';
+import {CommentPreview} from './CommentPreview';
+import {SeekBarToolTip} from './SeekBarToolTip';
+import {SmoothSeekBarPointer} from './SmoothSeekBarPointer';
 import {NicoTextParser} from '../packages/zenza/src/commentLayer/NicoTextParser';
 import {NicoCommentPlayer} from './CommentPlayer';
 import {CommentLayoutWorker} from '../packages/zenza/src/commentLayer/CommentLayoutWorker';
@@ -83,6 +86,11 @@ import {CommentInputPanel} from './CommentInputPanel';
 // import {SettingPanel} from './SettingPanel';
 import {TagListView} from './TagListView';
 import {VideoInfoPanel} from './VideoInfoPanel';
+import {VideoHeaderPanel} from './VideoHeaderPanel';
+import {VideoSearchForm} from './VideoSearchForm';
+import {UaaView} from './UaaView';
+import {RelatedInfoMenu} from './RelatedInfoMenu';
+import {VideoMetaInfo} from './VideoMetaInfo';
 import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 import {initializeGinzaSlayer} from './GinzaSlayer';
 import {initialize} from './initializer';
@@ -90,6 +98,7 @@ import {initializeExternalSite} from '../packages/zenza/src/init/externalStartup
 import {CustomElements} from '../packages/zenza/src/parts/CustomElements';
 import {CONSTANT} from './constant';
 import {TextLabel} from '../packages/lib/src/ui/TextLabel';
+import {DiagnosticConsole} from '../packages/zenza/src/diagnostics/DiagnosticConsole';
 import {parseThumbInfo} from '../packages/lib/src/nico/parseThumbInfo';
 import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';
 import {ENV,VER} from './ZenzaWatchIndex';
@@ -105,6 +114,9 @@ import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {domUtil} from '../packages/lib/src/dom/domUtil';
 import {createAdvancedSettingsPanel} from './_setting';
 import {AdvancedSettingsController} from './AdvancedSettingsController';
+import {NicodicArticleLoader} from '../packages/lib/src/nico/NicodicArticleLoader';
+import {NotificationJournal} from './NotificationJournal';
+import {PopupMessage} from '../packages/lib/src/ui/PopupMessage';
 //@require AntiPrototypeJs
 AntiPrototypeJs();
 (() => {
@@ -300,6 +312,9 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 //@require StoryboardModel
 
 //@require VideoControlBar
+//@require CommentPreview
+//@require SeekBarToolTip
+//@require SmoothSeekBarPointer
 
 //@require NicoCommentPlayer
 
@@ -322,6 +337,11 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 //@require TagListView
 
 //@require VideoInfoPanel
+//@require VideoHeaderPanel
+//@require VideoSearchForm
+//@require UaaView
+//@require RelatedInfoMenu
+//@require VideoMetaInfo
 
 //@require initializeGinzaSlayer
 
@@ -333,11 +353,19 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 //@require CustomElements
 
 //@require TextLabel
+//@require DiagnosticConsole
 ZenzaWatch.modules.TextLabel = TextLabel;
 
     if (window.name === 'commentLayerFrame') {
       return;
     }
+
+    // Task1052: 上級者設定「診断（上級者向け）」の詳細ログ。初期設定は OFF で、OFF の間は何も記録しない。
+    DiagnosticConsole.install({
+      window, config: Config, version: ZenzaWatch.version, build: ZenzaWatch.build,
+      emitter: ZenzaWatch.emitter, debugRoot: ZenzaWatch.debug,
+      journal: typeof NotificationJournal !== 'undefined' ? NotificationJournal : undefined
+    });
 
     if (location.host === 'www.nicovideo.jp') {
       const advancedSettings = new AdvancedSettingsController({
@@ -349,6 +377,7 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       uq.ready().then(() => {
         if (/^\/my(?:\/|$)/.test(location.pathname)) { advancedSettings.mountEntry(); }
       });
+      DiagnosticConsole.mark('ZenzaWatch の初期化（initialize）を開始');
       return initialize();
     }
 

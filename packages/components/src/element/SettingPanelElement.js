@@ -630,10 +630,10 @@ const { SettingPanelElement } = (() => {
           }
           label:hover {
             border-radius: 4px;
-            background: rgba(80, 80, 80, 0.3);
+            background: var(--zt-overlay-dark, rgba(80, 80, 80, 0.3));
           }
           input[type=checkbox], input[type=radio] {
-            accent-color:#84dccd;
+            accent-color:var(--zt-info, #84dccd);
             margin-right: 8px;
           }
           input[type=text], input[type=number], select {
@@ -641,7 +641,7 @@ const { SettingPanelElement } = (() => {
             border: 1px solid currentcolor;
             font-size: 13px;
             padding: 6px;
-            background: #202c3d;
+            background: var(--zt-info-strong, #202c3d);
             color: currentcolor;
           }
           input[type=range] {
@@ -680,8 +680,8 @@ const { SettingPanelElement } = (() => {
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-            color: #edf4ff;
-            background: #303c51;
+            color: var(--zt-text-0, #edf4ff);
+            background: var(--zt-info-strong, #303c51);
             border: 0;
           }
 

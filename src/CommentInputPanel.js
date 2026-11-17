@@ -447,13 +447,13 @@ CommentInputPanel.__css__ = (`
   }
 
   .is-mouseMoving .commentInputOuter {
-    border: 1px solid #888;
+    border: 1px solid var(--zt-border, #888);
     box-sizing: border-box;
     border-radius: 8px;
     opacity: 0.5;
   }
   .is-mouseMoving:not(:focus-within) .commentInputOuter {
-    box-shadow: 0 0 8px #fe9, 0 0 4px #fe9 inset;
+    box-shadow: 0 0 8px var(--zt-accent, #fe9), 0 0 4px var(--zt-accent, #fe9) inset;
   }
 
   .commentInputPanel:focus-within .commentInputOuter,
@@ -485,15 +485,15 @@ CommentInputPanel.__css__ = (`
   .commentInputPanel:focus-within .commentInput,
   .commentInputPanel:hover  .commentInput {
     box-sizing: border-box;
-    border: 1px solid #888;
+    border: 1px solid var(--zt-border, #888);
     border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 0 8px #fff;
-    color: #000;
+    background: var(--zt-surface-light, #fff);
+    box-shadow: 0 0 8px var(--zt-glow-light, #fff);
+    color: var(--zt-text-inverse, #000);
   }
   .commentInputPanel:focus-within :where(.commandInput, .commentSubmit) {
-    background: #fff;
-    color: #000;
+    background: var(--zt-surface-light, #fff);
+    color: var(--zt-text-inverse, #000);
   }
 
   .commentInputPanel .autoPauseLabel {
@@ -504,12 +504,12 @@ CommentInputPanel.__css__ = (`
     top: 9px;
     left: 50%;
     transform: translate(-50%, 0);
-    background: #336;
+    background: var(--zt-info-strong, #336);
     z-index: -1;
     opacity: 0;
     transition: top 0.2s ease, opacity 0.2s ease;
     text-align: center;
-    color: #ccc;
+    color: var(--zt-text-1, #ccc);
   }
   .commentInputPanel:focus-within .autoPauseLabel {
     top: 36px;
@@ -541,7 +541,7 @@ CommentInputPanel.__css__ = (`
     opacity: 0.9;
     border: none;
     pointer-events: auto;
-    box-shadow: 0 0 8px #fff;
+    box-shadow: 0 0 8px var(--zt-glow-light, #fff);
     padding: 0;
   }
 
@@ -565,12 +565,12 @@ CommentInputPanel.__css__ = (`
     z-index: 1;
     transition: right 0.2s ease, opacity 0.2s ease, z-index 0s;
     opacity: 0.9;
-    box-shadow: 0 0 8px #fff;
+    box-shadow: 0 0 8px var(--zt-glow-light, #fff);
   }
   .commentInputPanel:focus-within .commentSubmit:active {
-    color: #000;
-    background: #fff;
-    box-shadow: 0 0 16px #ccf;
+    color: var(--zt-text-inverse, #000);
+    background: var(--zt-surface-light, #fff);
+    box-shadow: 0 0 16px var(--zt-info-soft, #ccf);
   }
 
   /* ---- Task 073: コメントコマンドピッカー ---- */
@@ -583,10 +583,10 @@ CommentInputPanel.__css__ = (`
     --zenza-picker-accent-soft: rgba(255, 152, 0, 0.2);
   }
   .commentInputPanel.has-command:focus-within .commandInput {
-    box-shadow: 0 0 8px #fff, inset 5px 0 0 var(--zenza-command-color, #fff);
+    box-shadow: 0 0 8px var(--zt-glow-light, #fff), inset 5px 0 0 var(--zenza-command-color, #fff);
   }
   .commentInputPanel.has-command.is-commandColorDark:focus-within .commandInput {
-    box-shadow: 0 0 8px #fff, inset 5px 0 0 var(--zenza-command-color, #fff), inset 6px 0 0 #999;
+    box-shadow: 0 0 8px var(--zt-glow-light, #fff), inset 5px 0 0 var(--zenza-command-color, #fff), inset 6px 0 0 var(--zt-glow-light, #999);
   }
   .commentInputPanel .commandPicker-btn {
     appearance: none;
@@ -595,10 +595,10 @@ CommentInputPanel.__css__ = (`
     padding: 0 7px;
     min-width: 26px;
     height: 22px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    border: 1px solid var(--zt-border-light, rgba(255, 255, 255, 0.22));
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #eef;
+    background: var(--zt-overlay-light, rgba(255, 255, 255, 0.08));
+    color: var(--zt-text-0, #eef);
     font-size: 12px;
     line-height: 20px;
     font-family: inherit;
@@ -606,8 +606,8 @@ CommentInputPanel.__css__ = (`
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
   .commentInputPanel .commandPicker-btn:hover {
-    border-color: rgba(255, 255, 255, 0.5);
-    background: rgba(255, 255, 255, 0.16);
+    border-color: var(--zt-border-light, rgba(255, 255, 255, 0.5));
+    background: var(--zt-overlay-light, rgba(255, 255, 255, 0.16));
   }
   .commentInputPanel .commandPicker-btn:active {
     transform: scale(0.94);
@@ -615,7 +615,7 @@ CommentInputPanel.__css__ = (`
   .commentInputPanel .commandPicker-btn[aria-pressed="true"] {
     border-color: var(--zenza-picker-accent);
     background: var(--zenza-picker-accent);
-    color: #111;
+    color: var(--zt-text-inverse, #111);
     font-weight: bold;
   }
   .commentInputPanel .commandPicker-seg {
@@ -636,7 +636,7 @@ CommentInputPanel.__css__ = (`
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    border: 2px solid #777;
+    border: 2px solid var(--zt-border, #777);
     background: var(--dot-color);
     cursor: pointer;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
@@ -645,7 +645,7 @@ CommentInputPanel.__css__ = (`
     transform: scale(1.18);
   }
   .commentInputPanel .commandPicker-dot[aria-pressed="true"] {
-    border-color: #fff;
+    border-color: var(--zt-border-light, #fff);
     box-shadow: 0 0 0 2px var(--zenza-picker-accent);
   }
   .commentInputPanel .commandPicker-more {
@@ -658,7 +658,7 @@ CommentInputPanel.__css__ = (`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 1px solid #999;
+    border: 1px solid var(--zt-border, #999);
     background: var(--zenza-command-color, #fff);
   }
   .commentInputPanel.is-popoverOpen .commandPicker-more {
@@ -682,8 +682,8 @@ CommentInputPanel.__css__ = (`
     gap: 5px 12px;
     padding: 6px 10px;
     border-radius: 0 0 10px 10px;
-    background: #336;
-    color: #dde;
+    background: var(--zt-info-strong, #336);
+    color: var(--zt-text-1, #dde);
     font-size: 12px;
     opacity: 0;
     visibility: hidden;
@@ -707,7 +707,7 @@ CommentInputPanel.__css__ = (`
     gap: 5px;
   }
   .commentInputPanel .commandDrawer-label {
-    color: #aab;
+    color: var(--zt-text-2, #aab);
     font-size: 11px;
   }
   .commentInputPanel .commandDrawer .autoPauseLabel {
@@ -718,7 +718,7 @@ CommentInputPanel.__css__ = (`
     opacity: 1;
     z-index: auto;
     background: none;
-    color: #ccd;
+    color: var(--zt-text-1, #ccd);
     font-size: 12px;
     white-space: nowrap;
     cursor: pointer;
@@ -744,7 +744,7 @@ CommentInputPanel.__css__ = (`
     border-radius: 12px;
     background: var(--zenza-picker-bg);
     color: var(--zenza-picker-text);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 10px 30px var(--zt-shadow, rgba(0, 0, 0, 0.6));
     font-size: 12px;
     text-align: left;
     opacity: 0;
@@ -787,12 +787,12 @@ CommentInputPanel.__css__ = (`
   }
   .commentInputPanel .commandPopover .commandPicker-btn {
     border-color: var(--zenza-picker-line);
-    background: #2a2b31;
+    background: var(--zt-surface-1, #2a2b31);
     color: var(--zenza-picker-text);
   }
   .commentInputPanel .commandPopover .commandPicker-btn:hover {
-    border-color: #888;
-    background: #35363d;
+    border-color: var(--zt-border, #888);
+    background: var(--zt-surface-2, #35363d);
   }
   .commentInputPanel .commandPopover .commandPicker-btn[aria-pressed="true"] {
     border-color: var(--zenza-picker-accent);

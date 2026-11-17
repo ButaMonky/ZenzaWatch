@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/VideoSearch.ts",
   "runtime": "packages/lib/src/nico/VideoSearch.js",
   "sourceSha256": "d5e48ed8602d24646c8ca3b26c00facf1ff5099e236ef4ae8666a14feae9e86f",
-  "runtimeSha256": "82f4ed729daa59013f5a64d56e2f953b65ca2bf0aeef990e52841ef6a89ea56a"
+  "runtimeSha256": "23b646adc78794943635c7873c61403df4346560c6d5eb04c5ef937e7a5b5fee"
 }

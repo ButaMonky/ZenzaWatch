@@ -5,7 +5,7 @@
 // @include     https://www.youtube.com/*
 // @include     https://www.youtube.com/embed/*
 // @include     https://youtube.com/*
-// @version     0.0.24-task966qa
+// @version     0.0.26-task1058
 // @grant       none
 // @license     public domain
 // ==/UserScript==
@@ -75,6 +75,7 @@ import {throttle} from '../packages/lib/src/infra/bounce';
                     case 'fromDataURL':
                         return fromDataURL(params);
                 }
+                return undefined;
             };
         };
         let worker;
@@ -227,7 +228,7 @@ import {throttle} from '../packages/lib/src/infra/bounce';
         let id = '';
         location.search.substring(1).split('&').forEach(item => {
             if (item.split('=')[0] === 'v') {
-                id = item.split('=')[1];
+                id = item.split('=')[1] ?? '';
             }
         });
         return id;

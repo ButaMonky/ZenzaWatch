@@ -8,17 +8,17 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const ClassList: Loose;
-declare const Emitter: Loose;
-declare const MediaTimeline: Loose;
-declare const StoryboardWorker: Loose;
-declare const TextLabel: Loose;
-declare const _: Loose;
-declare const cssUtil: Loose;
-declare const domEvent: Loose;
-declare const global: Loose;
-declare const textUtil: Loose;
-declare const uq: Loose;
+declare const ClassList: typeof import('./ClassList').ClassList;
+declare const Emitter: typeof import('./Emitter').Emitter;
+declare const MediaTimeline: typeof import('./MediaTimeline').MediaTimeline;
+declare const StoryboardWorker: typeof import('./StoryboardWorker').StoryboardWorker;
+declare const TextLabel: typeof import('./TextLabel').TextLabel;
+declare const _: import('./shared-types/Lodash').LodashSubset;
+declare const cssUtil: typeof import('./css').cssUtil;
+declare const domEvent: typeof import('./domEvent').domEvent;
+declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
+declare const textUtil: typeof import('./textUtil').textUtil;
+declare const uq: typeof import('./uQuery').uq;
 
 
 
@@ -132,7 +132,7 @@ class StoryboardView extends Emitter {
   }
   _initializeStoryboard() {
     if (this._view) { return; }
-    window.console.log('%cStoryboardView.initializeStoryboard', 'background: lightgreen;');
+    console.log('%cStoryboardView.initializeStoryboard', 'background: lightgreen;');
 
     this._body = document.body;
 
@@ -308,9 +308,9 @@ class StoryboardView extends Emitter {
     const cl = ClassList(view);
     cl.add('is-success');
 
-    window.console.time('createStoryboardDOM');
+    console.time('createStoryboardDOM');
     this._updateSuccessDom();
-    window.console.timeEnd('createStoryboardDOM');
+    console.timeEnd('createStoryboardDOM');
 
     if (!this.isEnable) {
       return;

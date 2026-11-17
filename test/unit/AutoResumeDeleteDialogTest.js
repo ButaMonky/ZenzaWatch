@@ -3,7 +3,7 @@ const assert=require('assert'),fs=require('fs'),path=require('path');
 const parser=require('@babel/parser');
 const {pathToFileURL}=require('url');
 const {createDialogHarness,deferred,flush}=require('../helpers/dialogHarness');
-const {run}=require('../helpers/extractSource');
+const {run,installDialogRoles}=require('../helpers/extractSource');
 const emitted='tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialog.js';
 let classSource,ClearCoordinator;
 function getDialogClass(){
@@ -26,6 +26,7 @@ before(async()=>{
 function setup({watchId='sm9',contextWatchId=watchId,videoId=watchId,loggedIn=true}={}){
  const h=createDialogHarness(),d=h.dialog;
  run(getDialogClass()+';globalThis.__compiledP12Dialog=P12CompiledDialog;',h.context);
+ installDialogRoles(emitted,h.context.__compiledP12Dialog,h.context); // Task1060: 役割ごとのメソッド
  Object.setPrototypeOf(d,h.context.__compiledP12Dialog.prototype);
  h.context.AutoResumeClearCoordinator=ClearCoordinator;
  const calls={local:[],remote:[],refresh:[],warnings:[]};

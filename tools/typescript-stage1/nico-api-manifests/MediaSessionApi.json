@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/MediaSessionApi.ts",
   "runtime": "packages/lib/src/infra/MediaSessionApi.js",
-  "sourceSha256": "e3670a55f7a8b590a28eb255b9db16e8d1755176e025f9652026140c416a15c3",
+  "sourceSha256": "d45a271ebbe1b89450279c42b9744198de08b8568d2864c9e89f29d020130e75",
   "runtimeSha256": "5168e4ae2d06aa24498166547d55d952564b43cb63f4978539257d957dc1af0c"
 }

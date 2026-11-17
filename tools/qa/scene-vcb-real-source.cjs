@@ -6,7 +6,9 @@ const {parse}=require('@babel/parser');
 const traverse=require('@babel/traverse').default;
 const {JSDOM}=require('jsdom');
 const ROOT=path.resolve(__dirname,'../..');
-const src=fs.readFileSync(path.join(ROOT,'src/VideoControlBar.js'),'utf8');
+// Task1063: VideoControlBar は SeekBarToolTip・SmoothSeekBarPointer（WheelSeeker）などを別ファイルへ分けた。
+// import/export を除いた本文をつなげて、分割前と同じ1つの範囲として調べる。
+const src=require('./native-source-family.cjs').nativeSourceText('src/VideoControlBar.js');
 const constants=fs.readFileSync(path.join(ROOT,'src/constant.js'),'utf8');
 const ast=parse(src,{sourceType:'unambiguous'});
 const constAst=parse(constants,{sourceType:'unambiguous'});

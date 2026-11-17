@@ -28,6 +28,10 @@ const createPrefetchReporter = (deps) => {
                 deps.console(name, payload);
         }
         catch (_) { /* 診断は再生に影響させない */ }
+        try {
+            deps.trace?.(name, payload);
+        }
+        catch (_) { /* 診断は再生に影響させない */ }
     };
     const mode = () => {
         try {
@@ -151,8 +155,9 @@ const createPrefetchReporter = (deps) => {
                 details.elapsedMs = Math.round(seconds * 1000);
             if (cacheHits > 0)
                 details.count = cacheHits;
-            record({ category: 'player', level: 'info', videoId, source: 'prefetch', details,
-                message: `${text}（${videoId}）` });
+            // Task1056: 画面に出す通知と同じ文面にする。通知履歴は「同じ文面の詳しい記録」があれば
+            // 通知側の記録を省くので、二重に残らない（動画IDは videoId 欄に入っている）。
+            record({ category: 'player', level: 'info', videoId, source: 'prefetch', details, message: text });
             if (!popup || mode() === 'off')
                 return;
             try {
@@ -167,8 +172,9 @@ const createPrefetchReporter = (deps) => {
             const details = { operation: 'playlist', event: 'prefetch-miss' };
             if (Number.isFinite(seconds) && seconds > 0)
                 details.elapsedMs = Math.round(seconds * 1000);
-            record({ category: 'player', level: 'info', videoId, source: 'prefetch', details,
-                message: `${text}（${videoId}）` });
+            // Task1056: 画面に出す通知と同じ文面にする。通知履歴は「同じ文面の詳しい記録」があれば
+            // 通知側の記録を省くので、二重に残らない（動画IDは videoId 欄に入っている）。
+            record({ category: 'player', level: 'info', videoId, source: 'prefetch', details, message: text });
             if (!popup || mode() === 'off')
                 return;
             try {

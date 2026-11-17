@@ -1,12 +1,13 @@
 'use strict';
 const assert=require('assert'),fs=require('fs'),parser=require('@babel/parser');
-const {createContext,run}=require('../helpers/extractSource');
+const {createContext,run,installDialogRoles}=require('../helpers/extractSource');
 function fixture(history=[]){
- const text=fs.readFileSync('tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialog.js','utf8');
+ const text=fs.readFileSync('tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialogView.js','utf8'); // Task1060
  const ast=parser.parse(text,{sourceType:'module',allowUndeclaredExports:true,plugins:['classProperties']});
  const node=ast.program.body.find(n=>n.type==='ClassDeclaration'&&n.id.name==='NicoVideoPlayerDialogView');
  const ctx=createContext({Emitter:class{},WatchInfoCacheDb:{listSavedPoints:async()=>history}});
  run(text.slice(node.start,node.end)+';globalThis.View=NicoVideoPlayerDialogView;',ctx);
+ installDialogRoles('tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialogView.js',ctx.View,ctx,'NicoVideoPlayerDialogView'); // Task1063: 画面の役割ごとのメソッド
  const view=Object.create(ctx.View.prototype);view._state={videoInfo:{watchId:'sm1',title:'Current',duration:100}};view._dialog={_requestId:7,_videoInfo:{resumePoints:[{time:12}]}};return view;
 }
 describe('Saved point library integration',()=>{

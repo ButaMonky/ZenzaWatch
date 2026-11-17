@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {readNicoFamily} from './dialog-roles.mjs';
 // Task1042: 投稿者の ▶ の横に「動画」「ショート」。▶ はそのまま全部。件数を通知に。
-const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+// Task1060: NicoVideoPlayerDialog は部品に分割したので、分割先も含めて読む。
+const read=readNicoFamily; // Task1063: 分割したモジュールは分割先も含めて読む
 test('owner ▶ reveals persistent video/short buttons with tooltips',()=>{
  const v=read('nico-src/VideoInfoPanel.ts');
  assert(v.includes('data-command="ownerVideoLong"'));assert(v.includes('data-command="ownerVideoShort"'));

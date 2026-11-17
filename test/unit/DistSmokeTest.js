@@ -72,6 +72,8 @@ function freeIdentifiers(src, {hasLodash}) {
     ReferencedIdentifier(p) {
       const n = p.node.name;
       if (known.has(n) || p.scope.hasBinding(n, true)) { return; }
+      // `typeof 名前` は未定義でも例外にならない（存在確認のための書き方）ので対象外。
+      if (p.parentPath.isUnaryExpression({operator: 'typeof'})) { return; }
       if (p.parentPath.isMemberExpression({property: p.node}) && !p.parent.computed) { return; }
       found.add(n);
     }
@@ -97,7 +99,9 @@ async function startupErrors(src, url, {hasLodash}) {
   for (const name of ['Worker', 'IntersectionObserver', 'ResizeObserver', 'BroadcastChannel']) {
     if (typeof w[name] !== 'function') { w[name] = Noop; }
   }
-  w.URL.createObjectURL = () => 'blob:stub';
+  // Task1059: 本体は Blob の <script src> で入る。中身を覚えておき、GM_addElement の代用品で実行する。
+  const blobs = new Map();
+  w.URL.createObjectURL = blob => { const url = 'blob:stub/' + blobs.size; blobs.set(url, blob); return url; };
   w.URL.revokeObjectURL = () => {};
   w.unsafeWindow = w;
   w.GM_info = {script: {version: '0'}};
@@ -111,6 +115,12 @@ async function startupErrors(src, url, {hasLodash}) {
     Object.assign(element, attributes);
     parent.append(element);
     if (tag === 'script' && attributes.textContent) w.eval(attributes.textContent);
+    if (tag === 'script' && attributes.src && blobs.has(attributes.src)) {
+      blobs.get(attributes.src).text().then(text => {
+        try { w.eval(text); } catch (e) { errors.push(`sync: ${e.constructor.name}: ${e.message}`); }
+        element.dispatchEvent(new w.Event('load'));
+      });
+    }
     return element;
   };
   if (hasLodash) {

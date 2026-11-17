@@ -28,7 +28,8 @@ export interface MediaSessionVideoInfo {
 }
 export interface MediaPositionLike {
   duration: number;
-  playbackRate: number;
+  /** ダイアログは playbackRate を持たない（setPosition が undefined を扱う） */
+  playbackRate?: number | undefined;
   currentTime: number;
 }
 

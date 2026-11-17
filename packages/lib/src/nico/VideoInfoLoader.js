@@ -12,6 +12,7 @@ const Config = {
 
 const emitter = new Emitter();
 const debug = {};
+import {NicoSearchApiV2Loader} from './VideoSearch';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoInfoLoader.ts (Task649). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
@@ -763,13 +764,13 @@ const VideoInfoLoader = (function () {
                 !(callerSignal != null && typeof callerSignal === 'object' &&
                     callerSignal.aborted === true);
             const timeKey = `watchAPI:${generation}`;
-            window.console.time(timeKey);
+            console.time(timeKey);
             return loadPromise(watchId, options, false, isCurrent).then((result) => {
-                window.console.timeEnd(timeKey);
+                console.timeEnd(timeKey);
                 return result;
             }, (err) => {
                 err.watchId = watchId;
-                window.console.timeEnd(timeKey);
+                console.timeEnd(timeKey);
                 return Promise.reject(err);
             });
         }

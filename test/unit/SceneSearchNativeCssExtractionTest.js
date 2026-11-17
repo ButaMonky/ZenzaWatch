@@ -2,7 +2,7 @@
 const assert=require('assert'),fs=require('fs'),path=require('path');
 const {extractNativePreviewStyles,extractNativePreviewClasses,
  extractNativeTooltipAssets,extractNativeThumbnailStyle}=require('../../tools/qa/scui-native-css-extractor.cjs');
-const source=fs.readFileSync(path.join(__dirname,'../../src/VideoControlBar.js'),'utf8');
+const source=require('../../tools/qa/native-source-family.cjs').nativeSourceText('src/VideoControlBar.js'); // Task1063
 describe('SCUI structural native style extraction',()=>{
  it('loads the real storyboard CSS and fails closed for missing or duplicate rules',()=>{
   const native=fs.readFileSync(path.join(__dirname,

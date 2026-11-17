@@ -35,7 +35,7 @@ function fixture({onInit,onLoad,onAttach,onStop,onDestroy,missingLibrary=false,l
  const player=Object.create(context.Subject.prototype);
  const config={startLevel:-1,testBandwidth:true,startFragPrefetch:false,progressive:false,autoStartLoad:true,enableSoftwareAES:true};
  const h={player,engines,events,calls,config};
- Object.assign(player,{_hls:null,_hlsConfig:config,_video:{readyState:0,videoWidth:0,canPlayType:()=>''},_eventWrapperMap:new Map(),_src:A,_label:{textContent:''},_videoCount:0,_throttledCurrentTime:{cancel(){}},getAttribute(){return null;},
+ Object.assign(player,{_hls:null,_hlsConfig:config,_video:{readyState:0,videoWidth:0,canPlayType:()=>'',removeAttribute(name){delete this[name];},load(){}},_eventWrapperMap:new Map(),_src:A,_label:{textContent:''},_videoCount:0,_throttledCurrentTime:{cancel(){}},getAttribute(){return null;},
   dispatchEvent(event){events.push(event);if(event.type==='init-hls-js')onInit?.(h,event.detail.hls);return true;}});
  player._resetReadiness();
  return h;

@@ -15,7 +15,7 @@ declare class Emitter {
 declare const VideoListModel: new (params: {uniq?: boolean; maxItems?: number}) => Loose;
 declare const VideoListView: new (params: Loose) => Loose;
 declare const bounce: {time<F extends (...args: never[]) => unknown>(func: F, ms: number): F};
-declare const ThumbInfoLoader: Loose;
+declare const ThumbInfoLoader: typeof import('./ThumbInfoLoader').ThumbInfoLoader;
 declare const AdDecorationLoader: {
   load(watchIds: string[]): Promise<Map<string, string>>;
   loadFresh(watchIds: string[], onProgress: (p: {checked: number; total: number}) => void): Promise<Map<string, string>>;

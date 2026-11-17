@@ -5,7 +5,7 @@ const observe=p=>p.then(value=>({value}),error=>({error}));
 function subject(){
  const listeners=new Map(),timers=new Map(),frames=[],observers=[];let seq=0;
  const c=createContext({AbortController,PRODUCT:'ZenzaWatch',TOKEN:'token',location:{href:'https://www.nicovideo.jp',host:'www.nicovideo.jp'},
-  console:{log(){},warn(){},time(){},timeEnd(){}},BroadcastEmitter:{emitAsync(){}},
+  console:{log(){},debug(){},warn(){},time(){},timeEnd(){}},BroadcastEmitter:{emitAsync(){}},
   setTimeout:(fn,ms)=>{timers.set(++seq,{fn,ms});return seq;},clearTimeout:id=>timers.delete(id),
   addEventListener:(n,f)=>{if(!listeners.has(n))listeners.set(n,new Set());listeners.get(n).add(f);},removeEventListener:(n,f)=>listeners.get(n)?.delete(f),
   MutationObserver:class{constructor(f){this.f=f;observers.push(this);}observe(){this.active=true;}disconnect(){this.active=false;}}
@@ -122,7 +122,7 @@ function receiver(){
  const port={start(){},postMessage:p=>sent.push(p),addEventListener:(n,f)=>handlers.push(f)};
  const c=createContext({AbortController,PRODUCT:'ZenzaWatch',workerUtil:{env(){}},name:'testZenzaWatchLoader',localStorage:{},
   location:{href:'https://www.nicovideo.jp/robots.txt',host:'www.nicovideo.jp',pathname:'/robots.txt',hash:'#token'},
-  history:{replaceState(){}},console:{log(){},error(){},warn(){}},parent:{postMessage(){}},
+  history:{replaceState(){}},console:{log(){},debug(){},error(){},warn(){}},parent:{postMessage(){}},
   MessageChannel:class{constructor(){this.port1=port;this.port2={};}},
   document:{referrer:'https://www.nicovideo.jp/watch/sm9',createElement:()=>{let u;return {set href(v){u=new URL(v);},get hostname(){return u.hostname;},get protocol(){return u.protocol;}};}},
   setTimeout:(f,ms)=>{timers.set(++seq,{f,ms});return seq;},clearTimeout:id=>timers.delete(id),

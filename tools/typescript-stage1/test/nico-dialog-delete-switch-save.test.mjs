@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
 import test from 'node:test';
+import {roleInstallSource} from './dialog-roles.mjs'; // Task1060
 
 const read=name=>stripTypeScriptTypes(fs.readFileSync(new URL(name,import.meta.url),'utf8'),{mode:'strip'});
 const dialogText=read('../nico-src/NicoVideoPlayerDialog.ts');
@@ -29,7 +30,7 @@ function fixture({record}={}){
    return record?record(...args):{status:204};}}
  });
  vm.runInContext(coordinator+'\n'+classSource('VideoWatchOptions')+'\n'+
-  classSource('NicoVideoPlayerDialog')+';globalThis.Dialog=NicoVideoPlayerDialog;',context);
+  classSource('NicoVideoPlayerDialog')+roleInstallSource()+';globalThis.Dialog=NicoVideoPlayerDialog;',context);
  const dialog=Object.create(context.Dialog.prototype);
  Object.assign(dialog,{
   _requestId:'request-A',_watchId:'sm1',_lastOpenAt:0,_lastCurrentTime:85,

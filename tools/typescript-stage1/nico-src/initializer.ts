@@ -1,6 +1,6 @@
 declare const HlsRuntime: {install(zenza:Loose,dependencies:{Emitter:Loose;dimport:Loose}):Promise<unknown>};
-declare const Emitter: Loose;
-declare const dimport: Loose;
+declare const Emitter: typeof import('./Emitter').Emitter;
+declare const dimport: typeof import('./dimport').dimport;
 declare const NotificationJournal: typeof import('./NotificationJournal').NotificationJournal;
 declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
@@ -13,36 +13,36 @@ declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestD
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const BroadcastEmitter: Loose;
-declare const CONSTANT: Loose;
-declare const CommentLayoutWorker: Loose;
+declare const BroadcastEmitter: typeof import('./messageUtil').BroadcastEmitter;
+declare const CONSTANT: import('./shared-types/Constant').ZenzaConstant;
+declare const CommentLayoutWorker: typeof import('./external/CommentLayoutWorker').CommentLayoutWorker;
 declare const Config: Loose;
-declare const CustomElements: Loose;
-declare const HoverMenu: Loose;
-declare const NicoComment: Loose;
-declare const NicoVideoPlayerDialog: Loose;
+declare const CustomElements: typeof import('./CustomElements').CustomElements;
+declare const HoverMenu: typeof import('./HoverMenu').HoverMenu;
+declare const NicoComment: typeof import('./CommentPlayer').NicoComment;
+declare const NicoVideoPlayerDialog: typeof import('./NicoVideoPlayerDialog').NicoVideoPlayerDialog;
 declare const OfficialPlayerRoute: Loose;
-declare const PlayerConfig: Loose;
-declare const PlayerSession: Loose;
-declare const PlayerState: Loose;
-declare const PlaylistSession: Loose;
-declare const RootDispatcher: Loose;
-declare const START_PAGE_QUERY: Loose;
-declare const StoryboardCacheDb: Loose;
-declare const StoryboardWorker: Loose;
-declare const ThumbInfoLoader: Loose;
-declare const VideoSessionWorker: Loose;
-declare const WatchInfoCacheDb: Loose;
-declare const WatchPageHistory: Loose;
+declare const PlayerConfig: typeof import('./NicoVideoPlayerDialog').PlayerConfig;
+declare const PlayerSession: typeof import('./PlayerSession').PlayerSession;
+declare const PlayerState: typeof import('./State').PlayerState;
+declare const PlaylistSession: typeof import('./PlayListSession').PlaylistSession;
+declare const RootDispatcher: typeof import('./RootDispatcher').RootDispatcher;
+declare const START_PAGE_QUERY: string;
+declare const StoryboardCacheDb: typeof import('./StoryboardCacheDb').StoryboardCacheDb;
+declare const StoryboardWorker: typeof import('./StoryboardWorker').StoryboardWorker;
+declare const ThumbInfoLoader: typeof import('./ThumbInfoLoader').ThumbInfoLoader;
+declare const VideoSessionWorker: typeof import('./VideoSessionWorker').VideoSessionWorker;
+declare const WatchInfoCacheDb: typeof import('./WatchInfoCacheDb').WatchInfoCacheDb;
+declare const WatchPageHistory: typeof import('./WatchPageHistory').WatchPageHistory;
 declare const ZenzaWatch: Loose;
-declare const cssUtil: Loose;
-declare const domEvent: Loose;
-declare const global: Loose;
+declare const cssUtil: typeof import('./css').cssUtil;
+declare const domEvent: typeof import('./domEvent').domEvent;
+declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
 declare const initializeGinzaSlayer: Loose;
-declare const replaceRedirectLinks: Loose;
-declare const textUtil: Loose;
-declare const uq: Loose;
-declare const util: Loose;
+declare const replaceRedirectLinks: typeof import('./replaceRedirectLinks').replaceRedirectLinks;
+declare const textUtil: typeof import('./textUtil').textUtil;
+declare const uq: typeof import('./uQuery').uq;
+declare const util: import('./shared-types/ZenzaUtil').ZenzaUtil;
 
 
 const {initialize} = (() => {
@@ -53,7 +53,8 @@ const {initialize} = (() => {
    * ニコニコのページ自体のエラーは拾わない（発生元が ZenzaWatch のときだけ）。
    * 同じエラー（種類＋場所）は1件にまとめて回数を数える。メッセージは記録時に URL・トークンを伏せる。
    */
-  const ZENZA_SOURCE = /ZenzaWatchRuntime\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
+  // Task1059: 本体（boot が読み込む monkey）は ZenzaWatchMain.js という名前で動く。
+  const ZENZA_SOURCE = /ZenzaWatch(?:Runtime|Main)\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
   const scriptErrorWhere = (stack: unknown): string => {
     if (typeof stack !== 'string') { return ''; }
     for (const line of stack.split('\n').slice(1, 8)) {
@@ -92,7 +93,56 @@ const {initialize} = (() => {
   };
 
   // GINZAを置き換えるべきか？の判定
-  const overrideGinza = async (dialog?: Loose, query?: Loose) => {
+  // Task1065: 公式の視聴ページで Zenza が代わりに再生する時、公式プレイヤーの再生を止める見張り。
+  // 以前は「ページの読み込みが全部終わってから（uq.complete）」公式の video を探して止めていたため、
+  // 公式プレイヤーの読み込みと自動再生が速いと、その間ずっと両方が鳴っていた（掲示板 2595・2615 の報告）。
+  // ここでは起動の最初に、ページ全体の play イベントを捕まえる（capture）見張りを置く。
+  // 後から作り直される video にも効く。Zenza 自身の video と、Zenza を閉じた後と、小・横の画面モードは止めない。
+  const isZenzaMedia = (el: Loose) => !!el && (el.classList?.contains('zenzaWatchVideoElement') ||
+    !!el.closest?.('#ZenzaWatchVideoPlayerContainer, .zenzaVideoPlayerDialog, .zenzaPlayerContainer'));
+  const isOfficialMedia = (el: Loose) => {
+    if (!(el instanceof HTMLMediaElement) || isZenzaMedia(el)) { return false; }
+    // 公式プレイヤーは #root（視聴ページの本体）の中にある。Zenza がサムネイル用に body へ足す video は対象外。
+    const root = document.getElementById('root');
+    return !!root && root.contains(el);
+  };
+  const createOfficialPlaybackGuard = () => {
+    let active = true;
+    let dialog: Loose = null;
+    const sideBySide = () => /(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className);
+    const shouldStop = () => {
+      if (!active || sideBySide()) { return false; }
+      // ダイアログができた後は、開いている間だけ止める（閉じたら公式で見られるように）
+      return !dialog || dialog.isOpen !== false;
+    };
+    const stop = (el: Loose) => {
+      if (!isOfficialMedia(el) || el.paused) { return; }
+      try { el.pause(); } catch (_) { /* 外れた video は止められなくてよい */ }
+    };
+    const onPlay = (ev: Event) => { if (shouldStop()) { stop(ev.target); } };
+    window.addEventListener('play', onPlay, true);
+    window.addEventListener('playing', onPlay, true);
+    const stopAll = () => { if (shouldStop()) { document.querySelectorAll('video, audio').forEach(stop); } };
+    stopAll();
+    return {
+      attach(next: Loose) {
+        dialog = next;
+        next.on?.('close', () => { active = false; });
+        next.on?.('open', () => { active = true; stopAll(); });
+        stopAll();
+      },
+      release() {
+        active = false;
+        window.removeEventListener('play', onPlay, true);
+        window.removeEventListener('playing', onPlay, true);
+      },
+      get active() { return active; }
+    };
+  };
+  const shouldOverrideGinza = (query?: Loose) =>
+    !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(query) && window.name !== 'watchGinza';
+
+  const overrideGinza = async (dialog?: Loose, query?: Loose, guard?: Loose) => {
     // GINZAで視聴のリンクできた場合はスキップ
     if (OfficialPlayerRoute.isOfficialRequest(query) || window.name === 'watchGinza') {
       // Retain the legacy named-window fallback, but do not depend on it.
@@ -108,34 +158,9 @@ const {initialize} = (() => {
     if (!Config.props.overrideGinza) {
       return;
     }
+    // 公式プレイヤーの再生を止める見張り（Task1065: 起動の最初に置いたものを、ダイアログにつなぐ）
+    (guard || createOfficialPlaybackGuard()).attach(dialog);
     initializeGinzaSlayer(dialog, query);
-    await uq.complete();
-    // 公式プレイヤーの再生を止める（二重に音が出ないように）
-    const stopPlayer = (ev?: Loose) => {
-      if (!document.body.classList.contains('showNicoVideoPlayerDialog')) { return; }
-      // 画面モードが横か小のときには止めない
-      if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className)) { return; }
-      ev.target.pause();
-    };
-    const video = document.querySelector('.grid-area_\\[player\\] video') as Loose;
-    if (video !== null) {
-      video.addEventListener('play', stopPlayer);
-      video.pause();
-      return;
-    }
-    const root = document.getElementById('root');
-    // On SPA transitions the root can already have been detached.
-    if (!root) { return; }
-    new MutationObserver((records, observer) => {
-      for (const record of records) {
-        if (record.addedNodes.length === 0) { continue; }
-        const found = (record.target as Loose).querySelector('.grid-area_\\[player\\] video');
-        if (found === null) { continue; }
-        found.addEventListener('play', stopPlayer);
-        found.pause();
-        observer.disconnect();
-      }
-    }).observe(root, {childList: true, subtree: true});
   };
 
   // Task175 (F02): the wait ends even if #root is missing or the SPA never mounts.
@@ -205,7 +230,7 @@ const {initialize} = (() => {
     if (!location.host.endsWith('.nicovideo.jp')) { return; }
     CommentLayoutWorker.getInstance();
     void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
-    window.console.time('init Workers');
+    console.time('init Workers');
     // Storyboard cache is optional for playback readiness. Keep the Watch
     // history DB prewarm gate: first-open WatchInfoCacheDb.get may otherwise
     // move its IndexedDB open wait onto the pre-session playback path.
@@ -215,12 +240,15 @@ const {initialize} = (() => {
     ];
     void StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable'));
     const watchCacheReady = WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
-    return Promise.all([...requiredWorkers, watchCacheReady]).then(() => window.console.timeEnd('init Workers'));
+    return Promise.all([...requiredWorkers, watchCacheReady]).then(() => console.timeEnd('init Workers'));
   };
 
 //@require replaceRedirectLinks
 
   const initialize = async function (){
+    // Task1065: 公式プレイヤーの見張りは、ほかの準備（設定・Worker・lit の読み込み）を待たずに最初に置く。
+    const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
+    const officialGuard = util.isGinzaWatchUrl() && shouldOverrideGinza(startQuery) ? createOfficialPlaybackGuard() : null;
     if(typeof StoryboardCacheDb!=='undefined'&&StoryboardCacheDb.configure){
       const configureSceneCache=()=>{
         const capacity=Number(Config.getValue('storyboardCacheMaxMB'));
@@ -260,7 +288,7 @@ const {initialize} = (() => {
     }
     if (typeof NotificationJournal !== 'undefined') { installScriptErrorJournal(); }
     await HlsRuntime.install(ZenzaWatch, {Emitter, dimport});
-    window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
+    console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
 
     domEvent.dispatchCustomEvent(
       document.body, 'BeforeZenzaWatchInitialize', (window as Loose).ZenzaWatch, {bubbles: true, composed: true});
@@ -272,6 +300,8 @@ const {initialize} = (() => {
 
     await uq.ready(); // DOMContentLoaded
     const isWatch = await isWatchPage();
+    // 視聴できないページ（削除・非公開など）では Zenza は代わりに再生しないので、見張りを外す
+    if (!isWatch) { officialGuard?.release(); }
 
     // migrate comment language
     if (typeof Config.props.commentLanguage === 'string') {
@@ -290,7 +320,7 @@ const {initialize} = (() => {
     hoverMenu.setPlayer(dialog);
 
     if (isWatch) {
-      await overrideGinza(dialog, query);
+      await overrideGinza(dialog, query, officialGuard);
     }
 
     initializeMessage(dialog);
@@ -302,7 +332,7 @@ const {initialize} = (() => {
     }
 
 
-    CustomElements.initialize();
+    CustomElements.initialize!();
     (window as Loose).ZenzaWatch.ready = true;
     global.emitter.emitAsync('ready');
     global.emitter.emitResolve('init');
@@ -328,7 +358,7 @@ const {initialize} = (() => {
       const localNow = Date.now();
 
       if (command === 'hello') {
-        window.console.log(
+        console.log(
           '%cHELLO! \ntime: %s (%smsec)\nmessage: %s \nfrom: %s\nurl: %s\n', 'font-weight: bold;',
           new Date(params.now).toLocaleString(), localNow - now,
           params.message, params.from, params.url,
@@ -339,7 +369,7 @@ const {initialize} = (() => {
         // window.console.log('execCommand', {params});
         result = player.execCommand(params.command, params.params);
       } else if (command === 'ping' && (params.force || (isLast && isOpen))) {
-        window.console.info('pong!');
+        console.info('pong!');
         result = {status: 'ok'};
       } else if (command === 'pong') {
         result = bcast.emitResolve('ping', params);
@@ -427,7 +457,7 @@ const {initialize} = (() => {
 
     // 最後にZenzaWatchを開いたタブに送る
     // なかったら同じタブで開く. 一見万能だが、pingを投げる都合上ワンテンポ遅れる。
-    const sendOrOpen = (watchId?: Loose, params?: Loose) => {
+    const sendOrOpen = (watchId?: Loose, params?: Loose): Promise<unknown> | void => {
       if (dialog.isLastOpenedPlayer) {
         open(watchId, params);
       } else {

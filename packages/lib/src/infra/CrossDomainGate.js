@@ -156,7 +156,7 @@ class CrossDomainGate extends Emitter {
     }
     _initializeCrossDomainGate() {
         // window.console.info(`%c1. CrossDomainGate open ${this.name} ${PRODUCT}`, 'background: orange; color: green; font-size: 120%');
-        window.console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
+        console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
         const loaderFrame = this.loaderFrame = document.createElement('iframe');
         loaderFrame.referrerPolicy = 'origin';
         loaderFrame.sandbox = 'allow-scripts allow-same-origin';
@@ -244,7 +244,7 @@ class CrossDomainGate extends Emitter {
                     this._initializeStatus = 'done';
                     this._clearInitializeTimer();
                     const originalBody = params;
-                    window.console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
+                    console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
                     const result = originalBody && this._onCommand(originalBody, sessionId);
                     this.emitResolve('initialize', { status: 'ok' });
                     // window.console.info(`%c4. CrossDomainGate init OK [${this.name} ${PRODUCT}]`, 'background: orange; color: green; font-size: 120%');

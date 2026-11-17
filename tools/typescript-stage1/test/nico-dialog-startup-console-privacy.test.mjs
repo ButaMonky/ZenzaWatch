@@ -1,3 +1,4 @@
+import {roleInstallSource} from './dialog-roles.mjs'; // Task1060
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
@@ -27,7 +28,7 @@ function fixture(){
   VideoWatchOptions:class{constructor(){this.videoLoadOptions={};}},
   VideoInfoLoader:{load:async()=>({})},WatchInfoCacheDb:{get:async()=>null},
   util:{fullscreen:{now:()=>false}}});
- vm.runInContext(code+';globalThis.Dialog=NicoVideoPlayerDialog;',context);
+ vm.runInContext(code+roleInstallSource()+';globalThis.Dialog=NicoVideoPlayerDialog;',context);
  const subject=Object.create(context.Dialog.prototype);
  Object.assign(subject,{_requestId:'current',_watchId:MARK,_lastOpenAt:Date.now(),
   _state:{isError:false,isOpen:true,setState(value){Object.assign(this,value);},

@@ -7,7 +7,7 @@ import {NICO_API_BY_NAME} from '../scripts/nico-api-registry.mjs';
 import {renderNicoLegacy} from '../scripts/sync-nico-api.mjs';
 import {emitNico,read} from './nico-api-harness.mjs';
 
-emitNico('tsconfig.nico-legacy.json');
+emitNico();
 
 for(const name of ['initializer','CommentPlayer']){
   test(`${name}: the emitted module with a key/method named import/export is accepted`,()=>{

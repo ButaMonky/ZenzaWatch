@@ -9,7 +9,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(root, '../..');
 const read = name => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
 const strict = read('tsconfig.nico.json');
-const relaxed = read('tsconfig.nico-legacy.json');
+// Task1058: 残っていた10ファイルを strict へ移し、緩い設定のレーン（tsconfig.nico-legacy.json）は廃止した。
+const relaxedExists = fs.existsSync(path.join(root, 'tsconfig.nico-legacy.json'));
 const expected = [
   'CapTubeEntry', 'CommentPanel', 'GamePadEntry',
   'MaskedWatchEntry', 'NicoVideoPlayer', 'NicoVideoPlayerDialog',
@@ -17,18 +18,16 @@ const expected = [
 ].map(name => 'nico-src/' + name + '.ts');
 const sort = items => [...items].sort();
 
-describe('TS-P0-01 legacy TypeScript strict boundary baseline', () => {
-  it('keeps the relaxed source allowlist explicit and in sync with strict exclusions', () => {
+describe('TS-P0-01 / Task1058 TypeScript strict boundary', () => {
+  it('has no relaxed lane: every Nico source is compiled with the strict options', () => {
+    assert.equal(relaxedExists, false, 'tsconfig.nico-legacy.json must not come back');
     assert.equal(strict.compilerOptions.strict, true);
     assert.equal(strict.compilerOptions.noUncheckedIndexedAccess, true);
     assert.equal(strict.compilerOptions.exactOptionalPropertyTypes, true);
-    assert.deepEqual(sort(strict.exclude), sort(expected));
-    assert.deepEqual(sort(relaxed.files), sort(expected));
-    assert.equal(new Set(relaxed.files).size, 10);
-    assert.equal(relaxed.compilerOptions.strictNullChecks, false);
-    assert.equal(relaxed.compilerOptions.noUncheckedIndexedAccess, false);
+    assert.deepEqual(strict.exclude || [], []);
+    assert.deepEqual(strict.include, ['nico-src/**/*.ts']);
   });
-  it('keeps the 10 remaining relaxed TypeScript sources mapped to tracked runtime manifests', () => {
+  it('keeps the 10 formerly relaxed TypeScript sources mapped to tracked runtime manifests', () => {
     for (const rel of expected) {
       const name = path.basename(rel, '.ts');
       const manifest = read('nico-api-manifests/' + name + '.json');

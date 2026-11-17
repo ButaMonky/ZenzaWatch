@@ -123,10 +123,10 @@ describe('ScreenFilter named user presets', function() {
       return source.slice(0,source.indexOf('}')+1);
     };
     css.textContent=[
-      rule('tools/typescript-stage1/nico-src/NicoVideoPlayerDialog.ts','.zenzaPlayerContainer .videoPlayer'),
-      rule('tools/typescript-stage1/nico-src/NicoVideoPlayerDialog.ts','.zenzaPlayerContainer .commentLayerFrame'),
+      rule('tools/typescript-stage1/nico-src/NicoVideoPlayerDialogView.ts','.zenzaPlayerContainer .videoPlayer'),
+      rule('tools/typescript-stage1/nico-src/NicoVideoPlayerDialogView.ts','.zenzaPlayerContainer .commentLayerFrame'),
       rule('tools/typescript-stage1/nico-src/NicoVideoPlayer.ts','.touchWrapper'),
-      rule('tools/typescript-stage1/nico-src/NicoVideoPlayerDialog.ts','.zenzaScreenMode_small .zenzaPlayerContainer > :not(.commentLayerFrame):not(.loadingMessageContainer)')
+      rule('tools/typescript-stage1/nico-src/NicoVideoPlayerDialogView.ts','.zenzaScreenMode_small .zenzaPlayerContainer > :not(.commentLayerFrame):not(.loadingMessageContainer)')
     ].join('\n');document.head.append(css);
     for(const [key,value] of Object.entries({videoWidth:640,videoHeight:360,readyState:2,offsetWidth:640,offsetHeight:360,offsetLeft:0,offsetTop:0}))Object.defineProperty(video,key,{value});
     const proto=window.HTMLCanvasElement.prototype,original=proto.getContext;

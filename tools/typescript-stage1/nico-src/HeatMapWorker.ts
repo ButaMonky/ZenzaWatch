@@ -8,8 +8,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const global: Loose;
-declare const workerUtil: Loose;
+declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
+declare const workerUtil: typeof import('./workerUtil').workerUtil;
 
 function HeatMapInitFunc(self?: Loose) {
 class HeatMapModel {
@@ -164,7 +164,6 @@ class HeatMapView {
     this.map = map;
     if (!map.length) { this.reset(); return true; }
 
-    console.time('draw HeatMap');
 
     // 一番コメント密度が高い所を100%として相対的な比率にする
     // 赤い所が常にピークになってわかりやすいが、
@@ -192,7 +191,6 @@ class HeatMapView {
       const right = Math.floor((i + 1) * this.width / map.length);
       context.fillRect(left, 0, right - left, this.height);
     }
-    console.timeEnd('draw HeatMap');
     context.commit && context.commit();
     return true;
   }
@@ -349,7 +347,7 @@ const HeatMapWorker = (() => {
   let worker: Loose;
   const createMainThreadHeatMap = ({container, width, height, canvas}: Loose) => {
     const HeatMap = HeatMapInitFunc({
-      emit: (...args: Loose[]) => global.emitter.emit(...args)
+      emit: (...args: [string, ...Loose[]]) => global.emitter.emit(...args)
     });
     return new HeatMap({container, width, height, canvas});
   };
@@ -466,7 +464,7 @@ const HeatMapWorker = (() => {
 })();
 
 const HeatMap = HeatMapInitFunc({
-  emit: (...args: Loose[]) => global.emitter.emit(...args)
+  emit: (...args: [string, ...Loose[]]) => global.emitter.emit(...args)
 });
 
 // Task187（監査v2 F13）: ヒートマップの通知を保存してよいのは、通知に付いた動画IDが今の動画と一致する時だけ。

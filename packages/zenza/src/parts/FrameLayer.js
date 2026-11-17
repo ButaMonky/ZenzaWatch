@@ -68,7 +68,10 @@ class FrameLayer {
     }
     _getIframe() {
         const iframe = Object.assign(document.createElement('iframe'), {
-            loading: 'eager', srcdoc: '<html></html>', sandbox: 'allow-same-origin allow-scripts'
+            // Task1056: 以前は sandbox='allow-same-origin allow-scripts' を付けていたが、この組み合わせは
+            // 中のスクリプトが制限を自分で外せるため守りにならず、ブラウザが毎回警告を出すだけだった。
+            // 中身は ZenzaWatch 自身の srcdoc なので、sandbox は付けない。
+            loading: 'eager', srcdoc: '<html></html>'
         });
         return iframe;
     }

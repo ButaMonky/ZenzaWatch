@@ -8,7 +8,7 @@ import {renderNicoLegacy,splitEntry,codeLines,entryDirectives} from '../scripts/
 import {emitNico,read} from './nico-api-harness.mjs';
 
 emitNico(); // HlsEntry retirement notice is in the strict lane.
-emitNico('tsconfig.nico-legacy.json');
+emitNico();
 const ENTRIES={UQueryEntry:'src/_uquery.js',CapTubeEntry:'src/_captube.js',MaskedWatchEntry:'src/_shape.js',
   HeatSyncEntry:'src/_heatsync.js',GamePadEntry:'src/_gamepad.js',HlsEntry:'src/_hls.js'};
 

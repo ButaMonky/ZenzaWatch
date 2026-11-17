@@ -163,11 +163,11 @@ PlayListView.__css__ = (`
 
     .is-playlistEnable .tabSelect.playlist::after {
       content: '▶';
-      color: #fff;
+      color: var(--zt-text-0, #fff);
       text-shadow: 0 0 8px orange;
     }
     .zenzaScreenMode_sideView .is-playlistEnable .is-notFullscreen .tabSelect.playlist::after  {
-      text-shadow: 0 0 8px #336;
+      text-shadow: 0 0 8px var(--zt-info-strong, #336);
     }
 
     .playlist-container {
@@ -178,19 +178,19 @@ PlayListView.__css__ = (`
 
     .playlist-header {
       height: 32px;
-      border-bottom: 1px solid #000;
-      background: #333;
-      color: #ccc;
+      border-bottom: 1px solid var(--zt-border-dark, #000);
+      background: var(--zt-surface-2, #333);
+      color: var(--zt-text-1, #ccc);
       user-select: none;
     }
 
     .playlist-menu-button {
       display: inline-block;
       cursor: pointer;
-      border: 1px solid #333;
+      border: 1px solid var(--zt-border-dark, #333);
       padding: 0px 4px;
       margin: 0 0 0 4px;
-      background: #666;
+      background: var(--zt-surface-3, #666);
       font-size: 16px;
       line-height: 28px;
       white-space: nowrap;
@@ -208,8 +208,8 @@ PlayListView.__css__ = (`
 
     .playlist-container.enable .toggleEnable,
     .playlist-container.loop   .toggleLoop {
-      text-shadow: 0 0 6px #f99;
-      color: #ff9;
+      text-shadow: 0 0 6px var(--zt-danger, #f99);
+      color: var(--zt-accent, #ff9);
     }
     .playlist-container .toggleLoop icon {
       font-family: STIXGeneral;
@@ -254,7 +254,7 @@ PlayListView.__css__ = (`
       right: 0px;
       top: 24px;
       min-width: 150px;
-      background: #333 !important;
+      background: var(--zt-surface-2, #333) !important;
     }
 
     .playlist-menu li {
@@ -275,11 +275,11 @@ PlayListView.__css__ = (`
       height: 94%;
       top: 3%;
       left: 3%;
-      background: #000;
-      color: #ccc;
+      background: var(--zt-surface-0, #000);
+      color: var(--zt-text-1, #ccc);
       opacity: 0.8;
-      border: 2px solid #ccc;
-      box-shadow: 0 0 4px #fff;
+      border: 2px solid var(--zt-border-light, #ccc);
+      box-shadow: 0 0 4px var(--zt-glow-light, #fff);
       padding: 16px;
       z-index: 100;
     }
@@ -289,8 +289,8 @@ PlayListView.__css__ = (`
     }
 
     .playlist-file-drop.drag-over {
-      box-shadow: 0 0 8px #fe9;
-      background: #030;
+      box-shadow: 0 0 8px var(--zt-accent, #fe9);
+      background: var(--zt-success-strong, #030);
     }
 
     .playlist-file-drop * {
@@ -300,7 +300,7 @@ PlayListView.__css__ = (`
     .playlist-file-drop-inner {
       padding: 8px;
       height: 100%;
-      border: 1px dotted #888;
+      border: 1px dotted var(--zt-border, #888);
     }
 
     .import-playlist-file-select {

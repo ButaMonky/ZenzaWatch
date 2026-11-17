@@ -4,7 +4,8 @@ import fs from 'fs';
 import path from 'path';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
-const DIALOG_PATH = path.join(REPO_ROOT, 'src', 'NicoVideoPlayerDialog.js');
+// Task1060: 画面（DOM・CSS）の部分は NicoVideoPlayerDialogView.js へ分割した。
+const DIALOG_PATH = path.join(REPO_ROOT, 'src', 'NicoVideoPlayerDialogView.js');
 const squash = s => String(s).replace(/\s+/g, ''); // Task964: generated-from-TS formatting tolerant
 
 function readDialog() {
@@ -63,7 +64,7 @@ describe('Historical source recovery（Task 095）', function() {
     const forFull = source.slice(forFullStart, forFullEnd);
 
     const globalStart = source.indexOf('NicoVideoPlayerDialogView.__css__ = `');
-    const globalEnd = source.indexOf('class NicoVideoPlayerDialog extends Emitter', globalStart);
+    const globalEnd = source.indexOf('NicoVideoPlayerDialogView.__tpl__', globalStart);
     assert.ok(globalStart >= 0 && globalEnd > globalStart, 'global dialog CSS block が見つからない');
     const globalCss = source.slice(globalStart, globalEnd);
 

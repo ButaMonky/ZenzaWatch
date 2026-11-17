@@ -177,6 +177,10 @@ async function register(configFile) {
   const prep = JSON.parse(fs.readFileSync(prepFile(cfg.task), 'utf8'));
   const legacy = Object.entries(prep).filter(([, o]) => o.legacy).map(([n]) => `nico-src/${n}.ts`);
   if (legacy.length) {
+    // Task1058: 緩い設定のレーンは廃止した。strict の型エラーを直してから登録する。
+    throw Error('LEGACY_TO_TS_RELAXED_LANE_RETIRED: fix strict errors for ' + legacy.join(' '));
+  }
+  if (legacy.length) {
     const lp = path.join(STAGE, 'tsconfig.nico-legacy.json');
     const lc = JSON.parse(fs.readFileSync(lp, 'utf8'));
     lc.files = [...new Set([...(lc.files || []), ...legacy])].sort();

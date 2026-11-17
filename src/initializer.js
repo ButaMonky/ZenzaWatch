@@ -32,6 +32,8 @@ import {uq} from '../packages/lib/src/uQuery';
 // import {domUtil} from '../packages/lib/src/dom/domUtil';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 const START_PAGE_QUERY = 'hoge=fuga';
+import {Emitter} from '../packages/lib/src/Emitter';
+import {dimport} from '../packages/lib/src/infra/dimport';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/initializer.ts (Task965). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
@@ -46,7 +48,8 @@ const { initialize } = (() => {
      * ニコニコのページ自体のエラーは拾わない（発生元が ZenzaWatch のときだけ）。
      * 同じエラー（種類＋場所）は1件にまとめて回数を数える。メッセージは記録時に URL・トークンを伏せる。
      */
-    const ZENZA_SOURCE = /ZenzaWatchRuntime\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
+    // Task1059: 本体（boot が読み込む monkey）は ZenzaWatchMain.js という名前で動く。
+    const ZENZA_SOURCE = /ZenzaWatch(?:Runtime|Main)\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
     const scriptErrorWhere = (stack) => {
         if (typeof stack !== 'string') {
             return '';
@@ -95,7 +98,67 @@ const { initialize } = (() => {
         });
     };
     // GINZAを置き換えるべきか？の判定
-    const overrideGinza = async (dialog, query) => {
+    // Task1065: 公式の視聴ページで Zenza が代わりに再生する時、公式プレイヤーの再生を止める見張り。
+    // 以前は「ページの読み込みが全部終わってから（uq.complete）」公式の video を探して止めていたため、
+    // 公式プレイヤーの読み込みと自動再生が速いと、その間ずっと両方が鳴っていた（掲示板 2595・2615 の報告）。
+    // ここでは起動の最初に、ページ全体の play イベントを捕まえる（capture）見張りを置く。
+    // 後から作り直される video にも効く。Zenza 自身の video と、Zenza を閉じた後と、小・横の画面モードは止めない。
+    const isZenzaMedia = (el) => !!el && (el.classList?.contains('zenzaWatchVideoElement') ||
+        !!el.closest?.('#ZenzaWatchVideoPlayerContainer, .zenzaVideoPlayerDialog, .zenzaPlayerContainer'));
+    const isOfficialMedia = (el) => {
+        if (!(el instanceof HTMLMediaElement) || isZenzaMedia(el)) {
+            return false;
+        }
+        // 公式プレイヤーは #root（視聴ページの本体）の中にある。Zenza がサムネイル用に body へ足す video は対象外。
+        const root = document.getElementById('root');
+        return !!root && root.contains(el);
+    };
+    const createOfficialPlaybackGuard = () => {
+        let active = true;
+        let dialog = null;
+        const sideBySide = () => /(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className);
+        const shouldStop = () => {
+            if (!active || sideBySide()) {
+                return false;
+            }
+            // ダイアログができた後は、開いている間だけ止める（閉じたら公式で見られるように）
+            return !dialog || dialog.isOpen !== false;
+        };
+        const stop = (el) => {
+            if (!isOfficialMedia(el) || el.paused) {
+                return;
+            }
+            try {
+                el.pause();
+            }
+            catch (_) { /* 外れた video は止められなくてよい */ }
+        };
+        const onPlay = (ev) => { if (shouldStop()) {
+            stop(ev.target);
+        } };
+        window.addEventListener('play', onPlay, true);
+        window.addEventListener('playing', onPlay, true);
+        const stopAll = () => { if (shouldStop()) {
+            document.querySelectorAll('video, audio').forEach(stop);
+        } };
+        stopAll();
+        return {
+            attach(next) {
+                dialog = next;
+                next.on?.('close', () => { active = false; });
+                next.on?.('open', () => { active = true; stopAll(); });
+                stopAll();
+            },
+            release() {
+                active = false;
+                window.removeEventListener('play', onPlay, true);
+                window.removeEventListener('playing', onPlay, true);
+            },
+            get active() { return active; }
+        };
+    };
+    const shouldOverrideGinza = (query) => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(query) && window.name !== 'watchGinza';
+    const overrideGinza = async (dialog, query, guard) => {
         // GINZAで視聴のリンクできた場合はスキップ
         if (OfficialPlayerRoute.isOfficialRequest(query) || window.name === 'watchGinza') {
             // Retain the legacy named-window fallback, but do not depend on it.
@@ -112,44 +175,9 @@ const { initialize } = (() => {
         if (!Config.props.overrideGinza) {
             return;
         }
+        // 公式プレイヤーの再生を止める見張り（Task1065: 起動の最初に置いたものを、ダイアログにつなぐ）
+        (guard || createOfficialPlaybackGuard()).attach(dialog);
         initializeGinzaSlayer(dialog, query);
-        await uq.complete();
-        // 公式プレイヤーの再生を止める（二重に音が出ないように）
-        const stopPlayer = (ev) => {
-            if (!document.body.classList.contains('showNicoVideoPlayerDialog')) {
-                return;
-            }
-            // 画面モードが横か小のときには止めない
-            if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className)) {
-                return;
-            }
-            ev.target.pause();
-        };
-        const video = document.querySelector('.grid-area_\\[player\\] video');
-        if (video !== null) {
-            video.addEventListener('play', stopPlayer);
-            video.pause();
-            return;
-        }
-        const root = document.getElementById('root');
-        // On SPA transitions the root can already have been detached.
-        if (!root) {
-            return;
-        }
-        new MutationObserver((records, observer) => {
-            for (const record of records) {
-                if (record.addedNodes.length === 0) {
-                    continue;
-                }
-                const found = record.target.querySelector('.grid-area_\\[player\\] video');
-                if (found === null) {
-                    continue;
-                }
-                found.addEventListener('play', stopPlayer);
-                found.pause();
-                observer.disconnect();
-            }
-        }).observe(root, { childList: true, subtree: true });
     };
     // Task175 (F02): the wait ends even if #root is missing or the SPA never mounts.
     const readyContent = (timeoutMs = 15000) => {
@@ -216,7 +244,7 @@ const { initialize } = (() => {
         }
         CommentLayoutWorker.getInstance();
         void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
-        window.console.time('init Workers');
+        console.time('init Workers');
         // Storyboard cache is optional for playback readiness. Keep the Watch
         // history DB prewarm gate: first-open WatchInfoCacheDb.get may otherwise
         // move its IndexedDB open wait onto the pre-session playback path.
@@ -226,10 +254,13 @@ const { initialize } = (() => {
         ];
         void StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable'));
         const watchCacheReady = WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
-        return Promise.all([...requiredWorkers, watchCacheReady]).then(() => window.console.timeEnd('init Workers'));
+        return Promise.all([...requiredWorkers, watchCacheReady]).then(() => console.timeEnd('init Workers'));
     };
     //@require replaceRedirectLinks
     const initialize = async function () {
+        // Task1065: 公式プレイヤーの見張りは、ほかの準備（設定・Worker・lit の読み込み）を待たずに最初に置く。
+        const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
+        const officialGuard = util.isGinzaWatchUrl() && shouldOverrideGinza(startQuery) ? createOfficialPlaybackGuard() : null;
         if (typeof StoryboardCacheDb !== 'undefined' && StoryboardCacheDb.configure) {
             const configureSceneCache = () => {
                 const capacity = Number(Config.getValue('storyboardCacheMaxMB'));
@@ -271,7 +302,7 @@ const { initialize } = (() => {
             installScriptErrorJournal();
         }
         await HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
-        window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
+        console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
         domEvent.dispatchCustomEvent(document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, { bubbles: true, composed: true });
         cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });
         initializeBySite();
@@ -279,6 +310,10 @@ const { initialize } = (() => {
         const query = textUtil.parseQuery(START_PAGE_QUERY);
         await uq.ready(); // DOMContentLoaded
         const isWatch = await isWatchPage();
+        // 視聴できないページ（削除・非公開など）では Zenza は代わりに再生しないので、見張りを外す
+        if (!isWatch) {
+            officialGuard?.release();
+        }
         // migrate comment language
         if (typeof Config.props.commentLanguage === 'string') {
             Config.props.commentLanguage = Config.props.commentLanguage.replace('_', '-').toLowerCase();
@@ -293,7 +328,7 @@ const { initialize } = (() => {
         const dialog = initializeDialogPlayer(Config);
         hoverMenu.setPlayer(dialog);
         if (isWatch) {
-            await overrideGinza(dialog, query);
+            await overrideGinza(dialog, query, officialGuard);
         }
         initializeMessage(dialog);
         WatchPageHistory.initialize(dialog);
@@ -324,7 +359,7 @@ const { initialize } = (() => {
             let result;
             const localNow = Date.now();
             if (command === 'hello') {
-                window.console.log('%cHELLO! \ntime: %s (%smsec)\nmessage: %s \nfrom: %s\nurl: %s\n', 'font-weight: bold;', new Date(params.now).toLocaleString(), localNow - now, params.message, params.from, params.url, { command, isLast, isOpen });
+                console.log('%cHELLO! \ntime: %s (%smsec)\nmessage: %s \nfrom: %s\nurl: %s\n', 'font-weight: bold;', new Date(params.now).toLocaleString(), localNow - now, params.message, params.from, params.url, { command, isLast, isOpen });
                 result = { status: 'ok' };
             }
             else if (command === 'sendExecCommand' &&
@@ -333,7 +368,7 @@ const { initialize } = (() => {
                 result = player.execCommand(params.command, params.params);
             }
             else if (command === 'ping' && (params.force || (isLast && isOpen))) {
-                window.console.info('pong!');
+                console.info('pong!');
                 result = { status: 'ok' };
             }
             else if (command === 'pong') {

@@ -9,7 +9,7 @@
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const dll: Loose;
-declare const util: Loose;
+declare const util: import('./shared-types/ZenzaUtil').ZenzaUtil;
 
 
 class BaseCommandElement extends HTMLElement {

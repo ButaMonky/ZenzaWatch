@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/UaaView.ts",
+  "runtime": "src/UaaView.js",
+  "sourceSha256": "0eb3ace1745ddcbc3853c21b790c2c85171461b65fcfe300b9b59682053c9d1c",
+  "runtimeSha256": "c6a88ae4f41eea8063fe4f78520d5df228f0c41ae8f542139dfaea966f059726"
+}

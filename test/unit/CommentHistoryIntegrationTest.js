@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const squash = s => String(s).replace(/\s+/g, ''); // Task964: generated-from-TS formatting tolerant
-const {read, extract, createContext, run, loadClass} = require('../helpers/extractSource');
+const {read, extract, createContext, run, loadClass, readFamily} = require('../helpers/extractSource');
 function playerClass(extra = {}) {
   const c = createContext({Emitter: class {}, ...extra});
   return loadClass('src/CommentPlayer.js', 'NicoCommentPlayer', c);
@@ -47,7 +47,7 @@ describe('Task200 comment history integration', function() {
     d._cancelCommentLoad();assert.strictEqual(n,1);assert.strictEqual(aborts,1);
   });
   it('wires normal success to the validated history seed without changing official counts', function() {
-    const text=read('src/NicoVideoPlayerDialog.js');
+    const text=readFamily('src/NicoVideoPlayerDialog.js');
     assert(squash(text).includes(squash('history.controller.normalReady({videoInfo: this._videoInfo, result, generation: requestId})')));
     assert(text.includes('this._state.isWaybackMode = result.threadInfo.isWaybackMode'));
     assert(text.includes('comment: result.threadInfo.totalResCount'));

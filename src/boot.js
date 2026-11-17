@@ -30,7 +30,8 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
     if (window.ZenzaLib) {
       window.ZenzaJQuery = window.ZenzaLib.$;
       const blob = new Blob([
-        `(${monkey})('${PRODUCT}', '${encodeURIComponent(START_PAGE_QUERY)}');`
+        // Task1059: 名前を付けて、ZenzaWatch 自身のエラーを見分けられるようにする（以前は UUID の名前だった）。
+        `(${monkey})('${PRODUCT}', '${encodeURIComponent(START_PAGE_QUERY)}');\n//# sourceURL=ZenzaWatchMain.js`
       ], {type: 'text/javascript'});
       const src = URL.createObjectURL(blob);
       const handler = () => {

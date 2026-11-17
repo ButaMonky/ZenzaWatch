@@ -2,8 +2,8 @@
 const assert=require('assert'),fs=require('fs'),path=require('path');
 const parser=require('@babel/parser');
 const {JSDOM}=require('jsdom');
-const {createContext,run}=require('../helpers/extractSource');
-const emitted='tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialog.js';
+const {createContext,run,installDialogRoles}=require('../helpers/extractSource');
+const emitted='tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialogView.js'; // Task1060: 画面の部品は分割先
 function compiledView(){
  const text=fs.readFileSync(path.resolve(emitted),'utf8');
  const parsed=parser.parse(text,{sourceType:'module',allowUndeclaredExports:true,
@@ -41,6 +41,7 @@ function setup({mountError=false}={}){
    onLoadFail(){calls.push(['fail']);}}
  });
  run(compiledView()+';globalThis.__view=NicoVideoPlayerDialogView;',ctx);
+ installDialogRoles(emitted,ctx.__view,ctx,'NicoVideoPlayerDialogView'); // Task1063: 画面の役割ごとのメソッド
  const view=Object.create(ctx.__view.prototype);
  view._$playerContainer=[container];
  view._state={videoInfo:{watchId:'sm1'}};

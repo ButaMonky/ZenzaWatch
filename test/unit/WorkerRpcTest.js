@@ -295,6 +295,8 @@ describe('Worker の要求と応答（R03）', function() {
       await sleep(100);
       assert.equal(ra2.state, 'rejected');
       assert.equal(fakeA.postCount, before, '終了した Worker へ送らない');
+      // もう一方の Worker の応答（50ms 後）を待つ。高負荷の時に 100ms では間に合わず、偶発的に失敗していた。
+      for (let i = 0; i < 40 && rb.state === 'pending'; i++) { await sleep(25); }
       assert.equal(rb.state, 'resolved');
       assert.equal(rb.value, 'B');
       assert.deepEqual(a.getRpcState(), Object.assign({}, a.getRpcState(), {state: 'disposed', pending: 0}));

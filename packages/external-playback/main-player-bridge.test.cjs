@@ -64,3 +64,31 @@ test('closing before main appears cancels retries and never starts late playback
  await assert.rejects(client.open('sm10',{isTrusted:true}),/PLAYER_CLOSED/);
  client.dispose();dispose();
 });
+
+// Task1032: Tampermonkey などがスクリプトごとに window を包んで渡す場合（実機で hello が一度も届かなかった）。
+test('launch succeeds when each script sees its own wrapper of the same frame window',async()=>{
+ const {createMainPlayerClient,installMainPlayerProvider}=require(modulePath);
+ const raw=frame();raw.document={};raw.location.href='https://www.nicovideo.jp/robots.txt#t';
+ const mainView=new Proxy(raw,{}),companionView=new Proxy(raw,{});
+ assert.notEqual(mainView,raw);assert.notEqual(companionView,mainView);
+ const opened=[];
+ const session={open:async id=>opened.push(id),close:()=>true,setStageListener(){}};
+ const dispose=installMainPlayerProvider(mainView,session);
+ const client=createMainPlayerClient(companionView,{timeoutMs:300,retryMs:10});
+ await client.open('sm9',{isTrusted:true});
+ assert.deepEqual(opened,['sm9']);
+ client.dispose();dispose();
+});
+test('a different window (e.g. a child loader frame) is still rejected even if same origin',async()=>{
+ const {installMainPlayerProvider}=require(modulePath);
+ const raw=frame();raw.document={};raw.location.href='https://www.nicovideo.jp/robots.txt#t';
+ const events=[];
+ const session={open:async()=>{throw Error('must not open');},close:()=>true,setStageListener(){}};
+ const dispose=installMainPlayerProvider(raw,session,{onDiag:(e,d)=>events.push([e,d])});
+ const child={document:{},name:'nicovideoApiZenzaWatchExternalTrialLoader1',location:{href:'https://www.nicovideo.jp/robots.txt#x'}};
+ raw.deliver({protocol:'zenza-main-player-v1',channel:'00000000-0000-0000-0000-000000000000',type:'hello'},child);
+ await new Promise(r=>setTimeout(r,5));
+ assert.ok(events.some(([e,d])=>e==='provider-message-rejected'&&d.reason==='source'));
+ assert.ok(!events.some(([e])=>e==='provider-hello'));
+ dispose();
+});

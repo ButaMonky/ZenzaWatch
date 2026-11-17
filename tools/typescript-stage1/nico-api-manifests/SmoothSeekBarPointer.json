@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/SmoothSeekBarPointer.ts",
+  "runtime": "src/SmoothSeekBarPointer.js",
+  "sourceSha256": "1a4c7dde24cf52d533fe19ac81b471a9fcbd9e4f4df8bbfec33b3115b90e7ff2",
+  "runtimeSha256": "6323b230c7d3adbb9432098c5027ae6727e4b431bd8a169a2cdcfe576002378f"
+}

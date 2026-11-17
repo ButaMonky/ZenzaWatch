@@ -210,7 +210,7 @@ NicoTextParser._FONT_REG = {
 // 画面レイアウトに影響ありそうなCSSをこっちにまとめる
 NicoTextParser.__css__ = (`
 body {
-  marign: 0;
+  margin: 0;
   padding: 0;
   overflow: hidden;
   pointer-events: none;

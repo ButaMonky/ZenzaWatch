@@ -158,3 +158,11 @@ for(const origin of ['https://www.nicovideo.jp/','https://example.org/'])test('d
   else{assert.equal(sent[0].data.type,'ZenzaBlogPartsClick');assert.equal(store.size,1);assert.equal([...store.values()][0].id,'sm9');}
  }finally{parent.close();}
 });
+// Task1033: ワーカーの中で動くコードは本体側の変数 externalTrial を参照できない。
+test('worker-side fetch does not reference the main-thread externalTrial variable',()=>{
+ const start=mainCode.indexOf('self.xFetch = async (url, options = {}) => {');
+ assert.ok(start>0,'worker xFetch must exist');
+ const body=mainCode.slice(start,mainCode.indexOf('};',mainCode.indexOf('return new Response',start)));
+ assert.ok(!/\bexternalTrial\b/.test(body),'worker xFetch must not use externalTrial');
+ assert.ok(body.includes("PRODUCT !== 'ZenzaWatchExternalTrial'"),'worker decides by PRODUCT');
+});

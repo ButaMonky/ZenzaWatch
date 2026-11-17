@@ -44,7 +44,7 @@ const { DialogElement, DialogProps } = (() => {
         *::-webkit-scrollbar-thumb {
           /*border-radius: 4px;*/
           background: var(--scrollbar-thumb-color, #999);
-          box-shadow: 0 0 4px #333 inset;
+          box-shadow: 0 0 4px var(--zt-shadow, #333) inset;
           will-change: transform;
         }
 
@@ -83,7 +83,7 @@ const { DialogElement, DialogProps } = (() => {
           animation-iteration-count: 1;
           animation-duration: 0.5s;
           animation-timing-function: linear;
-          border: 1px solid rgba(128, 128, 128, 0.5);
+          border: 1px solid var(--zt-border, rgba(128, 128, 128, 0.5));
         }
 
         .dialog.is-open::before {
@@ -216,12 +216,12 @@ const { DialogElement, DialogProps } = (() => {
         }
 
         h1, h2, h3, h4, h5, h6, h7, summary {
-          background: rgba(3, 147, 147, 1);
+          background: var(--zt-info-strong, rgba(3, 147, 147, 1));
           /*box-shadow: 0 0 8px rgba(0, 0, 0, 0.5) inset;*/
-          text-shadow: 1px 1px #999;
+          text-shadow: 1px 1px var(--zt-glow-light, #999);
           border-radius: 4px;
           font-weight: bold;
-          color: #333;
+          color: var(--zt-text-inverse, #333);
           padding: 4px 8px;
           margin: 0 8px 0 0;
           text-align: left;
@@ -229,7 +229,7 @@ const { DialogElement, DialogProps } = (() => {
 
         h3, h4 {
           margin: 0 auto;
-          background: rgba(192, 192, 192, 0.8);
+          background: var(--zt-overlay-light, rgba(192, 192, 192, 0.8));
           box-shadow: none;
         }
 
@@ -248,7 +248,7 @@ const { DialogElement, DialogProps } = (() => {
           font-size: 150%;
         }
         summary::-webkit-details-marker {
-          color: #f39393;
+          color: var(--zt-danger, #f39393);
           text-shadow: 0 0 1px red;
         }
         details: {

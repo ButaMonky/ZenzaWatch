@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/State.ts",
   "runtime": "src/State.js",
-  "sourceSha256": "c350c2680b1ea4fdf7797a77dd56a8290505233bc3ce2ede78e8798650c2716d",
+  "sourceSha256": "3ddce3f32d70780c9d9361ea91521349bd974ffbd7578b5f9286dc2bb70a6124",
   "runtimeSha256": "0768cac902ec0412ebfc27e36616f84a5d90e6e03cfd3a500dee3c6352baf05c"
 }

@@ -8,7 +8,7 @@ import {describe,it} from 'node:test';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
-const strict=read('tsconfig.nico.json'), legacy=read('tsconfig.nico-legacy.json');
+const strict=read('tsconfig.nico.json'), legacy=fs.existsSync(path.join(root,'tsconfig.nico-legacy.json'))?read('tsconfig.nico-legacy.json'):{files:[]}; // Task1058: 緩い設定のレーンは廃止
 const moved=['CommentPlayer','DialogElement','HeatMapWorker','PipPageThumbnail',
   'RootDispatcher','ShortcutActions','State','StoryboardView','VideoInfo','VideoItemElement'];
 const names=moved.map(n=>'nico-src/'+n+'.ts');

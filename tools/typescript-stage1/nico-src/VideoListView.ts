@@ -18,7 +18,7 @@ declare const cssUtil: {
   percent(v: number): unknown;
   px(v: number): unknown;
 };
-declare const uq: Loose;
+declare const uq: typeof import('./uQuery').uq;
 declare const ClassList: (element: Element) => Loose;
 declare const bounce: {time<F extends (...args: never[]) => unknown>(f: F, ms?: number): F};
 declare const sleep: {idle(): Promise<unknown>};

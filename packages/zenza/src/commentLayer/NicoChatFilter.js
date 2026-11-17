@@ -470,7 +470,7 @@ class NicoChatFilter extends Emitter {
         }
         const score = nicoChat.score;
         if (score <= threthold) {
-          window.console.log('%cNG共有適用: %s <= %s %s %s秒 %s', 'background: yellow;',
+          console.log('%cNG共有適用: %s <= %s %s %s秒 %s', 'background: yellow;',
             score,
             threthold,
             nicoChat.type,
@@ -482,7 +482,7 @@ class NicoChatFilter extends Emitter {
         let m;
         wordReg && (m = wordReg.exec(nicoChat.text));
         if (m) {
-          window.console.log('%cNGワード: "%s" %s %s秒 %s', 'background: yellow;',
+          console.log('%cNGワード: "%s" %s %s秒 %s', 'background: yellow;',
             m[1],
             nicoChat.type,
             nicoChat.vpos / 100,
@@ -494,7 +494,7 @@ class NicoChatFilter extends Emitter {
         if (wordRegReg) { wordRegReg.lastIndex = 0; }
         wordRegReg && (m = wordRegReg.exec(nicoChat.text));
         if (m) {
-          window.console.log(
+          console.log(
             '%cNGワード(正規表現): "%s" %s %s秒 %s',
             'background: yellow;',
             m[1],
@@ -506,7 +506,7 @@ class NicoChatFilter extends Emitter {
         }
 
         if (umatch && umatch.has(nicoChat.userId)) {
-          window.console.log('%cNGID: "%s" %s %s秒 %s %s', 'background: yellow;',
+          console.log('%cNGID: "%s" %s %s秒 %s %s', 'background: yellow;',
             nicoChat.userId,
             nicoChat.type,
             nicoChat.vpos / 100,
@@ -517,7 +517,7 @@ class NicoChatFilter extends Emitter {
         }
         commandReg && (m = commandReg.test(nicoChat.cmd));
         if (m) {
-          window.console.log('%cNG command: "%s" %s %s秒 %s %s', 'background: yellow;',
+          console.log('%cNG command: "%s" %s %s秒 %s %s', 'background: yellow;',
             m[1],
             nicoChat.type,
             nicoChat.vpos / 100,
@@ -552,7 +552,7 @@ class NicoChatFilter extends Emitter {
       return nicoChatArray;
     }
     const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
-    if (timeKey) { window.console.time(timeKey); }
+    if (timeKey) { console.time(timeKey); }
     const composite=this._getCompositeProjection(nicoChatArray);
     const filterFunc=composite?this._compositeLegacy:this.getFilterFunc();
     let result=nicoChatArray.filter(chat=>composite instanceof Map?
@@ -590,8 +590,8 @@ class NicoChatFilter extends Emitter {
       return !denyTypes.includes(chat.fork) && !denyThreadTypes.includes(chat.threadLabel);
     });
     if (timeKey) {
-      window.console.timeEnd(timeKey);
-      window.console.log('NG判定結果: %s/%s', result.length, before);
+      console.timeEnd(timeKey);
+      console.log('NG判定結果: %s/%s', result.length, before);
     }
     return result;
   }

@@ -19,7 +19,10 @@ const GateAPI = (() => {
     //@require ThumbInfoCacheDb
     const thumbInfo = async () => {
         const { port, TOKEN } = init({ prefix: `thumbInfo${PRODUCT}Loader`, type: 'thumbInfo' });
-        const db = await ThumbInfoCacheDb.open().catch(() => {
+        // Task1056: 以前はキャッシュDBを開き終えてから受信を登録していた。親は 'initialized' を受け取ると
+        // すぐ要求を送るため、DBを開いている間に届いた最初の要求が捨てられ、60秒のタイムアウトまで
+        // 待たされていた（起動直後の "Thumb info warm-up unavailable"）。受信は先に登録し、DBは要求の中で待つ。
+        const dbReady = ThumbInfoCacheDb.open().catch(() => {
             console.warn('Thumbnail cache unavailable');
             return { get: async () => null, put: async () => { } };
         });
@@ -40,6 +43,7 @@ const GateAPI = (() => {
             params.options = params.options || {};
             const watchId = params.url.split('/').reverse()[0];
             const expiresAt = Date.now() - (params.options.expireTime || 0);
+            const db = await dbReady;
             const cache = await db.get(watchId);
             if (cache && cache.thumbInfo.status === 'ok' && cache.updatedAt > expiresAt) {
                 return post({ status: 'ok', command, params: cache.thumbInfo }, { sessionId });

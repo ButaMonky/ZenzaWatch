@@ -5,7 +5,7 @@
 // @include     https://www.youtube.com/*
 // @include     https://www.youtube.com/embed/*
 // @include     https://youtube.com/*
-// @version     0.0.24-task966qa
+// @version     0.0.26-task1058
 // @grant       none
 // @license     public domain
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -13,7 +13,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/CapTube.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/CapTube.user.js
 // ==/UserScript==
-// build: 2026-11-15 16:05Z 3c3e39f
+// build: 2026-11-16 12:30Z 9a328b9c
 /* eslint-disable */
 
 
@@ -587,17 +587,14 @@ const workerUtil = (() => {
 								self.post({ command: 'alert', params: { message } });
 						};
 						const ping = async function (self, options = {}) {
-								const timekey = `PING "${self.name}"`;
-								console.log(timekey);
+								const started = Date.now();
 								let result;
 								options.timeout = options.timeout || 10000;
 								try {
-										console.time(timekey);
 										result = await self.post({ command: 'ping', params: { now: Date.now(), NAME, PID, url: location.href } }, options);
-										console.timeEnd(timekey);
+										console.debug(`PING "${self.name}"`, (Date.now() - started) + 'ms');
 								}
 								catch (e) {
-										console.timeEnd(timekey);
 										console.warn('ping fail', e);
 								}
 								return result;
@@ -647,7 +644,7 @@ const workerUtil = (() => {
 								const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
 								const src = `
 				const PID = ${JSON.stringify(pid)};
-				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
+				console.debug('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
 								const blob = new Blob([src], { type: 'text/javascript' });
@@ -776,17 +773,14 @@ const workerUtil = (() => {
 										});
 								};
 								const ping = async function (self, options = {}) {
-										const timekey = `PING "${self.name}" total time`;
-										window.console.log(`PING "${self.name}"...`);
+										const started = Date.now();
 										let result;
 										options.timeout = options.timeout || 10000;
 										try {
-												window.console.time(timekey);
 												result = await self.post({ command: 'ping', params: { now: Date.now(), NAME: self.name, PID, url: location.href } }, options);
-												window.console.timeEnd(timekey);
+												console.debug(`PING "${self.name}" total time`, (Date.now() - started) + 'ms');
 										}
 										catch (e) {
-												console.timeEnd(timekey);
 												console.warn('ping fail', e);
 										}
 										return result;
@@ -915,6 +909,7 @@ const workerUtil = (() => {
                     case 'fromDataURL':
                         return fromDataURL(params);
                 }
+                return undefined;
             };
         };
         let worker;
@@ -1067,7 +1062,7 @@ const workerUtil = (() => {
         let id = '';
         location.search.substring(1).split('&').forEach(item => {
             if (item.split('=')[0] === 'v') {
-                id = item.split('=')[1];
+                id = item.split('=')[1] ?? '';
             }
         });
         return id;

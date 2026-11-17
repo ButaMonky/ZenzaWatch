@@ -8,11 +8,11 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const CONSTANT: Loose;
-declare const Emitter: Loose;
-declare const _: Loose;
-declare const global: Loose;
-declare const nicoUtil: Loose;
+declare const CONSTANT: import('./shared-types/Constant').ZenzaConstant;
+declare const Emitter: typeof import('./Emitter').Emitter;
+declare const _: import('./shared-types/Lodash').LodashSubset;
+declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
+declare const nicoUtil: typeof import('./nicoUtil').nicoUtil;
 
 
 class BaseState extends Emitter {

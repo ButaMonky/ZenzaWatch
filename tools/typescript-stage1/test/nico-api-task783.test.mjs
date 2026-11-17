@@ -50,7 +50,7 @@ function mainWorld(opt={}){
     Date:{now:()=>0x1234},JSON,Object,Promise,Error,Map,String,Array,Infinity,
     setTimeout:(f,ms)=>{const i=++timerId;timers.set(i,f);log.push(['setTimeout',ms]);return i;},
     clearTimeout:i=>{timers.delete(i);},
-    console:{log(){},warn:(...a)=>log.push(['warn',String(a[0])]),error:(...a)=>log.push(['error',String(a[0])]),
+    console:{log(){},debug(){},warn:(...a)=>log.push(['warn',String(a[0])]),error:(...a)=>log.push(['error',String(a[0])]),
       time(){},timeEnd(){},timeLog(){}}}};
 }
 const reply=(w,sessionId,result,status='ok')=>w.workers.at(-1).fire('message',{data:{body:{command:'commandResult',params:{result}},sessionId,status}});
@@ -119,7 +119,7 @@ async function workerSide(code){
   class P{constructor(id){this.id=id;this.l={};}addEventListener(t,f){(this.l[t]=this.l[t]||[]).push(f);}
     postMessage(m){log.push(['port.post',this.id,m.body.command,m.status]);}start(){log.push(['port.start',this.id]);}}
   const self={name:'Inner',postMessage:(m,t)=>log.push(['self.post',m.body.command,m.sessionId,m.status,snapshot(m.body.params.result)])};
-  const ctx=createContext({self,console:{log(){},warn:(...a)=>log.push(['warn',String(a[0])]),error:(...a)=>log.push(['error',String(a[0])]),time(){},timeEnd(){}},
+  const ctx=createContext({self,console:{log(){},debug(){},warn:(...a)=>log.push(['warn',String(a[0])]),error:(...a)=>log.push(['error',String(a[0])]),time(){},timeEnd(){}},
     location:{href:'https://x.invalid/',origin:'https://x.invalid'},Date:{now:()=>1},JSON,Object,Promise,Error,
     setTimeout,BroadcastChannel:undefined});
   runInContext(src,ctx,{timeout:1000});

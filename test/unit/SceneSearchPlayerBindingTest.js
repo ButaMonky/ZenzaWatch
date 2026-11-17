@@ -66,7 +66,8 @@ describe('SCUI-18 actual player binding lifecycle',()=>{
   h.close();
  });
  it('is connected by the actual dialog source, not an unused helper',()=>{
-  const source=fs.readFileSync(path.resolve(__dirname,'../../src/NicoVideoPlayerDialog.js'),'utf8');
+  // Task1060: 分割した部品（画面・コマンド）も含めて調べる。
+  const source=require('../helpers/extractSource').readFamily('src/NicoVideoPlayerDialog.js');
   assert(source.includes("import {SceneSearchPlayerBinding}"),'dialog must import the runtime binding');
   assert(source.includes('this.sceneSearchBinding = new SceneSearchPlayerBinding('));
   assert(source.includes('this.sceneSearchBinding.attach()'));

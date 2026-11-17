@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
 import test from 'node:test';
+import {roleInstallSource} from './dialog-roles.mjs'; // Task1063: 画面も役割ごとに分割した
 
 // Run the canonical view in memory, including its real panel mount and handlers.
 // This suite also runs before a checkout has any ignored compiler emissions.
-const source=fs.readFileSync(new URL('../nico-src/NicoVideoPlayerDialog.ts',import.meta.url),'utf8');
+// Task1060: 画面の部品は NicoVideoPlayerDialogView.ts へ分割した。
+const source=fs.readFileSync(new URL('../nico-src/NicoVideoPlayerDialogView.ts',import.meta.url),'utf8');
 const text=stripTypeScriptTypes(source,{mode:'strip'});
 const viewStart=text.indexOf('class NicoVideoPlayerDialogView extends');
 const viewCode=text.slice(viewStart,text.indexOf('\n}',viewStart)+2);
@@ -24,7 +26,7 @@ function fixture({onMount,onActivate,mountError=false}={}){
   ManualBookmarkSession:class{dispose(){}},ManualBookmarkDock:{mount:()=>{
    onMount?.(view);if(mountError)throw Error('optional dock unavailable');return dock;
   }}});
- vm.runInContext(viewCode+';globalThis.View=NicoVideoPlayerDialogView',context);
+ vm.runInContext(viewCode+roleInstallSource('NicoVideoPlayerDialogView')+';globalThis.View=NicoVideoPlayerDialogView',context);
  const view=Object.create(context.View.prototype);
  view._dialog={_requestId:'request-A'};
  view._state={isError:false,videoInfo:null};

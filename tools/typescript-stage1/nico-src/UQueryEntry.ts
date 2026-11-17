@@ -8,9 +8,9 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const AntiPrototypeJs: Loose;
-declare const VER: Loose;
-declare const uQuery: Loose;
+declare const AntiPrototypeJs: typeof import('./AntiPrototypeJs').AntiPrototypeJs;
+declare const VER: string;
+declare const uQuery: typeof import('./uQuery').uQuery;
 
 //@require ../packages/lib/src/infra/AntiPrototype-js.js
 AntiPrototypeJs().then(() => {

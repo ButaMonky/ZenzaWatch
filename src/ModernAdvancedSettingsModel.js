@@ -7,7 +7,7 @@ class ModernAdvancedSettingsModel {
     static get CATEGORIES() {
         return [
             '再生・音声', '画面・映像', 'コメント表示',
-            'NG・表示対象', 'プレイリスト・検索', 'ショートカット', 'マウス・タッチ', '通知履歴', '外部連携', '外部サイトからの再生'
+            'NG・表示対象', 'プレイリスト・検索', 'ショートカット', 'マウス・タッチ', '通知履歴', '外部連携', '診断（上級者向け）', '外部サイトからの再生'
         ];
     }
     static _clone(value) {
@@ -192,6 +192,31 @@ class ModernAdvancedSettingsModel {
             ['HIGH', '強'], ['MAX', '最大']]);
         return [
             ...this.externalLinkSettings(),
+            ...group('診断（上級者向け）', 'コンソールへの詳細ログ', [
+                ['diagnostics.console.enabled', '詳細な診断ログをコンソールに出す', { type: 'boolean',
+                        description: '不具合を調べるための情報を、ブラウザの開発者ツール（F12）の「Console」へ大量に出します。初期状態はOFFです。ONの間は少し重くなることがあるので、調べ終わったらOFFに戻してください。キー・Cookie・コメント本文・ユーザーIDなどは伏せ字にし、URLのクエリは消して出します。記録は ZenzaWatch.debug.diagnostics.copy() でまとめてコピーでき、.dump() で一覧表示できます。下の項目で出す種類を選べます（変更はすぐ反映されます）。' }],
+                ['diagnostics.console.errors', 'エラー', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: '捕捉されなかったエラー、処理されなかったPromiseの拒否、画像やスクリプトの読み込み失敗、セキュリティポリシー（CSP）による遮断を出します。ZenzaWatch由来かページ由来かの目安と、発生場所・スタックも付けます。' }],
+                ['diagnostics.console.startup', '起動と環境', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: 'ONにした時と起動時に、版・ビルド・ブラウザ・画面・回線・端末の情報、主な設定、保存領域の使用量を出します。ZenzaWatchの初期化にかかった時間と、失敗した場合はその内容も出します。' }],
+                ['diagnostics.console.player', '再生（動画要素）', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: '動画要素の読み込み・再生・一時停止・シーク・待機・停止・エラーなどのイベントを、その時点の再生位置・バッファ・状態・コマ落ちと一緒に出します。再生中なのに3秒以上進まない「止まり」も知らせます。' }],
+                ['diagnostics.console.network', '通信', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: 'ニコニコ関係の通信を、状態コード・所要時間・転送量・キャッシュの有無と一緒に出します。動画データ（セグメント）は数が多いので10秒ごとにまとめ、件数・平均時間・推定速度を出します。失敗した通信は警告として出します。' }],
+                ['diagnostics.console.notifications', '通知', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: '画面に出る通知や、通知履歴に記録される通信の問題・復旧を出します。通知履歴の「記録する機能」でOFFにした種類は出ません。' }],
+                ['diagnostics.console.settings', '設定の変更', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: '設定が変わるたびに、項目名と新しい値を出します。NG・フィルター関係の値は伏せ字にします。' }],
+                ['diagnostics.console.events', '内部イベント（とても多い）', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: 'ZenzaWatch内部で発生するイベントを出します。量がとても多いので初期状態はOFFです。同じイベントが2秒以内に続いた場合はまとめます。' }],
+                ['diagnostics.console.performance', '負荷', { type: 'boolean', dependsOn: 'diagnostics.console.enabled',
+                        description: '画面が固まった時間（長いタスク）と、定期的にメモリ使用量・DOM要素数・動画のコマ落ち・処理の遅れを出します。' }],
+                ['diagnostics.console.intervalSec', '負荷を定期記録する間隔', { dependsOn: 'diagnostics.console.performance',
+                        ...select([[0, '定期記録しない'], [10, '10秒ごと'], [30, '30秒ごと'], [60, '60秒ごと']]),
+                        description: '「負荷」がONのときに、メモリ使用量などをまとめて出す間隔です。' }],
+                ['debug', '開発用の細かいログ（従来のデバッグ出力）', { type: 'boolean',
+                        description: '初期値OFF。ZenzaWatch の各部品が出す開発用の細かいログ（処理時間・NG判定の件数・コメント解析など）をコンソールへ出します。「診断ログ」とは別で、整理されていない生の出力です。とても多いので普段はOFFのままに。すぐに反映されます。' }]
+            ]),
             ...group('通知履歴', '基本設定', [
                 ['notificationHistory.enabled', '通知履歴を記録する', { type: 'boolean',
                         description: 'これから発生する通知やエラーを履歴に残します。OFFでも画面の通知は表示され、保存済みの履歴は消えません。過去の記録を消す場合は通知履歴パネルの削除操作を使ってください。設定は「変更を保存」の後に反映されます。' }],
@@ -633,6 +658,15 @@ class ModernAdvancedSettingsModel {
                         dependsOn: 'playlist.prefetchAhead.enabled',
                         description: 'ONにした一覧それぞれから、何本先まで準備しておくかです（初期値5本）。3つともONで5本なら最大15本が対象になります。本数が多いほど通信量が増えます。'
                     }],
+                ['playlist.prefetchAhead.skipWhenLoop', 'ループ中は先読みしない', { type: 'boolean',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF（ループ中も先読みします）。ONにすると、同じ動画を繰り返すループ再生の間は次の動画を先読みしません。ループ中に一覧から次の動画を選ぶことが少なく、通信量を抑えたい場合に使います。' }],
+                ['playlist.prefetchAhead.skipWhenPaused', '一時停止中は先読みしない', { type: 'boolean',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF（一時停止中も先読みを続けます）。止めている間は回線が空いているので、次の動画を準備しておくのに向いています。ONにすると、一時停止中は先読みを止めます。' }],
+                ['playlist.prefetchAhead.skipWhenDataSaver', 'データセーバー中は先読みしない', { type: 'boolean',
+                        dependsOn: 'playlist.prefetchAhead.enabled',
+                        description: '初期値OFF（データセーバー中も先読みします）。ONにすると、ブラウザや端末の「データセーバー（通信量の節約）」が有効な間は先読みしません。' }],
                 ['playlist.prefetchAhead.cacheMB', 'メモリキャッシュの上限', {
                         ...slider(16, 512, 16), unit: 'MB',
                         dependsOn: 'playlist.prefetchAhead.enabled',

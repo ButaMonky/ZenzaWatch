@@ -18,7 +18,7 @@ declare const cssUtil: {
   percent(v: number): unknown;
   px(v: number): unknown;
 };
-declare const uq: Loose;
+declare const uq: typeof import('./uQuery').uq;
 declare const ClassList: (element: Element) => Loose;
 declare const bounce: {time<F extends (...args: never[]) => unknown>(f: F, ms?: number): F};
 declare const sleep: {idle(): Promise<unknown>};
@@ -74,7 +74,7 @@ class VideoListItemView  {
     position: absolute;
     right: 8px;
     top: 80%;
-    color: #666;
+    color: var(--zt-text-inverse, #666);
     font-family: Impact;
     font-size: 45px;
     pointer-events: none;
@@ -95,8 +95,8 @@ class VideoListItemView  {
 
   .videoItem.is-dragging {
     pointer-events: none;
-    box-shadow: 8px 8px 4px #000;
-    background: #666;
+    box-shadow: 8px 8px 4px var(--zt-shadow, #000);
+    background: var(--zt-surface-3, #666);
     opacity: 0.8;
     transform: translate(var(--trans-x-pp), var(--trans-y-pp));
     transition:
@@ -113,7 +113,7 @@ class VideoListItemView  {
   }
 
   .is-dragging .videoItem.is-dragover {
-    outline: 5px dashed #99f;
+    outline: 5px dashed var(--zt-info, #99f);
   }
 
   .is-dragging .videoItem.is-dragover * {
@@ -131,8 +131,8 @@ class VideoListItemView  {
   }
   .videoItem.is-favorited .postedAt::after {
     content: ' ★';
-    color: #fea;
-    text-shadow: 2px 2px 2px #000;
+    color: var(--zt-accent-soft, #fea);
+    text-shadow: 2px 2px 2px var(--zt-shadow, #000);
   }
 
   .thumbnailContainer {
@@ -178,7 +178,7 @@ class VideoListItemView  {
   }
 
   .thumbnailContainer a:active {
-    box-shadow: 0 0 8px #f99;
+    box-shadow: 0 0 8px var(--zt-danger, #f99);
     transform: translate(0, 4px);
     transition: none;
   }
@@ -189,8 +189,8 @@ class VideoListItemView  {
   .thumbnailContainer .pocket-info {
     position: absolute;
     display: none;
-    color: #fff;
-    background: #666;
+    color: var(--zt-text-0, #fff);
+    background: var(--zt-surface-3, #666);
     width: 24px;
     height: 20px;
     line-height: 18px;
@@ -199,7 +199,7 @@ class VideoListItemView  {
     text-align: center;
     font-weight: bolder;
 
-    color: #fff;
+    color: var(--zt-text-0, #fff);
     cursor: pointer;
   }
   .thumbnailContainer .playlistAppend {
@@ -247,7 +247,7 @@ class VideoListItemView  {
   .videoItem:hover .thumbnailContainer .deflistAdd:hover,
   .videoItem:hover .thumbnailContainer .pocket-info:hover {
     transform: scale(1.5);
-    box-shadow: 2px 2px 2px #000;
+    box-shadow: 2px 2px 2px var(--zt-shadow, #000);
   }
 
   .playlist .videoItem:not(.is-active):hover .playlistRemove:active,
@@ -269,9 +269,9 @@ class VideoListItemView  {
     position: absolute;
     right: 0;
     bottom: 0;
-    background: #000;
+    background: var(--zt-surface-0, #000);
     font-size: 12px;
-    color: #fff;
+    color: var(--zt-text-0, #fff);
   }
   .videoItem:hover .thumbnailContainer .duration {
     display: none;
@@ -285,7 +285,7 @@ class VideoListItemView  {
 
   .postedAt {
     font-size: 12px;
-    color: #ccc;
+    color: var(--zt-text-1, #ccc);
   }
   .is-played .postedAt::after {
     content: ' ●';
@@ -312,15 +312,15 @@ class VideoListItemView  {
   .counter .count { flex: none; }
   .videoLink {
     font-size: 14px;
-    color: #ff9;
+    color: var(--zt-accent, #ff9);
     transition: background 0.4s ease, color 0.4s ease;
   }
   .videoLink:visited {
-    color: #ffd;
+    color: var(--zt-accent-soft, #ffd);
   }
   .videoLink:active {
-    color: #fff;
-    background: #663;
+    color: var(--zt-text-0, #fff);
+    background: var(--zt-accent-strong, #663);
     transition: none;
   }
 
@@ -330,7 +330,7 @@ class VideoListItemView  {
   }
   .counter {
     font-size: 12px;
-    color: #ccc;
+    color: var(--zt-text-1, #ccc);
   }
   .counter .value {
     font-weight: bolder;
@@ -344,7 +344,7 @@ class VideoListItemView  {
 
   .videoItem.is-active {
     border: none !important;
-    background: #776;
+    background: var(--zt-surface-3, #776);
   }
 
   @media screen and (min-width: 600px)

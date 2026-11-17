@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert');
 const {JSDOM}=require('jsdom');
-const {createContext,loadClass,read}=require('../helpers/extractSource');
+const {createContext,loadClass,read, readFamily}=require('../helpers/extractSource');
 function harness(){
  const dom=new JSDOM('<body><div id="dialog" class="is-open"><div id="player" class="zenzaPlayerContainer"><div class="hoverMenuContainer"><div class="menuItemContainer leftBottom"><div class="scalingUI"><div class="showCommentSwitch menuButton"><span class="tooltip">Comment</span></div></div></div></div></div></div></body>');
  const host=dom.window.document.getElementById('player'),jobs=new Map();
@@ -19,7 +19,7 @@ function harness(){
  view._state={screenMode:'normal'};view._playerConfig={props:{}};
  view.addClass=x=>host.classList.add(x);view.removeClass=x=>host.classList.remove(x);
  view._clearClass=()=>{};view._updateScreenModeStyle=()=>{};view._setThumbnail=()=>{};
- const cssSource=read('src/NicoVideoPlayerDialog.js');
+ const cssSource=readFamily('src/NicoVideoPlayerDialog.js');
  const end=cssSource.indexOf("className: 'videoHoverMenu'");
  const start=cssSource.lastIndexOf('util.addStyle('+String.fromCharCode(96),end);
  const close=cssSource.lastIndexOf(String.fromCharCode(96)+', {',end);

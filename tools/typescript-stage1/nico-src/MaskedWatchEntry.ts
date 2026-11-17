@@ -8,8 +8,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const VER: Loose;
-declare const css: Loose;
+declare const VER: string;
+declare const css: typeof import('./css').css;
 
 // chrome://flags/#enable-experimental-web-platform-features
 
@@ -222,7 +222,7 @@ interval: ${config.interval}        // マスクの更新間隔
       try {
         await css.addModule(下請, {config: {...config}});
       const transferCanvas = new OffscreenCanvas(config.tmpWidth, config.tmpHeight);
-      const ctx = transferCanvas.getContext('2d', {alpha: false, desynchronized: true});
+      const ctx = transferCanvas.getContext('2d', {alpha: false, desynchronized: true})!;
       debugLayer = document.createElement('div');
       [layer, debugLayer].forEach(layer => {
         layer.style.setProperty('--config', JSON.stringify({...config}));
@@ -644,7 +644,7 @@ interval: ${config.interval}        // マスクの更新間隔
             layer = document.querySelector('#comment-layer-container canvas');
             type = 'NICO LIVE';
           } else if (video.closest('#bilibiliPlayer')) {
-            layer = document.querySelector('.bilibili-player-video-danmaku').parentElement;
+            layer = document.querySelector('.bilibili-player-video-danmaku')!.parentElement;
             type = 'BILI BILI [´ω`]';
           } else if (video.id === 'js-video') {
             layer = document.querySelector('#cmCanvas');
@@ -693,7 +693,7 @@ interval: ${config.interval}        // マスクの更新間隔
         li.innerHTML = `<a href="javascript:;">${PRODUCT}設定</a>`;
         li.style.whiteSpace = 'nowrap';
         li.addEventListener('click', () => (dialog as Loose).toggle());
-        document.querySelector('#siteHeaderRightMenuContainer') && document.querySelector('#siteHeaderRightMenuContainer').append(li);
+        document.querySelector('#siteHeaderRightMenuContainer')?.append(li);
       }, document.querySelector('#siteHeaderRightMenuContainer') ? 1000 : 15000);
 
       ZenzaDetector.detect().then(zen => {

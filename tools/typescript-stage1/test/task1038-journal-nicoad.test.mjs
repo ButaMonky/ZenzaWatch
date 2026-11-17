@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {dialogFamilyText} from './dialog-roles.mjs';
 import {loadSource,flush} from './nonvisual-audit-source-harness.mjs';
 // Task1038: いいね・ニコるの記録、上限での優先保持、ニコニ広告の終了画面、投稿直後の日時、ニコるのアニメーション
 const policy=()=>loadSource('nico-src/NotificationJournalPolicy.ts','NotificationJournalPolicy');
@@ -41,7 +42,7 @@ test('history panel lists beyond 2000 rows and finds like entries by the word �
  const ids=[...root.querySelectorAll('[data-entry-id]')].map(e=>e.getAttribute('data-entry-id'));
  assert(ids.includes('like1'),'like entry should be found by kind label');
 });
-const dialogSrc=readFileSync(new URL('../nico-src/NicoVideoPlayerDialog.ts',import.meta.url),'utf8');
+const dialogSrc=dialogFamilyText(); // Task1060: 分割先も含めて読む
 test('nicoad end screen parses official response into up to 10 cards with supporter and points',()=>{
  const m=dialogSrc.match(/static nicoadEndItems\(body: Loose\): Loose\[\] \{([\s\S]*?)\n  \}\n/);assert(m);
  const fn=new Function('body',m[1].replace(/: Loose/g,''));

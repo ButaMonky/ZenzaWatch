@@ -9,16 +9,16 @@
 type Loose = any;
 import type {ZenzaRootPlayerPort, ZenzaRootPlayerState} from './PlayerLifetimeTypes';
 // legacy-to-ts: names provided by other bundled modules
-declare const CommentPictureInPicture: Loose;
-declare const PRODUCT: Loose;
-declare const PipPageThumbnail: Loose;
-declare const PlayerConfig: Loose;
-declare const PopupMessage: Loose;
-declare const RelatedMenuActions: Loose;
-declare const RelatedMenuOrder: Loose;
-declare const ScreenFilter: Loose;
+declare const CommentPictureInPicture: typeof import('./external/CommentPictureInPicture').CommentPictureInPicture;
+declare const PRODUCT: string;
+declare const PipPageThumbnail: typeof import('./PipPageThumbnail').PipPageThumbnail;
+declare const PlayerConfig: typeof import('./NicoVideoPlayerDialog').PlayerConfig;
+declare const PopupMessage: typeof import('./PopupMessage').PopupMessage;
+declare const RelatedMenuActions: typeof import('./external/RelatedMenuActions').RelatedMenuActions;
+declare const RelatedMenuOrder: typeof import('./external/RelatedMenuOrder').RelatedMenuOrder;
+declare const ScreenFilter: typeof import('./ScreenFilter').ScreenFilter;
 declare const ZenzaWatch: Loose;
-declare const nicoUtil: Loose;
+declare const nicoUtil: typeof import('./nicoUtil').nicoUtil;
 
 const RootDispatcher = (() => {
   let config: Loose;
@@ -148,7 +148,7 @@ const RootDispatcher = (() => {
           break;
         }
         case 'tweet':
-          nicoUtil.openTweetWindow(playerState.videoInfo);
+          nicoUtil.openTweetWindow(playerState.videoInfo as Loose);
           break;
         // Task 060: 関連メニュー(RelatedInfoMenu、VideoInfoPanel.js内)の
         // 「ニコニ広告で宣伝」「twitterの反応を見る」「親作品・コンテンツ

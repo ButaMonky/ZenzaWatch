@@ -1,3 +1,4 @@
+import {roleInstallSource} from './dialog-roles.mjs'; // Task1060
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -61,7 +62,7 @@ test('#114 closing the real Dialog restores held speed before its closed shortcu
   Fullscreen:{now:()=>false},global:{emitter:{emitAsync(){}}}});
  run(beginSection('packages/lib/src/Emitter.js'),c);
  run(sourceClass('ShortcutKeyEmitter')+';globalThis.Keys=ShortcutKeyEmitter;',c);
- run(sourceClass('NicoVideoPlayerDialog')+';globalThis.Dialog=NicoVideoPlayerDialog;',c);
+ run(sourceClass('NicoVideoPlayerDialog')+roleInstallSource()+';globalThis.Dialog=NicoVideoPlayerDialog;',c);
  run('globalThis.config=new Emitter();globalThis.external=new Emitter();external.emitResolve("init");globalThis.dialog=new Emitter();',c);
  c.config.props={KEY_SHIFT_RESET:82,KEY_TOGGLE_PLAY:32,playbackRate:1.75};
  // Match the real PlayerConfig API, including its read path used at Dialog close.

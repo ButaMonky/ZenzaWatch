@@ -106,7 +106,8 @@ describe('Task402 live nicoru and video identity',()=>{
  });
  it('passes the video watch ID from the active dialog into comment loading options',()=>{
   const fs=require('fs'),path=require('path');
-  const src=fs.readFileSync(path.join(__dirname,'../../src/NicoVideoPlayerDialog.js'),'utf8');
+  // Task1060: コメントの処理は NicoVideoPlayerDialogComments.js へ分割した。
+  const src=fs.readFileSync(path.join(__dirname,'../../src/NicoVideoPlayerDialogComments.js'),'utf8');
   const start=src.indexOf('  _onCommentLoadSuccess(requestId, result) {');
   assert(start>=0);
   const block=src.slice(start,start+850);

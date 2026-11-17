@@ -214,7 +214,7 @@ const {Emitter} = (() => {
       return this.on(name, wrapper);
     }
 
-    clear(name?: string) {
+    clear(name?: string): this | undefined | void {
       if (!this._events) {
         return;
       }
@@ -229,7 +229,7 @@ const {Emitter} = (() => {
       return this;
     }
 
-    emit(name: string, ...args: AnyArgs) {
+    emit(name: string, ...args: AnyArgs): this | undefined | void {
       if (!this._events) {
         return;
       }

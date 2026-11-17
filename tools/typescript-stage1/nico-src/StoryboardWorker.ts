@@ -8,8 +8,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const StoryboardInfoModel: Loose;
-declare const workerUtil: Loose;
+declare const StoryboardInfoModel: typeof import('./StoryboardInfoModel').StoryboardInfoModel;
+declare const workerUtil: typeof import('./workerUtil').workerUtil;
 
 
 const StoryboardWorker = (() => {
@@ -187,8 +187,6 @@ const StoryboardWorker = (() => {
           this.totalWidth = 0;
           return this.cls();
         }
-        const timerLabel = `BoardView setInfo:${this.name}:${generation}`;
-        console.time(timerLabel);
         const cols = info.cols;
         const rows = info.rows;
         const pageWidth  = info.pageWidth;
@@ -218,7 +216,7 @@ const StoryboardWorker = (() => {
             if (!current()) { return generated; }
             for (let row = 0; row < rows; row++) {
               const canvas = getCanvas(pageWidth, cellHeight);
-              const ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
+              const ctx = canvas.getContext('2d', {alpha: false, desynchronized: true})!;
               ctx.beginPath();
               const sy = row * cellHeight;
               if (image) {
@@ -255,7 +253,6 @@ const StoryboardWorker = (() => {
 
         if (!current()) {
           this._releaseBoards(boards);
-          console.timeEnd(timerLabel);
           return;
         }
         const previous = this.boards;
@@ -264,7 +261,6 @@ const StoryboardWorker = (() => {
         this.height = info.cellHeight;
         this._currentTime = -1;
         this.cls();
-        console.timeEnd(timerLabel);
         this.isReady = true;
         this.reDraw();
       }
@@ -768,6 +764,7 @@ const StoryboardWorker = (() => {
         case 'stopAnimation':
           return stopAnimation(params);
         }
+      return undefined;
     };
   };
 

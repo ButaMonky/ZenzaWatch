@@ -8,7 +8,6 @@ import {dimport} from '../packages/lib/src/infra/dimport';
 import {VideoItemObserver} from '../packages/lib/src/nico/VideoItemObserver';
 import {NicoQuery} from '../packages/lib/src/nico/NicoQuery';
 import {uQuery} from '../packages/lib/src/uQuery';
-import {domUtil} from '../packages/lib/src/dom/domUtil';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
 import {netUtil} from '../packages/lib/src/infra/netUtil';
@@ -150,7 +149,6 @@ util.createVideoElement = createVideoElement;
 Object.assign(util, domEvent);
 
 
-util.defineElement = domUtil.defineElement;
 util.$ = uQuery;
 util.createDom = util.$.html;
 util.isTL = util.$.isTL;

@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {readNicoFamily} from './dialog-roles.mjs';
 import {loadSource} from './nonvisual-audit-source-harness.mjs';
 // Task1040: 投稿ショート動画も投稿動画一覧へ・動画の最後のニコニ広告の通知設定・検索欄のはみ出し調整
-const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+// Task1060: NicoVideoPlayerDialog は部品に分割したので、分割先も含めて読む。
+const read=readNicoFamily; // Task1063: 分割したモジュールは分割先も含めて読む
 test('user shorts are fetched from v3 users videos (short) across pages and mapped to playlist items',async()=>{
  const urls=[];
  const page=(n,count)=>({meta:{status:200},data:{totalCount:150,items:Array.from({length:count},(_,i)=>({series:null,essential:{id:'ss'+(n*1000+i),title:'t',registeredAt:'2026-11-1'+(n)+'T00:00:00+09:00'}}))}});

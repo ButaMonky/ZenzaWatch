@@ -28,11 +28,11 @@ export interface RelatedMenuAction {
   [key: string]: unknown;
 }
 export interface RelatedMenuCopyContext {
-  videoId?: string;
-  watchId?: string;
-  videoUrl?: string;
-  videoTitle?: string;
-  currentTime?: number | string;
+  videoId?: string | undefined;
+  watchId?: string | undefined;
+  videoUrl?: string | undefined;
+  videoTitle?: string | undefined;
+  currentTime?: number | string | undefined;
 }
 export type RelatedMenuOpener = (url: string, target?: string, features?: string) => unknown;
 // Type-only source for the legacy userscript, preserved exactly at runtime.

@@ -5,7 +5,7 @@ const assert=require('assert');
 const fs=require('fs'),path=require('path'),parser=require('@babel/parser');
 const {pathToFileURL}=require('url');
 const {JSDOM}=require('jsdom');
-const {createContext,run}=require('../helpers/extractSource');
+const {createContext,run,installDialogRoles}=require('../helpers/extractSource');
 let ManualBookmarkPanel;
 before(async()=>{
   const file=path.resolve('packages/zenza/src/resume/ManualBookmarkPanel.js');
@@ -40,6 +40,7 @@ function build(){
       compiledClass('NicoVideoPlayerDialog','NicoVideoPlayerDialog')+';'+
       'globalThis.__video=VideoPlayer;globalThis.__nico=NicoVideoPlayer;'+
       'globalThis.__dialog=NicoVideoPlayerDialog;',ctx);
+  installDialogRoles('tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialog.js',ctx.__dialog,ctx); // Task1060
   const raw=Object.create(ctx.__video.prototype);
   raw._video=video;raw._videoElement=video;raw._currentVideo=video;
   raw._src='https://example.test/native';raw._touchWrapper={body:touch};

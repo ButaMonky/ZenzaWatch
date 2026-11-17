@@ -9,7 +9,9 @@ export const externalDefaults = {
   'externalLinks.redirects': false,
   'externalLinks.textIds': false,
   'externalLinks.prefixes': 'sm\nnm\nso\nss',
-  'externalLinks.preflight': 'off'
+  'externalLinks.preflight': 'off',
+  // Task1032: 調査用。外部サイト再生の各段階をコンソールへ詳しく出す。
+  'externalLinks.consoleLog': false
 };
 export type ExternalKey = keyof typeof externalDefaults;
 export interface ExternalSettings { enabled:boolean; siteMode:string; sites:string[]; excludedSites:string[]; activation:string; size:string; redirects:boolean; textIds:boolean; prefixes:string[]; preflight:string; }
@@ -26,6 +28,7 @@ export const externalDescriptors:Descriptor[] = [
  {id:'externalLinks.textIds',label:'文章中の動画IDも検出',type:'boolean',description:'入力欄・編集中・コード欄は対象外です。'},
  {id:'externalLinks.prefixes',label:'検出する動画IDの接頭辞',type:'textarea',description:'1行に1種類。初期値はsm・nm・so・ssです。',descriptionDetails:'数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。'}
  ,{id:'externalLinks.preflight',label:'再生情報の事前確認',type:'select',description:'既定は追加通信なし。確認するタイミングを選べます。',descriptionDetails:'確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。',options:choice([['off','確認しない（追加通信なし）'],['click','Zenを押したときに確認'],['display','ボタンを表示する前に確認']])}
+ ,{id:'externalLinks.consoleLog',label:'外部サイト再生の動作をコンソールに詳しく出力',type:'boolean',dependsOn:undefined,description:'初期値OFF。調査用です。外部サイトのページと、再生用の枠（www.nicovideo.jp/robots.txt）の両方で、ボタンの検出・クリック・枠の作成・本体との接続・ログイン確認・動画を開く各段階と失敗理由を、開発者ツールのコンソール（F12）へ ZENZA_EXT として出します。',descriptionDetails:'本体とZenzaBlogPartsButtonの両方へ設定が届くよう、ONにしたらニコニコ動画のページを一度再読み込みしてから外部サイトを開いてください。再生用の枠の記録は、コンソール上部の「top」を robots.txt の枠に切り替えると見えます（「すべてのコンテキスト」表示でも出ます）。URLのクエリ・Cookie・認証情報は出しません。'}
 ].map(d=>({...d,category:'外部サイトからの再生',subcategory:'基本設定',dependsOn:d.id==='externalLinks.enabled'?undefined:('dependsOn' in d?d.dependsOn:'externalLinks.enabled')})) as Descriptor[];
 const tokens=(v:unknown)=>typeof v==='string'?v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean):[];
 

@@ -31,7 +31,13 @@ test('HOVERMENU-CLICK-LISTENER-ACCUM-001: repeated hovers keep one pending hide 
     out[k]={afterHover,hidden,afterClickThenHover:listeners.length,once:listeners.every(l=>l.type==='click'&&l.once)};
   }
   assert.deepEqual(out.old,{afterHover:3,hidden:3,afterClickThenHover:1,once:true});
-  assert.deepEqual(out.new,{afterHover:1,hidden:1,afterClickThenHover:1,once:true});
+  // Task1019 以降: hover のたびに一回限りの click リスナーを足す方式をやめ、初期化時に
+  // document の click → _hideButton を 1 回だけ登録する方式になった。hover を何回しても
+  // リスナーは増えない（＝蓄積の不具合は形を変えても再発しない）。
+  assert.deepEqual(out.new,{afterHover:0,hidden:0,afterClickThenHover:0,once:true});
+  const src=pair('HoverMenu').new;
+  assert.equal(src.split("document.addEventListener('click', () => this._hideButton())").length-1,1,
+    'the single permanent document click hide listener must remain');
 });
 
 test('REDIRECTLINKS-SERIES-CONTAINER-001: a series page without the container is skipped',async()=>{

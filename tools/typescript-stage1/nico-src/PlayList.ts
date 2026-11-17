@@ -39,6 +39,7 @@ type LoadOwner = {generation: number; model: PlaylistModelLike};
 type AdditiveOwner = LoadOwner & {previous: Promise<unknown>; release: () => void};
 /** The base class and collaborators (still declared here; they are separate modules). */
 declare class VideoList {
+  constructor(params?: Loose);
   view: Loose;
   _thumbInfoLoader: Loose;
   _container: Loose;
@@ -47,7 +48,7 @@ declare class VideoList {
   emit(name: string, ...args: unknown[]): unknown;
   on(name: string, callback: (...args: Loose[]) => unknown): this;
 }
-declare const VideoListItem: Loose;
+declare const VideoListItem: typeof import('./VideoListItem').VideoListItem;
 declare const PlayListModel: new (params: Loose) => PlaylistModelLike;
 declare const PlayListSession: {save(data: unknown): void; restore(): Loose};
 declare const PlayListView: new (params: Loose) => Loose;
@@ -63,10 +64,10 @@ declare const _: {
   isBoolean(v: unknown): v is boolean;
 };
 /** Re-exported modules (their own canonical sources live next to this one). */
-declare const VideoListModel: Loose;
-declare const VideoListItemView: Loose;
-declare const VideoListView: Loose;
-declare const RelatedVideoList: Loose;
+declare const VideoListModel: typeof import('./VideoListModel').VideoListModel;
+declare const VideoListItemView: typeof import('./VideoListItemView').VideoListItemView;
+declare const VideoListView: typeof import('./VideoListView').VideoListView;
+declare const RelatedVideoList: typeof import('./RelatedVideoList').RelatedVideoList;
 
 
 class PlayList extends VideoList {

@@ -124,7 +124,7 @@ declare const ZenzaDetector: Loose;
           if (localStorage.hasOwnProperty(storageKey)) {
             try {
               let lastValue = (config as Loose)[key];
-              let newValue = JSON.parse(localStorage.getItem(storageKey));
+              let newValue = JSON.parse(localStorage.getItem(storageKey) as string);
               if (lastValue !== newValue) {
                 (config as Loose)[key] = newValue;
                 if (emitChange) {
@@ -666,7 +666,7 @@ declare const ZenzaDetector: Loose;
     };
 
     const scrollToVideo = () => {
-      getVideo().scrollIntoView({behavior: 'smooth', block: 'center'});
+      getVideo()!.scrollIntoView({behavior: 'smooth', block: 'center'});
     };
 
     const swapABXY_FC30 = (btn?: Loose) => {
@@ -1350,7 +1350,7 @@ declare const ZenzaDetector: Loose;
           let isRepeating = false;
 
           for (let i = 0, len = Math.min(this._buttons.length, buttons.length); i < len; i++) {
-            const buttonStatus = buttons[i].pressed ? 1 : 0;
+            const buttonStatus = buttons[i]!.pressed ? 1 : 0;
 
             if (this._buttons[i].pressed !== buttonStatus) {
               const eventName = (buttonStatus === 1) ? 'onButtonDown' : 'onButtonUp';
@@ -1371,7 +1371,7 @@ declare const ZenzaDetector: Loose;
             }
           }
           for (let i = 0, len = Math.min(8, this._axes.length); i < len; i++) {
-            const axis = Math.round(axes[i] * 1000) / 1000;
+            const axis = Math.round(axes[i]! * 1000) / 1000;
 
             if (this._axes[i].value === null) {
               this._axes[i].value = axis;

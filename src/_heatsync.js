@@ -15,7 +15,7 @@
 // @exclude     *://ch.nicovideo.jp/tool/*
 // @exclude     *://flapi.nicovideo.jp/*
 // @exclude     *://dic.nicovideo.jp/p/*
-// @version     0.0.24-task966qa
+// @version     0.0.25-task1061
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -238,7 +238,7 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
             emitter.clearConfig = function () {
                 noEmit = true;
                 Object.keys(defaultConfig).forEach(key => {
-                    if (_.contains(['message', 'debug'], key)) {
+                    if (['message', 'debug'].includes(key)) {
                         return;
                     }
                     var storageKey = prefix + key;

@@ -9,7 +9,7 @@
 type Loose = any;
 /** Libraries and the storyboard worker used here. */
 declare const cssUtil: {addStyle(css: string): unknown};
-declare const uQuery: Loose;
+declare const uQuery: typeof import('./uQuery').uQuery;
 declare const global: {debug: Loose};
 declare const StoryboardWorker: {createThumbnail(params: Loose): Loose};
 declare const ClassList: (element: Element) => Loose;

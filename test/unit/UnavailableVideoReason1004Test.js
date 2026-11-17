@@ -2,10 +2,12 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 const {JSDOM}=require('jsdom'),{stripTypeScriptTypes}=require('node:module');
 const parser=require('@babel/parser');
-const source=fs.readFileSync('tools/typescript-stage1/nico-src/NicoVideoPlayerDialog.ts','utf8');
+const source=fs.readFileSync('tools/typescript-stage1/nico-src/NicoVideoPlayerDialogView.ts','utf8'); // Task1060: 画面の部品は分割先
 const declaration=parser.parse(source,{sourceType:'module',plugins:['typescript']}).program.body.find(n=>n.type==='ClassDeclaration'&&n.id.name==='NicoVideoPlayerDialogView');
 const context=vm.createContext({Emitter:class{}});
 vm.runInContext(stripTypeScriptTypes(source.slice(declaration.start,declaration.end))+';globalThis.View=NicoVideoPlayerDialogView;',context);
+// Task1063: 画面の役割ごとのメソッド（分割先）も取り付ける
+require('../helpers/extractSource').installDialogRoles('tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialogView.js',context.View,context,'NicoVideoPlayerDialogView');
 describe('Task1004 unavailable-video reason text',()=>{
  it('converts only plain break tags and preserves existing blank lines',()=>{assert.equal(context.View.formatErrorMessage('削除理由<br>対象作品<BR/>権利者<br />補足\n\n詳細'),'削除理由\n対象作品\n権利者\n補足\n\n詳細');assert.equal(context.View.formatErrorMessage(null),'');assert.equal(context.View.formatErrorMessage(0),'0');});
  it('keeps untrusted tags and encoded markup as literal text in the actual state renderer',()=>{const dom=new JSDOM('<div id="error"></div>');try{const element=dom.window.document.querySelector('#error'),view=Object.create(context.View.prototype);view._$errorMessageContainer=[element];const raw='<img src=x onerror=alert(1)><br onclick=alert(1)><script>alert(1)</script>&lt;br&gt;<br>理由';view._onPlayerStateUpdate('errorMessage',raw);assert.equal(element.childElementCount,0);assert.equal(element.textContent,raw.replace(/<br>/g,'\n'));assert(!element.innerHTML.includes('<script>'));}finally{dom.window.close();}});

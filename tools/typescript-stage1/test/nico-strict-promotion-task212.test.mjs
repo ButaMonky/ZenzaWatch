@@ -6,12 +6,12 @@ import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
-const strict=read('tsconfig.nico.json'),legacy=read('tsconfig.nico-legacy.json');
+const strict=read('tsconfig.nico.json'),legacy=fs.existsSync(path.join(root,'tsconfig.nico-legacy.json'))?read('tsconfig.nico-legacy.json'):{files:[]}; // Task1058: 緩い設定のレーンは廃止
 const promoted=['BaseCommandElement','CommentInputPanel','TagListView',
   'SettingPanelElement','VideoControlBar','HeatSyncEntry','UQueryEntry','initializer','HlsEntry'];
 test('#212 promoted modules remain strictly checked with canonical generator provenance',()=>{
-  assert.equal(strict.exclude.length,10);
-  assert.equal(legacy.files.length,10);
+  assert.equal(strict.exclude.length,0);
+  assert.equal(legacy.files.length,0);
   for(const n of promoted){
     assert(!strict.exclude.includes('nico-src/'+n+'.ts'),'still excluded '+n);
     assert(!legacy.files.includes('nico-src/'+n+'.ts'),'still relaxed '+n);

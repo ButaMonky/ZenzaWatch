@@ -13,7 +13,7 @@ declare const ZenzaWatch: {
   emitter: {on(name: string, fn: (...args: Loose[]) => unknown): unknown; emit(name: string, ...args: unknown[]): unknown};
   external: {sendOrOpen(watchId: Loose, option: Loose): unknown; send(watchId: Loose, option: Loose): unknown};
 };
-declare const uq: Loose;
+declare const uq: typeof import('./uQuery').uq;
 declare const nicoUtil: {
   isGinzaWatchUrl(url?: string): boolean;
   getWatchId(url: string): string | null | undefined;

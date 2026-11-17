@@ -2,7 +2,7 @@
 // resume-position save (ended -> 0, close, switching video). Ordinary saves stay throttled.
 const assert = require('assert');
 const _ = require('lodash');
-const {read, extract, createContext, run} = require('../helpers/extractSource');
+const {read, extract, createContext, run, readFamily, installDialogRoles} = require('../helpers/extractSource');
 const {createDialogHarness} = require('../helpers/dialogHarness');
 
 function dialog({duration = 300, contextWatchId = 'sm9', videoId = 'sm9'} = {}) {
@@ -57,7 +57,7 @@ describe('Task178 final resume-position save is not throttled away (Watch V4 aud
   });
 
   it('ended, close and switching use the unthrottled final save; pause stays throttled', () => {
-    const text = read('src/NicoVideoPlayerDialog.js');
+    const text = readFamily('src/NicoVideoPlayerDialog.js');
     const dialogText = text.slice(text.indexOf('class NicoVideoPlayerDialog extends'));
     const body = name => {
       // Task964: the TS-generated source uses 4-space class-member indentation.
@@ -76,6 +76,7 @@ describe('Task178 final resume-position save is not throttled away (Watch V4 aud
     class Emitter {}
     const context = createContext({Emitter, _});
     run(`${extract('dist/ZenzaWatch-dev.user.js', 'NicoVideoPlayerDialog')}; globalThis.Dialog = NicoVideoPlayerDialog;`, context);
+    installDialogRoles('dist/ZenzaWatch-dev.user.js', context.Dialog, context); // Task1060
     const subject = Object.create(context.Dialog.prototype);
     const calls = [];
     subject._savePlaybackPositionNow = (...args) => calls.push(args);

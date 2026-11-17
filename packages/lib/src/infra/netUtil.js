@@ -1,4 +1,5 @@
 import {RequestDiagnostics} from './RequestDiagnostics';
+import {NicoVideoApi} from '../nico/NicoVideoApi';
 // GENERATED FROM tools/typescript-stage1/nico-src/netUtil.ts (Task640). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require RequestDiagnostics

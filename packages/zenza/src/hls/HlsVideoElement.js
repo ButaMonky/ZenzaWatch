@@ -503,7 +503,14 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                     if (this._videoCount !== videoCount) {
                         return;
                     }
-                    this._video.src = '';
+                    // Task1056: src='' は「空のURL」として読み込みを試みて error イベントを出す
+                    // （切り替えのたびに裏の動画要素で error が出ていた）。属性を外して load() すれば、
+                    // エラーを出さずに中身だけを空にできる。
+                    this._video.removeAttribute('src');
+                    try {
+                        this._video.load();
+                    }
+                    catch (_) { /* 空にできなくても次の src で置き換わる */ }
                     this.playerMode = PLAYER_MODE.DEFAULT;
                     return;
                 }
@@ -688,7 +695,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                 this.dispatchEvent(new CustomEvent('zenza-readiness', { detail: { stage, mode: this.playerMode, ms: r.at[stage] } }));
                 if (stage === 'firstProgress' || stage === 'firstFrame') {
                     // 秒数と段階名だけを出す（URL・キー・識別子は出さない）
-                    console.info('[Zenza] playback readiness', this.playerMode, JSON.stringify(r.at));
+                    console.debug('[Zenza] playback readiness', this.playerMode, JSON.stringify(r.at));
                 }
                 return true;
             }

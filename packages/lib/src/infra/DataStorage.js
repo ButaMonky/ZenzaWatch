@@ -69,26 +69,37 @@ class DataStorage {
     };
   }
 
+  /**
+   * Config.props の入れ子のアクセサ（props.playlist.prefetchAhead.window など）を作る。
+   * Task1059: 以前は名前空間の中のキー1つごとに同じ名前空間を作り直していたため、
+   * 入れ子が深いほど指数的に遅くなり、起動時に 0.1〜0.35 秒画面が固まっていた。
+   * 各名前空間を1回だけ作る。結果（プロパティ名・順序・列挙可否・値）は以前と同じ。
+   * 名前空間の判定も includes（途中一致）から startsWith（先頭一致）に直した。
+   */
   _makeProps(defaultData = {}, namespace = '') {
-    namespace = namespace ? `${namespace}.` : '';
+    const prefix = namespace ? `${namespace}.` : '';
     const self = this;
-    const def = {};
+    const ignore = new Set(this._ignoreExportKeys);
     const props = {};
-    Object.keys(defaultData).sort()
-      // .filter(key => !this._ignoreExportKeys.includes(key) && key.includes(namespace))
-      .filter(key => key.includes(namespace))
-      .forEach(key => {
-        const k = key.slice(namespace.length);
-        if (k.includes('.')) {
-          const ns = k.slice(0, k.indexOf('.'));
-          props[ns] = this._makeProps(defaultData, `${namespace}${ns}`);
-        }
-        def[k] = {
-          enumerable: !this._ignoreExportKeys.includes(key),
-          get() { return self.getValue(key); },
-          set(v) { self.setValue(key, v); }
-        };
-    });
+    const def = {};
+    const children = [];
+    for (const key of Object.keys(defaultData).sort()) {
+      if (!key.startsWith(prefix)) { continue; }
+      const k = key.slice(prefix.length);
+      const dot = k.indexOf('.');
+      if (dot >= 0) {
+        const ns = k.slice(0, dot);
+        if (!children.includes(ns)) { children.push(ns); }
+      }
+      def[k] = {
+        enumerable: !ignore.has(key),
+        get() { return self.getValue(key); },
+        set(v) { self.setValue(key, v); }
+      };
+    }
+    for (const ns of children) {
+      props[ns] = this._makeProps(defaultData, `${prefix}${ns}`);
+    }
     Object.defineProperties(props, def);
     return props;
   }

@@ -128,7 +128,7 @@ describe('Task197 one operation fetches the whole parent/child range', () => {
   });
 
   it('the rejected export is absent while related-tree actions remain', () => {
-    const panel = fs.readFileSync(path.join(__dirname, '../../src/VideoInfoPanel.js'), 'utf-8');
+    const panel = require('../helpers/extractSource').readFamily('src/VideoInfoPanel.js'); // Task1063: 分割先も含めて読む
     assert(!panel.includes('data-command="commonsTreeExport"'));
     assert(panel.includes('data-command="playlistSetCommonsTree"'));
     assert(panel.includes('data-command="open-parent-video"'));

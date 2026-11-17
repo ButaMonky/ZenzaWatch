@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert');
 const {JSDOM}=require('jsdom');
-const {createContext,loadClass,read}=require('../helpers/extractSource');
+const {createContext,loadClass,read, readFamily}=require('../helpers/extractSource');
 const Registry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',createContext({}));
 const settings=()=>Registry.ITEMS;
 describe('Task318 centralized visibility manifest',()=>{
@@ -169,7 +169,7 @@ describe('Task318 centralized visibility manifest',()=>{
     assert(css.includes('.menuButton:hover{opacity:1!important;}'));
     assert(!css.includes('background:#888!important'),
       'hover opacity must never override the existing color of tweet/like buttons');
-    assert(read('src/NicoVideoPlayerDialog.js').includes('.zenzaTweetButton:hover'),
+    assert(readFamily('src/NicoVideoPlayerDialog.js').includes('.zenzaTweetButton:hover'),
       'the original tweet-specific blue hover rule must remain available');
     assert(css.includes('.menuButton:hover .tooltip{opacity:1!important'));
     connection.dispose();
@@ -296,11 +296,11 @@ describe('Task318 centralized visibility manifest',()=>{
   });
   it('lists each configured selector in the actual owner template',()=>{
     const owners={
-      hover:read('src/NicoVideoPlayerDialog.js'),
-      bar:read('src/VideoControlBar.js'),
-      info:read('src/VideoInfoPanel.js'),
-      header:read('src/VideoInfoPanel.js'),
-      related:read('src/VideoInfoPanel.js'),
+      hover:readFamily('src/NicoVideoPlayerDialog.js'),
+      bar:readFamily('src/VideoControlBar.js'),
+      info:readFamily('src/VideoInfoPanel.js'),
+      header:readFamily('src/VideoInfoPanel.js'),
+      related:readFamily('src/VideoInfoPanel.js'),
       comment:read('src/CommentInputPanel.js'),
       scene:[
         read('packages/zenza/src/sceneSearch/SceneSearchLayoutCard.js'),

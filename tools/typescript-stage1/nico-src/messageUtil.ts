@@ -13,14 +13,9 @@
 type Loose = Record<string, any>;
 type Settle = (value?: unknown) => void;
 
-/** The part of Emitter (packages/lib/src/Emitter.js) used here. */
-declare class Emitter {
-  emit(name: string, ...args: unknown[]): unknown;
-  emitAsync(name: string, ...args: unknown[]): unknown;
-  promise(name: string, callback?: (resolve: Settle, reject: Settle) => unknown): Promise<unknown>;
-  emitReject(name: string, ...args: unknown[]): unknown;
-  resetPromise(name: string): void;
-}
+/** Emitter (packages/lib/src/Emitter.js) — Task1061: 自前の部分宣言をやめて本物の型を使う */
+declare const Emitter: typeof import('./Emitter').Emitter;
+type Emitter = import('./Emitter').EmitterInstance;
 /** The parts of global, Config and NicoVideoApi used here. */
 declare const global: {
   config: {props: Loose};
@@ -43,7 +38,7 @@ export type BroadcastEmitterType = Emitter & {
   ping(options?: PingOptions): Promise<unknown>;
   sendOpen(watchId: string, params?: Loose): void;
   notifyClose(): unknown;
-  notifyOpen(playerId: string): unknown;
+  notifyOpen(playerId?: string): unknown;
 };
 
 const messageUtil = {} as {WindowMessageEmitter: WindowMessageEmitterType; BroadcastEmitter: BroadcastEmitterType};

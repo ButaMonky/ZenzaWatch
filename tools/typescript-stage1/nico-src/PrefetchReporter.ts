@@ -27,6 +27,11 @@ export interface ReporterDeps {
   /** 検証版の詳細コンソールログを出すか。 */
   diagnostics(): boolean;
   /**
+   * Task1054: 上級者設定の診断ログへ同じ記録を渡す（任意）。diagnostics() と違い、
+   * 完了通知などの見え方は変えない。
+   */
+  trace?(name: string, payload: Record<string, unknown>): void;
+  /**
    * 通知の出し方（上級者設定「先読みの通知」）。
    * off=通知履歴にも残さない / journal=通知履歴のみ / popup=最終失敗を画面にも表示。
    * 検証版の診断コンソールログは設定に関係なく出る。
@@ -81,6 +86,7 @@ export const describeFailure = (described: Record<string, unknown>): string => {
 const createPrefetchReporter = (deps: ReporterDeps) => {
   const log = (name: string, payload: Record<string, unknown>): void => {
     try { if (deps.diagnostics()) deps.console(name, payload); } catch (_) { /* 診断は再生に影響させない */ }
+    try { deps.trace?.(name, payload); } catch (_) { /* 診断は再生に影響させない */ }
   };
   const mode = (): NotifyMode => {
     try {
@@ -178,8 +184,9 @@ const createPrefetchReporter = (deps: ReporterDeps) => {
       const details: Record<string, string | number | boolean> = {operation: 'playlist', event: 'prefetch-hit'};
       if (Number.isFinite(seconds) && seconds > 0) details.elapsedMs = Math.round(seconds * 1000);
       if (cacheHits > 0) details.count = cacheHits;
-      record({category: 'player', level: 'info', videoId, source: 'prefetch', details,
-        message: `${text}（${videoId}）`});
+      // Task1056: 画面に出す通知と同じ文面にする。通知履歴は「同じ文面の詳しい記録」があれば
+      // 通知側の記録を省くので、二重に残らない（動画IDは videoId 欄に入っている）。
+      record({category: 'player', level: 'info', videoId, source: 'prefetch', details, message: text});
       if (!popup || mode() === 'off') return;
       try { deps.notify(text); } catch (_) { /* 通知失敗は再生に影響させない */ }
     },
@@ -190,8 +197,9 @@ const createPrefetchReporter = (deps: ReporterDeps) => {
       const text = `先読みなしで再生しました（${shown}秒で再生開始）`;
       const details: Record<string, string | number | boolean> = {operation: 'playlist', event: 'prefetch-miss'};
       if (Number.isFinite(seconds) && seconds > 0) details.elapsedMs = Math.round(seconds * 1000);
-      record({category: 'player', level: 'info', videoId, source: 'prefetch', details,
-        message: `${text}（${videoId}）`});
+      // Task1056: 画面に出す通知と同じ文面にする。通知履歴は「同じ文面の詳しい記録」があれば
+      // 通知側の記録を省くので、二重に残らない（動画IDは videoId 欄に入っている）。
+      record({category: 'player', level: 'info', videoId, source: 'prefetch', details, message: text});
       if (!popup || mode() === 'off') return;
       try { deps.notify(text); } catch (_) { /* 通知失敗は再生に影響させない */ }
     },

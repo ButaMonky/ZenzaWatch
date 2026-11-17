@@ -1,3 +1,4 @@
+import {roleInstallSource} from './dialog-roles.mjs'; // Task1060
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -79,7 +80,7 @@ for(const stale of [false,true])test(`#117 startup playlist rejection is handled
  const originalCatch=load.promise.catch.bind(load.promise);load.promise.catch=fn=>{catches++;return originalCatch(fn);};
  const quiet={timeEnd(){},log(){},warn:label=>calls.push(label)};
  const context=vm.createContext({Emitter:class{},console:quiet,window:{console:quiet},WatchInfoCacheDb:{putBestEffort(){}}});
- vm.runInContext(classBody('NicoVideoPlayerDialog')+';globalThis.Dialog=NicoVideoPlayerDialog;',context);
+ vm.runInContext(classBody('NicoVideoPlayerDialog')+roleInstallSource()+';globalThis.Dialog=NicoVideoPlayerDialog;',context);
  const d=Object.create(context.Dialog.prototype);
  Object.assign(d,{_requestId:'A',_watchId:'sm1',_videoInfo:{watchId:'sm1',videoId:'sm1',msgInfo:{}},
   _state:{isLoading:true,setVideoCanPlay(){this.isLoading=false;calls.push('ready');}},

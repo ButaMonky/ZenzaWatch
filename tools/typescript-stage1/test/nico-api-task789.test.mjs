@@ -52,7 +52,7 @@ function gateWorld({name='nicovideoApiLoader#https://www.nicovideo.jp',referrer=
     parent:{postMessage:(m,origin,transfer)=>log.push(['parent.post',snapshot(m),origin,transfer.length])},
     MessageChannel,localStorage:white?{ZenzaWatch_whiteHost:white}:{},fetch,AbortController,
     Date:{now:()=>0xabc},setTimeout:t.setTimeout,clearTimeout:t.clearTimeout,isNaN,Map,Object,Promise,Error,JSON,RegExp,
-    console:{log:(...a)=>log.push(['console.log',...a.slice(2)]),error:(...a)=>log.push(['console.error',a[0]])}};
+    console:{log:(...a)=>log.push(['console.log',...a.slice(2)]),debug:(...a)=>log.push(['console.log',...a.slice(2)]),error:(...a)=>log.push(['console.error',a[0]])}};
   return {log,globals,t,responses,portListeners};
 }
 const fakeResponse=(body='abc')=>({type:'basic',url:'https://www.nicovideo.jp/api',redirected:false,status:200,ok:true,statusText:'OK',

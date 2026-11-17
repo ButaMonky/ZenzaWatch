@@ -299,9 +299,7 @@ const CommentLayoutWorker = (config => {
 
     self.onmessage = ({command, params}) => {
       const {type, members, lastUpdate} = params;
-      console.time('CommentLayoutWorker: ' + type);
       groupCollision(members);
-      console.timeEnd('CommentLayoutWorker: ' + type);
       return {type, members, lastUpdate};
     };
 

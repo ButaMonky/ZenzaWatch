@@ -5,6 +5,7 @@ import {stripTypeScriptTypes, createRequire} from 'node:module';
 import vm from 'node:vm';
 const require=createRequire(import.meta.url);
 const parser=require('../../../node_modules/@babel/parser');
+import {roleInstallSource} from './dialog-roles.mjs';
 function load(file,name,extra={}) {
  const text=stripTypeScriptTypes(readFileSync(new URL('../nico-src/'+file+'.ts',import.meta.url),'utf8'));
  const ast=parser.parse(text,{sourceType:'module',allowUndeclaredExports:true});
@@ -14,7 +15,9 @@ function load(file,name,extra={}) {
   for(const v of Object.values(n))if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);
  };visit(ast);
  const context={Emitter:class{},VideoList:class{},console,Promise,window:{console},...extra};
- return vm.runInNewContext(text.slice(found.start,found.end)+';'+name,context);
+ // Task1060: NicoVideoPlayerDialog の役割ごとのメソッドも本番と同じく取り付ける。
+ const roles=roleInstallSource(name); // Task1063: 役割を持つクラスなら取り付ける
+ return vm.runInNewContext(text.slice(found.start,found.end)+roles+';'+name,context);
 }
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject};};
 const tick=()=>new Promise(r=>setImmediate(r));

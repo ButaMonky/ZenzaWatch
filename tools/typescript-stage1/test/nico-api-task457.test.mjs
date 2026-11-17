@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {NICO_API_MODULES,NICO_API_BY_NAME} from '../scripts/nico-api-registry.mjs';
+import {NICO_API_MODULES,NICO_API_BY_NAME,ESM_ADDED_IMPORTS} from '../scripts/nico-api-registry.mjs';
 import {renderNicoLegacy,syncNicoApi} from '../scripts/sync-nico-api.mjs';
 import {emitNico,read,loadLegacy,snapshot,settle} from './nico-api-harness.mjs';
 
@@ -29,7 +29,7 @@ test('registry is fixed and every pre-migration fixture matches its recorded has
     } else if (['NotificationJournalPolicy','NotificationJournalStore'].includes(spec.name)) {
       assert.equal(spec.runtime, 'packages/zenza/src/notification/' + spec.name + '.js');
     } else {
-      assert.match(spec.runtime,/^(?:packages\/(?:lib\/src\/(?:nico\/[A-Za-z]+|infra\/(?:RequestDiagnostics|netUtil|sleep|env|dimport|speech|StorageWriter|CacheStorage|MediaSessionApi|bounce|AntiPrototype-js|logSafe|objUtil|Observable|workerUtil|IndexedDbStorage|CrossDomainGate)|dom\/(?:ClassListWrapper|Clipboard|domEvent|domUtil|watchResize|Fullscreen|MediaTimeline|VideoCaptureUtil)|text\/(?:reg|textUtil)|ui\/(?:PopupMessage|TextLabel)|css\/css|message\/(?:gate|messageUtil)|Emitter|uQuery)|zenza\/src\/(?:videoPlayer\/(?:createVideoElement|YouTubeWrapper|SupporterCredit|ScreenFilter|PipPageThumbnail)|Playlist\/(?:PlayListModel|RelatedVideoList|PlayListSession|VideoListModel|VideoList|VideoListItem|PlayList|VideoListItemView|VideoListView|PlayListView)|storyboard\/(?:Storyboard|StoryboardInfoModel|SeekBarThumbnail|StoryboardView|StoryboardWorker)|heatMap\/HeatMapWorker|audio\/AudioAdjuster|init\/(?:MylistPocketDetector|externalStartup|PlayerSession|PagePreviewGuard|inintCssProps|WatchPageHistory|replaceRedirectLinks)|parts\/(?:saveMymemory|FrameLayer|BaseViewComponent|CustomElements)|ShortcutKeyEmitter|ShortcutActions|menu\/HoverMenu)|components\/src\/element\/(?:BaseCommandElement|SettingPanelElement|VideoItemElement|DialogElement))|src\/(?:VideoInfo|TagListView|CommentInputPanel|CommentPanel|NicoVideoPlayer|VideoControlBar|VideoInfoPanel|NicoVideoPlayerDialog|RootDispatcher|initializer|State|CommentPlayer|_uquery|_captube|_shape|_heatsync|_gamepad|_hls))\.js$/);
+      assert.match(spec.runtime,/^(?:packages\/(?:lib\/src\/(?:nico\/[A-Za-z]+|infra\/(?:RequestDiagnostics|netUtil|sleep|env|dimport|speech|StorageWriter|CacheStorage|MediaSessionApi|bounce|AntiPrototype-js|logSafe|objUtil|Observable|workerUtil|IndexedDbStorage|CrossDomainGate)|dom\/(?:ClassListWrapper|Clipboard|domEvent|domUtil|watchResize|Fullscreen|MediaTimeline|VideoCaptureUtil)|text\/(?:reg|textUtil)|ui\/(?:PopupMessage|TextLabel)|css\/css|message\/(?:gate|messageUtil)|Emitter|uQuery)|zenza\/src\/(?:videoPlayer\/(?:createVideoElement|YouTubeWrapper|SupporterCredit|ScreenFilter|PipPageThumbnail)|Playlist\/(?:PlayListModel|RelatedVideoList|PlayListSession|VideoListModel|VideoList|VideoListItem|PlayList|VideoListItemView|VideoListView|PlayListView)|storyboard\/(?:Storyboard|StoryboardInfoModel|SeekBarThumbnail|StoryboardView|StoryboardWorker)|heatMap\/HeatMapWorker|audio\/AudioAdjuster|init\/(?:MylistPocketDetector|externalStartup|PlayerSession|PagePreviewGuard|inintCssProps|WatchPageHistory|replaceRedirectLinks|ExtensionIntegrations)|parts\/(?:saveMymemory|FrameLayer|BaseViewComponent|CustomElements)|ShortcutKeyEmitter|ShortcutActions|menu\/HoverMenu)|components\/src\/element\/(?:BaseCommandElement|SettingPanelElement|VideoItemElement|DialogElement))|src\/(?:VideoInfo|TagListView|CommentInputPanel|CommentPanel|NicoVideoPlayer|VideoControlBar|VideoInfoPanel|NicoVideoPlayerDialog(?:View(?:SmallMode|Bookmarks|Feedback)?|Prefetch|PlaylistSources|Comments|Resume|UserActions|Notifications|NicoadEnd|Commands)?|VideoHoverMenu|VariablesMapper|VideoHeaderPanel|VideoSearchForm|UaaView|RelatedInfoMenu|VideoMetaInfo|CommentPreview|SeekBarToolTip|SmoothSeekBarPointer|RootDispatcher|initializer|State|CommentPlayer|_uquery|_captube|_shape|_heatsync|_gamepad|_hls))\.js$/);
     }
   }
 });
@@ -117,6 +117,29 @@ test('legacy build directives are preserved in each runtime',()=>{
       expected.splice(expected.indexOf('//===END==='), 0,
         '//@require Config', '//@require NotificationJournal');
     }
+    if (spec.name === 'NicoVideoPlayer') {
+      // Task1029: 外部の拡張機能が変えた再生速度を受け入れる仕組みを別モジュールにした。追加はこの 1 つだけ。
+      expected.splice(expected.indexOf('//===BEGIN==='), 0,
+        "import {createPlaybackRateReconciler} from '../packages/zenza/src/videoPlayer/PlaybackRateReconciler';");
+      expected.splice(expected.indexOf('//===BEGIN===') + 1, 0, '//@require createPlaybackRateReconciler');
+    }
+    if (spec.name === 'WatchPageHistory') {
+      // Task1047: 外部のブラウザ拡張機能との連携を ExtensionIntegrations に分けた。追加はこの 1 つだけ。
+      expected.splice(expected.indexOf('//===BEGIN==='), 0, "import {ExtensionIntegrations} from './ExtensionIntegrations';");
+      expected.splice(expected.indexOf('//===END==='), 0, '//@require ExtensionIntegrations');
+    }
+    if (spec.name === 'ExtensionIntegrations') {
+      // Task1047 で新しく作ったモジュール。移行前の足場（2c65708b）には import も require も無い。
+      assert.deepEqual(directives(after),['//===BEGIN===','//===END===']);
+      continue;
+    }
+    if (spec.name === 'HoverMenu') {
+      // Task202: real video clicks are claimed by WatchClickNavigation before
+      // page/React navigation. Keep the single added owner and its require order exact.
+      expected.splice(expected.indexOf('//===BEGIN==='), 0,
+        "import {WatchClickNavigation} from './WatchClickNavigation';");
+      expected.splice(expected.indexOf('//===END==='), 0, '//@require WatchClickNavigation');
+    }
     if (spec.name === 'NicoVideoPlayerDialog') {
       // P12's local auto-clear coordinator and independent bookmark dock are
       // new, fixed preamble owners. Keep both the import and require order exact.
@@ -131,6 +154,23 @@ test('legacy build directives are preserved in each runtime',()=>{
       expected.splice(expected.indexOf('//@require NotificationHistoryPanel'),0,
         '//@require AutoResumeClearCoordinator','//@require ManualBookmarkRepository',
         '//@require ManualBookmarkSession','//@require ManualBookmarkDock','//@require SavedVideoThumbnail');
+      // Task1060: 画面・ホバーメニュー・役割ごとのメソッドを別ファイルへ分割した。import と require はこの順番。
+      const split=['VideoHoverMenu','NicoVideoPlayerDialogView','NicoVideoPlayerDialogPrefetch',
+        'NicoVideoPlayerDialogPlaylistSources','NicoVideoPlayerDialogComments','NicoVideoPlayerDialogResume',
+        'NicoVideoPlayerDialogUserActions','NicoVideoPlayerDialogNotifications','NicoVideoPlayerDialogNicoadEnd',
+        'NicoVideoPlayerDialogCommands'];
+      expected.splice(expected.indexOf('//===BEGIN==='),0,...split.map(name=>`import {${name}} from './${name}';`));
+      expected.splice(expected.indexOf('//@require NotificationHistoryPanel')+1,0,...split.map(name=>'//@require '+name));
+      // Task1063: 画面の VariablesMapper を別ファイルにした（画面の直後に読み込む）。
+      expected.splice(expected.indexOf("import {NicoVideoPlayerDialogView} from './NicoVideoPlayerDialogView';")+1,0,
+        "import {VariablesMapper} from './VariablesMapper';");
+      expected.splice(expected.indexOf('//@require NicoVideoPlayerDialogView')+1,0,'//@require VariablesMapper');
+    }
+    if (spec.name === 'NicoVideoPlayerDialogView') {
+      // Task1063: 画面の役割ごとのメソッドを別ファイルへ分けた。先に読み込んでから本体の for 文で取り付ける。
+      const roles=['NicoVideoPlayerDialogViewSmallMode','NicoVideoPlayerDialogViewBookmarks','NicoVideoPlayerDialogViewFeedback'];
+      expected.splice(expected.indexOf('//===BEGIN==='),0,...roles.map(name=>`import {${name}} from './${name}';`));
+      expected.splice(expected.indexOf('//===BEGIN===')+1,0,...roles.map(name=>'//@require '+name));
     }
     if (spec.name === 'VideoControlBar') {
       // Preserve the exact order of both added native seek dependencies.
@@ -140,6 +180,9 @@ test('legacy build directives are preserved in each runtime',()=>{
         "import {SceneResumeMarkerPresenter} from '../packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter';");
       expected.splice(expected.indexOf('//@require UiVisibilityRegistry') + 1, 0,
         '//@require TimelineGeometry', '//@require SceneResumeMarkerPresenter');
+      // Task1063: コメントのプレビューと一緒に CommentPreview.js へ移った（読み込む位置は同じ）。
+      expected.splice(expected.indexOf('//@require HeatMapWorker'), 1);
+      assert.match(read('src/CommentPreview.js'), /^\/\/@require HeatMapWorker$/m);
     }
     if (spec.name === 'Storyboard') {
       expected.unshift(
@@ -151,11 +194,25 @@ test('legacy build directives are preserved in each runtime',()=>{
         '//@require VideoInfoLoader','//@require netUtil','//@require RequestDiagnostics');
       // VideoSessionWorker is provided by the shared ZenzaLib scope, not redeclared.
     }
-    assert.deepEqual(directives(after), expected, spec.name);
+    // Task1064: ES モジュールとして読めるように、本文で使う名前の import を足した（ビルドの //@require は変えない）。
+    // 足した import は registry の ESM_ADDED_IMPORTS に記録したものだけを許す。
+    const added=new Set(ESM_ADDED_IMPORTS[spec.name]||[]);
+    const actualDirectives=directives(after).filter(line=>!added.has(line));
+    assert.deepEqual(actualDirectives, expected, spec.name);
+    for(const line of added)assert(directives(after).includes(line),spec.name+' missing ESM import '+line);
     // Task475: compare exported names, since legacy exports may span lines.
     const exported=t=>[...t.matchAll(/^export\s*\{([^}]*)\}/gm)]
       .flatMap(m=>m[1].split(',').map(s=>s.trim()).filter(Boolean)).sort();
-    assert.deepEqual(exported(after),spec.name==='Storyboard'?[...exported(before),'SavedSceneLoader'].sort():exported(before),spec.name+' exports');
+    // Task1060: 画面・ホバーメニュー（と VariablesMapper）は分割先のファイルから export する。
+    // Task1063: VideoInfoPanel・VideoControlBar・画面も同じく分割先から export する。
+    const movedOut={
+      NicoVideoPlayerDialog:['NicoVideoPlayerDialogView','VariablesMapper','VideoHoverMenu'],
+      NicoVideoPlayerDialogView:['VariablesMapper'],
+      VideoInfoPanel:['VideoHeaderPanel','VideoSearchForm','UaaView','RelatedInfoMenu','VideoMetaInfo'],
+      VideoControlBar:['CommentPreviewModel','CommentPreviewView','CommentPreview','SeekBarToolTip'],
+    }[spec.name]||[];
+    assert.deepEqual(exported(after),spec.name==='Storyboard'?[...exported(before),'SavedSceneLoader'].sort():
+      exported(before).filter(name=>!movedOut.includes(name)),spec.name+' exports');
   }
 });
 

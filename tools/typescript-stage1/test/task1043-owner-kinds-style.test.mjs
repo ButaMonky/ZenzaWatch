@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 // Task1043: ▶ の横のボタンは重ねて置き（名前がずれない）、形を上級者設定で選べる
-const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+import {readNicoFamily} from './dialog-roles.mjs';
+const read=readNicoFamily; // Task1063: 分割したモジュールは分割先も含めて読む
 test('kinds are absolutely positioned on an anchor around ▶ and have no text labels',()=>{
  const v=read('nico-src/VideoInfoPanel.ts');
  assert(v.includes('<span class="ownerVideoAnchor">'));

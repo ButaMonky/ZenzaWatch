@@ -9,18 +9,21 @@ function parseDirectLink(href, base) {
   } catch (_) { return null; }
 }
 
-async function verifyLogin(api) {
+async function verifyLogin(api, diag=()=>{}) {
   let response, body;
+  const started=Date.now();
   try {
     response = await api.fetch('https://nvapi.nicovideo.jp/v1/users/me/mylists', {
       credentials: 'include', cache: 'no-store', timeout: 15000,
       headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
     });
+    diag('auth-response',{status:response.status,ms:Date.now()-started});
     if (response.status === 401) throw new Error('LOGIN_REQUIRED');
     if (response.status === 403) throw new Error('AUTH_FORBIDDEN');
     if (response.status !== 200) throw new Error('AUTH_CHECK_FAILED');
     body = await response.json();
   } catch (error) {
+    diag('auth-error',{message:String(error?.message||error),name:error?.name||null,ms:Date.now()-started});
     const known=['LOGIN_REQUIRED','AUTH_FORBIDDEN','GM_NETWORK_ERROR','GM_DESTINATION_DENIED'];
     throw new Error(known.includes(error?.message) ? error.message : error?.name==='TimeoutError'?'AUTH_TIMEOUT':'AUTH_CHECK_FAILED');
   }
@@ -29,11 +32,12 @@ async function verifyLogin(api) {
   // Deliberately return neither account details nor private list names.
 }
 
-function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
+function createRuntimeSession({startRuntime, enable, hasExistingRuntime, diag=()=>{}}) {
+  const t0=Date.now();
   let runtime, loading, initializing, ready=false,closed=false;
   const ensureOpen=()=>{if(closed)throw Error('PLAYER_CLOSED');};
   let listener=()=>{},stage='BOOT';
-  const progress=value=>{stage=value;listener(value);};
+  const progress=value=>{stage=value;diag('stage',{stage:value,ms:Date.now()-t0});listener(value);};
   return {
     reportStage:progress,
     configure(value) {runtime=value;},
@@ -42,17 +46,18 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
     diagnostics() {return runtime?.diagnostics?.()||{runtimeReady:false};},
     async open(id,event) {
       try {
+      diag('session-open',{id,loading:!!loading,ready,runtime:!!runtime});
       ensureOpen();await enable(event);ensureOpen();
       progress('BOOT');
       if(!loading) {
-        if(hasExistingRuntime())throw Error('EXISTING_RUNTIME');
+        if(hasExistingRuntime()){diag('existing-runtime',{zenza:typeof window!=='undefined'&&!!window.ZenzaWatch});throw Error('EXISTING_RUNTIME');}
         // A failed bootstrap is not rerun over a partially initialized runtime.
         loading=Promise.resolve().then(startRuntime);
       }
       await loading;ensureOpen();
       if(!runtime)throw Error('RUNTIME_NOT_READY');
       progress('SETTINGS');await runtime.connect();ensureOpen();
-      progress('AUTH');await verifyLogin(runtime.api);ensureOpen();
+      progress('AUTH');await verifyLogin(runtime.api,diag);ensureOpen();
       runtime.setLogin();
       if(!ready) {
         progress('UI');
@@ -60,7 +65,16 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
         await initializing;ensureOpen();ready=true;
       }
       progress('VIDEO');await runtime.open(id);ensureOpen();progress('OPEN');
-      } catch(error) {throw Object.assign(error instanceof Error?error:Error('PLAYER_START_FAILED'),{stage});}
+      } catch(error) {
+        try{
+          const name=['TypeError','ReferenceError','RangeError'].includes(error?.name)?error.name:null;
+          const m=/of '([^']{1,80})' as it is|reading '([^']{1,80})'|^([A-Za-z_$][\w$.]{0,79}) is not defined/.exec(String(error?.message||''));
+          runtime?.journal?.(stage,String(error?.message||'PLAYER_START_FAILED').slice(0,60),name,m?(m[1]||m[2]||m[3]):null);
+        }catch(_){}
+        diag('session-failed',{stage,message:String(error?.message||error),name:error?.name||null,
+          stack:typeof error?.stack==='string'?error.stack.split('\n').slice(0,8).join(' | '):null});
+        throw Object.assign(error instanceof Error?error:Error('PLAYER_START_FAILED'),{stage});
+      }
     }
   };
 }

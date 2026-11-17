@@ -82,7 +82,7 @@ class NicoCommentCss3PlayerView extends Emitter {
   }
   _initializeView (params, retryCount) {
     if (retryCount === 0) {
-      self.console.time('initialize NicoCommentCss3PlayerView');
+      console.time('initialize NicoCommentCss3PlayerView');
     }
     this._style = null;
     this.commentLayer = null;
@@ -108,7 +108,7 @@ class NicoCommentCss3PlayerView extends Emitter {
         doc = iframe.contentWindow.document;
       } catch (e) {
         self.console.error(e);
-        self.console.log('変な広告に乗っ取られました');
+        console.log('変な広告に乗っ取られました');
         iframe.remove();
         this._view = null;
         global.debug.commentLayer = null;
@@ -203,7 +203,7 @@ class NicoCommentCss3PlayerView extends Emitter {
           }
         , 100)
       );
-      self.console.timeEnd('initialize NicoCommentCss3PlayerView');
+      console.timeEnd('initialize NicoCommentCss3PlayerView');
     };
 
     this._view = iframe;
@@ -514,7 +514,7 @@ class NicoCommentCss3PlayerView extends Emitter {
     // performance.measure('updateDom');
   }
   buildHtml (currentTime) {
-    self.console.time('buildHtml');
+    console.time('buildHtml');
 
     const vm = this._viewModel;
     currentTime = currentTime || vm.currentTime;
@@ -535,7 +535,7 @@ class NicoCommentCss3PlayerView extends Emitter {
       .replace('%CSS%', '')
       .replace('%MSG%', html.join(''));
 
-    self.console.timeEnd('buildHtml');
+    console.timeEnd('buildHtml');
     return tpl;
   }
   _buildGroupHtml (m, currentTime = 0) {

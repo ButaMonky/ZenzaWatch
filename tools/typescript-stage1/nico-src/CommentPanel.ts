@@ -9,21 +9,21 @@ import type {ZenzaCommentSortKey, ZenzaCommentReadingModelPort, ZenzaCommentRead
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const BaseViewComponent: Loose;
-declare const CONSTANT: Loose;
-declare const ClassList: Loose;
-declare const Emitter: Loose;
-declare const FrameLayer: Loose;
+declare const BaseViewComponent: typeof import('./BaseViewComponent').BaseViewComponent;
+declare const CONSTANT: import('./shared-types/Constant').ZenzaConstant;
+declare const ClassList: typeof import('./ClassList').ClassList;
+declare const Emitter: typeof import('./Emitter').Emitter;
+declare const FrameLayer: typeof import('./FrameLayer').FrameLayer;
 declare const NICORU: Loose;
-declare const _: Loose;
-declare const css: Loose;
-declare const cssUtil: Loose;
-declare const env: Loose;
-declare const global: Loose;
-declare const nicoUtil: Loose;
-declare const textUtil: Loose;
-declare const throttle: Loose;
-declare const uq: Loose;
+declare const _: import('./shared-types/Lodash').LodashSubset;
+declare const css: typeof import('./css').css;
+declare const cssUtil: typeof import('./css').cssUtil;
+declare const env: typeof import('./env').env;
+declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
+declare const nicoUtil: typeof import('./nicoUtil').nicoUtil;
+declare const textUtil: typeof import('./textUtil').textUtil;
+declare const throttle: typeof import('./bounce').throttle;
+declare const uq: typeof import('./uQuery').uq;
 
 
 class CommentListModel extends Emitter implements ZenzaCommentReadingModelPort {
@@ -125,6 +125,9 @@ class CommentListModel extends Emitter implements ZenzaCommentReadingModelPort {
       user: 'userId',
       nicoru: 'nicoru'
     };
+    if (!key) {
+      return;
+    }
     const func = (table as Loose)[key];
     if (!func) {
       return;
@@ -134,7 +137,7 @@ class CommentListModel extends Emitter implements ZenzaCommentReadingModelPort {
       this._items.reverse();
     }
     this._currentSortKey = key;
-    this._isDesc = isDesc;
+    this._isDesc = !!isDesc;
     this._currentIndex = -1;
     this.onUpdate(true);
   }
@@ -395,7 +398,7 @@ class CommentListView extends Emitter {
     if (!this._isReadCurrent(owner)) { return; }
     this._isFrameReady = true;
 
-    window.console.time('update commentlistView');
+    console.time('update commentlistView');
     this.addClass('updating');
     itemList = Array.isArray(itemList) ? itemList : [itemList];
     // Preserve manual browsing while the list is rebuilt.
@@ -431,7 +434,7 @@ class CommentListView extends Emitter {
       this.emit('update');
     }, 100);
 
-    window.console.timeEnd('update commentlistView');
+    console.timeEnd('update commentlistView');
   }
   _onClick(e?: Loose) {
     e.stopPropagation();
@@ -749,7 +752,7 @@ CommentListView.__tpl__ = (`
     right: 0;
     width: 16px;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.6));
     z-index: 100;
     contain: strict;
     pointer-events: none;
@@ -768,7 +771,7 @@ CommentListView.__tpl__ = (`
     overscroll-behavior: none;
     will-change: transform;
     scrollbar-width: 16px;
-    scrollbar-color: #039393;
+    scrollbar-color: var(--zt-info-strong, #039393);
   }
   .is-firefox #listContainer {
     will-change: auto;
@@ -787,7 +790,7 @@ CommentListView.__tpl__ = (`
 
   #listContainerInner:empty::after {
     content: 'コメントは空です';
-    color: #666;
+    color: var(--zt-text-inverse, #666);
     display: inline-block;
     text-align: center;
     position: absolute;
@@ -816,9 +819,9 @@ CommentListView.__tpl__ = (`
     opacity: 0;
     pointer-events: none;
     z-index: 100;
-    border: 2px solid #fc9;
-    background-color: rgba(255, 255, 232, 0.9);
-    box-shadow: 4px 4px 0 rgba(99, 99, 66, 0.8);
+    border: 2px solid var(--zt-warning, #fc9);
+    background-color: var(--zt-overlay-light, rgba(255, 255, 232, 0.9));
+    box-shadow: 4px 4px 0 var(--zt-accent-translucent, rgba(99, 99, 66, 0.8));
     transition: opacity 0.2s;
   }
 
@@ -854,7 +857,7 @@ CommentListView.__tpl__ = (`
   }
   .itemDetailContainer .time {
     cursor: pointer;
-    color: #339;
+    color: var(--zt-info-strong, #339);
   }
   .itemDetailContainer .time:hover {
     text-decoration: underline;
@@ -890,12 +893,12 @@ CommentListView.__tpl__ = (`
     content: 'cmd';
   }
   .itemDetailContainer .text {
-    border: 1px inset #ccc;
+    border: 1px inset var(--zt-border-light, #ccc);
     padding: 8px;
     margin: 4px 8px;
   }
   .itemDetailContainer .close {
-    border: 2px solid #666;
+    border: 2px solid var(--zt-border, #666);
     width: 50%;
     cursor: pointer;
     text-align: center;
@@ -919,7 +922,7 @@ CommentListView.__tpl__ = (`
     transform: translateY(var(--trans-y-pp));
     pointer-events: none;
     will-change: transform;
-    border: 1px dashed #e12885;
+    border: 1px dashed var(--zt-special, #e12885);
     opacity: 0.8;
   }
   .timeBar::after {
@@ -929,8 +932,8 @@ CommentListView.__tpl__ = (`
     top: -3px;
     content: '';
     position: absolute;
-    border: 2px solid #2b2b2b;
-    outline: 2px solid #2b2b2b;
+    border: 2px solid var(--zt-border-dark, #2b2b2b);
+    outline: 2px solid var(--zt-border-dark, #2b2b2b);
     outline-offset: -5px;
     box-sizing: border-box;
   }*/
@@ -951,7 +954,7 @@ CommentListView.__tpl__ = (`
     --height-pp: calc( 1px * var(--inner-height) * var(--inner-height) / var(--list-height) );
     --trans-y-pp: calc( 1px * var(--inner-height) * var(--scroll-top) / var(--list-height));
     height: var(--height-pp);
-    background: #039393;
+    background: var(--zt-info-strong, #039393);
     max-height: 100vh;
     transform: translateY(var(--trans-y-pp));
     pointer-events: none;
@@ -998,7 +1001,7 @@ const CommentListItemView = (() => {
       }
 
       body {
-        background: #000;
+        background: var(--zt-surface-0, #000);
         margin: 0;
         padding: 0;
         overflow: hidden;
@@ -1027,17 +1030,17 @@ const CommentListItemView = (() => {
       .listMenu  .menuButton {
         font-size: 13px;
         line-height: 20px;
-        border: 1px solid #666;
-        color: #fff;
-        background: #666;
+        border: 1px solid var(--zt-border, #666);
+        color: var(--zt-text-0, #fff);
+        background: var(--zt-surface-3, #666);
         cursor: pointer;
         text-align: center;
         width: 48px;
       }
 
       .listMenu .menuButton:hover {
-        border: 1px solid #ccc;
-        box-shadow: 2px 2px 2px #333;
+        border: 1px solid var(--zt-border-light, #ccc);
+        box-shadow: 2px 2px 2px var(--zt-shadow, #333);
       }
 
       .listMenu .menuButton:active {
@@ -1074,7 +1077,7 @@ const CommentListItemView = (() => {
         white-space: nowrap;
         margin: 0;
         padding: 0;
-        background: #222;
+        background: var(--zt-surface-1, #222);
         z-index: 50;
         contain: strict;
       }
@@ -1093,18 +1096,18 @@ const CommentListItemView = (() => {
       }
 
       .commentListItem.odd {
-        background: #333;
+        background: var(--zt-surface-2, #333);
       }
       .commentListItem[data-nicoru] {
-        background: #332;
+        background: var(--zt-surface-1, #332);
       }
       .commentListItem.odd[data-nicoru] {
-        background: #443;
+        background: var(--zt-surface-2, #443);
       }
       .commentListItem[data-nicoru]:hover::before {
         position: absolute;
         content: attr(data-nicoru);
-        color: #ccc;
+        color: var(--zt-text-1, #ccc);
         font-size: 12px;
         left: 80px;
       }
@@ -1219,12 +1222,12 @@ const CommentListItemView = (() => {
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
-        color: #888;
+        color: var(--zt-text-2, #888);
         margin: 0;
         padding: 0 8px 0;
       }
       .commentListItem[data-valhalla="1"] .info {
-        color: #f88;
+        color: var(--zt-danger, #f88);
       }
       .commentListItem .timepos {
         display: inline-block;
@@ -1238,7 +1241,7 @@ const CommentListItemView = (() => {
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
-        color: #ccc;
+        color: var(--zt-text-1, #ccc);
         margin: 0;
         padding: 0 8px;
         font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', arial, 'Menlo';
@@ -1254,7 +1257,7 @@ const CommentListItemView = (() => {
         overflow-y: visible;
         z-index: 60;
         height: auto;
-        box-shadow: 2px 2px 2px #000, 2px -2px 2px #000;
+        box-shadow: 2px 2px 2px var(--zt-shadow, #000), 2px -2px 2px var(--zt-shadow, #000);
         contain: layout style paint;
       }
 
@@ -1265,7 +1268,7 @@ const CommentListItemView = (() => {
       }
 
       .commentListItem.fork1 .timepos {
-        text-shadow: 1px 1px 0 #008800, -1px -1px 0 #008800 !important;
+        text-shadow: 1px 1px 0 var(--zt-success-strong, #008800), -1px -1px 0 var(--zt-success-strong, #008800) !important;
       }
       .commentListItem:where(.fork2, .fork3) .timepos {
         opacity: 0.6;
@@ -1279,7 +1282,7 @@ const CommentListItemView = (() => {
       }
 
       .commentListItem.is-active {
-        outline: dashed 2px #ff8;
+        outline: dashed 2px var(--zt-accent, #ff8);
         outline-offset: 4px;
       }
 
@@ -1294,7 +1297,7 @@ const CommentListItemView = (() => {
         bottom: 0;
         right: 0;
         pointer-events: none;
-        background: #888;
+        background: var(--zt-surface-3, #888);
         will-change: transform;
         animation-duration: var(--duration);
         animation-delay: calc(var(--vpos-time) - var(--current-time) - 1s);
@@ -1576,8 +1579,8 @@ class CommentPanelView extends Emitter {
         command: 'update-commentLanguage',
         param: language,
       });
-      list.textContent = label;
-      langs.append(list);
+      list.textContent = label ?? null;
+      langs?.append(list);
     }
 
     const $menu = this._$menu = this.$view.find('.commentPanel-menu');
@@ -1694,18 +1697,18 @@ CommentPanelView.__css__ = `
 
     .commentPanel-header {
       height: var(--zenza-comment-panel-header-height);
-      border-bottom: 1px solid #000;
-      background: #333;
-      color: #ccc;
+      border-bottom: 1px solid var(--zt-border-dark, #000);
+      background: var(--zt-surface-2, #333);
+      color: var(--zt-text-1, #ccc);
     }
 
     .commentPanel-menu-button {
       display: inline-block;
       cursor: pointer;
-      border: 1px solid #333;
+      border: 1px solid var(--zt-border-dark, #333);
       padding: 0px 4px;
       margin: 0 4px;
-      background: #666;
+      background: var(--zt-surface-3, #666);
       font-size: 16px;
       line-height: 28px;
       white-space: nowrap;
@@ -1722,8 +1725,8 @@ CommentPanelView.__css__ = `
     }
 
     .commentPanel-container.autoScroll .autoScroll {
-      text-shadow: 0 0 6px #f99;
-      color: #ff9;
+      text-shadow: 0 0 6px var(--zt-danger, #f99);
+      color: var(--zt-accent, #ff9);
     }
 
     .commentPanel-frame {
@@ -1771,7 +1774,7 @@ CommentPanelView.__css__ = `
     .commentPanel-container.lang-en-us .commentPanel-command[data-param=en-us],
     .commentPanel-container.lang-zh-tw .commentPanel-command[data-param=zh-tw] {
       font-weight: bolder;
-      color: #ff9;
+      color: var(--zt-accent, #ff9);
     }
 
 
@@ -2132,7 +2135,7 @@ class TimeMachineView extends BaseViewComponent {
     window.setInterval(this._bound._onTimer, 3 * 1000);
   }
 
-  _initDom(...args: Loose[]) {
+  _initDom(...args: [Loose]) {
     super._initDom(...args);
 
     const v = this._shadow || this._view;
@@ -2266,8 +2269,8 @@ TimeMachineView._shadow_ = (`
         margin: auto 4px 4px;
         padding: 0 4px;
         border: 1px solid;
-        background: #888;
-        color: #000;
+        background: var(--zt-surface-3, #888);
+        color: var(--zt-text-inverse, #000);
         font-size: 20px;
         line-height: 24px;
         font-family: monospace;
@@ -2275,9 +2278,9 @@ TimeMachineView._shadow_ = (`
       }
 
       .is-WaybackMode .dateTime {
-        background: #000;
-        color: #888;
-        box-shadow: 0 0 4px #ccc, 0 0 4px #ccc inset;
+        background: var(--zt-surface-0, #000);
+        color: var(--zt-text-2, #888);
+        box-shadow: 0 0 4px var(--zt-glow-light, #ccc), 0 0 4px var(--zt-glow-light, #ccc) inset;
       }
       .reloadButton {
         display: inline-block;
@@ -2304,15 +2307,15 @@ TimeMachineView._shadow_ = (`
           text-decoration: underline;
         }
         .reloadButton:active {
-          color: #888;
+          color: var(--zt-text-2, #888);
           cursor: wait;
         }
         .reloadButton:active .icon {
           text-decoration: none;
           transform: rotate(-270deg) scale(2);
           transition: none;
-          color: #ff0;
-          text-shadow: 0 0 4px #ff8;
+          color: var(--zt-accent, #ff0);
+          text-shadow: 0 0 4px var(--zt-accent, #ff8);
         }
 
       .backToTheFuture {
@@ -2325,7 +2328,7 @@ TimeMachineView._shadow_ = (`
         user-select: none;
       }
       .backToTheFuture:hover {
-        text-shadow: 0 0 8px #ffc;
+        text-shadow: 0 0 8px var(--zt-accent-soft, #ffc);
         transform: translate(0, -2px);
       }
       .backToTheFuture:active {
@@ -2342,8 +2345,8 @@ TimeMachineView._shadow_ = (`
         position: absolute;
         top: 32px;
         left: 4px;
-        background: #333;
-        box-shadow: 0 0 4px #fff;
+        background: var(--zt-surface-2, #333);
+        box-shadow: 0 0 4px var(--zt-glow-light, #fff);
       }
       .is-Selecting .inputContainer {
         display: block;
@@ -2362,20 +2365,20 @@ TimeMachineView._shadow_ = (`
             cursor: pointer;
             padding: 4px 8px;
             margin: 4px;
-            border: 1px solid #888;
+            border: 1px solid var(--zt-border, #888);
             text-align: center;
             transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
             user-select: none;
           }
           .dateTimeSubmit:hover, .dateTimeCancel:hover {
-            background: #666;
+            background: var(--zt-surface-3, #666);
             transform: translate(0, -2px);
-            box-shadow: 0 4px 2px #000;
+            box-shadow: 0 4px 2px var(--zt-shadow, #000);
           }
           .dateTimeSubmit:active, .dateTimeCancel:active {
-            background: #333;
+            background: var(--zt-surface-2, #333);
             transform: translate(0, 0);
-            box-shadow: 0 0 2px #000 inset;
+            box-shadow: 0 0 2px var(--zt-shadow, #000) inset;
           }
 
           .dateTimeSubmit {
@@ -2399,6 +2402,10 @@ TimeMachineView._shadow_ = (`
   `).trim();
 
 TimeMachineView.__tpl__ = ('<div class="TimeMachineView"></div>').trim();
+
+/** Task1062: type-tests/nico-boundaries.ts が型の境界を確かめるための別名（出力 JS には出ない） */
+export type CommentListModelType = CommentListModel;
+export type CommentListViewType = CommentListView;
 
 export {
   CommentPanel

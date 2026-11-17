@@ -3,7 +3,7 @@ const assert=require('assert'),fs=require('fs'),path=require('path'),crypto=requ
 const {JSDOM}=require('jsdom');
 const native=require('../../tools/qa/scene-vcb-real-source.cjs');
 const root=path.resolve(__dirname,'../..');
-const source=fs.readFileSync(path.join(root,'src/VideoControlBar.js'),'utf8');
+const source=require('../../tools/qa/native-source-family.cjs').nativeSourceText('src/VideoControlBar.js'); // Task1063
 describe('real VideoControlBar source contract for scene-search Chromium QA',()=>{
  it('preserves the original native range and all three control sections',()=>{
   const dom=new JSDOM('<!doctype html><body>'+native.markup+'</body>');

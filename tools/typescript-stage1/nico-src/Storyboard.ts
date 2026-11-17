@@ -18,8 +18,8 @@ declare class Emitter {
 declare const StoryboardInfoLoader: {load(serverType: unknown, videoInfo: Loose): Promise<Loose>};
 declare const StoryboardView: new (params: Loose) => Loose;
 declare const StoryboardInfoModel: new (data: Loose) => Loose;
-declare const SeekBarThumbnail: Loose;
-declare const StoryboardWorker: Loose;
+declare const SeekBarThumbnail: typeof import('./SeekBarThumbnail').SeekBarThumbnail;
+declare const StoryboardWorker: typeof import('./StoryboardWorker').StoryboardWorker;
 declare const StoryboardCacheDb: typeof import('./StoryboardCacheDb').StoryboardCacheDb;
 declare const VideoInfoLoader: typeof import('./VideoInfoLoader').VideoInfoLoader;
 declare const VideoSessionWorker: typeof import('./VideoSessionWorker').VideoSessionWorker;

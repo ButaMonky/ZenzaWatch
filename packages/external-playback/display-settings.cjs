@@ -86,6 +86,8 @@ function createDisplaySettings(w, gm, registered=[]) {
     if(!gm.get(savedSlot)&&snapshot.saved?.version===2)
       gm.set(savedSlot,{version:2,official:clean(snapshot.saved.official),values:clean(snapshot.saved.values)});
   }
-  return {publish,apply,save,scheduleSave,diagnostics,migrate};
+  return {publish,apply,save,scheduleSave,diagnostics,migrate,
+    // Task1034: 計測用の軽い読み出し（diagnostics は保存領域を読み直すので定期計測には使わない）
+    storageTiming:()=>({saveCount:storageTiming.saveCount,totalSaveMs:Math.round(storageTiming.totalSaveMs),maxSaveMs:Math.round(storageTiming.maxSaveMs)})};
 }
 module.exports={createDisplaySettings};

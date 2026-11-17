@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.90-task1015
+// @version     0.5.93-task1062
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -146,7 +146,6 @@ AntiPrototypeJs().then(() => {
         font-size: 16px;
         line-height: 24px;
         -webkit-user-select: none;
-        -moz-use-select: none;
         user-select: none;
         outline: none;
       }
@@ -215,7 +214,7 @@ AntiPrototypeJs().then(() => {
       }
 
       .mylistPocketHoverMenu:hover {
-        font-weibht: bolder;
+        font-weight: bolder;
         opacity: 1;
       }
 
@@ -4186,7 +4185,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.90-task1015', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.93-task1062', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

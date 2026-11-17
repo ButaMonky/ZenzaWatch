@@ -154,7 +154,11 @@ test('PopupMessage: notify/alert/debug, html opt-in, css once, undefined message
   const normalizeApprovedTheme = css => css
     .replace('color: #fff;', 'color: rgba(255, 255, 255, 0.8);')
     .replace('20% { opacity: 1; }', '20% { opacity: 0.8; }')
-    .replace('80% { opacity: 1; }', '80% { opacity: 0.8; }');
+    .replace('80% { opacity: 1; }', '80% { opacity: 0.8; }')
+    // c73dbd7: the warning notification type is an approved addition to the
+    // legacy fixture. Remove only its variable and rule; all other CSS stays strict.
+    .replace('      --warning-color: #c60;\n', '')
+    .replace('    .zenzaPopupMessage.warning {\n      background: var(--warning-color, #c60);\n      white-space: pre-line;\n      overflow-wrap: anywhere;\n    }\n\n', '');
   await compare('PopupMessage','PopupMessage',()=>{
     const log=[];const body=el(log,'body','body');
     const make=()=>{const d={className:'',textContent:undefined,innerHTML:undefined,

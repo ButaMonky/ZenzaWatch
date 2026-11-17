@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/netUtil.ts",
   "runtime": "packages/lib/src/infra/netUtil.js",
   "sourceSha256": "6562ff97fa9404f3e7ad7783340e29d63bc03ee18dc58ed51e187529f5599c1c",
-  "runtimeSha256": "e8b30628fa7854efc4c2bcd2aea2a284076cc65759ed784990dbf48b3c1b9678"
+  "runtimeSha256": "d1728770b8adeb7e795a3d2a7f79904fc5c6044fa4825033736b59ada03ae902"
 }

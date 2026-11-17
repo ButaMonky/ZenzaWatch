@@ -8,14 +8,14 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const BaseViewComponent: Loose;
+declare const BaseViewComponent: typeof import('./BaseViewComponent').BaseViewComponent;
 declare const Config: Loose;
-declare const NicodicArticleLoader: Loose;
-declare const TagEditApi: Loose;
+declare const NicodicArticleLoader: typeof import('./NicodicArticleLoader').NicodicArticleLoader;
+declare const TagEditApi: typeof import('./TagEditApi').TagEditApi;
 declare const ZenzaWatch: Loose;
-declare const nicoUtil: Loose;
-declare const parseVideoSearchSortValue: Loose;
-declare const textUtil: Loose;
+declare const nicoUtil: typeof import('./nicoUtil').nicoUtil;
+declare const parseVideoSearchSortValue: typeof import('./VideoSearch').parseVideoSearchSortValue;
+declare const textUtil: typeof import('./textUtil').textUtil;
 
 
 class TagListView extends BaseViewComponent {
@@ -58,7 +58,7 @@ class TagListView extends BaseViewComponent {
     this._inputFocusTimer = null;
   }
 
-  _initDom(...args: Loose[]) {
+  _initDom(...args: [Loose]) {
     super._initDom(...args);
 
     const v = this._shadow || this._view;
@@ -594,7 +594,7 @@ TagListView.DIC_ICON_NONE   = dicIconSvg('#999999', '#cccccc', '0.5');
 TagListView.__shadow__ = (`
     <style>
       :host-context(.videoTagsContainer.sideTab) .tagLink {
-        color: #000 !important;
+        color: var(--zt-text-inverse, #000) !important;
         text-decoration: none;
       }
 
@@ -619,16 +619,16 @@ TagListView.__shadow__ = (`
         text-align: center;
         transform: translate(-50%, -50%);
         z-index: 10001;
-        color: #fe9;
+        color: var(--zt-accent, #fe9);
         font-size: 24px;
         letter-spacing: 3px;
-        text-shadow: 0 0 4px #000;
+        text-shadow: 0 0 4px var(--zt-shadow, #000);
         pointer-events: none;
       }
 
       .TagListView.is-Updating:before {
         content: ' ';
-        background: rgba(0, 0, 0, 0.6);
+        background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.6));
         position: absolute;
         top: 50%;
         left: 50%;
@@ -637,7 +637,7 @@ TagListView.__shadow__ = (`
         height: 100%;
         padding: 8px;
         z-index: 10000;
-        box-shadow: 0 0 8px #000;
+        box-shadow: 0 0 8px var(--zt-shadow, #000);
         border-radius: 8px;
         pointer-events: none;
       }
@@ -662,12 +662,12 @@ TagListView.__shadow__ = (`
       }
 
       .TagListView .button:hover {
-        background: #666;
+        background: var(--zt-surface-3, #666);
       }
 
       .TagListView .button:active {
         transition: none;
-        box-shadow: 0 0 2px #000 inset;
+        box-shadow: 0 0 2px var(--zt-shadow, #000) inset;
       }
       .TagListView .button .icon {
         position: absolute;
@@ -684,8 +684,8 @@ TagListView.__shadow__ = (`
         bottom: 100%;
         transform: translate(-50%, 0) scale(0.9);
         pointer-events: none;
-        background: rgba(192, 192, 192, 0.9);
-        box-shadow: 0 0 4px #000;
+        background: var(--zt-overlay-light, rgba(192, 192, 192, 0.9));
+        box-shadow: 0 0 4px var(--zt-shadow, #000);
         color: black;
         font-size: 12px;
         margin: 0;
@@ -715,8 +715,8 @@ TagListView.__shadow__ = (`
         display: inline-block;
         padding: 0 8px;
         border-radius: 10px;
-        background: #4a6;
-        color: #fff;
+        background: var(--zt-success, #4a6);
+        color: var(--zt-text-0, #fff);
         font-size: 12px;
         line-height: 18px;
         font-weight: bold;
@@ -724,7 +724,7 @@ TagListView.__shadow__ = (`
         white-space: nowrap;
       }
       .genreBadge:hover {
-        background: #5c8;
+        background: var(--zt-success, #5c8);
       }
 
       .videoTagsInner {
@@ -748,7 +748,7 @@ TagListView.__shadow__ = (`
       }
 
       .tagLink {
-        color: #fff;
+        color: var(--zt-text-0, #fff);
         text-decoration: none;
         user-select: none;
         display: inline-block;
@@ -784,8 +784,8 @@ TagListView.__shadow__ = (`
         width: 20px;
         height: 20px;
         font-size: 16px;
-        background: #f66;
-        color: #fff;
+        background: var(--zt-danger, #f66);
+        color: var(--zt-text-0, #fff);
         cursor: pointer;
         border-radius: 100%;
         transition: transform 0.2s, background 0.4s;
@@ -797,14 +797,14 @@ TagListView.__shadow__ = (`
 
       .TagListView.is-Editing .deleteButton:hover {
         transform: rotate(0) scale(1.2);
-        background: #f00;
+        background: var(--zt-danger, #f00);
         opacity: 1;
       }
 
       .TagListView.is-Editing .deleteButton:active {
         transform: rotate(360deg) scale(1.2);
         transition: none;
-        background: #888;
+        background: var(--zt-surface-3, #888);
       }
 
       .TagListView.is-Editing .is-Locked .deleteButton {
@@ -812,7 +812,7 @@ TagListView.__shadow__ = (`
       }
 
       .TagListView .is-Removing .deleteButton {
-        background: #666;
+        background: var(--zt-surface-3, #666);
       }
 
       .tagItem .playlistAppend {
@@ -829,8 +829,8 @@ TagListView.__shadow__ = (`
         width: 24px;
         height: 24px;
         bottom: 4px;
-        background: #666;
-        color: #ccc;
+        background: var(--zt-surface-3, #666);
+        color: var(--zt-text-1, #ccc);
         text-decoration: none;
         border: 1px outset;
         cursor: pointer;
@@ -897,9 +897,9 @@ TagListView.__shadow__ = (`
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: #ff9;
+        color: var(--zt-accent, #ff9);
         white-space: nowrap;
-        background: rgba(0, 0, 0, 0.6);
+        background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.6));
       }
 
       .is-Editing .tagItem:nth-child(11).is-Locked:hover:after {
@@ -907,11 +907,11 @@ TagListView.__shadow__ = (`
       }
 
       .is-Editing .tagItem:not(.is-Locked) {
-        text-shadow: 0 4px 4px rgba(0, 0, 0, 0.8);
+        text-shadow: 0 4px 4px var(--zt-shadow, rgba(0, 0, 0, 0.8));
       }
 
       .is-Editing .tagItem.is-Category * {
-        color: #ff9;
+        color: var(--zt-accent, #ff9);
       }
       .is-Editing .tagItem.is-Category.is-Locked:hover:after {
         content: '${'\\01F6AB'} カテゴリタグ';
@@ -921,15 +921,15 @@ TagListView.__shadow__ = (`
       .tagInputContainer {
         display: none;
         padding: 4px 8px;
-        background: #666;
+        background: var(--zt-surface-3, #666);
         z-index: 5000;
-        box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.8);
+        box-shadow: 4px 4px 4px var(--zt-shadow, rgba(0, 0, 0, 0.8));
         font-size: 16px;
       }
 
       :host-context(.videoTagsContainer.sideTab)     .tagInputContainer {
         position: absolute;
-        background: #999;
+        background: var(--zt-surface-mid, #999);
       }
 
       .tagInputContainer .tagInputText {
@@ -954,12 +954,12 @@ TagListView.__shadow__ = (`
         }
 
         .tagInput:active {
-          box-shadow: 0 0 4px #fe9;
+          box-shadow: 0 0 4px var(--zt-accent, #fe9);
         }
 
         .submit, .cancel {
-          background: #666;
-          color: #ccc;
+          background: var(--zt-surface-3, #666);
+          color: var(--zt-text-1, #ccc);
           cursor: pointer;
           border: 1px solid;
           text-align: center;
@@ -995,7 +995,7 @@ TagListView.__shadow__ = (`
 
       .TagListView.is-Editing .button.toggleEdit,
       .TagListView .button.toggleEdit:hover {
-        background: #c66;
+        background: var(--zt-danger, #c66);
       }
 
       .TagListView .button.tagRefresh .icon {
@@ -1014,7 +1014,7 @@ TagListView.__shadow__ = (`
       }
 
       .TagListView  .button.toggleInput:hover {
-        background: #66c;
+        background: var(--zt-info, #66c);
       }
 
       .tagEditContainer form {
@@ -1057,11 +1057,11 @@ TagListView.__css__ = (`
       overflow: hidden;
     }
     .videoTagsContainer.sideTab a {
-      color: #000 !important;
+      color: var(--zt-text-inverse, #000) !important;
       text-decoration: none !important;
     }
     .videoTagsContainer.videoHeader a {
-      color: #fff !important;
+      color: var(--zt-text-0, #fff) !important;
       text-decoration: none !important;
     }
     .videoTagsContainer.sideTab .tagInputContainer {
@@ -1103,15 +1103,15 @@ class TagItemMenu extends HTMLElement {
         }
 
         .nicodic, .toggle {
-          background: #888;
-          color: #ccc;
-          box-shadow: 0.1em 0.1em 0 #333;
+          background: var(--zt-surface-3, #888);
+          color: var(--zt-text-1, #ccc);
+          box-shadow: 0.1em 0.1em 0 var(--zt-shadow, #333);
           transition: background 0.2s ease, color 0.2s ease;
         }
         /* 記事があるタグ。灰色との差がはっきり出るようにしてある（Task 047） */
         .has-nicodic .nicodic,.has-nicodic .toggle {
-          background: #c62828;
-          color: #fff;
+          background: var(--zt-danger, #c62828);
+          color: var(--zt-text-0, #fff);
         }
         .toggle::after {
           content: '？';
@@ -1152,14 +1152,14 @@ class TagItemMenu extends HTMLElement {
         li {
           list-style-type: none;
           padding: 2px 8px 2px 20px;
-          background: rgba(80, 80, 80, 0.95);
+          background: var(--zt-overlay-dark, rgba(80, 80, 80, 0.95));
         }
 
         li a {
           display: inline-block;
           white-space: nowrap;
           text-decoration: none;
-          color: #ccc;
+          color: var(--zt-text-1, #ccc);
         }
 
         li a:hover {
@@ -1207,7 +1207,7 @@ class TagItemMenu extends HTMLElement {
   constructor() {
     super();
     this.hasNicodic = parseInt(this.dataset.hasNicodic as string) !== 0;
-    this.text = textUtil.escapeToZenkaku(this.dataset.text);
+    this.text = textUtil.escapeToZenkaku(this.dataset.text as string);
     const shadow = this._shadow = this.attachShadow({mode: 'open'});
     shadow.innerHTML = (this.constructor as Loose).template({text: this.text});
     this._applyHasNicodic();

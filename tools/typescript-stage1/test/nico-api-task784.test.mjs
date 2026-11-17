@@ -33,7 +33,7 @@ function world(){
     Math:Object.assign(Object.create(Math),{random:()=>++rnd/1000}),
     setTimeout:(f,ms)=>{const i=++tid;timers.set(i,f);log.push(['setTimeout',ms]);return i;},
     clearTimeout:i=>{timers.delete(i);},Object,Promise,Error,JSON,Map,Number,Array,Symbol,
-    console:{warn:(...a)=>log.push(['warn',a[0],snapshot(a[1])]),log(){},error(){}}};
+    console:{warn:(...a)=>log.push(['warn',a[0],snapshot(a[1])]),log(){},error(){},time(){},timeEnd(){}}};
   // Loader side: answer `initialized` through the window, then replies via the port.
   const hello=(extra={})=>winListeners.get('message')({source:loaderWindow,ports:[port],
     data:{id:PRODUCT,type:'nicovideo',token:TOKEN,body:{command:'initialized'},...extra}});

@@ -14,7 +14,10 @@ module.exports=function adaptRuntime(base) {
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';", "const PRODUCT = externalTrial ? 'ZenzaWatchExternalTrial' : 'ZenzaWatch';");
  once('ModernAdvancedSettingsModel.visibleExtraSettings()', "ModernAdvancedSettingsModel.visibleExtraSettings().map(d=>externalTrial && "+JSON.stringify(currentSiteIds)+".includes(d.id) ? {...d,addCurrentSite:true,currentSite:externalSettingsHost} : d)");
  once('return gate = {};','if (!externalTrial) return gate = {};');
- once('if (url.startsWith(location.origin)) {','if (!externalTrial && url.startsWith(location.origin)) {');
+ // Task1033: この箇所はワーカー（別スレッド）の中で動く。ワーカーには externalTrial が無く、
+ // 以前は「externalTrial is not defined」で動画のセッション作成が必ず失敗していた。
+ // ワーカーは env で受け取る PRODUCT で外部再生かを判断する（外部再生中は同一オリジンでも本体経由で取得）。
+ once('if (url.startsWith(location.origin)) {',"if ((typeof PRODUCT === 'undefined' || PRODUCT !== 'ZenzaWatchExternalTrial') && url.startsWith(location.origin)) {");
  const advancedBegin=body.indexOf("    if (location.host === 'www.nicovideo.jp') {\n      const advancedSettings");
  const advancedEnd=body.indexOf('    uq.ready().then(() => initializeExternalSite',advancedBegin);
  if(advancedBegin<0||advancedEnd<0)throw Error('Advanced lifecycle anchor missing');
@@ -73,7 +76,13 @@ module.exports=function adaptRuntime(base) {
         connect:async()=>{},setLogin:()=>{nicoUtil.isLogin=util.isLogin=()=>true;},
         initialize:async()=>{await initialize();},
         close:()=>ZenzaWatch.external.execCommand('close'),
-        open:id=>ZenzaWatch.external.open(id,{autoCloseFullScreen:false})
+        open:id=>ZenzaWatch.external.open(id,{autoCloseFullScreen:false}),
+        // Task1036: 外部再生の失敗を通知履歴へ（この枠の中の履歴。外部ページごとに保存領域が分かれる）。
+        journal:(stage,code,errorName,missing)=>{try{if(typeof NotificationJournal!=='undefined')NotificationJournal.recordDiagnostic('external-'+stage+'-'+code,{
+          category:'player',source:'external-playback',level:'error',
+          message:'外部サイトからの再生に失敗しました（'+stage+'）: '+code,
+          details:{operation:'external-playback',outcome:'failed',reason:errorName?'script':'external',errorCode:/^[A-Z_]{1,40}$/.test(code)?code:'OTHER',
+            phase:stage.toLowerCase(),module:'packages/external-playback/launcher.cjs',...(errorName?{errorName}:{}),...(missing?{missing}:{})}});}catch(_){}}
       });
       Config.on('update',()=>displaySettings.scheduleSave());
       Config.on('update',(key)=>{if(typeof key==='string'&&key.startsWith('externalLinks.'))writeExternal({[key]:Config.getValue(key)});});

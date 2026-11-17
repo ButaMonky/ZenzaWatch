@@ -11,9 +11,12 @@ const STAGE = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COMPILER = resolve(STAGE, 'node_modules/typescript/lib/tsc.js');
 const VERSION_FILE = resolve(STAGE, 'node_modules/typescript/package.json');
 const LF = text => text.replace(/\r\n/g, '\n');
-export const DEFAULT_PROFILES = Object.freeze([
+// Task1058: tsconfig.nico-legacy.json（null 検査を緩めた旧レーン）は全ファイルを strict へ移して廃止した。
+// 名前は過去の検査用に受け付けるが、既定では存在する設定だけを調べる。
+export const KNOWN_PROFILES = Object.freeze([
   'tsconfig.nico.json', 'tsconfig.nico-legacy.json', 'tsconfig.scui.json'
 ]);
+export const DEFAULT_PROFILES = Object.freeze(KNOWN_PROFILES.filter(name => existsSync(resolve(STAGE, name))));
 
 function walkJs(directory, prefix = '') {
   const found = [];
@@ -31,7 +34,7 @@ function walkJs(directory, prefix = '') {
 export function checkEmittedProvenance(root = STAGE, profiles = DEFAULT_PROFILES) {
   if (!Array.isArray(profiles) || !profiles.length ||
       new Set(profiles).size !== profiles.length ||
-      profiles.some(name => !DEFAULT_PROFILES.includes(name))) {
+      profiles.some(name => !KNOWN_PROFILES.includes(name))) {
     throw Error('EMIT_PROVENANCE_PROFILES_INVALID');
   }
   if (!existsSync(COMPILER)) throw Error('EMIT_PROVENANCE_COMPILER_MISSING');

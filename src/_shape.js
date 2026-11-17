@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.8-task966
+// @version     0.3.9-task1058
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -691,7 +691,7 @@ interval: ${config.interval}        // マスクの更新間隔
                 li.innerHTML = `<a href="javascript:;">${PRODUCT}設定</a>`;
                 li.style.whiteSpace = 'nowrap';
                 li.addEventListener('click', () => dialog.toggle());
-                document.querySelector('#siteHeaderRightMenuContainer') && document.querySelector('#siteHeaderRightMenuContainer').append(li);
+                document.querySelector('#siteHeaderRightMenuContainer')?.append(li);
             }, document.querySelector('#siteHeaderRightMenuContainer') ? 1000 : 15000);
             ZenzaDetector.detect().then(zen => {
                 console.log('ZenzaWatch found ver.%s', zen.version);

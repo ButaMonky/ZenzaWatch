@@ -9,7 +9,7 @@ const {extract, createContext, run} = require('../helpers/extractSource');
 function element() {
   const events = [], infos = [];
   const context = createContext({HTMLElement: class {}, Hls: {isSupported: () => true}, Event, CustomEvent,
-    console: {info: (...a) => infos.push(a.join(' ')), log() {}, warn() {}, error() {}}});
+    console: {info: (...a) => infos.push(a.join(' ')), debug: (...a) => infos.push(a.join(' ')), log() {}, warn() {}, error() {}}});
   run(`const PLAYER_MODE = ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'PLAYER_MODE', 'var')};
     ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
   const p = Object.create(context.Subject.prototype);

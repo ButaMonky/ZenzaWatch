@@ -14,6 +14,7 @@ export interface RecommendItem {
 }
 /** The parts of VideoList / VideoListItem / RecommendAPILoader used here. */
 declare class VideoList {
+  constructor(params?: Loose);
   view?: Loose;
   model: {setItem(items: unknown[]): unknown};
   _initializeView(): void;

@@ -8,9 +8,9 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const Emitter: Loose;
+declare const Emitter: typeof import('./Emitter').Emitter;
 declare const ZenzaDetector: Loose;
-declare const _: Loose;
+declare const _: import('./shared-types/Lodash').LodashSubset;
 
 (() => {
   const PRODUCT = 'HeatSync';
@@ -181,7 +181,7 @@ declare const _: Loose;
 
     const config = (function() {
       const prefix = PRODUCT + '_config_';
-      const emitter = new Emitter();
+      const emitter = new Emitter() as Loose;
 
       const defaultConfig = {
         debug: false,
@@ -248,7 +248,7 @@ declare const _: Loose;
       emitter.clearConfig = function() {
         noEmit = true;
         Object.keys(defaultConfig).forEach(key => {
-          if (_.contains(['message', 'debug'], key)) { return; }
+          if (['message', 'debug'].includes(key)) { return; }
           var storageKey = prefix + key;
           try {
             if (localStorage.hasOwnProperty(storageKey)) {

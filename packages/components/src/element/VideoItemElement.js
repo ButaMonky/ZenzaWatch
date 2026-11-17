@@ -118,7 +118,7 @@ const { VideoItemElement, VideoItemProps } = (() => {
       }
 
       .thumbnailContainer a:active {
-        box-shadow: 0 0 8px #f99;
+        box-shadow: 0 0 8px var(--zt-danger, #f99);
         transform: translate(0, 4px);
         transition: none;
       }
@@ -129,8 +129,8 @@ const { VideoItemElement, VideoItemProps } = (() => {
       .thumbnailContainer .pocket-info {
         position: absolute;
         display: none;
-        color: #fff;
-        background: #666;
+        color: var(--zt-text-0, #fff);
+        background: var(--zt-surface-3, #666);
         width: 24px;
         height: 20px;
         line-height: 18px;
@@ -173,7 +173,7 @@ const { VideoItemElement, VideoItemProps } = (() => {
       .videoItem:hover .thumbnailContainer .deflistAdd:hover,
       .videoItem:hover .thumbnailContainer .pocket-info:hover {
         transform: scale(1.5);
-        box-shadow: 2px 2px 2px #000;
+        box-shadow: 2px 2px 2px var(--zt-shadow, #000);
       }
 
       .videoItem:hover .thumbnailContainer .playlistAppend:active,
@@ -194,9 +194,9 @@ const { VideoItemElement, VideoItemProps } = (() => {
         position: absolute;
         right: 0;
         bottom: 0;
-        background: #000;
+        background: var(--zt-surface-0, #000);
         font-size: 12px;
-        color: #fff;
+        color: var(--zt-text-0, #fff);
       }
 
       .videoItem:hover .thumbnailContainer .duration {
@@ -233,8 +233,8 @@ const { VideoItemElement, VideoItemProps } = (() => {
         content: '[CH]';
         display: inline;
         font-size: 12px;
-        background: #888;
-        color: #ccc;
+        background: var(--zt-surface-3, #888);
+        color: var(--zt-text-1, #ccc);
         padding: 0 2px;
         margin: 0;
       }

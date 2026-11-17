@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogPrefetch.ts",
+  "runtime": "src/NicoVideoPlayerDialogPrefetch.js",
+  "sourceSha256": "b73c9d50be1372eb461795e97ff828538f86923ffdee860437abd77a2688976b",
+  "runtimeSha256": "0ff221d47198023f8a091ec8559a5076a6d51b7bb078c343b4b5cfe13f18ea82"
+}

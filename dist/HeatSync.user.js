@@ -15,7 +15,7 @@
 // @exclude     *://ch.nicovideo.jp/tool/*
 // @exclude     *://flapi.nicovideo.jp/*
 // @exclude     *://dic.nicovideo.jp/p/*
-// @version     0.0.24-task966qa
+// @version     0.0.25-task1061
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -25,7 +25,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // ==/UserScript==
-// build: 2026-11-15 16:05Z 3c3e39f
+// build: 2026-11-16 20:25Z 97e09d99
 /* eslint-disable */
 
 // GENERATED FROM tools/typescript-stage1/nico-src/HeatSyncEntry.ts (Task966). Edit the .ts and run npm run nico:sync.
@@ -494,7 +494,7 @@ const ZenzaDetector = (() => {
             emitter.clearConfig = function () {
                 noEmit = true;
                 Object.keys(defaultConfig).forEach(key => {
-                    if (_.contains(['message', 'debug'], key)) {
+                    if (['message', 'debug'].includes(key)) {
                         return;
                     }
                     var storageKey = prefix + key;

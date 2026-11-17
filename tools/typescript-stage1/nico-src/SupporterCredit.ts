@@ -154,7 +154,7 @@ const SupporterCredit = (() => {
     ctx.textBaseline = 'middle';
     let lines = [String(text)];
     if (overflow === 'ellipsis' && width && ctx.measureText(lines[0]).width > width) {
-      let s = lines[0];
+      let s = String(text);
       while (s.length > 1 && ctx.measureText(`${s}...`).width > width) { s = s.slice(0, -1); }
       lines = [`${s}...`];
     } else if (overflow === 'wrap' && width) {
@@ -422,7 +422,7 @@ const SupporterCredit = (() => {
       opacity: 0;
       transition: opacity 0.4s ease;
       container-type: size;
-      background: #000;
+      background: var(--zt-surface-0, #000);
       pointer-events: none;
     }
     .zenzaSupporterCredit.is-show { display: block; }
@@ -453,8 +453,8 @@ const SupporterCredit = (() => {
       justify-content: space-between;
       align-items: center;
       gap: 1em;
-      background: rgba(0, 0, 0, 0.5);
-      color: #fff;
+      background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.5));
+      color: var(--zt-text-0, #fff);
       font-size: 4cqh;
       pointer-events: auto;
       overflow: hidden;
@@ -489,9 +489,9 @@ const SupporterCredit = (() => {
       bottom: 3%;
       padding: 0.4em 1em;
       font-size: max(12px, 2.4cqh);
-      color: #fff;
-      background: rgba(0, 0, 0, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.5);
+      color: var(--zt-text-0, #fff);
+      background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.55));
+      border: 1px solid var(--zt-border-light, rgba(255, 255, 255, 0.5));
       border-radius: 2em;
       cursor: pointer;
       pointer-events: auto;
@@ -564,16 +564,16 @@ const SupporterCredit = (() => {
           <button type="button" class="scSkip" title="提供画面を飛ばす">スキップ ▶▶</button>
         </div>`;
       this.canvas = view.querySelector('canvas');
-      this.ctx = this.canvas.getContext('2d');
+      this.ctx = this.canvas!.getContext('2d');
       // プレイヤー側のクリック（再生/一時停止・ドラッグ）へ伝えない
       ['click', 'mousedown', 'pointerdown', 'dblclick', 'contextmenu'].forEach(name => {
-        view.querySelector('.scSkip').addEventListener(name, e => e.stopPropagation());
-        view.querySelector('.scHeader').addEventListener(name, e => e.stopPropagation());
-        view.querySelector('.scBanners').addEventListener(name, e => {
+        view.querySelector('.scSkip')!.addEventListener(name, e => e.stopPropagation());
+        view.querySelector('.scHeader')!.addEventListener(name, e => e.stopPropagation());
+        view.querySelector('.scBanners')!.addEventListener(name, e => {
           (e.target as Loose).closest('a') && e.stopPropagation();
         });
       });
-      view.querySelector('.scSkip').addEventListener('click', e => {
+      view.querySelector('.scSkip')!.addEventListener('click', e => {
         e.preventDefault();
         this.onSkip && this.onSkip();
       });
@@ -694,6 +694,7 @@ const SupporterCredit = (() => {
         const canvas = document.createElement('canvas');
         canvas.width = CANVAS_W; canvas.height = CANVAS_H;
         const ctx = canvas.getContext('2d');
+        if (!ctx) { return; }
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
         const scale = Math.min(CANVAS_W / frame.width, CANVAS_H / frame.height);
         ctx.drawImage(frame, (CANVAS_W - frame.width * scale) / 2, (CANVAS_H - frame.height * scale) / 2,

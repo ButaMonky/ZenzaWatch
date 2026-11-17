@@ -314,7 +314,7 @@ describe('Task318 full-viewport advanced-settings shell',()=>{
   });
   it('renders nine major groups, sidebar width and persistent bottom actions',()=>{
     const h=boot();assert(h.q('.zw-modern-root'));
-    assert.strictEqual(h.all('[data-zw-major]').length,9);
+    assert.strictEqual(h.all('[data-zw-major]').length,11);
     assert(h.q('.zw-modern-root').getAttribute('style').includes('290px'));
     assert(h.q('[data-zw-save]'));assert(h.q('[data-zw-cancel]'));
     assert(h.panel.classList.contains('zw-modern-active'));
@@ -899,7 +899,7 @@ describe('Task318 comment history navigation migration',()=>{
     assert.strictEqual(h.ui.selected.category,'コメント表示');
     assert.strictEqual(h.ui.selected.subcategory,'追加取得');
     assert(h.ui.expanded.has('コメント表示'));
-    assert.strictEqual(h.all('[data-zw-major]').length,9);
+    assert.strictEqual(h.all('[data-zw-major]').length,11);
     assert(h.q('[data-zw-id="commentHistory.enabled"]'));
     assert.strictEqual(h.config.writes.length,0);
     h.destroy();

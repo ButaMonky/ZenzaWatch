@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert');
 const {JSDOM}=require('jsdom');
-const {createContext,loadClass,read}=require('../helpers/extractSource');
+const {createContext,loadClass,read, readFamily}=require('../helpers/extractSource');
 
 function harness(){
  const timers=new Map();let sequence=0;
@@ -45,7 +45,7 @@ describe('Discussion 36 shared action button feedback',function(){
  it('keeps the Like button visible past its delayed press transition and expires independently',()=>{
   const h=harness();try{
    // The production button declares its own duration instead of a command-specific timer.
-   const source=read('src/NicoVideoPlayerDialog.js');
+   const source=readFamily('src/NicoVideoPlayerDialog.js');
    const tag=source.match(/<div class="menuButton toggleLikeButton forMember"[^>]*>/)?.[0];
    assert(tag,'production Like button missing');
    const duration=Number(tag.match(/data-feedback-visible-ms="([0-9]+)"/)?.[1]);

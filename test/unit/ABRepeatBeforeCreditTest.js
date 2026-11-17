@@ -2,7 +2,7 @@
 // P12 #219: terminal B must intercept before any SupporterCredit startup.
 const assert=require('assert'),fs=require('fs'),path=require('path');
 const parser=require('@babel/parser');
-const {createContext,run}=require('../helpers/extractSource');
+const {createContext,run,installDialogRoles}=require('../helpers/extractSource');
 function compiled(name,file){
   const src=fs.readFileSync(path.resolve('tools/typescript-stage1/.generated/nico/'+file+'.js'),'utf8');
   const ast=parser.parse(src,{sourceType:'module',allowUndeclaredExports:true,plugins:['classProperties']});
@@ -24,6 +24,7 @@ async function build(){
   });
   run(compiled('NicoVideoPlayerDialog','NicoVideoPlayerDialog')+
       ';globalThis.__dialog=NicoVideoPlayerDialog;',ctx);
+  installDialogRoles('tools/typescript-stage1/.generated/nico/NicoVideoPlayerDialog.js',ctx.__dialog,ctx); // Task1060
   const dialog=Object.create(ctx.__dialog.prototype);
   const calls={play:0,repeat:0,credit:0,load:0,ended:0};
   const dock={isRepeating:true,repeatAtEnd(){calls.repeat++;return true;}};

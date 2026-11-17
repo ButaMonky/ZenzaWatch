@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert');
 const {JSDOM}=require('jsdom');
-const {createContext,loadClass,read}=require('../helpers/extractSource');
+const {createContext,loadClass,read, readFamily}=require('../helpers/extractSource');
 
 function harness(){
  const pending=new Map(),cancelled=[];
@@ -163,7 +163,7 @@ describe('Task936 fullscreen/small pause preference and shortcut icon',function(
      h.events.length=0;
      h.view._onControlBarTimingConfigChange();
      assert.strictEqual(h.pending.size,1,'idle change must not arm another timer');
-     const src=read('src/NicoVideoPlayerDialog.js');
+     const src=readFamily('src/NicoVideoPlayerDialog.js');
      assert(src.includes("config.onkey(key, () => this._onControlBarTimingConfigChange())"));
      h.tick(800);
      assert.strictEqual(h.pending.size,0);
@@ -172,7 +172,7 @@ describe('Task936 fullscreen/small pause preference and shortcut icon',function(
  it('makes keyboard feedback visible via the real hover-menu CSS even when idle',()=>{
    const h=harness();
    try{
-     const source=read('src/NicoVideoPlayerDialog.js');
+     const source=readFamily('src/NicoVideoPlayerDialog.js');
      const end=source.indexOf("className: 'videoHoverMenu'");
      const start=source.lastIndexOf('util.addStyle('+String.fromCharCode(96),end);
      const close=source.lastIndexOf(String.fromCharCode(96)+', {',end);

@@ -889,15 +889,15 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
         !(callerSignal != null && typeof callerSignal === 'object' &&
           callerSignal.aborted === true);
       const timeKey = `watchAPI:${generation}`;
-      window.console.time(timeKey);
+      console.time(timeKey);
       return loadPromise(watchId, options, false, isCurrent).then(
         (result) => {
-          window.console.timeEnd(timeKey);
+          console.timeEnd(timeKey);
           return result;
         },
         (err) => {
           err.watchId = watchId;
-          window.console.timeEnd(timeKey);
+          console.timeEnd(timeKey);
           return Promise.reject(err);
         }
       );

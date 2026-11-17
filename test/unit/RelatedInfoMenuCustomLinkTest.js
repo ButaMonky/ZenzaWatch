@@ -70,7 +70,7 @@ function harness(links = [], order = [], hidden = [], menuVisible = true, builti
     ';globalThis.OfficialPlayerRoute=OfficialPlayerRoute;',ctx);
   run(beginSection('packages/zenza/src/parts/BaseViewComponent.js')+
     ';globalThis.BaseViewComponent=BaseViewComponent;',ctx);
-  const source=fs.readFileSync(path.join(REPO_ROOT,'src/VideoInfoPanel.js'),'utf8');
+  const source=require('../../tools/qa/native-source-family.cjs').nativeSourceText('src/VideoInfoPanel.js'); // Task1063
   const from=source.indexOf('class RelatedInfoMenu extends');
   const until=source.indexOf('class VideoMetaInfo extends',from);
   assert(from>=0 && until>from);

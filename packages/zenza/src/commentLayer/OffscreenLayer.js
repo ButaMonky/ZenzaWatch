@@ -74,7 +74,7 @@ const OffscreenLayer = config => {
     if (offScreenFrame) {
       return;
     }
-    window.console.time('createOffscreenLayer');
+    console.time('createOffscreenLayer');
     const frame = document.createElement('iframe');
     offScreenFrame = frame;
     frame.loading = 'eager';
@@ -108,7 +108,7 @@ const OffscreenLayer = config => {
         get optionCss() { return optionStyle.innerHTML;}
       };
 
-      window.console.timeEnd('createOffscreenLayer');
+      console.timeEnd('createOffscreenLayer');
       emt.emitResolve('GetReady!', offScreenLayer);
     };
 

@@ -21,6 +21,8 @@ function setup(root, overrideGinza=true) {
     OfficialPlayerRoute:{isOfficialRequest:()=>false},
     Config:{props:{overrideGinza}},
     initializeGinzaSlayer:()=>calls.push(['slayer']),
+    // Task1065: 公式プレイヤーの見張り（本物は test/browser/task1065-official-player-guard.cjs で確かめる）
+    createOfficialPlaybackGuard:()=>({attach:()=>calls.push(['guard.attach'])}),
     uq:{complete:async()=>{}}, window:{name:''}});
   run('globalThis.overrideGinza='+overrideCode,ctx);
   return {ctx,calls,video};
@@ -30,14 +32,18 @@ describe('#212 strict entry null boundaries',()=>{
   it('missing SPA root does not create an observer or throw',async()=>{
     const {ctx,calls}=setup(null);
     await ctx.overrideGinza({}, {});
-    // Task1030: 設定ONなら起動するが、#root が無ければ監視は作らない。
-    assert.deepEqual(calls,[['slayer']]);
+    // Task1030: 設定ONなら起動する。Task1065: #root を MutationObserver で探すのはやめ、ページ全体の見張りにつなぐ。
+    assert.deepEqual(calls,[['guard.attach'],['slayer']]);
   });
-  it('the replacement preference (Task1030 restored, opt-in) observes a mounted root',async()=>{
+  it('the replacement preference (Task1030 restored, opt-in) attaches the official-player guard before opening Zenza',async()=>{
     const root={nodeType:1,id:'synthetic-root'};
     const {ctx,calls}=setup(root);
     await ctx.overrideGinza({}, {});
-    assert.deepEqual(calls.map(c=>c[0]),['slayer','observer.construct','observe']);
+    // Task1065: 起動の最初に置いた見張りを使う（受け取らなかった時は作る）。ページの読み込み完了は待たない。
+    assert.deepEqual(calls.map(c=>c[0]),['guard.attach','slayer']);
+    const given=[];
+    await ctx.overrideGinza({}, {}, {attach:()=>given.push('early')});
+    assert.deepEqual(given,['early']);
   });
   it('with the preference OFF (default) the watch page is left to the official player',async()=>{
     const root={nodeType:1,id:'synthetic-root'};

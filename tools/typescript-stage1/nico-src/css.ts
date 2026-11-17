@@ -6,9 +6,12 @@
  * @property {boolean?} inherits
  * Canonical TypeScript source for packages/lib/src/css/css.js (Task786).
  */
-export interface RegisterPropertyDefinition extends PropertyDefinition {window?: {CSS: {registerProperty(definition: PropertyDefinition): void}}}
+export interface RegisterPropertyDefinition extends Omit<PropertyDefinition, 'initialValue'> {
+  /** CSS.registerProperty は数値も文字列にして受け取る（Task1061: 呼び出し側は 0 などの数値を渡している） */
+  initialValue?: string | number;
+  window?: {CSS: {registerProperty(definition: PropertyDefinition): void}}}
 /** [element, property, value] applied with style.setProperty on the next frame. */
-export type SetPropsTask = [ElementCSSInlineStyle, string, unknown];
+export type SetPropsTask = [{readonly style: CSSStyleDeclaration}, string, unknown];
 type PaintModule = (...args: unknown[]) => unknown;
 /** CSS Typed OM factories that lib.dom does not declare everywhere. */
 type TypedCss = Record<string, ((value: unknown) => unknown) | undefined> & {
@@ -70,7 +73,7 @@ const css = (() => {
       /** @type registerPropertyDefinition */
       for (const definition of args) {
         try {
-          (definition.window || window as unknown as {CSS: {registerProperty(definition: PropertyDefinition): void}}).CSS.registerProperty(definition);
+          (definition.window || window as unknown as {CSS: {registerProperty(definition: PropertyDefinition): void}}).CSS.registerProperty(definition as PropertyDefinition);
         } catch (err) { console.warn('CSS.registerProperty fail', definition, err); }
       }
     },

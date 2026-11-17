@@ -14,7 +14,7 @@ function nativePreview(dom){
   throttle:{raf:fn=>{const f=(...args)=>fn(...args);f.cancel=()=>{};return f;}},
   util:{$:wrap,secToTime:sec=>String(sec),StyleSwitcher:{update(){}},
    dispatchCommand:(node,command,value)=>commands.push([command,value])}});
- const src='src/VideoControlBar.js';
+ const src='src/CommentPreview.js'; // Task1063: コメントのプレビューは VideoControlBar.js から分割した
  loadClass(src,'CommentPreviewModel',ctx);
  const View=loadClass(src,'CommentPreviewView',ctx);
  loadClass(src,'CommentPreviewChatItem',ctx);

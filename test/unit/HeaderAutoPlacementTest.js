@@ -2,7 +2,7 @@
 const assert=require('assert'),fs=require('fs'),path=require('path'),vm=require('vm');
 const {REPO_ROOT}=require('../helpers/buildSandbox');
 const {classText}=require('../helpers/nativeCssFixture.cjs');
-const source=fs.readFileSync(path.join(REPO_ROOT,'src/VideoInfoPanel.js'),'utf8');
+const source=fs.readFileSync(path.join(REPO_ROOT,'src/VideoHeaderPanel.js'),'utf8'); // Task1063: VideoInfoPanel.js から分割
 function classList(initial=[]){const s=new Set(initial);return {contains:k=>s.has(k),add:(...ks)=>ks.forEach(k=>s.add(k)),remove:(...ks)=>ks.forEach(k=>s.delete(k)),toggle:(k,on)=>on?s.add(k):s.delete(k)};}
 function fixture(top){
  const classes=classList(),style={removeProperty(){},getPropertyValue(){return '';}};

@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.8-task966
+// @version     0.3.9-task1058
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -19,7 +19,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // ==/UserScript==
-// build: 2026-11-15 16:05Z 3c3e39f
+// build: 2026-11-16 12:30Z 9a328b9c
 /* eslint-disable */
 
 // GENERATED FROM tools/typescript-stage1/nico-src/MaskedWatchEntry.ts (Task966). Edit the .ts and run npm run nico:sync.
@@ -36,7 +36,7 @@
     const PRODUCT = 'MaskedWatch';
     const monkey = (PRODUCT) => {
         'use strict';
-        var VER = '0.3.8-task966';
+        var VER = '0.3.9-task1058';
         const ENV = 'STABLE';
 
         let ZenzaWatch = null;
@@ -905,7 +905,7 @@ const cssUtil = css;
                 li.innerHTML = `<a href="javascript:;">${PRODUCT}設定</a>`;
                 li.style.whiteSpace = 'nowrap';
                 li.addEventListener('click', () => dialog.toggle());
-                document.querySelector('#siteHeaderRightMenuContainer') && document.querySelector('#siteHeaderRightMenuContainer').append(li);
+                document.querySelector('#siteHeaderRightMenuContainer')?.append(li);
             }, document.querySelector('#siteHeaderRightMenuContainer') ? 1000 : 15000);
             ZenzaDetector.detect().then(zen => {
                 console.log('ZenzaWatch found ver.%s', zen.version);

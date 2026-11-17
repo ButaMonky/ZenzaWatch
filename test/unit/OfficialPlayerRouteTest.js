@@ -2,7 +2,7 @@
 const assert=require('assert');
 const parser=require('@babel/parser');
 const traverse=require('@babel/traverse').default;
-const {createContext,beginSection,read,run,loadClass}=require('../helpers/extractSource');
+const {createContext,beginSection,read,run,loadClass, readFamily}=require('../helpers/extractSource');
 function loadMenuOrder(){
   return loadClass('src/RelatedMenuOrder.js','RelatedMenuOrder',createContext({URL}));
 }
@@ -29,6 +29,7 @@ function loadGinzaOverride(){
   const c=createContext({
     window:{name:''},Config:{props:{overrideGinza:true}},
     initializeGinzaSlayer(dialog,query){calls.push({dialog,query});},
+    createOfficialPlaybackGuard(){return {attach(){}};}, // Task1065
     OfficialPlayerRoute:loadOfficialRoute(),
     uq:{complete:()=>Promise.resolve()},
     document:{
@@ -132,8 +133,8 @@ describe('Task350 official NicoNico player routing',()=>{
     dom.window.close();
   });
   it('uses the same official URL builder for both RelatedInfoMenu and player action',()=>{
-    const menu=read('src/VideoInfoPanel.js');
-    const dialog=read('src/NicoVideoPlayerDialog.js');
+    const menu=readFamily('src/VideoInfoPanel.js');
+    const dialog=readFamily('src/NicoVideoPlayerDialog.js');
     assert(menu.includes("this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid))"));
     assert(squash(dialog).includes(squash('OfficialPlayerRoute.makeUrl(this._watchId,time)')));
     assert(squash(dialog).includes(squash('option.includePosition===false?0:this.currentTime')));
@@ -195,8 +196,8 @@ describe('Task350 official seek seconds forwarding',()=>{
     }
   });
   it('uses the current time in related-menu and player command routes',()=>{
-    const src=read('src/VideoInfoPanel.js');
-    const dialog=read('src/NicoVideoPlayerDialog.js');
+    const src=readFamily('src/VideoInfoPanel.js');
+    const dialog=readFamily('src/NicoVideoPlayerDialog.js');
     assert(squash(src).includes(squash('OfficialPlayerRoute.makeUrl(this._currentWatchId,currentTime)')));
     assert(squash(dialog).includes(squash('OfficialPlayerRoute.makeUrl(this._watchId,time)')));
     assert(squash(dialog).includes(squash('option.includePosition===false?0:this.currentTime')));

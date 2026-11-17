@@ -10,7 +10,7 @@ type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const CONSTANT: import('./shared-types/Constant').ZenzaConstant;
 declare const ClassList: typeof import('./ClassList').ClassList;
-declare const Config: Loose;
+declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const Fullscreen: typeof import('./Fullscreen').Fullscreen;
 declare const RelatedInfoMenu: typeof import('./RelatedInfoMenu').RelatedInfoMenu;

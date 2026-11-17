@@ -1,6 +1,6 @@
 import {cssUtil} from '../../../lib/src/css/css';
 import {uQuery} from '../../../lib/src/uQuery';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {StoryboardWorker} from './StoryboardWorker';
 import {ClassList} from '../../../lib/src/dom/ClassListWrapper';
 // GENERATED FROM tools/typescript-stage1/nico-src/SeekBarThumbnail.ts (Task901). Edit the .ts and run npm run nico:sync.

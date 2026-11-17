@@ -1,5 +1,5 @@
 // @ts-expect-error Production-relative import is not resolved by the Stage A mirror.
-import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch} from '../../../../src/ZenzaContext';
 // @ts-expect-error Production-relative import is not resolved by the Stage A mirror.
 import {util} from '../../../../src/util';
 

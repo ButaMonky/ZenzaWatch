@@ -158,14 +158,18 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
       'packages/comment-history/src/generated/MANIFEST.json', 'packages/comment-history/src/generated/package.json',
       'packages/comment-history/package.json', 'packages/comment-history/README.md',
       'packages/comment-history/tools/build.mjs', 'packages/comment-history/tools/build-zenza.mjs',
-      'packages/comment-history/tests/fixtures.mjs', 'packages/comment-history/tests/core.test.mjs'];
+      'packages/comment-history/tests/fixtures.mjs', 'packages/comment-history/tests/core.test.mjs',
+      'packages/external-playback/build-shells.cjs', 'packages/external-playback/bundle.test.cjs',
+      'packages/external-playback/generated/settings.js', 'packages/external-playback/src/settings.ts',
+      'packages/external-playback/tsconfig.json', 'packages/zenza/src/diagnostics/DiagnosticConsole.ts'];
     const denied = ['.env', 'src/.env.local', 'capture.har', 'tools/publish_scan.py', 'docs/design-pack/x.md',
       'dist/_versions/ZenzaWatch-dev.task081.user.js', '.npmrc', 'test/fixtures/cookies.json', 'id_rsa',
       'notes.txt', 'src/data.bin', 'server.key', 'debug.log',
       'packages/zenza/src/pocket/OtherUnreviewed.ts', 'packages/lib/src/pocket/PocketThumbnail.ts',
       'packages/comment-history/capture.har', 'packages/comment-history/src/cookies.mjs',
       'packages/comment-history/evidence/results.json', 'packages/comment-history/tools/unknown.mjs',
-      'packages/other/src/unreviewed.mjs', 'packages/comment-history/src/generated/credentials.json'];
+      'packages/other/src/unreviewed.mjs', 'packages/external-playback/capture.har',
+      'packages/external-playback/evidence/run.json', 'packages/zenza/src/diagnostics/Other.ts', 'packages/comment-history/src/generated/credentials.json'];
     const code = [
       'import sys, json',
       `sys.path.insert(0, ${JSON.stringify(path.dirname(POLICY))})`,

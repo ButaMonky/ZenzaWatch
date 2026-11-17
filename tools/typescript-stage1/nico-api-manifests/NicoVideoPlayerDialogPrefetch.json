@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogPrefetch.ts",
   "runtime": "src/NicoVideoPlayerDialogPrefetch.js",
   "sourceSha256": "b73c9d50be1372eb461795e97ff828538f86923ffdee860437abd77a2688976b",
-  "runtimeSha256": "0ff221d47198023f8a091ec8559a5076a6d51b7bb078c343b4b5cfe13f18ea82"
+  "runtimeSha256": "a9d613df92b056c15827fec98984c2678a727a875f529304c868d2b852f7c57a"
 }

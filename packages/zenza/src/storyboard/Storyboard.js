@@ -9,7 +9,7 @@ import {StoryboardView} from './StoryboardView';
 import {StoryboardInfoModel} from './StoryboardInfoModel';
 import {SeekBarThumbnail} from './SeekBarThumbnail';
 import {StoryboardWorker} from './StoryboardWorker';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {ClassList} from '../../../lib/src/dom/ClassListWrapper';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/Storyboard.ts (Task901). Edit the .ts and run npm run nico:sync.

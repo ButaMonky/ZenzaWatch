@@ -1,7 +1,7 @@
 import {HlsRuntime} from '../packages/zenza/src/hls/HlsRuntime';
 import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 import {NotificationJournal} from './NotificationJournal';
-import {ZenzaWatch, global} from './ZenzaWatchIndex';
+import {ZenzaWatch, global} from './ZenzaContext';
 import {
   Config,
   PlayerSession,
@@ -113,19 +113,39 @@ const { initialize } = (() => {
         const root = document.getElementById('root');
         return !!root && root.contains(el);
     };
+    // Task1075: 見張りを直した。
+    // (1) 以前は画面モードが「小」「横」の時に見張りを止めていたが、視聴ページの画面モードは初期値が「小」なので、
+    //     視聴ページを開くとほぼいつも公式プレイヤーも鳴っていた（2026-11-17 利用者の実機で確認。2595・2615 の本当の原因）。
+    //     「公式の視聴ページで ZenzaWatch を優先」が ON なら、画面モードに関係なく止める。
+    // (2) ページを読み込まずに視聴ページへ移る場合（ユーザーページ・フォロー新着などから、公式の画面の中で移る）や、
+    //     視聴ページの判定が間に合わなかった場合は、Zenza が開かずに公式プレイヤーだけが鳴っていた。
+    //     公式プレイヤーが鳴り始めた時に、視聴ページなら公式を止めて Zenza で開く。
+    //     利用者がその視聴ページで Zenza を閉じた時は、その動画では公式で見られるようにする（別の動画へ移ったらまた Zenza）。
     const createOfficialPlaybackGuard = () => {
         let active = true;
         let dialog = null;
-        const sideBySide = () => /(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className);
-        const shouldStop = () => {
-            if (!active || sideBySide()) {
-                return false;
-            }
-            // ダイアログができた後は、開いている間だけ止める（閉じたら公式で見られるように）
-            return !dialog || dialog.isOpen !== false;
-        };
+        let allowedWatchId = null;
+        const currentQuery = () => textUtil.parseQuery(location.search.replace(/^\?/, ''));
+        const currentWatchId = () => util.isGinzaWatchUrl() ? util.getWatchId() : null;
+        const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
+            window.name !== 'watchGinza';
+        // Task1075: 止めるだけだと、公式プレイヤーが「止められたらすぐ再生し直す」ため、再生と停止を細かく繰り返して
+        // 音がノイズ混じりに聞こえた（利用者の実機）。止めた video は、Zenza が開いている間 play() を何もしないものに差し替える
+        // （その video だけ。閉じたら元に戻す）。音量・ミュートは公式が保存してしまうので触らない。
+        const held = new Set();
+        const noPlay = () => Promise.resolve();
         const stop = (el) => {
-            if (!isOfficialMedia(el) || el.paused) {
+            if (!isOfficialMedia(el)) {
+                return;
+            }
+            if (!held.has(el)) {
+                held.add(el);
+                try {
+                    Object.defineProperty(el, 'play', { configurable: true, writable: true, value: noPlay });
+                }
+                catch (_) { /* 差し替えられなくても止めはする */ }
+            }
+            if (el.paused) {
                 return;
             }
             try {
@@ -133,24 +153,76 @@ const { initialize } = (() => {
             }
             catch (_) { /* 外れた video は止められなくてよい */ }
         };
-        const onPlay = (ev) => { if (shouldStop()) {
+        const releaseHeld = () => {
+            held.forEach(el => { try {
+                delete el.play;
+            }
+            catch (_) { /* 元に戻せなくても続ける */ } });
+            held.clear();
+        };
+        const onPlay = (ev) => {
+            if (!active || !isOfficialMedia(ev.target) || !wanted()) {
+                return;
+            }
+            const watchId = currentWatchId();
+            if (!watchId) {
+                return;
+            } // 視聴ページ以外の動画（一覧の試し再生など）には触らない
+            if (!dialog) {
+                stop(ev.target);
+                return;
+            } // 起動の途中（ダイアログができる前）は止めるだけ
+            if (dialog.isOpen) {
+                stop(ev.target);
+                return;
+            } // Zenza が開いている間は止める（画面モードに関係なく）
+            if (watchId === allowedWatchId) {
+                return;
+            } // この動画は公式で見ると決めた（Zenza を閉じた）
             stop(ev.target);
-        } };
+            try {
+                dialog.open(watchId, {});
+            }
+            catch (_) { /* 開けなかった時は公式のまま（止めたものは利用者が再生できる） */ }
+        };
         window.addEventListener('play', onPlay, true);
         window.addEventListener('playing', onPlay, true);
-        const stopAll = () => { if (shouldStop()) {
-            document.querySelectorAll('video, audio').forEach(stop);
-        } };
+        const stopAll = () => {
+            if (active && wanted() && currentWatchId() && (!dialog || dialog.isOpen)) {
+                document.querySelectorAll('video, audio').forEach(stop);
+            }
+        };
+        // Zenza が開いている間に公式が作った video は、再生を始める前に差し替えておく（一瞬鳴るのも防ぐ）
+        let watcher = null;
+        const watchNew = () => {
+            const root = document.getElementById('root');
+            if (watcher || !root) {
+                return;
+            }
+            watcher = new MutationObserver(records => {
+                const hasMedia = records.some(r => [...r.addedNodes].some((n) => n.nodeType === 1 && (n instanceof HTMLMediaElement || n.querySelector?.('video, audio'))));
+                if (hasMedia) {
+                    stopAll();
+                }
+            });
+            watcher.observe(root, { childList: true, subtree: true });
+        };
+        const unwatchNew = () => { watcher?.disconnect(); watcher = null; };
         stopAll();
         return {
             attach(next) {
                 dialog = next;
-                next.on?.('close', () => { active = false; });
-                next.on?.('open', () => { active = true; stopAll(); });
+                next.on?.('close', () => { allowedWatchId = currentWatchId(); unwatchNew(); releaseHeld(); });
+                next.on?.('open', () => { allowedWatchId = null; stopAll(); watchNew(); });
                 stopAll();
+                if (next.isOpen) {
+                    watchNew();
+                }
             },
             release() {
                 active = false;
+                unwatchNew();
+                releaseHeld();
                 window.removeEventListener('play', onPlay, true);
                 window.removeEventListener('playing', onPlay, true);
             },
@@ -175,8 +247,10 @@ const { initialize } = (() => {
         if (!Config.props.overrideGinza) {
             return;
         }
-        // 公式プレイヤーの再生を止める見張り（Task1065: 起動の最初に置いたものを、ダイアログにつなぐ）
-        (guard || createOfficialPlaybackGuard()).attach(dialog);
+        // 公式プレイヤーの再生を止める見張りは initialize でダイアログにつないである（Task1075）
+        if (!guard) {
+            createOfficialPlaybackGuard().attach(dialog);
+        }
         initializeGinzaSlayer(dialog, query);
     };
     // Task175 (F02): the wait ends even if #root is missing or the SPA never mounts.
@@ -190,19 +264,23 @@ const { initialize } = (() => {
         }
         const { promise, resolve } = Promise.withResolvers();
         let timer = null;
+        // Task1075: 以前は #root の直下の変化しか見ておらず、本体の枠だけできてプレイヤーの枠がまだ無い時に
+        // 「視聴ページではない」と判定することがあった（Zenza が開かない）。プレイヤーの枠ができるまで、中まで見る。
+        const ready = () => document.querySelector('.grid-area_\\[player\\]') != null;
+        if (ready()) {
+            return Promise.resolve();
+        }
         const observer = new MutationObserver((records, observer) => {
-            for (const record of records) {
-                if (record.addedNodes.length === 0 || document.querySelector('[aria-label="nicovideo-content"]') == null) {
-                    continue;
-                }
-                clearTimeout(timer);
-                observer.disconnect();
-                resolve();
+            if (!ready()) {
                 return;
             }
+            clearTimeout(timer);
+            observer.disconnect();
+            resolve();
         });
         observer.observe(root, {
             childList: true,
+            subtree: true,
         });
         timer = setTimeout(() => {
             observer.disconnect();
@@ -213,6 +291,11 @@ const { initialize } = (() => {
     const isWatchPage = async () => {
         if (!util.isGinzaWatchUrl()) {
             return false;
+        }
+        // Task1075: ショート動画のページ（/shorts/ss〜）には、ページの情報（meta）もプレイヤーの枠（grid-area_[player]）も無いので、
+        // 以前は 15 秒待った後に「視聴ページではない」と判定して Zenza が開かなかった。動画の番号があれば視聴ページとして扱う。
+        if (/^\/shorts\//.test(location.pathname)) {
+            return !!util.getWatchId();
         }
         const res = document.querySelector('meta[name="server-response"]')?.getAttribute('content');
         // Task175 (F02): decide per response, without network, between the legacy
@@ -260,7 +343,9 @@ const { initialize } = (() => {
     const initialize = async function () {
         // Task1065: 公式プレイヤーの見張りは、ほかの準備（設定・Worker・lit の読み込み）を待たずに最初に置く。
         const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
-        const officialGuard = util.isGinzaWatchUrl() && shouldOverrideGinza(startQuery) ? createOfficialPlaybackGuard() : null;
+        // Task1075: 視聴ページ以外でも置く（ページを読み込まずに視聴ページへ移った時のため）。設定が OFF なら何もしない。
+        const officialGuard = location.host === 'www.nicovideo.jp' && (util.isGinzaWatchUrl() ? shouldOverrideGinza(startQuery) : true) ?
+            createOfficialPlaybackGuard() : null;
         if (typeof StoryboardCacheDb !== 'undefined' && StoryboardCacheDb.configure) {
             const configureSceneCache = () => {
                 const capacity = Number(Config.getValue('storyboardCacheMaxMB'));
@@ -310,10 +395,8 @@ const { initialize } = (() => {
         const query = textUtil.parseQuery(START_PAGE_QUERY);
         await uq.ready(); // DOMContentLoaded
         const isWatch = await isWatchPage();
-        // 視聴できないページ（削除・非公開など）では Zenza は代わりに再生しないので、見張りを外す
-        if (!isWatch) {
-            officialGuard?.release();
-        }
+        // Task1075: 視聴ページと判定できなくても見張りは外さない（判定が間に合わなかった時は、公式が鳴り始めた時に Zenza で開く。
+        // 削除・非公開のページでは公式プレイヤーが鳴らないので、何も起きない）
         // migrate comment language
         if (typeof Config.props.commentLanguage === 'string') {
             Config.props.commentLanguage = Config.props.commentLanguage.replace('_', '-').toLowerCase();
@@ -327,6 +410,7 @@ const { initialize } = (() => {
         document.body.classList.toggle('is-watch', isWatch);
         const dialog = initializeDialogPlayer(Config);
         hoverMenu.setPlayer(dialog);
+        officialGuard?.attach(dialog);
         if (isWatch) {
             await overrideGinza(dialog, query, officialGuard);
         }

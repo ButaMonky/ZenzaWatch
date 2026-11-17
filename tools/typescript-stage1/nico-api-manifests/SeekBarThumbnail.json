@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/SeekBarThumbnail.ts",
   "runtime": "packages/zenza/src/storyboard/SeekBarThumbnail.js",
   "sourceSha256": "a75d0c2c4c1a9badf4b64735c5884dcab4394e7e5af28121b880c7ed503bd64c",
-  "runtimeSha256": "0ef36d386e07112d0f4db1c247d64ec4571d741e2d9b22034f79524754bdf8b1"
+  "runtimeSha256": "9e9c23b14c7bc976e101ef39a46b12c071b3cb55527e3d7c55fe60c046c0ff3b"
 }

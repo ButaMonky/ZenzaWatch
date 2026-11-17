@@ -4,6 +4,6 @@
   "emitted": "tools/typescript-stage1/.generated/advanced/UiVisibilityRegistry.js",
   "runtime": "src/UiVisibilityRegistry.js",
   "sourceSha256": "90508c97bab503d6dfaed20c474cf94ce4f2103f1746d503b59cc4d0695c887f",
-  "runtimeSha256": "e7c3d3aff97737f2b2eda6be835cd38cb9b60498085120bbf3cf36a24db58be3",
-  "semanticSha256": "94adf29bdd049b9ca31aef1daac4619d2f4f7b581b8cb45e7db076391266d316"
+  "runtimeSha256": "470fabbdca6392484f95f406da575d4e3883c4d1d2112e731a11f5c80d084f4e",
+  "semanticSha256": "aaf0ec33c6b70f265231cca482de4baea79eccbe3c3099e3ed050700ab7d513c"
 }

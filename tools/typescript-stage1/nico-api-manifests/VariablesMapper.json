@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/VariablesMapper.ts",
   "runtime": "src/VariablesMapper.js",
   "sourceSha256": "2e3bcf8253df589756ff2303fd1ad22863295748b6847f521b812acfd12f5686",
-  "runtimeSha256": "489aa85a0ec50e224aac2f703686304b2d64204c4a6d8b336aa75de56d6666fa"
+  "runtimeSha256": "dae23c4ab7b9e7a9cdf57ce61d8f05c66af1ef68354a1e6e2da8baf4db8c61bd"
 }

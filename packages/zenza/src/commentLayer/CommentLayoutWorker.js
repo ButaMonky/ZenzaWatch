@@ -1,4 +1,4 @@
-import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch} from '../../../../src/ZenzaContext';
 import {workerUtil} from '../../../lib/src/infra/workerUtil';
 
 const Config = ZenzaWatch.config;

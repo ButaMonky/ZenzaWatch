@@ -1,5 +1,5 @@
 // import * as _ from 'lodash';
-import {ZenzaWatch, global} from './ZenzaWatchIndex';
+import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {SeekBarThumbnail, Storyboard} from './StoryBoard';
 import {util, BaseViewComponent} from './util';

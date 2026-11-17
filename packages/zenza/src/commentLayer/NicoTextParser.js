@@ -1,4 +1,4 @@
-import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch} from '../../../../src/ZenzaContext';
 import {util} from '../../../../src/util';
 
 /**

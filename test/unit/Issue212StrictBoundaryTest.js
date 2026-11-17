@@ -39,11 +39,12 @@ describe('#212 strict entry null boundaries',()=>{
     const root={nodeType:1,id:'synthetic-root'};
     const {ctx,calls}=setup(root);
     await ctx.overrideGinza({}, {});
-    // Task1065: 起動の最初に置いた見張りを使う（受け取らなかった時は作る）。ページの読み込み完了は待たない。
+    // Task1065: 起動の最初に置いた見張りを使う（受け取らなかった時は作ってつなぐ）。ページの読み込み完了は待たない。
     assert.deepEqual(calls.map(c=>c[0]),['guard.attach','slayer']);
+    // Task1075: 受け取った見張りは initialize がもうダイアログにつないであるので、ここではつながない（二重につながない）
     const given=[];
     await ctx.overrideGinza({}, {}, {attach:()=>given.push('early')});
-    assert.deepEqual(given,['early']);
+    assert.deepEqual(given,[]);
   });
   it('with the preference OFF (default) the watch page is left to the official player',async()=>{
     const root={nodeType:1,id:'synthetic-root'};

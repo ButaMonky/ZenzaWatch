@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/StoryboardView.ts",
   "runtime": "packages/zenza/src/storyboard/StoryboardView.js",
   "sourceSha256": "eaca3568583013ecb5ca9b2a8df52618cbfe95540a8f808011dfec5b7d8d96e4",
-  "runtimeSha256": "34caa842da20d3ab144873e94ee9fe37215e193e77cfb26d2f3ab79fc98b6a22"
+  "runtimeSha256": "55c1353f5c1aa6fa6e3056342a9f48a49e1cc9c4cac5179e40f577ee9e7b762b"
 }

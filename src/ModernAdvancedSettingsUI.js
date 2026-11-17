@@ -1,6 +1,7 @@
 // Task318: responsive Zenza Dark shell for the new advanced settings.
 // Source is deliberately isolated from the older SettingPanel until parity validation.
 import { ModernAdvancedSettingsModel } from './ModernAdvancedSettingsModel';
+import { NgCompositeRuleEditor } from './NgCompositeRuleEditor';
 //===BEGIN===
 class ModernAdvancedSettingsUI {
     _updateSceneSettingsPreview() {

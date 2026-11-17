@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/HeatMapWorker.ts",
   "runtime": "packages/zenza/src/heatMap/HeatMapWorker.js",
   "sourceSha256": "ad92f6767d160fa57d9608924399eb3f6b4dec41c43a42e4ac0bedb4dfa83a3f",
-  "runtimeSha256": "0b537726f0791685c30f7aa4e60b2adb19a98194571ceb6cdc3f2b3fac066547"
+  "runtimeSha256": "de24d2f657c38261005752bf0351181e67119f249b1c63117e4ff1115e5f2c2c"
 }

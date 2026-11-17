@@ -9,7 +9,7 @@
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const BaseViewComponent: typeof import('./BaseViewComponent').BaseViewComponent;
-declare const Config: Loose;
+declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const NicodicArticleLoader: typeof import('./NicodicArticleLoader').NicodicArticleLoader;
 declare const TagEditApi: typeof import('./TagEditApi').TagEditApi;
 declare const ZenzaWatch: Loose;

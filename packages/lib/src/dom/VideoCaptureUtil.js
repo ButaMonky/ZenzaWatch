@@ -1,7 +1,7 @@
 import {createVideoElement} from '../../../zenza/src/videoPlayer/createVideoElement';
 import {sleep} from '../infra/sleep';
 import {CrossDomainGate} from '../infra/CrossDomainGate';
-import {PRODUCT} from '../../../../src/ZenzaWatchIndex';
+import {PRODUCT} from '../../../../src/ZenzaContext';
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoCaptureUtil.ts (Task788). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 const VideoCaptureUtil = (() => {

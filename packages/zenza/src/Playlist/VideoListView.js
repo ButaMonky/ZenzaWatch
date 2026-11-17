@@ -1,3 +1,4 @@
+import {global} from '../../../../src/ZenzaContext';
 import {Emitter} from '../../../lib/src/Emitter';
 import {bounce} from '../../../lib/src/infra/bounce';
 import {cssUtil} from '../../../lib/src/css/css';

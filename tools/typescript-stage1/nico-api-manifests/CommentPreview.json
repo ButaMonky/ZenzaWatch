@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/CommentPreview.ts",
   "runtime": "src/CommentPreview.js",
   "sourceSha256": "71ce432e819c0d69b27adec898bea992b5c6a57eb7952531910f29bd9aae638d",
-  "runtimeSha256": "a73130f559324963d454d1e49a62bcd344a45830370ebc73d212388df1788f58"
+  "runtimeSha256": "b626f097ebf34c959e822fa7666d4927fdb2914e296bdd7ce126deb5417ed0a6"
 }

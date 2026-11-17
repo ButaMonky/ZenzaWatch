@@ -1,4 +1,4 @@
-import {global} from './ZenzaWatchIndex';
+import {global} from './ZenzaContext';
 import {NicoCommentPlayer} from './CommentPlayer';
 import {util, Config, Fullscreen, VideoCaptureUtil, BaseViewComponent} from './util';
 import {YouTubeWrapper} from '../packages/zenza/src/videoPlayer/YouTubeWrapper';

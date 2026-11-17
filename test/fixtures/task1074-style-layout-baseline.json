@@ -1,0 +1,1796 @@
+{
+ "wide:boot-styles": {
+  "doc": [
+   {
+    "cls": "videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 25608,
+    "hash": "35a0aec1"
+   },
+   {
+    "cls": "screenMode for-popup videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1788,
+    "hash": "ac7080d8"
+   },
+   {
+    "cls": "screenMode for-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 2392,
+    "hash": "776a8c83"
+   },
+   {
+    "cls": "screenMode for-screen-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1550,
+    "hash": "2a5cdf84"
+   },
+   {
+    "cls": "commentPreview ZenzaWatch",
+    "id": "",
+    "len": 484,
+    "hash": "77052bef"
+   },
+   {
+    "cls": "commentPreview list ZenzaWatch",
+    "id": "",
+    "len": 4170,
+    "hash": "9207811b"
+   },
+   {
+    "cls": "commentPreview hover ZenzaWatch",
+    "id": "",
+    "len": 2004,
+    "hash": "42e554dc"
+   },
+   {
+    "cls": "videoHoverMenu ZenzaWatch",
+    "id": "",
+    "len": 16380,
+    "hash": "e84b189f"
+   },
+   {
+    "cls": "videoHoverMenu screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 261,
+    "hash": "a99751c0"
+   },
+   {
+    "cls": "screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 2936,
+    "hash": "ce3ffa6f"
+   },
+   {
+    "cls": "screenMode for-popup ZenzaWatch",
+    "id": "",
+    "len": 16633,
+    "hash": "439d4e23"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 107,
+    "hash": "33aacca3"
+   },
+   {
+    "cls": "screenMode for-dialog ZenzaWatch",
+    "id": "",
+    "len": 180,
+    "hash": "d6c6842b"
+   },
+   {
+    "cls": "zenza-open ZenzaWatch",
+    "id": "",
+    "len": 1129,
+    "hash": "7e90472d"
+   },
+   {
+    "cls": "videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 18074,
+    "hash": "4644913c"
+   },
+   {
+    "cls": "screenMode for-full videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 949,
+    "hash": "b478b143"
+   },
+   {
+    "cls": "screenMode for-popup videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 1886,
+    "hash": "c942fc73"
+   },
+   {
+    "cls": "screenMode for-dialog videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 2995,
+    "hash": "cbb30ddf"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 61,
+    "hash": "c9dd6954"
+   },
+   {
+    "cls": "screenMode for-popup videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 1263,
+    "hash": "fbfac24e"
+   },
+   {
+    "cls": "screenMode for-dialog videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 732,
+    "hash": "e426b85d"
+   },
+   {
+    "cls": "screenMode for-full videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 690,
+    "hash": "7ddbd9d1"
+   },
+   {
+    "cls": "screenMode for-popup videoSearchPanel ZenzaWatch",
+    "id": "",
+    "len": 96,
+    "hash": "5687d46d"
+   },
+   {
+    "cls": "common ZenzaWatch",
+    "id": "",
+    "len": 3087,
+    "hash": "73b4810a"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 11687,
+    "hash": "f859dda7"
+   },
+   {
+    "cls": "",
+    "id": "zenzaScreenFilterStyle",
+    "len": 314,
+    "hash": "46a43cc2"
+   },
+   {
+    "cls": "",
+    "id": "zenzaHoverTooltipOpaque",
+    "len": 157,
+    "hash": "841412bc"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 12834,
+    "hash": "500dd51e"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 1850,
+    "hash": "9380d837"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "TagListViewStyle",
+    "len": 430,
+    "hash": "4abd42f5"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "UaaViewStyle",
+    "len": 74,
+    "hash": "eaaf1f03"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 6116,
+    "hash": "c8468250"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 25436,
+    "hash": "f79bb514"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 9932,
+    "hash": "e567ba70"
+   }
+  ],
+  "shadows": [
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-range-bar",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 1392,
+      "hash": "e9e37d61"
+     }
+    ]
+   },
+   {
+    "host": "zenza-playlist-append",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 790,
+      "hash": "e1a047f5"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3921,
+      "hash": "b7531d99"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   }
+  ],
+  "sheets": 34
+ },
+ "wide:player-styles": {
+  "doc": [
+   {
+    "cls": "videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 25608,
+    "hash": "35a0aec1"
+   },
+   {
+    "cls": "screenMode for-popup videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1788,
+    "hash": "ac7080d8"
+   },
+   {
+    "cls": "screenMode for-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 2392,
+    "hash": "776a8c83"
+   },
+   {
+    "cls": "screenMode for-screen-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1550,
+    "hash": "2a5cdf84"
+   },
+   {
+    "cls": "commentPreview ZenzaWatch",
+    "id": "",
+    "len": 484,
+    "hash": "77052bef"
+   },
+   {
+    "cls": "commentPreview list ZenzaWatch",
+    "id": "",
+    "len": 4170,
+    "hash": "9207811b"
+   },
+   {
+    "cls": "commentPreview hover ZenzaWatch",
+    "id": "",
+    "len": 2004,
+    "hash": "42e554dc"
+   },
+   {
+    "cls": "videoHoverMenu ZenzaWatch",
+    "id": "",
+    "len": 16380,
+    "hash": "e84b189f"
+   },
+   {
+    "cls": "videoHoverMenu screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 261,
+    "hash": "a99751c0"
+   },
+   {
+    "cls": "screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 2936,
+    "hash": "ce3ffa6f"
+   },
+   {
+    "cls": "screenMode for-popup ZenzaWatch",
+    "id": "",
+    "len": 16633,
+    "hash": "439d4e23"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 107,
+    "hash": "33aacca3"
+   },
+   {
+    "cls": "screenMode for-dialog ZenzaWatch",
+    "id": "",
+    "len": 180,
+    "hash": "d6c6842b"
+   },
+   {
+    "cls": "zenza-open ZenzaWatch",
+    "id": "",
+    "len": 1129,
+    "hash": "7e90472d"
+   },
+   {
+    "cls": "videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 18074,
+    "hash": "4644913c"
+   },
+   {
+    "cls": "screenMode for-full videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 949,
+    "hash": "b478b143"
+   },
+   {
+    "cls": "screenMode for-popup videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 1886,
+    "hash": "c942fc73"
+   },
+   {
+    "cls": "screenMode for-dialog videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 2995,
+    "hash": "cbb30ddf"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 61,
+    "hash": "c9dd6954"
+   },
+   {
+    "cls": "screenMode for-popup videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 1263,
+    "hash": "fbfac24e"
+   },
+   {
+    "cls": "screenMode for-dialog videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 732,
+    "hash": "e426b85d"
+   },
+   {
+    "cls": "screenMode for-full videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 690,
+    "hash": "7ddbd9d1"
+   },
+   {
+    "cls": "screenMode for-popup videoSearchPanel ZenzaWatch",
+    "id": "",
+    "len": 96,
+    "hash": "5687d46d"
+   },
+   {
+    "cls": "common ZenzaWatch",
+    "id": "",
+    "len": 3087,
+    "hash": "73b4810a"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 11687,
+    "hash": "f859dda7"
+   },
+   {
+    "cls": "",
+    "id": "zenzaScreenFilterStyle",
+    "len": 314,
+    "hash": "46a43cc2"
+   },
+   {
+    "cls": "",
+    "id": "zenzaHoverTooltipOpaque",
+    "len": 157,
+    "hash": "841412bc"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 12834,
+    "hash": "500dd51e"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 1850,
+    "hash": "9380d837"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "TagListViewStyle",
+    "len": 430,
+    "hash": "4abd42f5"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "UaaViewStyle",
+    "len": 74,
+    "hash": "eaaf1f03"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 6116,
+    "hash": "c8468250"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 25436,
+    "hash": "f79bb514"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 1146,
+    "hash": "9ad16761"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "VideoContextMenuStyle",
+    "len": 3583,
+    "hash": "3035b0de"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 13757,
+    "hash": "614b32eb"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 4942,
+    "hash": "3dc23d93"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 2095,
+    "hash": "b17c4763"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 9932,
+    "hash": "e567ba70"
+   }
+  ],
+  "shadows": [
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-range-bar",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 1392,
+      "hash": "e9e37d61"
+     }
+    ]
+   },
+   {
+    "host": "zenza-playlist-append",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 790,
+      "hash": "e1a047f5"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3921,
+      "hash": "b7531d99"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3029,
+      "hash": "a02a3fb3"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   },
+   {
+    "host": "video",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 914,
+      "hash": "ade5682c"
+     }
+    ]
+   }
+  ],
+  "sheets": 39
+ },
+ "wide:player-layout": [
+  "div.is-open.zen-family.zen-root.zenzaVideoPlayerDialog|0|0|1280|800|flex|fixed|6000002|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.zenzaVideoPlayerDialogInner|144|208|992|384|block|static|1|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|rgb(0, 0, 0) 4px 4px 4px 0px|none",
+  "div.menuContainer|144|208|672|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.is-enableFilter.is-error.is-notPlayed.is-pausing.is-showComment.showVideoControlBar.zenzaPlayerContainer|144|208|672|384|block|relative|auto|rgb(0, 0, 0)|rgb(0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.errorMessageContainer|160|336|640|52|block|absolute|10000|rgb(255, 232, 233)|rgb(72, 30, 41)|20px|400|1|visible|1px|6px|rgba(0, 0, 0, 0.533) 0px 4px 16px 0px|matrix(1, 0, 0, 1, -320, -26)",
+  "div.hoverMenuContainer|144|208|672|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.menuItemContainer.rightTop|576|208|240|40|block|absolute|40000|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|576|208|240|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.forMember.menuButton.toggleLikeButton|576|208|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|577|209|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.not-liked-heart|577|209|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.heart-effect|532|149|120|150|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|24px|400|0|hidden|0px|0px|none|matrix(5, 0, 0, 5, -12, -15)",
+  "div.menuButton.zenzaTweetButton|616|208|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|617|209|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.forMember.menuButton.mylistAddMenu.mylistButton|656|208|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|21px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|657|209|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|21px|400|1|visible|0px|0px|none|none",
+  "div.forMember.mylistSelectMenu.selectMenu.zenzaPopupMenu|733|245|2|2|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|13px|400|0|hidden|1px|0px|none|none",
+  "div.triangle|660|234|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|13px|400|1|hidden|0px|0px|none|matrix(-0.707107, 0.707107, -0.707107, -0.707107, 0, 0)",
+  "div.deflistAdd.forMember.menuButton.mylistButton|696|208|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|21px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|697|209|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|21px|400|1|visible|0px|0px|none|none",
+  "div.closeButton.menuButton|784|208|32|32|block|absolute|60000|rgb(204, 204, 204)|rgb(136, 136, 136)|20px|400|0|visible|1px|0px|none|none",
+  "div.menuButtonInner|785|209|30|30|block|static|auto|rgb(204, 204, 204)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.leftBottom.menuItemContainer|152|512|120|32|block|absolute|40000|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|152|512|120|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.menuButton.showCommentSwitch|152|512|32|32|block|absolute|auto|rgb(255, 255, 255)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|153|513|30|30|block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.menuButton.ngFilterSwitch|192|512|32|32|block|absolute|auto|rgb(153, 204, 255)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner.ngFilterIcon|193|513|30|30|flex|static|auto|rgb(153, 204, 255)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.menuItemContainer.onErrorMenu|240|438|480|36|flex|absolute|40000|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, -240, 0)",
+  "div.menuButton.openGinzaMenu|316|438|160|36|block|relative|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|14px|400|1|visible|2px|0px|rgb(51, 51, 51) 4px 4px 0px 0px|none",
+  "div.menuButtonInner|326|448|140|16|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|14px|400|1|visible|0px|0px|none|none",
+  "div.for-nicovideo.menuButton.reloadMenu|484|438|160|36|block|relative|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|14px|400|1|visible|2px|0px|rgb(51, 51, 51) 4px 4px 0px 0px|none",
+  "div.for-nicovideo.menuButtonInner|494|448|140|16|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|14px|400|1|visible|0px|0px|none|none",
+  "div.videoControlBar|0|760|1280|40|block|fixed|150000|rgb(0, 0, 0)|rgb(0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.seekBarContainer|0|760|1280|0|block|absolute|250|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.controlItemContainer.left|0|770|86|40|block|absolute|200|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|0|770|86|32|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.ZenzaWatchVer|86|770|143|32|block|absolute|auto|rgb(153, 153, 153)|rgba(0, 0, 0, 0)|12px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 143.188, 0)",
+  "button.controlButton.playbackPointsSwitch|11|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgb(34, 34, 34)|20px|400|0.8|visible|0px|0px|none|none",
+  "span.controlButtonInner|17|771|20|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "button.controlButton.notificationHistorySwitch|46|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgb(34, 34, 34)|20px|400|0.8|visible|0px|0px|none|none",
+  "span.controlButtonInner|53|771|18|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.center.controlItemContainer|454|770|372|40|block|absolute|200|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, -186, 0)",
+  "div.scalingUI|454|770|372|32|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.seekBarContainer-mainControl|454|770|372|32|flex|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.playControl.toggleStoryboard|454|770|32|32|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.4|hidden|0px|0px|none|none",
+  "div.controlButtonInner|456|772|28|28|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|hidden|1px|75% 16%|none|matrix(0.707107, 0.707107, -0.707107, 0.707107, -10, -10)",
+  "div.controlButton.loopSwitch.playControl|486|770|32|32|block|relative|auto|rgb(136, 136, 136)|rgba(0, 0, 0, 0)|20px|400|0.4|visible|0px|0px|none|none",
+  "div.controlButtonInner|492|770|19|30|inline-block|static|auto|rgb(136, 136, 136)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.playControl.seekTop|516|768|35|35|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.4|visible|0px|0px|none|matrix(1.1, 0, 0, 1.1, 0, 0)",
+  "div.controlButtonInner|523|768|22|33|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.playControl.togglePlay|548|768|40|35|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.4|visible|0px|0px|none|matrix(1.1, 0, 0, 1.1, 0, 0)",
+  "span.pause|581|786|0|18|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0|visible|0px|0px|none|matrix(0, 0, 0, 1, 0, 0)",
+  "span.play|545|766|48|42|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|matrix(1.2, 0, 0, 1.2, -17.28, -15.36)",
+  "div.controlButton.playbackRateMenu|586|770|48|32|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|586|770|48|37|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|visible|0px|0px|none|none",
+  "div.playbackRateSelectMenu.zenzaPopupMenu.zenzaSubMenu|520|380|180|378|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|18px|400|0|hidden|1px|0px|none|matrix(1, 0, 0, 1, -90, 0)",
+  "div.triangle|599|746|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|18px|400|1|hidden|0px|0px|none|matrix(0.707107, -0.707107, 0.707107, 0.707107, -8, 0)",
+  "p.caption|521|381|178|24|block|static|auto|rgb(255, 255, 255)|rgb(102, 102, 102)|18px|700|1|hidden|0px|0px|none|none",
+  "li.playbackRate|533|407|154|24|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|0px|0px|none|none",
+  "li.playbackRate|533|433|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|460|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|487|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|514|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|541|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|568|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|595|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate.selected|533|622|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|700|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|649|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|676|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|703|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|533|730|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "div.videoTime|634|777|96|18|flex|static|auto|rgb(255, 255, 255)|rgba(33, 33, 33, 0.5)|12px|400|1|visible|0px|0px|none|none",
+  "span.currentTimeLabel|634|777|44|18|block|relative|auto|rgb(255, 255, 255)|rgba(33, 33, 33, 0.5)|12px|400|1|visible|0px|0px|none|none",
+  "span.durationLabel|683|777|44|18|block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.muteSwitch|730|770|32|32|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.menuButtonInner.mute-off|730|770|32|30|block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.volumeControl|762|780|64|12|block|relative|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.controlItemContainer.right|1065|770|215|40|block|absolute|200|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|1065|770|215|32|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "button.commentHistorySwitch.controlButton|1065|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "span.controlButtonInner|1068|775|26|26|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.screenFilterSwitch|1100|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|1103|775|26|26|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.videoServerTypeMenu|1135|770|40|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|1147|770|16|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|400|1|visible|0px|0px|none|none",
+  "div.videoServerTypeSelectMenu.zenzaPopupMenu.zenzaSubMenu|1065|677|180|81|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|16px|400|0|hidden|1px|0px|none|matrix(1, 0, 0, 1, -90, 0)",
+  "div.triangle|1144|746|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|16px|400|1|hidden|0px|0px|none|matrix(0.707107, -0.707107, 0.707107, 0.707107, -8, 0)",
+  "p.caption|1066|678|178|24|block|static|auto|rgb(255, 255, 255)|rgb(102, 102, 102)|16px|700|1|hidden|0px|0px|none|none",
+  "li.select-server-domand.selected.serverType|1078|704|154|24|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|700|0.4|hidden|0px|0px|none|none",
+  "li.select-server-dmc.serverType|1078|730|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|400|0.4|hidden|1px|0px|none|none",
+  "div.controlButton.screenModeMenu|1178|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|1186|770|16|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.screenModeSelectMenu.zenzaPopupMenu.zenzaSubMenu|1120|626|148|132|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|12px|400|0|hidden|1px|0px|none|matrix(1, 0, 0, 1, -74, 0)",
+  "div.triangle|1183|746|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|12px|400|1|hidden|0px|0px|none|matrix(0.707107, -0.707107, 0.707107, 0.707107, -8, 0)",
+  "p.caption|1121|627|146|19|block|static|auto|rgb(255, 255, 255)|rgb(102, 102, 102)|12px|700|1|hidden|0px|0px|none|none",
+  "li.mode3D.screenMode|1121|658|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.screenMode.small|1194|658|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.screenMode.sideView|1121|687|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.normal.screenMode|1194|687|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.screenMode.wide|1121|716|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.big.screenMode|1194|716|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "div.controlButton.fullscreenSwitch|1213|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|1221|770|17|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "span.toFull|1221|770|17|29|inline|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.settingPanelSwitch|1248|770|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|1255|770|18|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.WheelSeeker|0|760|1280|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.is-loadFailed.is-notFullscreen.show.zenzaWatchVideoInfoPanel|816|208|320|384|block|absolute|25000|rgb(204, 204, 204)|rgb(51, 51, 51)|13px|400|1|visible|0px|0px|none|none",
+  "div.tabSelectContainer|816|208|320|32|flex|absolute|100|rgb(204, 204, 204)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.activeTab.playlist.tabSelect|816|208|320|32|block|static|auto|rgb(204, 204, 204)|rgb(51, 51, 51)|14px|400|1|visible|0px|0px|none|none",
+  "div.activeTab.playlist.tabs|816|240|320|352|block|relative|auto|rgb(204, 204, 204)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none"
+ ],
+ "wide:errors": [],
+ "narrow:boot-styles": {
+  "doc": [
+   {
+    "cls": "videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 25608,
+    "hash": "35a0aec1"
+   },
+   {
+    "cls": "screenMode for-popup videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1788,
+    "hash": "ac7080d8"
+   },
+   {
+    "cls": "screenMode for-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 2392,
+    "hash": "776a8c83"
+   },
+   {
+    "cls": "screenMode for-screen-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1550,
+    "hash": "2a5cdf84"
+   },
+   {
+    "cls": "commentPreview ZenzaWatch",
+    "id": "",
+    "len": 484,
+    "hash": "77052bef"
+   },
+   {
+    "cls": "commentPreview list ZenzaWatch",
+    "id": "",
+    "len": 4170,
+    "hash": "9207811b"
+   },
+   {
+    "cls": "commentPreview hover ZenzaWatch",
+    "id": "",
+    "len": 2004,
+    "hash": "42e554dc"
+   },
+   {
+    "cls": "videoHoverMenu ZenzaWatch",
+    "id": "",
+    "len": 16380,
+    "hash": "e84b189f"
+   },
+   {
+    "cls": "videoHoverMenu screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 261,
+    "hash": "a99751c0"
+   },
+   {
+    "cls": "screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 2936,
+    "hash": "ce3ffa6f"
+   },
+   {
+    "cls": "screenMode for-popup ZenzaWatch",
+    "id": "",
+    "len": 16633,
+    "hash": "439d4e23"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 107,
+    "hash": "33aacca3"
+   },
+   {
+    "cls": "screenMode for-dialog ZenzaWatch",
+    "id": "",
+    "len": 180,
+    "hash": "d6c6842b"
+   },
+   {
+    "cls": "zenza-open ZenzaWatch",
+    "id": "",
+    "len": 1129,
+    "hash": "7e90472d"
+   },
+   {
+    "cls": "videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 18074,
+    "hash": "4644913c"
+   },
+   {
+    "cls": "screenMode for-full videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 949,
+    "hash": "b478b143"
+   },
+   {
+    "cls": "screenMode for-popup videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 1886,
+    "hash": "c942fc73"
+   },
+   {
+    "cls": "screenMode for-dialog videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 2995,
+    "hash": "cbb30ddf"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 61,
+    "hash": "c9dd6954"
+   },
+   {
+    "cls": "screenMode for-popup videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 1263,
+    "hash": "fbfac24e"
+   },
+   {
+    "cls": "screenMode for-dialog videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 732,
+    "hash": "e426b85d"
+   },
+   {
+    "cls": "screenMode for-full videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 690,
+    "hash": "7ddbd9d1"
+   },
+   {
+    "cls": "screenMode for-popup videoSearchPanel ZenzaWatch",
+    "id": "",
+    "len": 96,
+    "hash": "5687d46d"
+   },
+   {
+    "cls": "common ZenzaWatch",
+    "id": "",
+    "len": 3087,
+    "hash": "73b4810a"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 11687,
+    "hash": "f859dda7"
+   },
+   {
+    "cls": "",
+    "id": "zenzaScreenFilterStyle",
+    "len": 314,
+    "hash": "46a43cc2"
+   },
+   {
+    "cls": "",
+    "id": "zenzaHoverTooltipOpaque",
+    "len": 157,
+    "hash": "841412bc"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 12834,
+    "hash": "500dd51e"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 1850,
+    "hash": "9380d837"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "TagListViewStyle",
+    "len": 430,
+    "hash": "4abd42f5"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "UaaViewStyle",
+    "len": 74,
+    "hash": "eaaf1f03"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 6116,
+    "hash": "c8468250"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 25436,
+    "hash": "f79bb514"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 9932,
+    "hash": "e567ba70"
+   }
+  ],
+  "shadows": [
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-range-bar",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 1392,
+      "hash": "e9e37d61"
+     }
+    ]
+   },
+   {
+    "host": "zenza-playlist-append",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 790,
+      "hash": "e1a047f5"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3921,
+      "hash": "b7531d99"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   }
+  ],
+  "sheets": 34
+ },
+ "narrow:player-styles": {
+  "doc": [
+   {
+    "cls": "videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 25608,
+    "hash": "35a0aec1"
+   },
+   {
+    "cls": "screenMode for-popup videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1788,
+    "hash": "ac7080d8"
+   },
+   {
+    "cls": "screenMode for-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 2392,
+    "hash": "776a8c83"
+   },
+   {
+    "cls": "screenMode for-screen-full videoControlBar ZenzaWatch",
+    "id": "",
+    "len": 1550,
+    "hash": "2a5cdf84"
+   },
+   {
+    "cls": "commentPreview ZenzaWatch",
+    "id": "",
+    "len": 484,
+    "hash": "77052bef"
+   },
+   {
+    "cls": "commentPreview list ZenzaWatch",
+    "id": "",
+    "len": 4170,
+    "hash": "9207811b"
+   },
+   {
+    "cls": "commentPreview hover ZenzaWatch",
+    "id": "",
+    "len": 2004,
+    "hash": "42e554dc"
+   },
+   {
+    "cls": "videoHoverMenu ZenzaWatch",
+    "id": "",
+    "len": 16380,
+    "hash": "e84b189f"
+   },
+   {
+    "cls": "videoHoverMenu screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 261,
+    "hash": "a99751c0"
+   },
+   {
+    "cls": "screenMode for-full ZenzaWatch",
+    "id": "",
+    "len": 2936,
+    "hash": "ce3ffa6f"
+   },
+   {
+    "cls": "screenMode for-popup ZenzaWatch",
+    "id": "",
+    "len": 16633,
+    "hash": "439d4e23"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 107,
+    "hash": "33aacca3"
+   },
+   {
+    "cls": "screenMode for-dialog ZenzaWatch",
+    "id": "",
+    "len": 180,
+    "hash": "d6c6842b"
+   },
+   {
+    "cls": "zenza-open ZenzaWatch",
+    "id": "",
+    "len": 1129,
+    "hash": "7e90472d"
+   },
+   {
+    "cls": "videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 18074,
+    "hash": "4644913c"
+   },
+   {
+    "cls": "screenMode for-full videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 949,
+    "hash": "b478b143"
+   },
+   {
+    "cls": "screenMode for-popup videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 1886,
+    "hash": "c942fc73"
+   },
+   {
+    "cls": "screenMode for-dialog videoInfoPanel ZenzaWatch",
+    "id": "",
+    "len": 2995,
+    "hash": "cbb30ddf"
+   },
+   {
+    "cls": "domain slack-com ZenzaWatch",
+    "id": "",
+    "len": 61,
+    "hash": "c9dd6954"
+   },
+   {
+    "cls": "screenMode for-popup videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 1263,
+    "hash": "fbfac24e"
+   },
+   {
+    "cls": "screenMode for-dialog videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 732,
+    "hash": "e426b85d"
+   },
+   {
+    "cls": "screenMode for-full videoHeaderPanel ZenzaWatch",
+    "id": "",
+    "len": 690,
+    "hash": "7ddbd9d1"
+   },
+   {
+    "cls": "screenMode for-popup videoSearchPanel ZenzaWatch",
+    "id": "",
+    "len": 96,
+    "hash": "5687d46d"
+   },
+   {
+    "cls": "common ZenzaWatch",
+    "id": "",
+    "len": 3087,
+    "hash": "73b4810a"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 11687,
+    "hash": "f859dda7"
+   },
+   {
+    "cls": "",
+    "id": "zenzaScreenFilterStyle",
+    "len": 314,
+    "hash": "46a43cc2"
+   },
+   {
+    "cls": "",
+    "id": "zenzaHoverTooltipOpaque",
+    "len": 157,
+    "hash": "841412bc"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 12834,
+    "hash": "500dd51e"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 1850,
+    "hash": "9380d837"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "TagListViewStyle",
+    "len": 430,
+    "hash": "4abd42f5"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "UaaViewStyle",
+    "len": 74,
+    "hash": "eaaf1f03"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 6116,
+    "hash": "c8468250"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 25436,
+    "hash": "f79bb514"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 1146,
+    "hash": "9ad16761"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "VideoContextMenuStyle",
+    "len": 3583,
+    "hash": "3035b0de"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 13757,
+    "hash": "614b32eb"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 4942,
+    "hash": "3dc23d93"
+   },
+   {
+    "cls": "ZenzaWatch",
+    "id": "",
+    "len": 2095,
+    "hash": "b17c4763"
+   },
+   {
+    "cls": "",
+    "id": "",
+    "len": 9932,
+    "hash": "e567ba70"
+   }
+  ],
+  "shadows": [
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-seekbar-label",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 816,
+      "hash": "d6157ee0"
+     }
+    ]
+   },
+   {
+    "host": "zenza-range-bar",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 1392,
+      "hash": "e9e37d61"
+     }
+    ]
+   },
+   {
+    "host": "zenza-playlist-append",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 790,
+      "hash": "e1a047f5"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3921,
+      "hash": "b7531d99"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3029,
+      "hash": "a02a3fb3"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 695,
+      "hash": "aee9ab6c"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 3228,
+      "hash": "d01ecc77"
+     }
+    ]
+   },
+   {
+    "host": "div",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 9319,
+      "hash": "6c0f9749"
+     }
+    ]
+   },
+   {
+    "host": "video",
+    "styles": [
+     {
+      "cls": "",
+      "id": "",
+      "len": 914,
+      "hash": "ade5682c"
+     }
+    ]
+   }
+  ],
+  "sheets": 39
+ },
+ "narrow:player-layout": [
+  "div.is-open.zen-family.zen-root.zenzaVideoPlayerDialog|0|0|900|560|flex|fixed|6000002|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.zenzaVideoPlayerDialogInner|0|114|900|331|block|static|1|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|rgb(0, 0, 0) 4px 4px 4px 0px|none",
+  "div.menuContainer|0|114|580|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.is-enableFilter.is-error.is-notPlayed.is-pausing.is-showComment.showVideoControlBar.zenzaPlayerContainer|0|114|580|331|block|relative|auto|rgb(0, 0, 0)|rgb(0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.errorMessageContainer|16|222|548|49|block|absolute|10000|rgb(255, 232, 233)|rgb(72, 30, 41)|18px|400|1|visible|1px|6px|rgba(0, 0, 0, 0.533) 0px 4px 16px 0px|matrix(1, 0, 0, 1, -274, -24.5)",
+  "div.hoverMenuContainer|0|114|580|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.menuItemContainer.rightTop|340|114|240|40|block|absolute|40000|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|340|114|240|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.forMember.menuButton.toggleLikeButton|340|114|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|341|115|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.not-liked-heart|341|115|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.heart-effect|296|55|120|150|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|24px|400|0|hidden|0px|0px|none|matrix(5, 0, 0, 5, -12, -15)",
+  "div.menuButton.zenzaTweetButton|380|114|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|381|115|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.forMember.menuButton.mylistAddMenu.mylistButton|420|114|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|21px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|421|115|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|21px|400|1|visible|0px|0px|none|none",
+  "div.forMember.mylistSelectMenu.selectMenu.zenzaPopupMenu|497|151|2|2|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|13px|400|0|hidden|1px|0px|none|none",
+  "div.triangle|424|140|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|13px|400|1|hidden|0px|0px|none|matrix(-0.707107, 0.707107, -0.707107, -0.707107, 0, 0)",
+  "div.deflistAdd.forMember.menuButton.mylistButton|460|114|32|32|block|absolute|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|21px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|461|115|30|30|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|21px|400|1|visible|0px|0px|none|none",
+  "div.closeButton.menuButton|548|114|32|32|block|absolute|60000|rgb(204, 204, 204)|rgb(136, 136, 136)|20px|400|0|visible|1px|0px|none|none",
+  "div.menuButtonInner|549|115|30|30|block|static|auto|rgb(204, 204, 204)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.leftBottom.menuItemContainer|8|366|120|32|block|absolute|40000|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|8|366|120|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.menuButton.showCommentSwitch|8|366|32|32|block|absolute|auto|rgb(255, 255, 255)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner|9|367|30|30|block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.menuButton.ngFilterSwitch|48|366|32|32|block|absolute|auto|rgb(153, 204, 255)|rgb(136, 136, 136)|24px|400|0|visible|1px|4px|none|none",
+  "div.menuButtonInner.ngFilterIcon|49|367|30|30|flex|static|auto|rgb(153, 204, 255)|rgba(0, 0, 0, 0)|24px|400|1|visible|0px|0px|none|none",
+  "div.menuItemContainer.onErrorMenu|50|313|480|36|flex|absolute|40000|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, -240, 0)",
+  "div.menuButton.openGinzaMenu|126|313|160|36|block|relative|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|14px|400|1|visible|2px|0px|rgb(51, 51, 51) 4px 4px 0px 0px|none",
+  "div.menuButtonInner|136|323|140|16|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|14px|400|1|visible|0px|0px|none|none",
+  "div.for-nicovideo.menuButton.reloadMenu|294|313|160|36|block|relative|auto|rgb(0, 0, 0)|rgb(136, 136, 136)|14px|400|1|visible|2px|0px|rgb(51, 51, 51) 4px 4px 0px 0px|none",
+  "div.for-nicovideo.menuButtonInner|304|323|140|16|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|14px|400|1|visible|0px|0px|none|none",
+  "div.videoControlBar|0|520|900|40|block|fixed|150000|rgb(0, 0, 0)|rgb(0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.seekBarContainer|0|520|900|0|block|absolute|250|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.controlItemContainer.left|0|530|86|40|block|absolute|200|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|0|530|86|32|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.ZenzaWatchVer|86|530|143|32|block|absolute|auto|rgb(153, 153, 153)|rgba(0, 0, 0, 0)|12px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 143.188, 0)",
+  "button.controlButton.playbackPointsSwitch|11|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgb(34, 34, 34)|20px|400|0.8|visible|0px|0px|none|none",
+  "span.controlButtonInner|17|531|20|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "button.controlButton.notificationHistorySwitch|46|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgb(34, 34, 34)|20px|400|0.8|visible|0px|0px|none|none",
+  "span.controlButtonInner|53|531|18|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.center.controlItemContainer|264|530|372|40|block|absolute|200|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, -186, 0)",
+  "div.scalingUI|264|530|372|32|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "div.seekBarContainer-mainControl|264|530|372|32|flex|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.playControl.toggleStoryboard|264|530|32|32|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.4|hidden|0px|0px|none|none",
+  "div.controlButtonInner|266|532|28|28|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|hidden|1px|75% 16%|none|matrix(0.707107, 0.707107, -0.707107, 0.707107, -10, -10)",
+  "div.controlButton.loopSwitch.playControl|296|530|32|32|block|relative|auto|rgb(136, 136, 136)|rgba(0, 0, 0, 0)|20px|400|0.4|visible|0px|0px|none|none",
+  "div.controlButtonInner|302|530|19|30|inline-block|static|auto|rgb(136, 136, 136)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.playControl.seekTop|326|528|35|35|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.4|visible|0px|0px|none|matrix(1.1, 0, 0, 1.1, 0, 0)",
+  "div.controlButtonInner|333|528|22|33|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.playControl.togglePlay|358|528|40|35|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.4|visible|0px|0px|none|matrix(1.1, 0, 0, 1.1, 0, 0)",
+  "span.pause|391|546|0|18|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0|visible|0px|0px|none|matrix(0, 0, 0, 1, 0, 0)",
+  "span.play|355|526|48|42|block|absolute|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|matrix(1.2, 0, 0, 1.2, -17.28, -15.36)",
+  "div.controlButton.playbackRateMenu|396|530|48|32|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|396|530|48|37|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|visible|0px|0px|none|none",
+  "div.playbackRateSelectMenu.zenzaPopupMenu.zenzaSubMenu|330|140|180|378|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|18px|400|0|hidden|1px|0px|none|matrix(1, 0, 0, 1, -90, 0)",
+  "div.triangle|409|506|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|18px|400|1|hidden|0px|0px|none|matrix(0.707107, -0.707107, 0.707107, 0.707107, -8, 0)",
+  "p.caption|331|141|178|24|block|static|auto|rgb(255, 255, 255)|rgb(102, 102, 102)|18px|700|1|hidden|0px|0px|none|none",
+  "li.playbackRate|343|167|154|24|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|0px|0px|none|none",
+  "li.playbackRate|343|193|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|220|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|247|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|274|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|301|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|328|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|355|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate.selected|343|382|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|700|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|409|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|436|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|463|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "li.playbackRate|343|490|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|18px|400|1|hidden|1px|0px|none|none",
+  "div.videoTime|444|537|96|18|flex|static|auto|rgb(255, 255, 255)|rgba(33, 33, 33, 0.5)|12px|400|1|visible|0px|0px|none|none",
+  "span.currentTimeLabel|444|537|44|18|block|relative|auto|rgb(255, 255, 255)|rgba(33, 33, 33, 0.5)|12px|400|1|visible|0px|0px|none|none",
+  "span.durationLabel|493|537|44|18|block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.muteSwitch|540|530|32|32|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.menuButtonInner.mute-off|540|530|32|30|block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.volumeControl|572|540|64|12|block|relative|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.controlItemContainer.right|685|530|215|40|block|absolute|200|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.scalingUI|685|530|215|32|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|matrix(1, 0, 0, 1, 0, 0)",
+  "button.commentHistorySwitch.controlButton|685|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "span.controlButtonInner|688|535|26|26|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.screenFilterSwitch|720|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|723|535|26|26|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.videoServerTypeMenu|755|530|40|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|767|530|16|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|400|1|visible|0px|0px|none|none",
+  "div.videoServerTypeSelectMenu.zenzaPopupMenu.zenzaSubMenu|685|437|180|81|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|16px|400|0|hidden|1px|0px|none|matrix(1, 0, 0, 1, -90, 0)",
+  "div.triangle|764|506|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|16px|400|1|hidden|0px|0px|none|matrix(0.707107, -0.707107, 0.707107, 0.707107, -8, 0)",
+  "p.caption|686|438|178|24|block|static|auto|rgb(255, 255, 255)|rgb(102, 102, 102)|16px|700|1|hidden|0px|0px|none|none",
+  "li.select-server-domand.selected.serverType|698|464|154|24|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|700|0.4|hidden|0px|0px|none|none",
+  "li.select-server-dmc.serverType|698|490|154|25|list-item|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|16px|400|0.4|hidden|1px|0px|none|none",
+  "div.controlButton.screenModeMenu|798|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|806|530|16|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.screenModeSelectMenu.zenzaPopupMenu.zenzaSubMenu|740|386|148|132|block|absolute|50000|rgb(255, 255, 255)|rgb(51, 51, 51)|12px|400|0|hidden|1px|0px|none|matrix(1, 0, 0, 1, -74, 0)",
+  "div.triangle|803|506|23|23|block|absolute|auto|rgb(255, 255, 255)|rgb(51, 51, 51)|12px|400|1|hidden|0px|0px|none|matrix(0.707107, -0.707107, 0.707107, 0.707107, -8, 0)",
+  "p.caption|741|387|146|19|block|static|auto|rgb(255, 255, 255)|rgb(102, 102, 102)|12px|700|1|hidden|0px|0px|none|none",
+  "li.mode3D.screenMode|741|418|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.screenMode.small|814|418|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.screenMode.sideView|741|447|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.normal.screenMode|814|447|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.screenMode.wide|741|476|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "li.big.screenMode|814|476|73|29|block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|12px|400|1|hidden|0px|0px|none|none",
+  "div.controlButton.fullscreenSwitch|833|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|841|530|17|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "span.toFull|841|530|17|29|inline|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.controlButton.settingPanelSwitch|868|530|32|32|inline-block|relative|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|0.8|visible|0px|0px|none|none",
+  "div.controlButtonInner|875|530|18|30|inline-block|static|auto|rgb(255, 255, 255)|rgba(0, 0, 0, 0)|20px|400|1|visible|0px|0px|none|none",
+  "div.WheelSeeker|0|520|900|0|block|static|auto|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.is-loadFailed.is-notFullscreen.show.zenzaWatchVideoInfoPanel|580|114|320|331|block|absolute|25000|rgb(204, 204, 204)|rgb(51, 51, 51)|13px|400|1|visible|0px|0px|none|none",
+  "div.tabSelectContainer|580|114|320|32|flex|absolute|100|rgb(204, 204, 204)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
+  "div.activeTab.playlist.tabSelect|580|114|320|32|block|static|auto|rgb(204, 204, 204)|rgb(51, 51, 51)|14px|400|1|visible|0px|0px|none|none",
+  "div.activeTab.playlist.tabs|580|146|320|299|block|relative|auto|rgb(204, 204, 204)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none"
+ ],
+ "narrow:errors": []
+}

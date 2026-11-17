@@ -1,3 +1,4 @@
+import { SHORTCUT_ACTIONS, formatKeyCombo } from '../packages/zenza/src/ShortcutActions';
 //===BEGIN===
 class UiVisibilityRegistry {
     static get SHARED_SETTINGS() {

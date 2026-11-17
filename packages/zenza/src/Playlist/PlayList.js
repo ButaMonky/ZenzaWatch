@@ -1,3 +1,4 @@
+import {global} from '../../../../src/ZenzaContext';
 import {VideoListItem} from './VideoListItem';
 import {VideoListModel} from './VideoListModel';
 import {VideoListItemView} from './VideoListItemView';

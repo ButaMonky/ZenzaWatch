@@ -9,7 +9,7 @@
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const BaseViewComponent: typeof import('./BaseViewComponent').BaseViewComponent;
-declare const Config: Loose;
+declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const UaaLoader: typeof import('./UaaLoader').UaaLoader;
 declare const ZenzaWatch: Loose;
 declare const css: typeof import('./css').css;

@@ -4,6 +4,6 @@
   "emitted": "tools/typescript-stage1/.generated/advanced/ModernAdvancedSettingsUI.js",
   "runtime": "src/ModernAdvancedSettingsUI.js",
   "sourceSha256": "315f62a4c60802d32a01391b7a55116f7783ed23e53c148e26c0a82f724039f5",
-  "runtimeSha256": "16e975d5fbbf092b06416c7d7367ecf7a66ce727b39c56600e984e3eb58845c9",
-  "semanticSha256": "b38d0c9163d7ada7b9a45c55d9f0b1764cbdb781f64be8cc69f6241d9514c0f3"
+  "runtimeSha256": "3dec25d9364e2cd1c605189b8dd893c50863dcb869ab22fb308155952e9c8b62",
+  "semanticSha256": "27705c4e72f408876cd365eee21a73cea862fe757f5640d86510b557685fc212"
 }

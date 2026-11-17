@@ -8,7 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const Config: Loose;
+declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const NicoSearchApiV2Loader: typeof import('./VideoSearch').NicoSearchApiV2Loader;
 declare const TagListView: typeof import('./TagListView').TagListView;

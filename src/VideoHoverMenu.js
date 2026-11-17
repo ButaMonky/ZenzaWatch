@@ -1,6 +1,7 @@
+import {startup} from './ZenzaContext';
 import * as $ from 'jquery';
 import * as _ from 'lodash';
-import {global} from './ZenzaWatchIndex';
+import {global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {PlaybackPosition, VideoInfoLoader, NVWatchCaller, CommonsTreeLoader} from '../packages/lib/src/nico/loader';
 import {Fullscreen, ShortcutKeyEmitter, util} from './util';
@@ -221,7 +222,9 @@ class VideoHoverMenu {
         window.setTimeout(() => document.body.focus(), 0);
     }
 }
-util.addStyle(`
+// Task1074: 読み込んだ時に入れていた CSS を、起動の時に呼ぶ処理として登録する（今の配布物ではその場ですぐ呼ぶ）
+startup.add('VideoHoverMenu:style', () => {
+    util.addStyle(`
     .hoverMenuContainer .menuButton[hidden] { display: none !important; }
     .hoverMenuContainer {
       user-select: none;
@@ -877,7 +880,7 @@ util.addStyle(`
 
 
   `, { className: 'videoHoverMenu' });
-util.addStyle(`
+    util.addStyle(`
   .menuItemContainer.leftBottom {
     bottom: calc(64px * var(--zenza-ui-scale,1));
   }
@@ -891,6 +894,7 @@ util.addStyle(`
     bottom: 0px;
   }
   `, { className: 'videoHoverMenu screenMode for-full' });
+});
 VideoHoverMenu.__tpl__ = (`
     <div class="hoverMenuContainer">
       <div class="menuItemContainer leftTop">

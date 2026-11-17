@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/BaseViewComponent.ts",
   "runtime": "packages/zenza/src/parts/BaseViewComponent.js",
   "sourceSha256": "b908ed805907012bff84bee0f22f029ab8dfc05ade9e5f01faee921a01ea97f5",
-  "runtimeSha256": "5f63d1642b68f98cbe0667ecb704e591b08eb311851edfe398fa45496554fb01"
+  "runtimeSha256": "7b0cd9893d4e46d26e45d42a30a62c9353969820510671a2ef40c9232a0c9db2"
 }

@@ -1,5 +1,5 @@
 // import * as _ from 'lodash';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {Emitter} from '../../../lib/src/Emitter';
 import {textUtil} from '../../../lib/src/text/textUtil';
 // GENERATED FROM tools/typescript-stage1/nico-src/YouTubeWrapper.ts (Task960). Edit the .ts and run npm run nico:sync.

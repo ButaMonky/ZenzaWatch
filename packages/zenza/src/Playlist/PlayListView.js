@@ -4,7 +4,7 @@ import {Emitter} from '../../../lib/src/Emitter';
 import {cssUtil} from '../../../lib/src/css/css';
 import {ClassList} from '../../../lib/src/dom/ClassListWrapper';
 import {uq} from '../../../lib/src/uQuery';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/PlayListView.ts (Task900). Edit the .ts and run npm run nico:sync.
 //===BEGIN===

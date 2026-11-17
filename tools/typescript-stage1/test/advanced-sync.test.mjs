@@ -8,7 +8,7 @@ import {dirname,resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {ADVANCED_MODULES} from '../scripts/advanced-registry.mjs';
 import {
-  syncAdvanced,prepareAdvanced,restoreLegacyRequires,canonicalJs,directiveList
+  syncAdvanced,prepareAdvanced,restoreLegacyRequires,addEsmImports,ADVANCED_ESM_IMPORTS,canonicalJs,directiveList
 } from '../scripts/sync-advanced.mjs';
 import {emissionStamp,relativeStamp} from '../scripts/stamp-advanced.mjs';
 import {sha} from '../scripts/generator-core.mjs';
@@ -60,7 +60,7 @@ test('fixed advanced-settings registry includes exactly eleven source families',
 test('native TS7 output preserves all eleven exact JavaScript ASTs and directives',()=>{
   for(const spec of ADVANCED_MODULES){
     const actual=read(repo,spec.runtime);
-    const emitted=restoreLegacyRequires(spec,read(repo,spec.emitted));
+    const emitted=addEsmImports(spec,restoreLegacyRequires(spec,read(repo,spec.emitted)));
     assert.equal(sha(canonicalJs(actual)),sha(canonicalJs(emitted)),spec.name);
     assert.deepEqual(directiveList(actual),directiveList(emitted),spec.name);
   }
@@ -68,6 +68,15 @@ test('native TS7 output preserves all eleven exact JavaScript ASTs and directive
   // Native TS7 may retain this directive directly; both forms must resolve.
   assert(restoreLegacyRequires(setting,read(repo,setting.emitted))
     .includes('//@require uq'));
+});
+test('Task1066: ESM imports are added before BEGIN and only once',()=>{
+  for(const [name,lines] of Object.entries(ADVANCED_ESM_IMPORTS)){
+    const spec=ADVANCED_MODULES.find(s=>s.name===name);
+    const runtime=read(repo,spec.runtime);
+    const head=runtime.slice(0,runtime.indexOf('//===BEGIN==='));
+    for(const line of lines){assert(head.includes(line),name+': '+line);}
+    assert.equal(addEsmImports(spec,runtime),runtime);
+  }
 });
 test('a eleven-module sync updates only manifests when generated JS is equivalent',t=>{
   const dir=fixture(t);

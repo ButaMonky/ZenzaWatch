@@ -1,6 +1,6 @@
 import {cssUtil} from '../../../lib/src/css/css';
 import {CONSTANT} from '../../../../src/constant';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 // GENERATED FROM tools/typescript-stage1/nico-src/inintCssProps.ts (Task901). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 const initCssProps = (win) => {

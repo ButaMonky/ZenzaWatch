@@ -1,6 +1,6 @@
 import {Emitter} from '../../../lib/src/Emitter';
 import {StoryboardInfoModel} from './StoryboardInfoModel';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {cssUtil} from '../../../lib/src/css/css';
 import {textUtil} from '../../../lib/src/text/textUtil';
 import {uq} from '../../../lib/src/uQuery';

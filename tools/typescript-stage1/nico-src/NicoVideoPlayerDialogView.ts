@@ -417,7 +417,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     }
   }
   _initializeResponsive() {
-    window.addEventListener('resize', _.debounce(this._updateResponsive.bind(this), 500) as Loose);
+    window.addEventListener('resize', _.debounce(() => this._updateResponsive(), 500));
     this.varMapper = new VariablesMapper({config: this._playerConfig});
     this.varMapper.on('update', () => this._updateResponsive());
   }

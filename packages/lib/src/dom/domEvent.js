@@ -1,4 +1,4 @@
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 // GENERATED FROM tools/typescript-stage1/nico-src/domEvent.ts (Task785). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 const domEvent = {

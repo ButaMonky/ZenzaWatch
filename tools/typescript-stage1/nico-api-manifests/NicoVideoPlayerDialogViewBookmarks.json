@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogViewBookmarks.ts",
   "runtime": "src/NicoVideoPlayerDialogViewBookmarks.js",
   "sourceSha256": "4cab0dcca09fc2e255c8429ff5c0c3fb2080622df2ecf4f090a62e7f1e5c7d95",
-  "runtimeSha256": "f97a8068b9aa011471b892d34bf31a38886539ac89014fc9c64e55e708296945"
+  "runtimeSha256": "bdd864b8512876094e42b2917d2532fb36874182d5ef544922e1128c8371cb73"
 }

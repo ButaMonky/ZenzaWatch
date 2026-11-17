@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/VideoMetaInfo.ts",
   "runtime": "src/VideoMetaInfo.js",
   "sourceSha256": "8cd7e2b6bc612d415bdc310c2236ff1e79f569bc961ea73147d21be44fe3c1cf",
-  "runtimeSha256": "d5889a611090ab6e867fdaa5937361bf2afac1beec46b3beaa47708bbfab2116"
+  "runtimeSha256": "56359f52896f239287d6686e25269c7457ec288adde2390025184e2892f05d4f"
 }

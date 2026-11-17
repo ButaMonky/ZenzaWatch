@@ -1,5 +1,6 @@
 import {Emitter} from '../Emitter';
-import {global, PRODUCT} from '../../../../src/ZenzaWatchIndex';
+import {PRODUCT} from '../../../../src/ZenzaContext';
+import {global} from '../../../../src/ZenzaContext';
 import {Config} from '../../../../src/Config';
 import {NicoVideoApi} from '../nico/NicoVideoApi';
 

@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogNotifications.ts",
   "runtime": "src/NicoVideoPlayerDialogNotifications.js",
   "sourceSha256": "65a4a77b7b45282b355861da322f01d485ed6d7c47771e0811e98c93cd69db1d",
-  "runtimeSha256": "21acbc8caba9cb985f9bc6ad2c8ed069ba452a43f0502b07ceef5be91cb39376"
+  "runtimeSha256": "02da831cb112d59eb48f02635a482669499c87f0585f8013bfcb3a2ae6a5ad9e"
 }

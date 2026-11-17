@@ -14,9 +14,13 @@ import path from 'path';
 // See test/mocks/dll.js for the full explanation.
 const dllRealPath = path.resolve(__dirname, '../packages/components/src/dll.js');
 const dllMockPath = path.resolve(__dirname, './mocks/dll.js');
+// Task1069: 部品は global・ZenzaWatch を src/ZenzaContext から引く。単体テストでは中身の入った代わりを渡す（test/mocks/ZenzaContext.js）。
+const contextRealPath = path.resolve(__dirname, '../src/ZenzaContext.js');
+const contextMockPath = path.resolve(__dirname, './mocks/ZenzaContext.js');
 const originalResolveFilename = Module._resolveFilename;
 Module._resolveFilename = function(request, ...rest) {
   const resolved = originalResolveFilename.call(this, request, ...rest);
+  if (resolved === contextRealPath) { return contextMockPath; }
   return resolved === dllRealPath ? dllMockPath : resolved;
 };
 

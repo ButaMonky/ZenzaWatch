@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/CommentPanel.ts",
   "runtime": "src/CommentPanel.js",
   "sourceSha256": "53badfe9c022845d601a757a8fedcf500bc4d505228bf1f321fece63345887fc",
-  "runtimeSha256": "338948fd13c62686cabbda7d90196566ce580da75f2af5db539d49c6d5ceee56"
+  "runtimeSha256": "08670b8bf66124e13ab07128bd03c373509e3e5bd8a6ed172a130e2add8ccc98"
 }

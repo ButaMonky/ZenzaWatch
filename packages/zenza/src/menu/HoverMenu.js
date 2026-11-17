@@ -1,4 +1,4 @@
-import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch} from '../../../../src/ZenzaContext';
 import {uq} from '../../../lib/src/uQuery';
 import {nicoUtil} from '../../../lib/src/nico/nicoUtil';
 import {cssUtil} from '../../../lib/src/css/css';

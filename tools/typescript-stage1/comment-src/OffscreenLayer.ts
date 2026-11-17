@@ -5,7 +5,7 @@ import {util} from '../../../../src/util';
 import {NicoTextParser} from './NicoTextParser';
 // import {NicoChatViewModel} from './NicoChatViewModel';
 // @ts-expect-error Production-relative import is resolved by the legacy bundler.
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 // @ts-expect-error Production-relative import is resolved by the legacy bundler.
 import {cssUtil} from '../../../lib/src/css/css';
 // Task625: type-only bridge for the isolated text measuring layer.

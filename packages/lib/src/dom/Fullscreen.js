@@ -1,6 +1,6 @@
 // import * as _ from 'lodash';
 // const emitter;
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {ClassList} from './ClassListWrapper';
 // GENERATED FROM tools/typescript-stage1/nico-src/Fullscreen.ts (Task785). Edit the .ts and run npm run nico:sync.
 //===BEGIN===

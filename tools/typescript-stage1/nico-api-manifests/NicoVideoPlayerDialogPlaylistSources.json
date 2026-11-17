@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogPlaylistSources.ts",
   "runtime": "src/NicoVideoPlayerDialogPlaylistSources.js",
   "sourceSha256": "fb83de4602ad68a29c92c736f720a0a5eb189701c207df50ca55fa5038147460",
-  "runtimeSha256": "9301e093554820ff9e75b35ab87c7ae9adc8c898317a7cd736521c5fcffe7dae"
+  "runtimeSha256": "22e04a7dcf19627ec01a6da6ee6ae1bc27f69bbfe9ccf152de3fec19051eefd9"
 }

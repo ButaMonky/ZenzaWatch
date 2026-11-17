@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogResume.ts",
   "runtime": "src/NicoVideoPlayerDialogResume.js",
   "sourceSha256": "77c159e313077b510a9c3c8f213b196b554b7c8fbdd4ba74df6c06866781dc2d",
-  "runtimeSha256": "2cff4a72db03dc88589287e7a9a88e7d3f326ac8d136c5e391fd2a994058ff9f"
+  "runtimeSha256": "dc1f16bff7d2d46b860c644c4a30b661c61b4e8e658f364657b51ef49470683e"
 }

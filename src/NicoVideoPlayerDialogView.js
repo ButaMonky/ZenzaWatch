@@ -1,6 +1,6 @@
 import * as $ from 'jquery';
 import * as _ from 'lodash';
-import {global} from './ZenzaWatchIndex';
+import {global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {PlaybackPosition, VideoInfoLoader, NVWatchCaller, CommonsTreeLoader} from '../packages/lib/src/nico/loader';
 import {Fullscreen, ShortcutKeyEmitter, util} from './util';
@@ -352,7 +352,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         }
     }
     _initializeResponsive() {
-        window.addEventListener('resize', _.debounce(this._updateResponsive.bind(this), 500));
+        window.addEventListener('resize', _.debounce(() => this._updateResponsive(), 500));
         this.varMapper = new VariablesMapper({ config: this._playerConfig });
         this.varMapper.on('update', () => this._updateResponsive());
     }

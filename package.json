@@ -12,6 +12,7 @@
     "@babel/register": "^7.0.0-beta.42",
     "cross-env": "^10.1.0",
     "css-tree": "^3.2.1",
+    "esbuild": "^0.28.2",
     "eslint": "8.57.1",
     "globals": "13.24.0",
     "jquery": "^3.3.1",

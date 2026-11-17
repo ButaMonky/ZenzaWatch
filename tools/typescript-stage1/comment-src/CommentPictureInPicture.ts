@@ -1,6 +1,6 @@
 import {CommentLayer} from './CommentLayer';
 import {NicoChat} from './NicoChat';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {ScreenFilter} from '../videoPlayer/ScreenFilter';
 // Task626: type-only API for comment-composited Picture-in-Picture.
 export interface CommentPictureInPictureStartContract {

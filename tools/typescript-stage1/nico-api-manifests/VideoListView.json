@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/VideoListView.ts",
   "runtime": "packages/zenza/src/Playlist/VideoListView.js",
   "sourceSha256": "9e87866990c62b2aba9eee9457307808827823306904db1955117575fff83ce2",
-  "runtimeSha256": "56e5815b7017c428876885cc2a9a516e148bc729adf215e46db64c89ecb5d512"
+  "runtimeSha256": "0bf97d68c148a3ed21bb5badd6284f7051a5a8c55855ce4f74f3219d94521b1d"
 }

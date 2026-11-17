@@ -1,5 +1,5 @@
 import {Emitter} from './baselib';
-import {global} from './ZenzaWatchIndex';
+import {global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {bounce} from '../packages/lib/src/infra/bounce';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';

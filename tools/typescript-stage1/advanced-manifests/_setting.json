@@ -4,6 +4,6 @@
   "emitted": "tools/typescript-stage1/.generated/advanced/_setting.js",
   "runtime": "src/_setting.js",
   "sourceSha256": "4c37e7d78fd5da5b992209b1ee8c14412a37cce463e87f9924a7ad87cc741aa0",
-  "runtimeSha256": "536e925f656a9ced63925aa57771ecd3c43b1ea91022188dbda91dfc2e2d165f",
-  "semanticSha256": "238c09f34ff64a0d9abb97694aef887f10862d421a838cf793493c2197e3eff6"
+  "runtimeSha256": "94211af35700de09c169530847d2016047775286a1eaf601891591c47622917f",
+  "semanticSha256": "47bd171a177e4c81f8f5df253aa2609b5c61a6046d51dabb710567fe48f18406"
 }

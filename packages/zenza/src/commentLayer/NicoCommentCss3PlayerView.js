@@ -1,6 +1,6 @@
 import {Emitter} from '../../../lib/src/Emitter';
 import {NicoChatFilter} from './NicoChatFilter';
-import {ZenzaWatch, global} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch, global} from '../../../../src/ZenzaContext';
 import {Config} from '../../../../src/Config';
 import {bounce, throttle} from '../../../lib/src/infra/bounce';
 import {NicoChat} from './NicoChat';

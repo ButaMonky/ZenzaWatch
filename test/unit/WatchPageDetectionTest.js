@@ -4,7 +4,7 @@
 const assert = require('assert');
 const {read, createContext, run} = require('../helpers/extractSource');
 
-function detector({isWatchUrl = true, meta, root = true, contentNow = false, grid = false, mountLater = false} = {}) {
+function detector({isWatchUrl = true, meta, root = true, contentNow = false, grid = false, mountLater = false, path = '/watch/sm9'} = {}) {
   const text = read('src/initializer.js');
   const code = text.slice(text.indexOf('  const readyContent ='), text.indexOf('  const initWorker ='));
   let content = contentNow, gridPresent = grid;
@@ -25,12 +25,14 @@ function detector({isWatchUrl = true, meta, root = true, contentNow = false, gri
     disconnect() { this.connected = false; }
   }
   const context = createContext({
-    util: {isGinzaWatchUrl: () => isWatchUrl}, document, MutationObserver,
+    util: {isGinzaWatchUrl: () => isWatchUrl, getWatchId: () => (/^\/(?:watch|shorts)\/([a-z0-9]+)/.exec(path) || [])[1] || null},
+    location: {pathname: path}, document, MutationObserver,
     setTimeout: (f, ms) => { timers.push({f, ms}); return timers.length; }, clearTimeout: id => { if (timers[id - 1]) { timers[id - 1].f = null; } }
   });
   run(code + ';globalThis.isWatchPage = isWatchPage;', context);
   return {
     isWatchPage: () => context.isWatchPage(),
+    mountContentOnly() { content = true; for (const o of observers) { if (o.connected) { o.cb([{addedNodes: [{}]}], o); } } },
     mount() { content = true; gridPresent = true; for (const o of observers) { if (o.connected) { o.cb([{addedNodes: [{}]}], o); } } },
     expire() { for (const t of timers) { if (t.f) { const f = t.f; t.f = null; f(); } } },
     observers, timers
@@ -81,5 +83,23 @@ describe('Task175 watch page detection for V3/V4 envelopes (Watch V4 audit F02)'
     d.expire();
     assert.strictEqual(await pending, false);
     assert(d.observers.every(o => !o.connected), 'observer released');
+  });
+
+  it('Task1075: 本体の枠だけできてプレイヤーの枠がまだ無い時は、まだ判定しない（プレイヤーの枠ができてから）', async () => {
+    const d = detector({meta: undefined});
+    const pending = d.isWatchPage();
+    let settled = false;
+    pending.then(() => { settled = true; });
+    d.mountContentOnly();
+    await new Promise(r => setImmediate(r));
+    assert.strictEqual(settled, false, '以前はここで「視聴ページではない」と判定していた');
+    d.mount();
+    assert.strictEqual(await pending, true);
+  });
+
+  it('Task1075: ショート動画のページは、meta もプレイヤーの枠も無くても視聴ページ（待たない）', async () => {
+    const d = detector({meta: undefined, path: '/shorts/ss46993228'});
+    assert.strictEqual(await d.isWatchPage(), true);
+    assert.strictEqual(d.timers.length, 0);
   });
 });

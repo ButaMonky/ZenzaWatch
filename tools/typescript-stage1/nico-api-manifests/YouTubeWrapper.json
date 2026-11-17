@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/YouTubeWrapper.ts",
   "runtime": "packages/zenza/src/videoPlayer/YouTubeWrapper.js",
   "sourceSha256": "090abd7769d1dc0cda2715ac2b1591df924edd656ff7d51feff281b3b6402855",
-  "runtimeSha256": "06d1ab4bbbd6229a90504aef50128c8eab7c0404b4ec4e6c8542a7df2f8bb03f"
+  "runtimeSha256": "206db05367dfdaa954a2604795505bf96fcf3ffb250343f0683f38f42c3fdfec"
 }

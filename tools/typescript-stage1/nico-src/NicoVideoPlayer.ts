@@ -12,7 +12,7 @@ type Loose = any;
 declare const BaseViewComponent: typeof import('./BaseViewComponent').BaseViewComponent;
 declare const CONSTANT: import('./shared-types/Constant').ZenzaConstant;
 declare const ClassList: typeof import('./ClassList').ClassList;
-declare const Config: Loose;
+declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const Fullscreen: typeof import('./Fullscreen').Fullscreen;
 declare const MediaTimeline: typeof import('./MediaTimeline').MediaTimeline;

@@ -1,5 +1,5 @@
 // @ts-expect-error Stage A mirror retains the product-relative import path.
-import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch} from '../../../../src/ZenzaContext';
 // @ts-expect-error Stage A mirror retains the product-relative import path.
 import {workerUtil} from '../../../lib/src/infra/workerUtil';
 

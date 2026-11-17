@@ -8,7 +8,7 @@ module.exports=function adaptRuntime(base) {
   if(body.split(from).length!==2)throw Error('Runtime adapter anchor changed: '+from.slice(0,80));
   body=body.replace(from,to);
  };
- once('const monkey = async (PRODUCT, START_PAGE_QUERY)', 'const monkey = async (PRODUCT, START_PAGE_QUERY, externalTrial = null)');
+ once('const monkey = async (_product, START_PAGE_QUERY)', 'const monkey = async (_product, START_PAGE_QUERY, externalTrial = null)');
  once('    const Array = window.PureArray', '    const {displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged} = externalTrial || {};\n    const Array = window.PureArray');
  once("if (window.top === window) {\n      window.ZenzaLib = { _ };", "if (externalTrial || window.top === window) {\n      window.ZenzaLib = { _ };");
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';", "const PRODUCT = externalTrial ? 'ZenzaWatchExternalTrial' : 'ZenzaWatch';");

@@ -1,4 +1,5 @@
-import {ZenzaWatch, PRODUCT} from './ZenzaWatchIndex';
+import {PRODUCT} from './ZenzaContext';
+import {ZenzaWatch} from './ZenzaContext';
 import {PopupMessage} from './util';
 import {PlayerConfig} from './NicoVideoPlayerDialog';
 import {Clipboard} from '../packages/lib/src/dom/Clipboard';
@@ -166,7 +167,10 @@ const RootDispatcher = (() => {
                     break;
                 }
                 case 'tweet':
-                    nicoUtil.openTweetWindow(playerState.videoInfo);
+                    // Task1072: 動画を開いていない時（videoInfo が null）は何もしない（以前は openTweetWindow の中で例外になっていた）
+                    if (playerState.videoInfo) {
+                        nicoUtil.openTweetWindow(playerState.videoInfo);
+                    }
                     break;
                 // Task 060: 関連メニュー(RelatedInfoMenu、VideoInfoPanel.js内)の
                 // 「ニコニ広告で宣伝」「twitterの反応を見る」「親作品・コンテンツ

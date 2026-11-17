@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/messageUtil.ts",
   "runtime": "packages/lib/src/message/messageUtil.js",
   "sourceSha256": "b9b34adb8ca9fe49feadb301b10acf2a5bdc457dfc5d1a43a241471ef43e9028",
-  "runtimeSha256": "1ff6e06fa008c4aafb2c88be2304b20a1b174d2f8f6f993ae30e96caad2dcbb1"
+  "runtimeSha256": "97903406ab21f69526171772e93812abb574523e42a3ecb3eb6d9f5223b39bee"
 }

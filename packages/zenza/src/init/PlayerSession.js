@@ -1,4 +1,4 @@
-import {PRODUCT} from '../../../../src/ZenzaWatchIndex';
+import {PRODUCT} from '../../../../src/ZenzaContext';
 // GENERATED FROM tools/typescript-stage1/nico-src/PlayerSession.ts (Task851). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 const PlayerSession = {

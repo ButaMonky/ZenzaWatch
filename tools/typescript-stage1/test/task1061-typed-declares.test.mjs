@@ -18,7 +18,7 @@ const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 // 302件・132種類（Task1060 時点）→ 12種類。JS にしか無い部品（ZenzaWatch・dll・Config など）と、
 // 静的プロパティを後から足している NicoComment / NicoChatViewModel だけが残っている。
 // Task1063: ファイルを分けると同じ名前の declare が増えるので、件数ではなく名前の種類で数える。
-const LOOSE_DECLARE_NAMES = new Set(['Config', 'ZenzaWatch', 'dll', 'ZenzaCommentHistoryCore', 'OfficialPlayerRoute',
+const LOOSE_DECLARE_NAMES = new Set(['ZenzaWatch', 'dll', 'ZenzaCommentHistoryCore', 'OfficialPlayerRoute',
   'ZenzaDetector', 'initializeGinzaSlayer', 'ThumbnailSourcePolicy', 'RequestAnimationFrame', 'NicoComment',
   'NicoChatViewModel', 'NICORU']);
 
@@ -79,4 +79,19 @@ test('shared-types/Lodash.d.ts の関数は配布物が @require する lodash 4
   // Task1061 で見つけた不具合: lodash 4 には contains が無い（HeatSync の設定初期化で TypeError になっていた）
   assert.equal(lodash.contains, undefined);
   assert.doesNotMatch(fs.readFileSync(path.join(SRC, 'HeatSyncEntry.ts'), 'utf8'), /_\.contains\(/);
+});
+
+test('Task1073: shared-types/ZenzaConfig.d.ts のメソッドは DataStorage（と橋渡しした Emitter）にすべてある', () => {
+  const dts = read('tools/typescript-stage1/nico-src/shared-types/ZenzaConfig.d.ts');
+  const body = dts.slice(dts.indexOf('export interface ZenzaConfig {'));
+  const methods = [...body.matchAll(/^\s+([a-zA-Z]+)\(/gm)].map(m => m[1]);
+  assert(methods.length >= 15, methods.join(','));
+  const storage = read('packages/lib/src/infra/DataStorage.js');
+  const emitter = read('packages/lib/src/Emitter.js');
+  const has = name => new RegExp(`^\\s+(?:async\\s+)?${name}\\s*\\(`, 'm').test(storage) ||
+    new RegExp(`^\\s+(?:async\\s+)?${name}\\s*\\(`, 'm').test(emitter);
+  assert.deepEqual(methods.filter(name => !has(name)), []);
+  for (const field of ['props', 'default', 'storage']) {
+    assert.match(storage, new RegExp(`this\\.${field} = `), field);
+  }
 });

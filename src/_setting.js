@@ -14,6 +14,7 @@ import { ModernAdvancedSettingsUI } from './ModernAdvancedSettingsUI';
 import { NgCompositeRuleEditor } from './NgCompositeRuleEditor';
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 import { CommentDisplayBudget } from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
+import { StoryboardCacheDb } from '../packages/lib/src/nico/StoryboardCacheDb';
 //===BEGIN===
 const createAdvancedSettingsPanel = (Config, lodash = window._) => {
     const PRODUCT = 'ZenzaWatch';

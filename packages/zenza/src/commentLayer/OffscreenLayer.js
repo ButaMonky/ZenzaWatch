@@ -2,7 +2,7 @@ import {Emitter} from '../../../lib/src/Emitter';
 import {util} from '../../../../src/util';
 import {NicoTextParser} from './NicoTextParser';
 // import {NicoChatViewModel} from './NicoChatViewModel';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 import {cssUtil} from '../../../lib/src/css/css';
 //===BEGIN===
 // フォントサイズ計算用の非表示レイヤーを取得

@@ -6,6 +6,20 @@ import {createHash} from 'node:crypto';
 import {NICO_API_MODULES,NICO_API_BY_NAME,ESM_ADDED_IMPORTS} from '../scripts/nico-api-registry.mjs';
 import {renderNicoLegacy,syncNicoApi} from '../scripts/sync-nico-api.mjs';
 import {emitNico,read,loadLegacy,snapshot,settle} from './nico-api-harness.mjs';
+import {createRequire} from 'node:module';
+// Task1069: global・ZenzaWatch の import 先を src/ZenzaContext へ移した（第4段階）。移行前のフィクスチャも同じ規則で読み替えて比べる。
+const {rewriteLine:rewriteContextImport}=createRequire(import.meta.url)('../../esm/rewrite-context-imports.cjs');
+// ZenzaContext からの import は、行の分け方・名前の順番を問わない（書き換えを2回に分けたため2行になったものがある）。
+const normalizeContextImports=lines=>{
+  const merged=new Map(),out=[];
+  for(const line of lines){
+    const m=/^import \{([^}]*)\} from '([^']*ZenzaContext)';$/.exec(line);
+    if(!m){out.push(line);continue;}
+    if(!merged.has(m[2])){merged.set(m[2],new Set());out.push({path:m[2]});}
+    m[1].split(',').map(x=>x.trim()).filter(Boolean).forEach(x=>merged.get(m[2]).add(x));
+  }
+  return out.map(x=>typeof x==='string'?x:`import {${[...merged.get(x.path)].sort().join(', ')}} from '${x.path}';`);
+};
 
 const sha=s=>createHash('sha256').update(s.replace(/\r\n/g,'\n')).digest('hex');
 emitNico();
@@ -53,7 +67,11 @@ test('legacy build directives are preserved in each runtime',()=>{
         return (!inSection&&/^import\s/.test(s))||/^\/\/@(?:require|dev-require)/.test(s);
       });
     };
-    const expected = directives(before);
+    const runtimeLines=new Set(directives(after));
+    const expected = directives(before).flatMap(line=>{
+      const next=rewriteContextImport(line);
+      return next&&!runtimeLines.has(line)?next:[line];
+    });
     const diagnosticPaths = {
       netUtil:'./RequestDiagnostics', VideoInfoLoader:'../infra/RequestDiagnostics',
       ThreadLoader:'../infra/RequestDiagnostics', VideoSessionWorker:'../infra/RequestDiagnostics',
@@ -198,7 +216,7 @@ test('legacy build directives are preserved in each runtime',()=>{
     // 足した import は registry の ESM_ADDED_IMPORTS に記録したものだけを許す。
     const added=new Set(ESM_ADDED_IMPORTS[spec.name]||[]);
     const actualDirectives=directives(after).filter(line=>!added.has(line));
-    assert.deepEqual(actualDirectives, expected, spec.name);
+    assert.deepEqual(normalizeContextImports(actualDirectives), normalizeContextImports(expected), spec.name);
     for(const line of added)assert(directives(after).includes(line),spec.name+' missing ESM import '+line);
     // Task475: compare exported names, since legacy exports may span lines.
     const exported=t=>[...t.matchAll(/^export\s*\{([^}]*)\}/gm)]

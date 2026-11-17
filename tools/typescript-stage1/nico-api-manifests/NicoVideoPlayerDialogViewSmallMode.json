@@ -3,5 +3,5 @@
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogViewSmallMode.ts",
   "runtime": "src/NicoVideoPlayerDialogViewSmallMode.js",
   "sourceSha256": "b2e22b821df36ebe1898d89ed4d5f11265aa9fa59c7ccd6e5c3ced1da67a9acb",
-  "runtimeSha256": "fa1da8faa702efb455e8be02ed4222d3923cddc258ada11fc31d94f3ef38c89a"
+  "runtimeSha256": "39c11d52f3d89a60e0a979e3929adb4fe3f9932945be641f6cc4c052c35a52d0"
 }

@@ -1,4 +1,4 @@
-import {ZenzaWatch} from './ZenzaWatchIndex';
+import {ZenzaWatch} from './ZenzaContext';
 import {NicodicArticleLoader} from '../packages/lib/src/nico/loader';
 import {BaseViewComponent} from '../packages/zenza/src/parts/BaseViewComponent';
 import {TagEditApi} from '../packages/lib/src/nico/TagEditApi';

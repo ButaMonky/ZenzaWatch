@@ -1,4 +1,4 @@
-import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
+import {ZenzaWatch} from '../../../../src/ZenzaContext';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/saveMymemory.ts (Task851). Edit the .ts and run npm run nico:sync.
 //===BEGIN===

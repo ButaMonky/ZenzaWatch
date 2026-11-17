@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/RelatedInfoMenu.ts",
   "runtime": "src/RelatedInfoMenu.js",
-  "sourceSha256": "a39450464f6c7347a8311ab2f6fa6e96f8f496384fcbe9e0cc5eaf39770a3407",
-  "runtimeSha256": "33dd63d41d97a9adb295584187f0ab95c066cc4b01b1eeb25617878663345247"
+  "sourceSha256": "79219f49b94655d288f22b546da35c8c36ddd1f40ad17a31421560e5ae98ad09",
+  "runtimeSha256": "96605762b82b0dc95e21dcf140830ee6c89b953f0b62448c628754fd02a37aa0"
 }

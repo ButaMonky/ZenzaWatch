@@ -29,6 +29,22 @@ export function restoreLegacyRequires(spec,compiled){
   return compiled.replace(anchor,(_,before,indent,line)=>
     before+indent+'//@require uq\n'+indent+line);
 }
+// Task1066 (ESM stage 2): names these runtimes use from other build modules without importing them.
+// The TS sources keep a typed `declare` boundary (their strict checks cannot resolve the runtime paths),
+// so the import is added to the generated JS before //===BEGIN=== (build.js ignores import lines).
+export const ADVANCED_ESM_IMPORTS={
+  UiVisibilityRegistry:["import { SHORTCUT_ACTIONS, formatKeyCombo } from '../packages/zenza/src/ShortcutActions';"],
+  ModernAdvancedSettingsUI:["import { NgCompositeRuleEditor } from './NgCompositeRuleEditor';"],
+  _setting:["import { StoryboardCacheDb } from '../packages/lib/src/nico/StoryboardCacheDb';"]
+};
+export function addEsmImports(spec,compiled){
+  const lines=ADVANCED_ESM_IMPORTS[spec.name];
+  if(!lines)return compiled;
+  const text=lf(compiled),at=text.indexOf('//===BEGIN===');
+  if(at<0)err('ADVANCED_ESM_IMPORT_ANCHOR_MISSING');
+  const missing=lines.filter(line=>!text.slice(0,at).includes(line));
+  return missing.length?text.slice(0,at)+missing.join('\n')+'\n'+text.slice(at):compiled;
+}
 export function directiveList(source){
   return lf(source).split('\n').map(s=>s.trim()).filter(s=>
     /^\/\/@(?:require|dev-require|ignore-)/.test(s) ||
@@ -52,7 +68,7 @@ export function prepareAdvanced(spec,root,mode,allowCodeChange=false){
   const manifestPath=resolve(root,spec.manifest);
   const source=readFileSync(sourcePath,'utf8');
   const rawCompiled=readFileSync(emittedPath,'utf8');
-  const compiled=restoreLegacyRequires(spec,rawCompiled);
+  const compiled=addEsmImports(spec,restoreLegacyRequires(spec,rawCompiled));
   const actual=readFileSync(runtimePath,'utf8');
   const desiredSemantic=sha(canonicalJs(compiled));
   const currentSemantic=sha(canonicalJs(actual));

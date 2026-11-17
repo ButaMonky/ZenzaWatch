@@ -1,5 +1,5 @@
 import {workerUtil} from '../../../lib/src/infra/workerUtil';
-import {global} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaContext';
 // import {WatchInfoCacheDb} from '../../../lib/src/nico/WatchInfoCacheDb';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/HeatMapWorker.ts (Task962). Edit the .ts and run npm run nico:sync.

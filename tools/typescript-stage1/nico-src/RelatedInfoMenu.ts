@@ -10,7 +10,7 @@ type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const BaseViewComponent: typeof import('./BaseViewComponent').BaseViewComponent;
 declare const ClassList: typeof import('./ClassList').ClassList;
-declare const Config: Loose;
+declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const OfficialPlayerRoute: Loose;
 declare const RelatedMenuActions: typeof import('./external/RelatedMenuActions').RelatedMenuActions;
 declare const RelatedMenuOrder: typeof import('./external/RelatedMenuOrder').RelatedMenuOrder;

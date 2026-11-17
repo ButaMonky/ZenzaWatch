@@ -1,5 +1,6 @@
+import {NICORU} from './ZenzaContext';
 import _ from 'lodash';
-import {global} from './ZenzaWatchIndex';
+import {global} from './ZenzaContext';
 import {BaseViewComponent} from './util';
 import {FrameLayer} from '../packages/zenza/src/parts/FrameLayer';
 import {CONSTANT} from './constant';

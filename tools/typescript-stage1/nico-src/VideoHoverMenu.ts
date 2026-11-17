@@ -14,6 +14,7 @@ declare const UiVisibilityRegistry: typeof import('./external/UiVisibilityRegist
 declare const _: import('./shared-types/Lodash').LodashSubset;
 declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
 declare const util: import('./shared-types/ZenzaUtil').ZenzaUtil;
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 
 
 class VideoHoverMenu {
@@ -211,6 +212,8 @@ class VideoHoverMenu {
   }
 }
 
+// Task1074: 読み込んだ時に入れていた CSS を、起動の時に呼ぶ処理として登録する（今の配布物ではその場ですぐ呼ぶ）
+startup.add('VideoHoverMenu:style', () => {
   util.addStyle(`
     .hoverMenuContainer .menuButton[hidden] { display: none !important; }
     .hoverMenuContainer {
@@ -881,6 +884,7 @@ util.addStyle(`
     bottom: 0px;
   }
   `, {className: 'videoHoverMenu screenMode for-full'});
+});
 
 VideoHoverMenu.__tpl__ = (`
     <div class="hoverMenuContainer">

@@ -10,7 +10,7 @@ const installers='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop
 const expected={
  'ZenzaWatch-dev.user.js':'2.7.468-task1088',
  'ZenzaHLS.user.js':'0.1.0-task997',
- 'MylistPocket.user.js':'0.5.93-task1062',
+ 'MylistPocket.user.js':'0.5.95-task1091',
  'ZenzaAdvancedSettings.user.js':'0.4.0-task993',
  'ZenzaBlogPartsButton.user.js':'1.1.42-task1088'
 };

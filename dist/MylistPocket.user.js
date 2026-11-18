@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.93-task1062
+// @version     0.5.95-task1091
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-16 20:55Z e462aae6
+// build: 2026-11-18 14:18Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -2154,9 +2154,9 @@ const PocketCardMetadataLoader = (() => {
                 <input
                   type="checkbox"
                   class="setting-form"
-                  data-config-name="openNewWindow"
+                  data-config-name="videoInfo.openNewWindow"
                 >
-                <span>タグやリンクを新しいタブで開く (次回から反映)</span>
+                <span>タグやリンクを新しいタブで開く</span>
               </label>
 
               <label class="setting-label">
@@ -4579,13 +4579,14 @@ class DataStorage {
       if (!window.BroadcastChannel) { return; }
       const broadcastChannel = new window.BroadcastChannel(PRODUCT);
 
-      const onBroadcastMessage = (e) => {
-        const data = e.data;
-        switch (data.type) {
-          case 'config-update':
-            config.refresh(true);
-            break;
-        }
+      const onBroadcastMessage = async ({data}) => {
+        if (data?.type !== 'config-update' || !Object.hasOwn(config.default, data.key)) { return; }
+        const key = data.key;
+        const previous = config.getValue(key);
+        const value = await config.refresh(key);
+        if (value === previous) { return; }
+        config.emit('update-' + key, value);
+        config.emit('update', key, value, 'broadcast');
       };
 
       broadcastChannel.addEventListener('message', onBroadcastMessage);
@@ -4595,9 +4596,9 @@ class DataStorage {
       };
 
     })(config);
-    config.on('update', (key, value) => {
-      if (!config.props.hasOwnProperty(key)) { return; }
-      MylistPocket.broadcast.postMessage(
+    config.on('update', (key, value, source) => {
+      if (source === 'broadcast' || !Object.hasOwn(config.default, key)) { return; }
+      MylistPocket.broadcast?.postMessage(
         {type: 'config-update', key, value, storage: 'local'}
       );
     });
@@ -5731,10 +5732,10 @@ const MylistApiLoader = (() => {
       _init() {
         this._view = document.querySelector('.mylistPocketHoverMenu');
 
-        this._view.addEventListener(location.host.includes('google') ? 'mouseup' : 'click', this._onClick.bind(this));
-        // The menu now belongs to the link; cancel Google's follow-up click too.
+        this._view.addEventListener('click', this._onClick.bind(this));
+        this._view.addEventListener('auxclick', this._onClick.bind(this));
         if (location.host.includes('google')) {
-          this._view.addEventListener('click', this._onClick.bind(this));
+          this._view.addEventListener('mouseup', this._onContextMenu.bind(this));
         }
         document.addEventListener('scroll', () => this.hide(), true);
         window.addEventListener('resize', () => this.hide());
@@ -5800,6 +5801,11 @@ const MylistApiLoader = (() => {
       _onClick(e) {
         e.preventDefault();
         e.stopPropagation();
+        const info = e.target.closest?.('[data-command="info"]');
+        if (info && this._view.contains(info)) {
+          this._videoInfo(this._watchId);
+          this.hide();
+        }
       }
 
       _onContextMenu(e) {
@@ -5815,10 +5821,8 @@ const MylistApiLoader = (() => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (command === 'info') {
-          this._videoInfo(watchId);
-          this.hide();
-        } else if (command === 'playlist-queue') {
+        if (command === 'info') { return; }
+        if (command === 'playlist-queue') {
           this.emit('playlist-queue', watchId, this);
         } else {
           if (e.button !== 0 || e.shiftKey) {
@@ -6071,6 +6075,7 @@ const MylistApiLoader = (() => {
 
         refresh();
 
+        this._config.onkey('openNewWindow', () => this._updateLinkTargets());
         this._config.on('update',  onUpdate);
         this._favConfig.on('update', onUpdate);
         this._ngConfig.on('update', () => {
@@ -6294,12 +6299,7 @@ const MylistApiLoader = (() => {
           elm.setAttribute('data-param', videoInfo.videoId);
         });
 
-        const target = this._config.props.openNewWindow ? '_blank' : '_self';
-        Array.prototype.forEach.call(
-          this._host.querySelectorAll('.target-change'), elm => {
-          elm.target = target;
-          elm.rel = 'noopener';
-        });
+        this._updateLinkTargets();
 
         this._updateFavNg();
 
@@ -6307,6 +6307,15 @@ const MylistApiLoader = (() => {
         this.addClass('is-ok');
         this.removeClass('is-fail');
         window.setTimeout(() => { this.addClass('noclip'); }, 800);
+      }
+
+      _updateLinkTargets() {
+        const target = this._config.props.openNewWindow ? '_blank' : '_self';
+        for (const link of this._host.querySelectorAll('a.target-change')) {
+          link.target = target;
+          link.relList.add('noopener');
+        }
+        for (const link of this._rootDom.querySelectorAll('a.tag')) { link.target = target; }
       }
 
       updateDescription(videoInfo, html) {
@@ -6385,7 +6394,7 @@ const MylistApiLoader = (() => {
 
 
       _createTagSlot(tag, {isChannel, owner}) {
-        const text = util.escapeHtml(tag.text);
+        const text = tag.text;
         const lock = tag.isLocked ? 'is-locked' : '';
         const span = document.createElement('span');
         const ownerId = owner ? owner.id : '';
@@ -6771,7 +6780,7 @@ const MylistApiLoader = (() => {
         let ngs = _config.props[key].trim().split(/[\r\n]/);
         const isContain = ngs.includes(value);
 
-        if (isContain || cmd === 'remove') {
+        if (cmd === 'remove' || (cmd === 'toggle' && isContain)) {
           ngs = ngs.filter((line) => {
             if (line === value) {
               window.console.info('%c-%s:%s', 'background: cyan', key, value);
@@ -6779,7 +6788,7 @@ const MylistApiLoader = (() => {
             return line !== value;
           });
           cmd = 'remove';
-        } else if (!isContain || cmd === 'add') {
+        } else {
           ngs.push(value);
           window.console.info('%c+%s:%s', 'background: cyan', key, value);
           cmd = 'add';
@@ -6791,7 +6800,7 @@ const MylistApiLoader = (() => {
 
         const className = namespace === 'fav' ? 'is-fav-favorited' : 'is-ng-rejected';
         Array.prototype.forEach.call(
-          document.querySelectorAll(`*[data-watch-id=${param.watchId}]`),
+          document.querySelectorAll(`[data-watch-id="${CSS.escape(String(param.watchId))}"]`),
           item => { item.classList.toggle(className, cmd === 'add'); });
       };
 
@@ -7406,9 +7415,31 @@ const MylistApiLoader = (() => {
       };
     };
 
+    // 通常クリックをサイトの画面遷移より先に処理する。動的に追加されたリンクも対象。
+    const openPocketLinkInNewTab = event => {
+      if (!config.props.videoInfo.openNewWindow || event.defaultPrevented ||
+          event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) { return; }
+      const path = event.composedPath();
+      const link = path.find(node => node.matches?.('a[href]'));
+      if (!link || link.hasAttribute('download') || !/^https?:$/.test(link.protocol)) { return; }
+      const inPopup = path.some(node => node.id === 'mylistPocket-popup');
+      const inControl = path.some(node => node.matches?.(
+        'button, input, select, textarea, [role="button"], [contenteditable="true"], .mylistPocketHoverMenu, .zenzaVideoPlayerDialog'));
+      if (inControl) { return; }
+      if (!inPopup) {
+        if (location.hostname !== 'www.nicovideo.jp' || link.origin !== location.origin ||
+            !/^\/(watch|shorts|tag)\/[^/]+/.test(link.pathname) ||
+            path.some(node => node.matches?.('.command, .zenzaHoverMenu, .nrn-card-tools, .nrn-action-pane, .nrn-movie-info-toggle, .nrn-movie-info-container, .nrn-description, .nrn-compact-owner'))) { return; }
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.open(link.href, '_blank', 'noopener,noreferrer');
+    };
+
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.93-task1062', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.95-task1091', 'background: #ccf;');
       await config.promise('restore');
+      window.addEventListener('click', openPocketLinkInNewTab, true);
       initDom();
       initZenzaBridge();
 

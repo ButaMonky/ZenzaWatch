@@ -35,6 +35,12 @@ describe('Task301 Pocket bootstrap continuation', () => {
         observe: async () => { throw new Error('DOM timeout'); }}),
       document: {querySelector: () => null}, initExternal() { externalCalls++; },
       console: {log() {}, warn() {}}});
+    run(`globalThis.openPocketLinkInNewTab = ${extract('src/_pocket.js', 'openPocketLinkInNewTab', 'var')}`, c);
+    c.addEventListener = (type, handler, capture) => {
+      assert.strictEqual(type, 'click');
+      assert.strictEqual(handler, c.openPocketLinkInNewTab);
+      assert.strictEqual(capture, true);
+    };
     run(`globalThis.init = ${extract('src/_pocket.js', 'init', 'var')}`, c);
     await c.init(); assert.strictEqual(externalCalls, 1);
   });

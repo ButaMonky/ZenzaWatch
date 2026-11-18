@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 // import * as _ from 'lodash';
 import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
@@ -475,7 +476,8 @@ CommentPreviewView.__tpl__ = (`
     <div class="listContainer"></div>
   </div>
   `).trim();
-util.addStyle(`
+startup.add('CommentPreview:style', () => {
+    util.addStyle(`
   .zenzaCommentPreview {
     display: none;
     position: absolute;
@@ -499,7 +501,7 @@ util.addStyle(`
   }
 
 `, { className: 'commentPreview' });
-util.addStyle(`
+    util.addStyle(`
   .zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
     border-bottom: 24px solid transparent;
     background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.4));
@@ -618,7 +620,7 @@ util.addStyle(`
     background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.9));
   }
 `, { className: 'commentPreview list' });
-util.addStyle(`
+    util.addStyle(`
   .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) {
     bottom: 24px;
     box-sizing: border-box;
@@ -685,6 +687,7 @@ util.addStyle(`
   }
 
 `, { className: 'commentPreview hover' });
+});
 class CommentPreview {
     constructor(params) {
         this._model = new CommentPreviewModel({});

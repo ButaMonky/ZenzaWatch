@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const {extract} = require('../helpers/extractSource');
 function section(file) {
   const source = fs.readFileSync(path.resolve(__dirname, '../../', file), 'utf8');
   const begin = '//===BEGIN===';
@@ -19,9 +20,10 @@ function fallback() {
   ['log', 'warn', 'error', 'trace', 'info', 'time', 'timeEnd'].forEach(key => { logger[key] = (...args) => logs.push(args); });
   const window = {addEventListener: (name, fn) => { handlers[name] = fn; }, console: logger};
   // Evaluate actual complete module section with browser boundaries stubbed.
-  const bcast = new Function('Emitter', 'PRODUCT', 'global', 'Config', 'NicoVideoApi', 'self', 'location', 'window', 'console',
+  const startup = new Function('return '+extract('src/ZenzaContext.js', 'startup', 'var'))();
+  const bcast = new Function('startup', 'Emitter', 'PRODUCT', 'global', 'Config', 'NicoVideoApi', 'self', 'location', 'window', 'console',
     section('packages/lib/src/message/messageUtil.js') + '\nreturn BroadcastEmitter;')(
-    emitterClass(), 'ZenzaWatch', {debug: {}}, {}, {}, {}, {host: 'www.nicovideo.jp'}, window, logger);
+    startup, emitterClass(), 'ZenzaWatch', {debug: {}}, {}, {}, {}, {host: 'www.nicovideo.jp'}, window, logger);
   bcast.emitAsync = (...args) => queued.push(args);
   assert.strictEqual(typeof handlers.storage, 'function', 'fallback listener installed without BroadcastChannel');
   return {send: overrides => handlers.storage(Object.assign({type: 'storage', key: 'ZenzaWatch_message', oldValue: null, newValue: null}, overrides)), queued, logs};

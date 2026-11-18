@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {Config} from './Config';
@@ -436,7 +437,8 @@ class VideoHeaderPanel extends Emitter {
         return this._$view.find('.publicStatus').html();
     }
 }
-css.addStyle(`
+startup.add('VideoHeaderPanel:style', () => {
+    css.addStyle(`
   .zenzaScreenMode_small .zenzaWatchVideoHeaderPanel {
     display: none;
   }
@@ -484,7 +486,7 @@ css.addStyle(`
   }
 
 `, { className: 'screenMode for-popup videoHeaderPanel', disabled: true });
-css.addStyle(`
+    css.addStyle(`
   body .is-open .zenzaWatchVideoHeaderPanel {
     width: calc(100% + ${CONSTANT.RIGHT_PANEL_WIDTH}px);
   }
@@ -518,7 +520,7 @@ css.addStyle(`
     }
 
 `, { className: 'screenMode for-dialog videoHeaderPanel', disabled: true });
-css.addStyle(`
+    css.addStyle(`
   .is-open .zenzaWatchVideoHeaderPanel {
     position: absolute; /* fixedだとFirefoxのバグでおかしくなる */
     top: 0px;
@@ -549,6 +551,7 @@ css.addStyle(`
   }
 
 `, { className: 'screenMode for-full videoHeaderPanel', disabled: true });
+});
 VideoHeaderPanel.__css__ = (`
     .zenzaWatchVideoHeaderPanel {
       position: absolute;

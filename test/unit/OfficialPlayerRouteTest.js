@@ -30,6 +30,7 @@ function loadGinzaOverride(){
     window:{name:''},Config:{props:{overrideGinza:true}},
     initializeGinzaSlayer(dialog,query){calls.push({dialog,query});},
     createOfficialPlaybackGuard(){return {attach(){}};}, // Task1065
+    shortsAllowed(){return true;}, // Task1077
     OfficialPlayerRoute:loadOfficialRoute(),
     uq:{complete:()=>Promise.resolve()},
     document:{

@@ -1,9 +1,10 @@
 const assert=require('assert');
 const {subject}=require('../helpers/commentMetricSubject');
-const {beginSection,run}=require('../helpers/extractSource');
+const {beginSection,run,extract}=require('../helpers/extractSource');
 async function actual() {
   const h=await subject();h.ctx.Config=h.config;h.ctx.ZenzaWatch={};
   h.ctx.util={escapeHtml:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')};
+  run('const startup = '+extract('src/ZenzaContext.js','startup','var')+';',h.ctx);
   for(const name of ['NicoChat','NicoTextParser','CommentLayer','NicoChatViewModel'])run(beginSection('packages/zenza/src/commentLayer/'+name+'.js'),h.ctx);
   run('globalThis.Chat=NicoChat;globalThis.VM=NicoChatViewModel;',h.ctx);
   h.make=c=>h.ctx.VM.create(c,h.off);

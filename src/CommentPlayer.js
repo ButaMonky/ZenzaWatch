@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 import * as _ from 'lodash';
 import {global} from './ZenzaContext';
 import {Config, PopupMessage, VideoCaptureUtil} from './util';
@@ -188,7 +189,9 @@ class NicoCommentPlayer extends Emitter {
 }
 //@require NicoComment
 //@require OffscreenLayer
-NicoComment.offscreenLayer = OffscreenLayer(Config);
+startup.add('CommentPlayer:config-1', () => {
+    NicoComment.offscreenLayer = OffscreenLayer(Config);
+});
 //@require NicoCommentViewModel
 //@require NicoChatGroup
 //@require NicoChatGroupViewModel
@@ -211,14 +214,18 @@ const updateSpeedRate = () => {
         NicoChatViewModel.emitter.emit('updateCommentSpeedRate', rate);
     }
 };
-Config.onkey('commentSpeedRate', updateSpeedRate);
-Config.onkey('autoCommentSpeedRate', updateSpeedRate);
-Config.onkey('playbackRate', updateSpeedRate);
-updateSpeedRate();
+startup.add('CommentPlayer:config-2', () => {
+    Config.onkey('commentSpeedRate', updateSpeedRate);
+    Config.onkey('autoCommentSpeedRate', updateSpeedRate);
+    Config.onkey('playbackRate', updateSpeedRate);
+    updateSpeedRate();
+});
 //@require NicoCommentCss3PlayerView
-Object.assign(global.debug, {
-    NicoChat,
-    NicoChatViewModel
+startup.add('CommentPlayer:config-3', () => {
+    Object.assign(global.debug, {
+        NicoChat,
+        NicoChatViewModel
+    });
 });
 //===END===
 export {

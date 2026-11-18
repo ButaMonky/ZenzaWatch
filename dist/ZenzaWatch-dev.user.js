@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.456-task1076
+// @version        2.7.468-task1088
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-17 12:00Z d111b8c1
+// build: 2026-11-18 04:54Z 7b2f7b30
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1335,7 +1335,7 @@ function createDisplaySettings(w, gm, registered=[]) {
     storageTiming:()=>({saveCount:storageTiming.saveCount,totalSaveMs:Math.round(storageTiming.totalSaveMs),maxSaveMs:Math.round(storageTiming.maxSaveMs)})};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","historyExtension.enable","extensionIntegration.enable","extensionIntegration.nicotubeSaver","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","diagnostics.console.enabled","diagnostics.console.errors","diagnostics.console.startup","diagnostics.console.player","diagnostics.console.network","diagnostics.console.notifications","diagnostics.console.settings","diagnostics.console.events","diagnostics.console.performance","diagnostics.console.intervalSec","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.nicoadEnd","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","videoInfo.ownerVideoKindsStyle","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","playlist.prefetchAhead.skipWhenLoop","playlist.prefetchAhead.skipWhenPaused","playlist.prefetchAhead.skipWhenDataSaver","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","historyExtension.enable","extensionIntegration.enable","extensionIntegration.nicotubeSaver","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","diagnostics.console.enabled","diagnostics.console.errors","diagnostics.console.startup","diagnostics.console.player","diagnostics.console.network","diagnostics.console.notifications","diagnostics.console.settings","diagnostics.console.events","diagnostics.console.performance","diagnostics.console.intervalSec","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.nicoadEnd","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","videoInfo.ownerVideoKindsStyle","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","playlist.prefetchAhead.skipWhenLoop","playlist.prefetchAhead.skipWhenPaused","playlist.prefetchAhead.skipWhenDataSaver","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","overrideGinza.officialPlayer","overrideGinza.followNavigation","overrideGinza.openOnNavigation","overrideGinza.shorts","overrideGinza.resumeOnClose","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -2089,10 +2089,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.456-task1076';
+    var VER = '2.7.468-task1088';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-17 12:00Z d111b8c1';
+    var BUILD = '2026-11-18 04:54Z 7b2f7b30';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -6119,6 +6119,11 @@ const Config = (() => {
 				'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 				'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
 				overrideGinza: false, // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
+				'overrideGinza.officialPlayer': 'manual', // manual: 開いた時に止め、公式の再生ボタンを押した時だけ再生 / block: 押しても再生しない
+				'overrideGinza.followNavigation': true, // 公式の画面で別の動画へ移ったら Zenza も切り替える
+				'overrideGinza.openOnNavigation': true, // ページを読み込まずに視聴ページへ移ったら Zenza で開く
+				'overrideGinza.shorts': true, // ショート動画のページでも Zenza で開く
+				'overrideGinza.resumeOnClose': false, // Zenza を閉じたら公式で同じ所から続きを再生
 				enableGinzaSlayer: false, // まだ実験中
 				lastPlayerId: '',
 				playbackRate: 1.0,
@@ -8454,7 +8459,9 @@ const AsyncEmitter = (() => {
 	emitter.prototype.emitAsync = Emitter.prototype.emitAsync;
 	return emitter;
 })();
+startup.add('util:async-emitter', () => {
 (ZenzaWatch ? ZenzaWatch.lib : {}).AsyncEmitter = AsyncEmitter;
+});
 const Fullscreen = {
 		now() {
 				return !!(this.get() || document.mozFullScreen || document.webkitIsFullScreen);
@@ -8515,8 +8522,10 @@ for (const k of Object.keys(window.console)) {
 }
 ['assert', 'error', 'warn'].forEach(k =>
 	dummyConsole[k] = window.console[k].bind(window.console));
+startup.add('util:console', () => {
 console = (Config.props && Config.props.debug) ? window.console : dummyConsole;
 Config.onkey('debug', v => console = v ? window.console : dummyConsole);
+});
 const css = (() => {
 		const setPropsTask = [];
 		const applySetProps = throttle.raf(() => {
@@ -9060,19 +9069,21 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
 		};
 		bcast.notifyClose = () => bcast.sendMessage({ command: 'notifyClose' });
 		bcast.notifyOpen = playerId => bcast.sendMessage({ command: 'notifyOpen', params: { playerId } });
-		global.debug.hello = bcast.hello;
-		global.debug.ping = ({ timeout, force } = {}) => {
-				window.console.time('ping');
-				return bcast.ping({ timeout, force }).then(result => {
-						window.console.timeEnd('ping');
-						window.console.info('ping result: ok', result);
-						return result;
-				}).catch(result => {
-						window.console.timeEnd('ping');
-						window.console.error('ping fail: ', result);
-						return result;
-				});
-		};
+		startup.add('messageUtil:debug', () => {
+				global.debug.hello = bcast.hello;
+				global.debug.ping = ({ timeout, force } = {}) => {
+						window.console.time('ping');
+						return bcast.ping({ timeout, force }).then(result => {
+								window.console.timeEnd('ping');
+								window.console.info('ping result: ok', result);
+								return result;
+						}).catch(result => {
+								window.console.timeEnd('ping');
+								window.console.error('ping fail: ', result);
+								return result;
+						});
+				};
+		});
 		if (location.host === 'www.nicovideo.jp') {
 				if (channel) {
 						channel.addEventListener('message', onBroadcastMessage);
@@ -9272,7 +9283,8 @@ const WatchPageHistory = (() => {
 				return {
 						initialize: () => { },
 						pushHistory: () => { },
-						pushHistoryAgency: () => { }
+						pushHistoryAgency: () => { },
+						isZenzaUrl: () => false
 				};
 		}
 		let originalUrl = window && window.location && window.location.href;
@@ -9428,7 +9440,8 @@ const WatchPageHistory = (() => {
 		return {
 				initialize,
 				pushHistory,
-				pushHistoryAgency
+				pushHistoryAgency,
+				isZenzaUrl: () => isPushed && window.location.href === pushedUrl
 		};
 })();
 const env = {
@@ -11929,9 +11942,11 @@ class RangeBarElement extends HTMLElement {
 		}
 	}
 }
+startup.add('RangeBarElement:style', () => {
 cssUtil.registerProps(
 	{name: '--range-percent', syntax: '<percentage>', initialValue: cssUtil.percent(0), inherits: true}
 );
+});
 if (window.customElements) {
 	customElements.get('zenza-range-bar') || window.customElements.define('zenza-range-bar', RangeBarElement);
 }
@@ -22666,7 +22681,9 @@ const { YouTubeWrapper } = (() => {
 		}
 		return { YouTubeWrapper };
 })();
-global.debug.YouTubeWrapper = YouTubeWrapper;
+startup.add('YouTubeWrapper:debug', () => {
+		global.debug.YouTubeWrapper = YouTubeWrapper;
+});
 
 /*
 * Task 074: 音量まわりの自動調整をまとめる仕組み。
@@ -32547,7 +32564,8 @@ class VideoControlBar extends Emitter {
 }
 VideoControlBar.BASE_HEIGHT = CONSTANT.CONTROL_BAR_HEIGHT;
 VideoControlBar.BASE_SEEKBAR_HEIGHT = 10;
-util.addStyle(`
+startup.add('VideoControlBar:style', () => {
+		util.addStyle(`
 	.videoControlBar {
 		position: fixed;
 		bottom: 0;
@@ -33499,7 +33517,7 @@ util.addStyle(`
 		display: none;
 	}
 `, { className: 'videoControlBar' });
-util.addStyle(`
+		util.addStyle(`
 	.videoControlBar {
 		width: 100% !important; /* 100vwだと縦スクロールバーと被る */
 	}
@@ -33548,7 +33566,7 @@ util.addStyle(`
 		background: var(--zt-surface-0, #000);
 	}
 `, { className: 'screenMode for-popup videoControlBar', disabled: true });
-util.addStyle(`
+		util.addStyle(`
 	body .videoControlBar {
 		position: absolute !important; /* firefoxのバグ対策 */
 		opacity: 0;
@@ -33614,7 +33632,7 @@ util.addStyle(`
 		outline: none;
 	}
 `, { className: 'screenMode for-full videoControlBar', disabled: true });
-util.addStyle(`
+		util.addStyle(`
 	.screenModeSelectMenu {
 		display: none;
 	}
@@ -33672,6 +33690,7 @@ util.addStyle(`
 		pointer-events: auto;
 	}
 `, { className: 'screenMode for-screen-full videoControlBar', disabled: true });
+});
 VideoControlBar.__tpl__ = (`
 		<div class="videoControlBar" data-command="nop">
 			<div class="seekBarContainer">
@@ -34739,7 +34758,8 @@ CommentPreviewView.__tpl__ = (`
 		<div class="listContainer"></div>
 	</div>
 	`).trim();
-util.addStyle(`
+startup.add('CommentPreview:style', () => {
+		util.addStyle(`
 	.zenzaCommentPreview {
 		display: none;
 		position: absolute;
@@ -34762,7 +34782,7 @@ util.addStyle(`
 		display: block;
 	}
 `, { className: 'commentPreview' });
-util.addStyle(`
+		util.addStyle(`
 	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
 		border-bottom: 24px solid transparent;
 		background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.4));
@@ -34872,7 +34892,7 @@ util.addStyle(`
 		background: var(--zt-overlay-dark, rgba(0, 0, 0, 0.9));
 	}
 `, { className: 'commentPreview list' });
-util.addStyle(`
+		util.addStyle(`
 	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) {
 		bottom: 24px;
 		box-sizing: border-box;
@@ -34936,6 +34956,7 @@ util.addStyle(`
 		}
 	}
 `, { className: 'commentPreview hover' });
+});
 class CommentPreview {
 		constructor(params) {
 				this._model = new CommentPreviewModel({});
@@ -36797,6 +36818,7 @@ NicoChatViewModel.LINE_HEIGHT = {
 	SMALL: 18
 };
 NicoChatViewModel.CHAT_MARGIN = 5;
+startup.add('NicoChatViewModel:config', () => {
 NicoChatViewModel.BASE_SCALE = parseFloat(Config.props.baseChatScale, 10);
 Config.onkey('baseChatScale', scale => {
 	if (isNaN(scale)) {
@@ -36805,6 +36827,7 @@ Config.onkey('baseChatScale', scale => {
 	scale = parseFloat(scale, 10);
 	NicoChatViewModel.BASE_SCALE = scale;
 	NicoChatViewModel.emitter.emit('updateBaseChatScale', scale);
+});
 });
 NicoChatViewModel.SPEED_RATE = 1.0;
 class FlashNicoChatViewModel extends NicoChatViewModel {}
@@ -38315,7 +38338,9 @@ const OffscreenLayer = config => {
 		get optionCss() { return optionStyle.innerHTML; }
 	};
 };
-NicoComment.offscreenLayer = OffscreenLayer(Config);
+startup.add('CommentPlayer:config-1', () => {
+		NicoComment.offscreenLayer = OffscreenLayer(Config);
+});
 class NicoCommentViewModel extends Emitter {
 	constructor(...args) {
 		super();
@@ -38860,10 +38885,12 @@ const updateSpeedRate = () => {
 				NicoChatViewModel.emitter.emit('updateCommentSpeedRate', rate);
 		}
 };
-Config.onkey('commentSpeedRate', updateSpeedRate);
-Config.onkey('autoCommentSpeedRate', updateSpeedRate);
-Config.onkey('playbackRate', updateSpeedRate);
-updateSpeedRate();
+startup.add('CommentPlayer:config-2', () => {
+		Config.onkey('commentSpeedRate', updateSpeedRate);
+		Config.onkey('autoCommentSpeedRate', updateSpeedRate);
+		Config.onkey('playbackRate', updateSpeedRate);
+		updateSpeedRate();
+});
 // already required
 class NicoCommentCss3PlayerView extends Emitter {
 	constructor(params) {
@@ -39402,6 +39429,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 	}
 }
 /* eslint-disable */
+startup.add('NicoCommentCss3PlayerView:config', () => {
 NicoCommentCss3PlayerView.__TPL__ = ((Config) => {
 	let ownerShadowColor = Config.props['commentLayer.ownerCommentShadowColor'];
 	ownerShadowColor = ownerShadowColor.replace(/([^a-z^0-9^#])/ig, '');
@@ -39794,9 +39822,12 @@ spacer {
 </body></html>
 	`).trim();
 })(Config);
-Object.assign(global.debug, {
-		NicoChat,
-		NicoChatViewModel
+});
+startup.add('CommentPlayer:config-3', () => {
+		Object.assign(global.debug, {
+				NicoChat,
+				NicoChatViewModel
+		});
 });
 
 const CommentLayoutWorker = (config => {
@@ -56646,7 +56677,8 @@ for (const role of [NicoVideoPlayerDialogViewSmallMode, NicoVideoPlayerDialogVie
 				Object.defineProperty(NicoVideoPlayerDialogView.prototype, key, { ...descriptor, enumerable: false });
 		}
 }
-util.addStyle(`
+startup.add('NicoVideoPlayerDialogView:style', () => {
+		util.addStyle(`
 	.is-watch .BaseLayout {
 		display: none;
 	}
@@ -56751,7 +56783,7 @@ util.addStyle(`
 		margin-left: 20%;
 	}
 `, { className: 'screenMode for-full', disabled: true });
-util.addStyle(`
+		util.addStyle(`
 	body #zenzaVideoPlayerDialog {
 		contain: style size;
 	}
@@ -57195,14 +57227,14 @@ util.addStyle(`
 		}
 	}
 `, { className: 'screenMode for-popup', disabled: true });
-util.addStyle(`
+		util.addStyle(`
 body.zenzaScreenMode_sideView,
 body.zenzaScreenMode_small {
 	border-bottom: 40px solid;
 	margin-top: 0;
 }
 `, { className: 'domain slack-com', disabled: true });
-util.addStyle(`
+		util.addStyle(`
 	.zenzaScreenMode_normal .zenzaPlayerContainer .videoPlayer {
 		left: 2.38%;
 		width: 95.23%;
@@ -57212,7 +57244,7 @@ util.addStyle(`
 		height: ${CONSTANT.BIG_PLAYER_HEIGHT}px;
 	}
 `, { className: 'screenMode for-dialog', disabled: true });
-util.addStyle(`
+		util.addStyle(`
 	.zenzaScreenMode_3D,
 	.zenzaScreenMode_normal,
 	.zenzaScreenMode_big,
@@ -57260,6 +57292,7 @@ util.addStyle(`
 		visibility: hidden !important;
 	}
 `, { className: 'zenza-open', disabled: true });
+});
 NicoVideoPlayerDialogView.__css__ = `
 	.zenzaVideoPlayerDialog {
 		display: none;
@@ -61958,7 +61991,9 @@ const CommentPictureInPicture = (() => {
 		CommentRenderer,
 		getNakaXpos
 	};
+	startup.add('CommentPictureInPicture:debug', () => {
 	global.debug.commentPictureInPicture = api;
+	});
 	return api;
 })();
 const ThumbnailSourcePolicy = (() => {
@@ -65243,7 +65278,8 @@ class VideoInfoPanel extends Emitter {
 				return $body;
 		}
 }
-css.addStyle(`
+startup.add('VideoInfoPanel:style-1', () => {
+		css.addStyle(`
 	.zenzaWatchVideoInfoPanel .tabs:not(.activeTab) {
 		display: none;
 		pointer-events: none;
@@ -65770,7 +65806,7 @@ css.addStyle(`
 		content-visibility: auto;
 	}
 	`, { className: 'videoInfoPanel' });
-css.addStyle(`
+		css.addStyle(`
 	.is-open .zenzaWatchVideoInfoPanel>* {
 		display: none;
 		pointer-events: none;
@@ -65809,7 +65845,7 @@ css.addStyle(`
 		transition: opacity 0.4s ease, transform 0.4s ease 1s;
 	}
 `, { className: 'screenMode for-full videoInfoPanel' });
-css.addStyle(`
+		css.addStyle(`
 	.zenzaScreenMode_small .zenzaWatchVideoInfoPanel {
 		display: none;
 	}
@@ -65870,6 +65906,7 @@ css.addStyle(`
 		background: var(--zt-surface-mid, #ccc);
 	}
 `, { className: 'screenMode for-popup videoInfoPanel' });
+});
 uq.ready().then(() => {
 		if (document.body.classList.contains('MatrixRanking-body')) {
 				css.addStyle(`
@@ -65956,7 +65993,8 @@ uq.ready().then(() => {
 		`, { className: 'screenMode for-sideView MatrixRanking', disabled: true });
 		}
 });
-css.addStyle(`
+startup.add('VideoInfoPanel:style-2', () => {
+		css.addStyle(`
 	.is-open .zenzaWatchVideoInfoPanel {
 		display: none;
 		left: calc(100%);
@@ -66068,11 +66106,12 @@ css.addStyle(`
 		}
 	}
 `, { className: 'screenMode for-dialog videoInfoPanel' });
-css.addStyle(`
+		css.addStyle(`
 	.zenzaWatchVideoInfoPanel .comment {
 		padding-left: 0;
 	}
 `, { className: 'domain slack-com', disabled: true });
+});
 VideoInfoPanel.__tpl__ = (`
 		<div class="zenzaWatchVideoInfoPanel show initializing">
 			<div class="nowLoading">
@@ -66509,7 +66548,8 @@ class VideoHeaderPanel extends Emitter {
 				return this._$view.find('.publicStatus').html();
 		}
 }
-css.addStyle(`
+startup.add('VideoHeaderPanel:style', () => {
+		css.addStyle(`
 	.zenzaScreenMode_small .zenzaWatchVideoHeaderPanel {
 		display: none;
 	}
@@ -66553,7 +66593,7 @@ css.addStyle(`
 		}
 	}
 `, { className: 'screenMode for-popup videoHeaderPanel', disabled: true });
-css.addStyle(`
+		css.addStyle(`
 	body .is-open .zenzaWatchVideoHeaderPanel {
 		width: calc(100% + ${CONSTANT.RIGHT_PANEL_WIDTH}px);
 	}
@@ -66582,7 +66622,7 @@ css.addStyle(`
 			background: var(--zt-surface-1, #222);
 		}
 `, { className: 'screenMode for-dialog videoHeaderPanel', disabled: true });
-css.addStyle(`
+		css.addStyle(`
 	.is-open .zenzaWatchVideoHeaderPanel {
 		position: absolute; /* fixedだとFirefoxのバグでおかしくなる */
 		top: 0px;
@@ -66608,6 +66648,7 @@ css.addStyle(`
 		width: calc(100% - 220px);
 	}
 `, { className: 'screenMode for-full videoHeaderPanel', disabled: true });
+});
 VideoHeaderPanel.__css__ = (`
 		.zenzaWatchVideoHeaderPanel {
 			position: absolute;
@@ -67970,12 +68011,14 @@ class VideoSearchForm extends Emitter {
 		}
 }
 VideoSearchForm.UNORDERABLE = ['h', 'p'];
-css.addStyle(`
+startup.add('VideoSearchForm:style', () => {
+		css.addStyle(`
 	.is-open .zenzaWatchVideoHeaderPanel .zenzaVideoSearchPanel {
 		top: 120px;
 		right: 32px;
 	}
 `, { className: 'screenMode for-popup videoSearchPanel', disabled: true });
+});
 VideoSearchForm.VIDEO_ID_REG =
 		/^(?:https?:\/\/)?(?:(?:www\.|sp\.|embed\.)?nicovideo\.jp\/(?:watch|shorts)\/|nico\.ms\/)?((?:sm|nm|so|ss)\d+)(?:[\/?#&].*)?$/i;
 VideoSearchForm.MAX_VIDEO_ID_CARDS = 5;
@@ -73821,71 +73864,126 @@ class HoverMenu {
 		const createOfficialPlaybackGuard = () => {
 				let active = true;
 				let dialog = null;
-				let allowedWatchId = null;
+				let allowedWatchId = null; // 利用者が Zenza を閉じた動画（その動画は公式で見る）
+				let lastGestureAt = -Infinity; // 公式プレイヤーの枠の上で押した時刻
+				let userPlayed = new WeakSet(); // 利用者が自分で再生した公式の video（止めない）
+				const setting = (key) => Config.getValue(key);
 				const currentQuery = () => textUtil.parseQuery(location.search.replace(/^\?/, ''));
 				const currentWatchId = () => util.isGinzaWatchUrl() ? util.getWatchId() : null;
+				const isShortsPage = () => /^\/shorts\//.test(location.pathname);
+				const zenzaOwnUrl = () => !!WatchPageHistory.isZenzaUrl?.();
+				let lastOfficialWatchId = currentWatchId();
 				const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
-						window.name !== 'watchGinza';
-				const held = new Set();
-				const noPlay = () => Promise.resolve();
-				const stop = (el) => {
-						if (!isOfficialMedia(el)) {
+						window.name !== 'watchGinza' && (!isShortsPage() || setting('overrideGinza.shorts') !== false);
+				const manualMode = () => setting('overrideGinza.officialPlayer') !== 'block';
+				const officialRects = () => [...document.querySelectorAll('#root video')]
+						.filter(isOfficialMedia)
+						.map(v => (v.closest('.grid-area_\\[player\\]') || v).getBoundingClientRect())
+						.filter(r => r.width > 0 && r.height > 0);
+				const onPointerDown = (ev) => {
+						if (isZenzaMedia(ev.target) || ev.target?.closest?.('.zen-family, .zenzaVideoPlayerDialog')) {
 								return;
 						}
-						if (!held.has(el)) {
-								held.add(el);
-								try {
-										Object.defineProperty(el, 'play', { configurable: true, writable: true, value: noPlay });
-								}
-								catch (_) { /* 差し替えられなくても止めはする */ }
+						const hit = officialRects().some(r => ev.clientX >= r.left && ev.clientX <= r.right &&
+								ev.clientY >= r.top && ev.clientY <= r.bottom + 64);
+						if (hit) {
+								lastGestureAt = performance.now();
 						}
-						if (el.paused) {
-								return;
-						}
-						try {
-								el.pause();
-						}
-						catch (_) { /* 外れた video は止められなくてよい */ }
 				};
-				const releaseHeld = () => {
-						held.forEach(el => { try {
-								delete el.play;
-						}
-						catch (_) { /* 元に戻せなくても続ける */ } });
-						held.clear();
-				};
-				const onPlay = (ev) => {
-						if (!active || !isOfficialMedia(ev.target) || !wanted()) {
-								return;
-						}
-						const watchId = currentWatchId();
-						if (!watchId) {
-								return;
-						} // 視聴ページ以外の動画（一覧の試し再生など）には触らない
-						if (!dialog) {
-								stop(ev.target);
-								return;
-						} // 起動の途中（ダイアログができる前）は止めるだけ
-						if (dialog.isOpen) {
-								stop(ev.target);
-								return;
-						} // Zenza が開いている間は止める（画面モードに関係なく）
-						if (watchId === allowedWatchId) {
-								return;
-						} // この動画は公式で見ると決めた（Zenza を閉じた）
-						stop(ev.target);
+				const userWantsOfficial = () => manualMode() && performance.now() - lastGestureAt < 1000;
+				const realPlay = HTMLMediaElement.prototype.play;
+				const open = (watchId) => {
 						try {
 								dialog.open(watchId, {});
 						}
-						catch (_) { /* 開けなかった時は公式のまま（止めたものは利用者が再生できる） */ }
+						catch (_) { /* 開けなかった時は公式のまま */ }
 				};
-				window.addEventListener('play', onPlay, true);
-				window.addEventListener('playing', onPlay, true);
-				const stopAll = () => {
-						if (active && wanted() && currentWatchId() && (!dialog || dialog.isOpen)) {
-								document.querySelectorAll('video, audio').forEach(stop);
+				const followIfNavigated = () => {
+						const watchId = currentWatchId();
+						if (!watchId || zenzaOwnUrl() || watchId === lastOfficialWatchId) {
+								return;
+						}
+						lastOfficialWatchId = watchId;
+						userPlayed = new WeakSet();
+						if (dialog?.isOpen && setting('overrideGinza.followNavigation') !== false && wanted() && dialog.watchId !== watchId) {
+								open(watchId);
 						}
 				};
+				const shouldHold = (el) => {
+						if (!active || !isOfficialMedia(el) || !wanted() || userPlayed.has(el)) {
+								return false;
+						}
+						const watchId = currentWatchId();
+						if (!watchId) {
+								return false;
+						} // 視聴ページ以外の動画（一覧の試し再生など）には触らない
+						if (!dialog || dialog.isOpen) {
+								return true;
+						} // 起動の途中・Zenza が開いている間
+						return watchId !== allowedWatchId && setting('overrideGinza.openOnNavigation') !== false;
+				};
+				const held = new Set();
+				function guardedPlay() {
+						followIfNavigated();
+						if (userWantsOfficial() && dialog?.isOpen) {
+								userPlayed.add(this);
+						}
+						if (!shouldHold(this)) {
+								unhold(this);
+								return realPlay.call(this);
+						}
+						openIfClosed();
+						return Promise.resolve();
+				}
+				const hold = (el) => {
+						if (!held.has(el)) {
+								held.add(el);
+								try {
+										Object.defineProperty(el, 'play', { configurable: true, writable: true, value: guardedPlay });
+								}
+								catch (_) { /* 差し替えられなくても止めはする */ }
+						}
+						if (!el.paused) {
+								try {
+										el.pause();
+								}
+								catch (_) { /* 外れた video は止められなくてよい */ }
+						}
+				};
+				const unhold = (el) => {
+						if (!held.delete(el)) {
+								return;
+						}
+						try {
+								delete el.play;
+						}
+						catch (_) { /* 元に戻せなくても続ける */ }
+				};
+				const releaseHeld = () => { [...held].forEach(unhold); };
+				const openIfClosed = () => {
+						const watchId = currentWatchId();
+						if (dialog && !dialog.isOpen && watchId) {
+								open(watchId);
+						}
+				};
+				const onPlay = (ev) => {
+						const el = ev.target;
+						if (!isOfficialMedia(el)) {
+								return;
+						}
+						followIfNavigated();
+						if (userWantsOfficial() && dialog?.isOpen) {
+								userPlayed.add(el);
+						}
+						if (!shouldHold(el)) {
+								return;
+						}
+						hold(el);
+						openIfClosed();
+				};
+				const stopAll = () => { document.querySelectorAll('video, audio').forEach(el => { if (shouldHold(el)) {
+						hold(el);
+				} }); };
 				let watcher = null;
 				const watchNew = () => {
 						const root = document.getElementById('root');
@@ -73901,12 +73999,46 @@ class HoverMenu {
 						watcher.observe(root, { childList: true, subtree: true });
 				};
 				const unwatchNew = () => { watcher?.disconnect(); watcher = null; };
+				const resumeOfficial = (watchId, time) => {
+						if (setting('overrideGinza.resumeOnClose') !== true || !watchId || currentWatchId() !== watchId) {
+								return;
+						}
+						const v = [...document.querySelectorAll('#root video')].find(el => isOfficialMedia(el) &&
+								el.getBoundingClientRect().width > 0);
+						if (!v) {
+								return;
+						}
+						try {
+								if (time > 0 && Number.isFinite(time)) {
+										v.currentTime = time;
+								}
+								void realPlay.call(v).catch(() => { });
+						}
+						catch (_) { /* 続きから再生できなくても閉じるのは続ける */ }
+				};
+				window.addEventListener('play', onPlay, true);
+				window.addEventListener('playing', onPlay, true);
+				window.addEventListener('pointerdown', onPointerDown, true);
 				stopAll();
 				return {
 						attach(next) {
 								dialog = next;
-								next.on?.('close', () => { allowedWatchId = currentWatchId(); unwatchNew(); releaseHeld(); });
-								next.on?.('open', () => { allowedWatchId = null; stopAll(); watchNew(); });
+								next.on?.('close', () => {
+										const watchId = currentWatchId();
+										const closedWatchId = next.watchId, time = Number(next._lastCurrentTime) || 0;
+										allowedWatchId = watchId;
+										unwatchNew();
+										releaseHeld();
+										if (watchId && closedWatchId === watchId) {
+												resumeOfficial(watchId, time);
+										}
+								});
+								next.on?.('open', () => {
+										allowedWatchId = null;
+										userPlayed = new WeakSet();
+										stopAll();
+										watchNew();
+								});
 								stopAll();
 								if (next.isOpen) {
 										watchNew();
@@ -73918,11 +74050,14 @@ class HoverMenu {
 								releaseHeld();
 								window.removeEventListener('play', onPlay, true);
 								window.removeEventListener('playing', onPlay, true);
+								window.removeEventListener('pointerdown', onPointerDown, true);
 						},
 						get active() { return active; }
 				};
 		};
-		const shouldOverrideGinza = (query) => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(query) && window.name !== 'watchGinza';
+		const shortsAllowed = () => !/^\/shorts\//.test(location.pathname) || Config.getValue('overrideGinza.shorts') !== false;
+		const shouldOverrideGinza = (query) => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(query) && window.name !== 'watchGinza' &&
+				shortsAllowed();
 		const overrideGinza = async (dialog, query, guard) => {
 				if (OfficialPlayerRoute.isOfficialRequest(query) || window.name === 'watchGinza') {
 						if (window.name === 'watchGinza') {
@@ -73930,7 +74065,7 @@ class HoverMenu {
 						}
 						return;
 				}
-				if (!Config.props.overrideGinza) {
+				if (!Config.props.overrideGinza || !shortsAllowed()) {
 						return;
 				}
 				if (!guard) {
@@ -74187,8 +74322,7 @@ const replaceRedirectLinks = async () => {
 };
 		const initialize = async function () {
 				const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
-				const officialGuard = location.host === 'www.nicovideo.jp' && (util.isGinzaWatchUrl() ? shouldOverrideGinza(startQuery) : true) ?
-						createOfficialPlaybackGuard() : null;
+				const officialGuard = location.host === 'www.nicovideo.jp' ? createOfficialPlaybackGuard() : null;
 				if (typeof StoryboardCacheDb !== 'undefined' && StoryboardCacheDb.configure) {
 						const configureSceneCache = () => {
 								const capacity = Number(Config.getValue('storyboardCacheMaxMB'));
@@ -75451,7 +75585,20 @@ class ModernAdvancedSettingsModel {
 										])]
 						]),
 						...group('再生・音声', '公式プレイヤー連携', [
-								['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { description: '視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。初期値OFF。' }]
+								['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { description: '視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。ZenzaWatch を開いた時は、公式プレイヤーを必ず一時停止します。初期値OFF。下の項目で細かい動きを選べます。' }],
+								['overrideGinza.officialPlayer', 'ZenzaWatch が開いている間の公式プレイヤー', {
+												...select([['manual', '開いた時に止める。公式の再生ボタンを押した時だけ一緒に再生する'], ['block', '止めたままにする（公式の再生ボタンを押しても再生しない）']]),
+												dependsOn: 'overrideGinza',
+												description: '「開いた時に止める」では、ZenzaWatch を開いた時（別の動画に切り替えた時も）は必ず公式を止めます。そのあと公式プレイヤーの画面の上で再生ボタンを押すと、ZenzaWatch と一緒に公式も再生できます（画面モード「小」などで公式が見えている時）。公式が自分で再生し直そうとしても再生しません。'
+										}],
+								['overrideGinza.followNavigation', '公式の画面で別の動画へ移ったら、ZenzaWatch もその動画に切り替える', { type: 'boolean', dependsOn: 'overrideGinza',
+												description: 'ZenzaWatch が開いている時に、公式の画面の関連動画・ショート動画の次の動画などへ移ると、ZenzaWatch もその動画を再生します。OFF にすると、ZenzaWatch は今の動画のまま、公式は止めたままにします。' }],
+								['overrideGinza.openOnNavigation', 'ページを読み込まずに視聴ページへ移った時も ZenzaWatch で開く', { type: 'boolean', dependsOn: 'overrideGinza',
+												description: '検索・タグ・ユーザーページ・フォロー新着などから、公式の画面の中で（ページを読み込み直さずに）視聴ページへ移った時に、公式プレイヤーを止めて ZenzaWatch で開きます。視聴ページで ZenzaWatch を閉じた動画は、公式で見られます。' }],
+								['overrideGinza.shorts', 'ショート動画も ZenzaWatch で開く', { type: 'boolean', dependsOn: 'overrideGinza',
+												description: 'ショート動画のページ（/shorts/）でも、公式プレイヤーの代わりに ZenzaWatch で再生します。OFF にすると、ショート動画は公式プレイヤーに任せます。' }],
+								['overrideGinza.resumeOnClose', 'ZenzaWatch を閉じたら、公式プレイヤーで続きから再生する', { type: 'boolean', dependsOn: 'overrideGinza',
+												description: '視聴ページで ZenzaWatch を閉じた時に、公式プレイヤーで同じ位置から再生を続けます。初期値OFF。' }]
 						]),
 						...group('画面・映像', '画面フィルター', [
 								['screenFilter.showDescriptions', '画面フィルターの説明を表示'],
@@ -86554,7 +86701,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.456-task1076",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.468-task1088",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

@@ -9,6 +9,7 @@ import type {ZenzaDescriptionGeneration, ZenzaZenTubeTimerGeneration, ZenzaVideo
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const VideoHeaderPanel: typeof import('./VideoHeaderPanel').VideoHeaderPanel;
 declare const UaaView: typeof import('./UaaView').UaaView;
 declare const RelatedInfoMenu: typeof import('./RelatedInfoMenu').RelatedInfoMenu;
@@ -748,6 +749,7 @@ class VideoInfoPanel extends Emitter {
   }
 }
 
+startup.add('VideoInfoPanel:style-1', () => {
 css.addStyle(`
   .zenzaWatchVideoInfoPanel .tabs:not(.activeTab) {
     display: none;
@@ -1438,6 +1440,7 @@ css.addStyle(`
     background: var(--zt-surface-mid, #ccc);
   }
 `, {className: 'screenMode for-popup videoInfoPanel'});
+});
 
 uq.ready().then(() => {
   if (document.body.classList.contains('MatrixRanking-body')) {
@@ -1527,6 +1530,7 @@ uq.ready().then(() => {
     }
 });
 
+startup.add('VideoInfoPanel:style-2', () => {
 css.addStyle(`
   .is-open .zenzaWatchVideoInfoPanel {
     display: none;
@@ -1656,6 +1660,7 @@ css.addStyle(`
     padding-left: 0;
   }
 `, {className: 'domain slack-com', disabled: true});
+});
 
 VideoInfoPanel.__tpl__ = (`
     <div class="zenzaWatchVideoInfoPanel show initializing">

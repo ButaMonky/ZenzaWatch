@@ -8,6 +8,7 @@
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const VideoHoverMenu: typeof import('./VideoHoverMenu').VideoHoverMenu;
 // Presentation forwards the original model unchanged. Only these two fields
 // are inspected for bookmarks, under the existing string/finite-number checks.
@@ -1012,6 +1013,7 @@ for (const role of [NicoVideoPlayerDialogViewSmallMode, NicoVideoPlayerDialogVie
   }
 }
 
+startup.add('NicoVideoPlayerDialogView:style', () => {
 util.addStyle(`
   .is-watch .BaseLayout {
     display: none;
@@ -1677,6 +1679,7 @@ util.addStyle(`
     visibility: hidden !important;
   }
 `, {className: 'zenza-open', disabled: true});
+});
 
 NicoVideoPlayerDialogView.__css__ = `
 

@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {Config} from './Config';
@@ -1270,12 +1271,14 @@ class VideoSearchForm extends Emitter {
 }
 // 本家で昇順/降順を選べない並び順（ニコニコで人気・あなたへのおすすめ）
 VideoSearchForm.UNORDERABLE = ['h', 'p'];
-css.addStyle(`
+startup.add('VideoSearchForm:style', () => {
+    css.addStyle(`
   .is-open .zenzaWatchVideoHeaderPanel .zenzaVideoSearchPanel {
     top: 120px;
     right: 32px;
   }
 `, { className: 'screenMode for-popup videoSearchPanel', disabled: true });
+});
 // Task 074: ショート動画(ss〜)と /shorts/ 形式のURLにも対応
 VideoSearchForm.VIDEO_ID_REG =
     /^(?:https?:\/\/)?(?:(?:www\.|sp\.|embed\.)?nicovideo\.jp\/(?:watch|shorts)\/|nico\.ms\/)?((?:sm|nm|so|ss)\d+)(?:[\/?#&].*)?$/i;

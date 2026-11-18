@@ -106,56 +106,104 @@ const {initialize} = (() => {
     const root = document.getElementById('root');
     return !!root && root.contains(el);
   };
-  // Task1075: 見張りを直した。
-  // (1) 以前は画面モードが「小」「横」の時に見張りを止めていたが、視聴ページの画面モードは初期値が「小」なので、
-  //     視聴ページを開くとほぼいつも公式プレイヤーも鳴っていた（2026-11-17 利用者の実機で確認。2595・2615 の本当の原因）。
-  //     「公式の視聴ページで ZenzaWatch を優先」が ON なら、画面モードに関係なく止める。
-  // (2) ページを読み込まずに視聴ページへ移る場合（ユーザーページ・フォロー新着などから、公式の画面の中で移る）や、
-  //     視聴ページの判定が間に合わなかった場合は、Zenza が開かずに公式プレイヤーだけが鳴っていた。
-  //     公式プレイヤーが鳴り始めた時に、視聴ページなら公式を止めて Zenza で開く。
-  //     利用者がその視聴ページで Zenza を閉じた時は、その動画では公式で見られるようにする（別の動画へ移ったらまた Zenza）。
+  // Task1075: 見張りを直した（画面モード「小」でも止める・ページを読み込まない移動・ショート動画）。
+  // Task1076: 止めた公式の video は play() を差し替え、再生・停止の取り合い（音のノイズ）をなくした。
+  // Task1077: 上級者設定「公式の視聴ページでZenzaWatchを優先」の下の設定で、次を選べるようにした（設定は毎回その時の値を読む）。
+  //   overrideGinza.officialPlayer   'manual'（初期値）: Zenza を開いた時に必ず止める。公式の再生ボタンを自分で押した時だけ一緒に再生できる
+  //                                  'block': Zenza が開いている間は、公式の再生ボタンを押しても再生しない
+  //   overrideGinza.followNavigation 公式の画面で別の動画へ移ったら、Zenza もその動画に切り替える（初期値 ON）
+  //   overrideGinza.openOnNavigation Zenza が閉じている時に、ページを読み込まずに視聴ページへ移ったら Zenza で開く（初期値 ON）
+  //   overrideGinza.shorts           ショート動画のページでも Zenza で開く（初期値 ON）
+  //   overrideGinza.resumeOnClose    Zenza を閉じたら、公式プレイヤーで同じ所から続きを再生する（初期値 OFF）
+  // 「公式の再生ボタンを自分で押した」の見分け方: 公式プレイヤーの枠の上で押してから 1 秒以内の play() だけを利用者の操作とみなす
+  // （一覧のリンクを押した直後の自動再生は、押した場所が枠の外なので止める）。
   const createOfficialPlaybackGuard = () => {
     let active = true;
     let dialog: Loose = null;
-    let allowedWatchId: Loose = null;
+    let allowedWatchId: Loose = null;      // 利用者が Zenza を閉じた動画（その動画は公式で見る）
+    let lastGestureAt = -Infinity;          // 公式プレイヤーの枠の上で押した時刻
+    let userPlayed = new WeakSet<HTMLMediaElement>();  // 利用者が自分で再生した公式の video（止めない）
+    const setting = (key: string) => Config.getValue(key);
     const currentQuery = () => textUtil.parseQuery(location.search.replace(/^\?/, ''));
     const currentWatchId = () => (util as Loose).isGinzaWatchUrl() ? (util as Loose).getWatchId() : null;
+    const isShortsPage = () => /^\/shorts\//.test(location.pathname);
+    // Zenza 自身が既読の色のために URL を動画のものにしている間（WatchPageHistory）は、公式の移動とみなさない
+    const zenzaOwnUrl = () => !!(WatchPageHistory as Loose).isZenzaUrl?.();
+    let lastOfficialWatchId: Loose = currentWatchId();
     const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
-      window.name !== 'watchGinza';
-    // Task1075: 止めるだけだと、公式プレイヤーが「止められたらすぐ再生し直す」ため、再生と停止を細かく繰り返して
-    // 音がノイズ混じりに聞こえた（利用者の実機）。止めた video は、Zenza が開いている間 play() を何もしないものに差し替える
-    // （その video だけ。閉じたら元に戻す）。音量・ミュートは公式が保存してしまうので触らない。
+      window.name !== 'watchGinza' && (!isShortsPage() || setting('overrideGinza.shorts') !== false);
+    const manualMode = () => setting('overrideGinza.officialPlayer') !== 'block';
+    const officialRects = () => [...document.querySelectorAll('#root video')]
+      .filter(isOfficialMedia)
+      .map(v => (v.closest('.grid-area_\\[player\\]') || v).getBoundingClientRect())
+      .filter(r => r.width > 0 && r.height > 0);
+    const onPointerDown = (ev: PointerEvent) => {
+      if (isZenzaMedia(ev.target) || (ev.target as Loose)?.closest?.('.zen-family, .zenzaVideoPlayerDialog')) { return; }
+      const hit = officialRects().some(r => ev.clientX >= r.left && ev.clientX <= r.right &&
+        ev.clientY >= r.top && ev.clientY <= r.bottom + 64);
+      if (hit) { lastGestureAt = performance.now(); }
+    };
+    const userWantsOfficial = () => manualMode() && performance.now() - lastGestureAt < 1000;
+    const realPlay = HTMLMediaElement.prototype.play;
+    const open = (watchId: string) => {
+      try { dialog.open(watchId, {}); } catch (_) { /* 開けなかった時は公式のまま */ }
+    };
+    // 公式が再生しようとした時（play イベント、または差し替えた play() が呼ばれた時）に、公式の画面で別の動画へ移ったかを見る
+    const followIfNavigated = () => {
+      const watchId = currentWatchId();
+      if (!watchId || zenzaOwnUrl() || watchId === lastOfficialWatchId) { return; }
+      lastOfficialWatchId = watchId;
+      userPlayed = new WeakSet();
+      if (dialog?.isOpen && setting('overrideGinza.followNavigation') !== false && wanted() && dialog.watchId !== watchId) {
+        open(watchId);
+      }
+    };
+    // この video を止めておくべきか
+    const shouldHold = (el: Loose) => {
+      if (!active || !isOfficialMedia(el) || !wanted() || userPlayed.has(el)) { return false; }
+      const watchId = currentWatchId();
+      if (!watchId) { return false; }                      // 視聴ページ以外の動画（一覧の試し再生など）には触らない
+      if (!dialog || dialog.isOpen) { return true; }        // 起動の途中・Zenza が開いている間
+      return watchId !== allowedWatchId && setting('overrideGinza.openOnNavigation') !== false;
+    };
     const held = new Set<HTMLMediaElement>();
-    const noPlay = () => Promise.resolve();
-    const stop = (el: Loose) => {
-      if (!isOfficialMedia(el)) { return; }
+    function guardedPlay(this: HTMLMediaElement) {
+      followIfNavigated();
+      if (userWantsOfficial() && dialog?.isOpen) { userPlayed.add(this); }
+      if (!shouldHold(this)) { unhold(this); return realPlay.call(this); }
+      openIfClosed();
+      return Promise.resolve();
+    }
+    const hold = (el: Loose) => {
       if (!held.has(el)) {
         held.add(el);
-        try { Object.defineProperty(el, 'play', {configurable: true, writable: true, value: noPlay}); } catch (_) { /* 差し替えられなくても止めはする */ }
+        try { Object.defineProperty(el, 'play', {configurable: true, writable: true, value: guardedPlay}); } catch (_) { /* 差し替えられなくても止めはする */ }
       }
-      if (el.paused) { return; }
-      try { el.pause(); } catch (_) { /* 外れた video は止められなくてよい */ }
+      if (!el.paused) {
+        try { el.pause(); } catch (_) { /* 外れた video は止められなくてよい */ }
+      }
     };
-    const releaseHeld = () => {
-      held.forEach(el => { try { delete (el as Loose).play; } catch (_) { /* 元に戻せなくても続ける */ } });
-      held.clear();
+    const unhold = (el: Loose) => {
+      if (!held.delete(el)) { return; }
+      try { delete el.play; } catch (_) { /* 元に戻せなくても続ける */ }
+    };
+    const releaseHeld = () => { [...held].forEach(unhold); };
+    // Zenza が閉じている時に、止めるべき公式の再生が始まった = ページを読み込まずに視聴ページへ移った・判定が間に合わなかった
+    const openIfClosed = () => {
+      const watchId = currentWatchId();
+      if (dialog && !dialog.isOpen && watchId) { open(watchId); }
     };
     const onPlay = (ev: Event) => {
-      if (!active || !isOfficialMedia(ev.target) || !wanted()) { return; }
-      const watchId = currentWatchId();
-      if (!watchId) { return; }                           // 視聴ページ以外の動画（一覧の試し再生など）には触らない
-      if (!dialog) { stop(ev.target); return; }          // 起動の途中（ダイアログができる前）は止めるだけ
-      if (dialog.isOpen) { stop(ev.target); return; }    // Zenza が開いている間は止める（画面モードに関係なく）
-      if (watchId === allowedWatchId) { return; }         // この動画は公式で見ると決めた（Zenza を閉じた）
-      stop(ev.target);
-      try { dialog.open(watchId, {}); } catch (_) { /* 開けなかった時は公式のまま（止めたものは利用者が再生できる） */ }
+      const el = ev.target as Loose;
+      if (!isOfficialMedia(el)) { return; }
+      followIfNavigated();
+      if (userWantsOfficial() && dialog?.isOpen) { userPlayed.add(el); }
+      if (!shouldHold(el)) { return; }
+      hold(el);
+      openIfClosed();
     };
-    window.addEventListener('play', onPlay, true);
-    window.addEventListener('playing', onPlay, true);
-    const stopAll = () => {
-      if (active && wanted() && currentWatchId() && (!dialog || dialog.isOpen)) { document.querySelectorAll('video, audio').forEach(stop); }
-    };
-    // Zenza が開いている間に公式が作った video は、再生を始める前に差し替えておく（一瞬鳴るのも防ぐ）
+    const stopAll = () => { document.querySelectorAll('video, audio').forEach(el => { if (shouldHold(el)) { hold(el); } }); };
+    // Zenza が開いている間に公式が作った video は、再生を始める前に止めておく（一瞬鳴るのも防ぐ）
     let watcher: MutationObserver | null = null;
     const watchNew = () => {
       const root = document.getElementById('root');
@@ -168,12 +216,39 @@ const {initialize} = (() => {
       watcher.observe(root, {childList: true, subtree: true});
     };
     const unwatchNew = () => { watcher?.disconnect(); watcher = null; };
+    // Zenza を閉じた時、公式で同じ所から続きを再生する（設定が ON の時だけ）
+    const resumeOfficial = (watchId: Loose, time: number) => {
+      if (setting('overrideGinza.resumeOnClose') !== true || !watchId || currentWatchId() !== watchId) { return; }
+      const v = [...document.querySelectorAll('#root video')].find(el => isOfficialMedia(el) &&
+        (el as HTMLElement).getBoundingClientRect().width > 0) as HTMLMediaElement | undefined;
+      if (!v) { return; }
+      try {
+        if (time > 0 && Number.isFinite(time)) { v.currentTime = time; }
+        void realPlay.call(v).catch(() => {});
+      } catch (_) { /* 続きから再生できなくても閉じるのは続ける */ }
+    };
+    window.addEventListener('play', onPlay, true);
+    window.addEventListener('playing', onPlay, true);
+    window.addEventListener('pointerdown', onPointerDown, true);
     stopAll();
     return {
       attach(next: Loose) {
         dialog = next;
-        next.on?.('close', () => { allowedWatchId = currentWatchId(); unwatchNew(); releaseHeld(); });
-        next.on?.('open', () => { allowedWatchId = null; stopAll(); watchNew(); });
+        next.on?.('close', () => {
+          const watchId = currentWatchId();
+          const closedWatchId = next.watchId, time = Number(next._lastCurrentTime) || 0;
+          allowedWatchId = watchId;
+          unwatchNew();
+          releaseHeld();
+          if (watchId && closedWatchId === watchId) { resumeOfficial(watchId, time); }
+        });
+        next.on?.('open', () => {
+          // Zenza を開くたびに、公式は必ず止める（利用者が一緒に再生していたものも）
+          allowedWatchId = null;
+          userPlayed = new WeakSet();
+          stopAll();
+          watchNew();
+        });
         stopAll();
         if (next.isOpen) { watchNew(); }
       },
@@ -183,12 +258,16 @@ const {initialize} = (() => {
         releaseHeld();
         window.removeEventListener('play', onPlay, true);
         window.removeEventListener('playing', onPlay, true);
+        window.removeEventListener('pointerdown', onPointerDown, true);
       },
       get active() { return active; }
     };
   };
+  // Task1077: ショート動画のページは、設定「ショート動画も Zenza で開く」が OFF なら公式に任せる
+  const shortsAllowed = () => !/^\/shorts\//.test(location.pathname) || Config.getValue('overrideGinza.shorts') !== false;
   const shouldOverrideGinza = (query?: Loose) =>
-    !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(query) && window.name !== 'watchGinza';
+    !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(query) && window.name !== 'watchGinza' &&
+    shortsAllowed();
 
   const overrideGinza = async (dialog?: Loose, query?: Loose, guard?: Loose) => {
     // GINZAで視聴のリンクできた場合はスキップ
@@ -203,7 +282,7 @@ const {initialize} = (() => {
     // 視聴ページを直接開いた（アドレス・ブックマーク・別タブ）ときに公式プレイヤーしか
     // 開かなくなり、利用者から「公式のプレイヤーでしか再生されなくなった」と報告された。
     // 設定は従来どおり任意（初期値OFF）。ONにしている利用者だけ以前の動作に戻る。
-    if (!Config.props.overrideGinza) {
+    if (!Config.props.overrideGinza || !shortsAllowed()) {
       return;
     }
     // 公式プレイヤーの再生を止める見張りは initialize でダイアログにつないである（Task1075）
@@ -306,8 +385,7 @@ const {initialize} = (() => {
     // Task1065: 公式プレイヤーの見張りは、ほかの準備（設定・Worker・lit の読み込み）を待たずに最初に置く。
     const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
     // Task1075: 視聴ページ以外でも置く（ページを読み込まずに視聴ページへ移った時のため）。設定が OFF なら何もしない。
-    const officialGuard = location.host === 'www.nicovideo.jp' && (util.isGinzaWatchUrl() ? shouldOverrideGinza(startQuery) : true) ?
-      createOfficialPlaybackGuard() : null;
+    const officialGuard = location.host === 'www.nicovideo.jp' ? createOfficialPlaybackGuard() : null;
     if(typeof StoryboardCacheDb!=='undefined'&&StoryboardCacheDb.configure){
       const configureSceneCache=()=>{
         const capacity=Number(Config.getValue('storyboardCacheMaxMB'));

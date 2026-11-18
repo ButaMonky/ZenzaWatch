@@ -1,14 +1,22 @@
 // Task457: offline harness shared by NicoNico API parity tests.
-// Evaluates legacy `//===BEGIN===` sections in a VM with injected fakes only.
+// Evaluates legacy sections with production startup and injected boundary fakes.
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {parse} from '@babel/parser';
 
 export const PKG=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 export const REPO=resolve(PKG,'../..');
 export const read=rel=>readFileSync(resolve(REPO,rel),'utf8');
+
+// The concatenated userscript provides startup before any component is evaluated.
+const contextSource=read('src/ZenzaContext.js');
+const startupNode=parse(contextSource,{sourceType:'module'}).program.body.find(n=>
+  n.type==='VariableDeclaration' && n.declarations.some(d=>d.id.name==='startup'));
+const startupSource=contextSource.slice(startupNode.start,startupNode.end);
+
 
 /** Emit nico-src with the pinned compiler (never a global tsc). */
 export function emitNico(project='tsconfig.nico.json'){
@@ -26,6 +34,7 @@ export function legacySection(code){
 /** Load `symbol` from a legacy module text with the given injected globals. */
 export function loadLegacy(code,symbol,globals){
   const context=createContext({...globals});
+  if(!Object.hasOwn(globals||{},'startup'))runInContext(startupSource,context,{timeout:1000});
   runInContext(legacySection(code)+`\nglobalThis.__subject=${symbol};`,context,{timeout:1000});
   return context.__subject;
 }

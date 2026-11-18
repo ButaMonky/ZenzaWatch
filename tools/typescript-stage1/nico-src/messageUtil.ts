@@ -14,6 +14,7 @@ type Loose = Record<string, any>;
 type Settle = (value?: unknown) => void;
 
 /** Emitter (packages/lib/src/Emitter.js) — Task1061: 自前の部分宣言をやめて本物の型を使う */
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const Emitter: typeof import('./Emitter').Emitter;
 type Emitter = import('./Emitter').EmitterInstance;
 /** The parts of global, Config and NicoVideoApi used here. */
@@ -220,6 +221,7 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
   bcast.notifyClose = () => bcast.sendMessage({command: 'notifyClose'});
   bcast.notifyOpen = playerId => bcast.sendMessage({command: 'notifyOpen', params: {playerId}});
 
+  startup.add('messageUtil:debug', () => {
   global.debug.hello = bcast.hello;
   global.debug.ping = ({timeout, force}: PingOptions = {}) => {
     window.console.time('ping');
@@ -233,6 +235,7 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
       return result;
     });
   };
+  });
 
   if (location.host === 'www.nicovideo.jp') {
     if (channel) {

@@ -239,6 +239,12 @@ const Config = (() => {
         'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
         'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
         overrideGinza: false, // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
+        // Task1077: 「公式の視聴ページでZenzaWatchを優先」の下の設定（nico-src/initializer.ts の createOfficialPlaybackGuard）
+        'overrideGinza.officialPlayer': 'manual', // manual: 開いた時に止め、公式の再生ボタンを押した時だけ再生 / block: 押しても再生しない
+        'overrideGinza.followNavigation': true, // 公式の画面で別の動画へ移ったら Zenza も切り替える
+        'overrideGinza.openOnNavigation': true, // ページを読み込まずに視聴ページへ移ったら Zenza で開く
+        'overrideGinza.shorts': true, // ショート動画のページでも Zenza で開く
+        'overrideGinza.resumeOnClose': false, // Zenza を閉じたら公式で同じ所から続きを再生
         enableGinzaSlayer: false, // まだ実験中
         lastPlayerId: '',
         playbackRate: 1.0,

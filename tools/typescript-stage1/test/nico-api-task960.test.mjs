@@ -84,3 +84,17 @@ test('YOUTUBE-CURRENTTIME-UNIT-001: playing time is interpolated in seconds, cap
   assert.deepEqual(out.old,{t0:10,t1:10.0005,capped:99.905});
   assert.deepEqual(out.new,{t0:10,t1:10.5,capped:100});
 });
+
+// Startup must execute the real registration, not silently discard the callback.
+test('legacy harness runs production startup callbacks in statement order',()=>{
+  const events=[];
+  loadLegacy('//===BEGIN===\nevents.push(1);startup.add("test",()=>events.push(2));events.push(3);\n//===END===','events',{events});
+  assert.deepEqual(events,[1,2,3]);
+});
+test('legacy harness keeps startup queues isolated and honors explicit injection',()=>{
+  const code='//===BEGIN===\n//===END===';
+  const a=loadLegacy(code,'startup',{}),b=loadLegacy(code,'startup',{}),events=[];
+  a.defer();a.add('queued',()=>events.push(1));b.add('immediate',()=>events.push(2));
+  assert.deepEqual(events,[2]);a.run();assert.deepEqual(events,[2,1]);
+  assert.equal(loadLegacy(code,'startup',{startup:a}),a);
+});

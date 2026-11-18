@@ -1,10 +1,11 @@
 import assert from 'power-assert';
-const {beginSection,createContext,run}=require('../helpers/extractSource');
+const {beginSection,createContext,run,extract}=require('../helpers/extractSource');
 function subject(){
   const NicoChat={TYPE:{TOP:'ue',NAKA:'naka',BOTTOM:'shita'},SIZE:{BIG:'big',MEDIUM:'medium',SMALL:'small'}};
   const c=createContext({NicoChat,Config:{props:{baseChatScale:1},onkey(){}},
     CommentLayer:{SCREEN:{WIDTH:544,HEIGHT:384,WIDTH_INNER:512,WIDTH_FULL_INNER:640,WIDTH_FULL_INNER_HTML5:684}},
     NicoTextParser:{likeXP:String,likeHTML5:String}});
+  run('const startup = '+extract('src/ZenzaContext.js','startup','var')+';',c);
   run(beginSection('packages/lib/src/Emitter.js'),c);
   const Cls=run(beginSection('packages/zenza/src/commentLayer/NicoChatViewModel.js')+';NicoChatViewModel;',c);
   const create=(rate,type,commentVer,duration=4,lines=1,width=180)=>{

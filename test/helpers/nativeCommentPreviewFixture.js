@@ -1,5 +1,6 @@
 'use strict';
 const {JSDOM}=require('jsdom');
+const parser=require('@babel/parser');
 const {EventEmitter}=require('events');
 const _=require('lodash');
 const {loadClass,createContext,run,read}=require('./extractSource');
@@ -18,8 +19,13 @@ function nativePreview(dom){
  loadClass(src,'CommentPreviewModel',ctx);
  const View=loadClass(src,'CommentPreviewView',ctx);
  loadClass(src,'CommentPreviewChatItem',ctx);
- const code=read(src),start=code.indexOf('CommentPreviewView.MAX_HEIGHT =');
- run(code.slice(start,code.indexOf('util.addStyle(',start)),ctx);
+ // Read complete static assignments; CSS startup wrappers are separate statements.
+ const code=read(src);
+ const statements=parser.parse(code,{sourceType:'module'}).program.body.filter(node=>
+  node.type==='ExpressionStatement' && node.expression.type==='AssignmentExpression' &&
+  node.expression.left.type==='MemberExpression' &&
+  node.expression.left.object.name==='CommentPreviewView');
+ run(statements.map(node=>code.slice(node.start,node.end)).join('\n'),ctx);
  const Preview=loadClass(src,'CommentPreview',ctx);
  const owner=document.createElement('div');document.body.append(owner);
  const preview=new Preview({$container:wrap(owner)});

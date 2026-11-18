@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 // import * as _ from 'lodash';
 import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
@@ -811,7 +812,8 @@ class VideoControlBar extends Emitter {
 }
 VideoControlBar.BASE_HEIGHT = CONSTANT.CONTROL_BAR_HEIGHT;
 VideoControlBar.BASE_SEEKBAR_HEIGHT = 10;
-util.addStyle(`
+startup.add('VideoControlBar:style', () => {
+    util.addStyle(`
   .videoControlBar {
     position: fixed;
     bottom: 0;
@@ -1854,7 +1856,7 @@ util.addStyle(`
 
 
 `, { className: 'videoControlBar' });
-util.addStyle(`
+    util.addStyle(`
   .videoControlBar {
     width: 100% !important; /* 100vwだと縦スクロールバーと被る */
   }
@@ -1904,7 +1906,7 @@ util.addStyle(`
     background: var(--zt-surface-0, #000);
   }
 `, { className: 'screenMode for-popup videoControlBar', disabled: true });
-util.addStyle(`
+    util.addStyle(`
   body .videoControlBar {
     position: absolute !important; /* firefoxのバグ対策 */
     opacity: 0;
@@ -1979,7 +1981,7 @@ util.addStyle(`
   }
 
 `, { className: 'screenMode for-full videoControlBar', disabled: true });
-util.addStyle(`
+    util.addStyle(`
   .screenModeSelectMenu {
     display: none;
   }
@@ -2040,6 +2042,7 @@ util.addStyle(`
   }
 
 `, { className: 'screenMode for-screen-full videoControlBar', disabled: true });
+});
 VideoControlBar.__tpl__ = (`
     <div class="videoControlBar" data-command="nop">
 

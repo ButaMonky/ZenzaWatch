@@ -1,3 +1,4 @@
+import {startup} from '../../../../src/ZenzaContext';
 // import * as _ from 'lodash';
 import {global} from '../../../../src/ZenzaContext';
 import {Emitter} from '../../../lib/src/Emitter';
@@ -560,7 +561,9 @@ const { YouTubeWrapper } = (() => {
     }
     return { YouTubeWrapper };
 })();
-global.debug.YouTubeWrapper = YouTubeWrapper;
+startup.add('YouTubeWrapper:debug', () => {
+    global.debug.YouTubeWrapper = YouTubeWrapper;
+});
 //===END===
 export {
   YouTubeWrapper

@@ -1,8 +1,9 @@
 const assert = require('assert');
-const {beginSection, createContext, run} = require('../helpers/extractSource');
+const {beginSection, createContext, run, extract} = require('../helpers/extractSource');
 function subject() {
   const ctx = createContext({Config: {props: {baseChatScale: 1}, onkey() {}}, ZenzaWatch: {},
     util: {escapeHtml: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}});
+  run('const startup = '+extract('src/ZenzaContext.js','startup','var')+';',ctx);
   for (const file of ['packages/lib/src/Emitter.js', 'packages/zenza/src/commentLayer/NicoChat.js',
     'packages/zenza/src/commentLayer/NicoTextParser.js', 'packages/zenza/src/commentLayer/CommentLayer.js',
     'packages/zenza/src/commentLayer/NicoChatViewModel.js']) run(beginSection(file), ctx);

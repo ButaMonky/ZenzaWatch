@@ -21,7 +21,15 @@ function emit(t,source,filename) {
     '--removeComments','false','--outDir',scratch,input],{
     cwd:repo,windowsHide:true,encoding:'utf8',stdio:['ignore','pipe','pipe']
   });
-  return readFileSync(resolve(scratch,filename+'.js'),'utf8');
+  const js=readFileSync(resolve(scratch,filename+'.js'),'utf8');
+  // Task1083: these typed sources declare startup; the matching runtime JS
+  // imports it explicitly (CODEX_STARTUP_REFACTOR section 4-2). Preserve the
+  // complete AST comparison, including the exact runtime import and order.
+  const declaration="declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;";
+  if(!source.includes(declaration))return js;
+  assert(['NicoChatViewModel','NicoCommentCss3PlayerView','CommentPictureInPicture'].includes(filename));
+  assert.equal(source.split(declaration).length,2);
+  return "import {startup} from '../../../../src/ZenzaContext';\n"+js;
 }
 export function runCommentModuleParity({moduleName,contractName}) {
   if(!/^[A-Za-z][A-Za-z0-9]+$/.test(moduleName))throw Error('Invalid module name');
@@ -49,6 +57,15 @@ export function runCommentModuleParity({moduleName,contractName}) {
     assert.notEqual(mutated,canonical);
     assert.notEqual(canonicalJs(emit(t,mutated,moduleName)),canonicalJs(original));
   });
+  if(canonical.includes('declare const startup:')) {
+    test(moduleName+': missing or changed startup import triggers the compatibility gate',t=>{
+      const bridge="import {startup} from '../../../../src/ZenzaContext';";
+      assert.equal(original.split(bridge).length,2);
+      const compiled=canonicalJs(emit(t,canonical,moduleName));
+      assert.notEqual(compiled,canonicalJs(original.replace(bridge,'')));
+      assert.notEqual(compiled,canonicalJs(original.replace(bridge,bridge.replace('ZenzaContext','WrongContext'))));
+    });
+  }
   test(moduleName+': TypeScript-only declarations disappear from generated JS',t=>{
     const js=emit(t,canonical,moduleName);
     assert(!js.includes('interface '+contractName));

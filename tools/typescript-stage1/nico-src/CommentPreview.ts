@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const HeatMapWorker: typeof import('./HeatMapWorker').HeatMapWorker;
 declare const _: import('./shared-types/Lodash').LodashSubset;
@@ -497,6 +498,7 @@ CommentPreviewView.__tpl__ = (`
   </div>
   `).trim();
 
+startup.add('CommentPreview:style', () => {
 util.addStyle(`
   .zenzaCommentPreview {
     display: none;
@@ -709,6 +711,7 @@ util.addStyle(`
   }
 
 `, {className: 'commentPreview hover'});
+});
 
 
   class CommentPreview {

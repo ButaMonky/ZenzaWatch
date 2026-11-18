@@ -1,3 +1,4 @@
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 import {Emitter} from '../../../lib/src/Emitter';
 import {NicoChatFilter} from './NicoChatFilter';
 import {ZenzaWatch, global} from '../../../../src/ZenzaContext';
@@ -672,6 +673,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 }
 
 /* eslint-disable */
+startup.add('NicoCommentCss3PlayerView:config', () => {
 NicoCommentCss3PlayerView.__TPL__ = ((Config) => {
   let ownerShadowColor = Config.props['commentLayer.ownerCommentShadowColor'];
   ownerShadowColor = ownerShadowColor.replace(/([^a-z^0-9^#])/ig, '');
@@ -1118,6 +1120,7 @@ spacer {
 </body></html>
   `).trim();
 })(Config);
+});
 
 //===END===
 

@@ -7,7 +7,8 @@ function fixture(source) {
  const dom=new JSDOM('<div id="root"><div class="tabSelectContainer">'+['videoInfoTab','relatedVideoTab','comment','playlist'].map((n,i)=>`<div class="tabSelect ${n} ${i===0?'activeTab':''}" data-command="selectTab" data-param="${n}">${n}</div>`).join('')+'</div>'+['videoInfoTab','relatedVideoTab','comment','playlist'].map((n,i)=>`<div class="tabs ${n} ${i===0?'activeTab':''}"><input></div>`).join('')+'</div>',{pretendToBeVisual:true});
  const document=dom.window.document,root=document.querySelector('#root'),commands=[];
  const raw=source.endsWith('.ts') ? fs.readFileSync(path.join(REPO_ROOT,source),'utf8') : null;
- const code=raw ? require('module').stripTypeScriptTypes(raw.slice(raw.indexOf('class VideoInfoPanel extends'),raw.indexOf('\ncss.addStyle(')),{mode:'strip'}) : extract(source,'VideoInfoPanel');
+ const declaration=raw && require('@babel/parser').parse(raw,{sourceType:'module',plugins:['typescript']}).program.body.find(n=>n.type==='ClassDeclaration' && n.id.name==='VideoInfoPanel');
+ const code=raw ? require('module').stripTypeScriptTypes(raw.slice(declaration.start,declaration.end),{mode:'strip'}) : extract(source,'VideoInfoPanel');
  const context=vm.createContext({Emitter:class{},window:dom.window,document,domEvent:{dispatchCommand:(target,command,param)=>commands.push({command,param})}});
  const Type=vm.runInContext(code+';VideoInfoPanel',context),view=Object.create(Type.prototype);
  const wrap=nodes=>({find:s=>wrap([...root.querySelectorAll(s)]),removeClass:c=>nodes.forEach(n=>n.classList.remove(c)),addClass:c=>nodes.forEach(n=>n.classList.add(c))});

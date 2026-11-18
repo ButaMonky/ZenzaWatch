@@ -6,7 +6,7 @@
 //   node scripts/gen-external-types.mjs --check  … 書き出し済みのものと一致するか（元が変わったら NG）
 import fs from 'node:fs';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 
@@ -74,7 +74,7 @@ const emit = () => {
   }
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const files = emit();
   if (process.argv.includes('--check')) {
     const stale = [...files].filter(([name, text]) => {

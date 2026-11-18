@@ -3,6 +3,7 @@
  */
 import type {TimelineGeometry as TimelineGeometryClass} from './TimelineGeometry';
 import type {SceneResumeMarkerPresenter as SceneResumeMarkerPresenterClass} from './SceneResumeMarkerPresenter';
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const TimelineGeometry: typeof TimelineGeometryClass;
 declare const SceneResumeMarkerPresenter: typeof SceneResumeMarkerPresenterClass;
 /**
@@ -894,6 +895,7 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
   VideoControlBar.BASE_HEIGHT = CONSTANT.CONTROL_BAR_HEIGHT;
   VideoControlBar.BASE_SEEKBAR_HEIGHT = 10;
 
+startup.add('VideoControlBar:style', () => {
 util.addStyle(`
   .videoControlBar {
     position: fixed;
@@ -2123,6 +2125,7 @@ util.addStyle(`
   }
 
 `, {className: 'screenMode for-screen-full videoControlBar', disabled: true});
+});
 
   VideoControlBar.__tpl__ = (`
     <div class="videoControlBar" data-command="nop">

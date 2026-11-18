@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {Config} from './Config';
@@ -728,7 +729,8 @@ class VideoInfoPanel extends Emitter {
         return $body;
     }
 }
-css.addStyle(`
+startup.add('VideoInfoPanel:style-1', () => {
+    css.addStyle(`
   .zenzaWatchVideoInfoPanel .tabs:not(.activeTab) {
     display: none;
     pointer-events: none;
@@ -1305,7 +1307,7 @@ css.addStyle(`
   }
 
   `, { className: 'videoInfoPanel' });
-css.addStyle(`
+    css.addStyle(`
   .is-open .zenzaWatchVideoInfoPanel>* {
     display: none;
     pointer-events: none;
@@ -1348,7 +1350,7 @@ css.addStyle(`
   }
 
 `, { className: 'screenMode for-full videoInfoPanel' });
-css.addStyle(`
+    css.addStyle(`
   .zenzaScreenMode_small .zenzaWatchVideoInfoPanel {
     display: none;
   }
@@ -1416,6 +1418,7 @@ css.addStyle(`
     background: var(--zt-surface-mid, #ccc);
   }
 `, { className: 'screenMode for-popup videoInfoPanel' });
+});
 uq.ready().then(() => {
     if (document.body.classList.contains('MatrixRanking-body')) {
         css.addStyle(`
@@ -1503,7 +1506,8 @@ uq.ready().then(() => {
     `, { className: 'screenMode for-sideView MatrixRanking', disabled: true });
     }
 });
-css.addStyle(`
+startup.add('VideoInfoPanel:style-2', () => {
+    css.addStyle(`
   .is-open .zenzaWatchVideoInfoPanel {
     display: none;
     left: calc(100%);
@@ -1626,11 +1630,12 @@ css.addStyle(`
     }
   }
 `, { className: 'screenMode for-dialog videoInfoPanel' });
-css.addStyle(`
+    css.addStyle(`
   .zenzaWatchVideoInfoPanel .comment {
     padding-left: 0;
   }
 `, { className: 'domain slack-com', disabled: true });
+});
 VideoInfoPanel.__tpl__ = (`
     <div class="zenzaWatchVideoInfoPanel show initializing">
       <div class="nowLoading">

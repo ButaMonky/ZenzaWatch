@@ -1,3 +1,4 @@
+import {startup} from '../../../../src/ZenzaContext';
 import {throttle} from '../../../lib/src/infra/bounce';
 import {uq} from '../../../lib/src/uQuery';
 import {cssUtil} from '../../../lib/src/css/css';
@@ -161,9 +162,11 @@ class RangeBarElement extends HTMLElement {
      }
   }
 }
+startup.add('RangeBarElement:style', () => {
 cssUtil.registerProps(
   {name: '--range-percent', syntax: '<percentage>', initialValue: cssUtil.percent(0), inherits: true}
 );
+});
 if (window.customElements) {
   customElements.get('zenza-range-bar') || window.customElements.define('zenza-range-bar', RangeBarElement);
 }

@@ -1,3 +1,4 @@
+import {startup} from '../../../../src/ZenzaContext';
 import {Emitter} from '../Emitter';
 import {PRODUCT} from '../../../../src/ZenzaContext';
 import {global} from '../../../../src/ZenzaContext';
@@ -177,19 +178,21 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
     };
     bcast.notifyClose = () => bcast.sendMessage({ command: 'notifyClose' });
     bcast.notifyOpen = playerId => bcast.sendMessage({ command: 'notifyOpen', params: { playerId } });
-    global.debug.hello = bcast.hello;
-    global.debug.ping = ({ timeout, force } = {}) => {
-        window.console.time('ping');
-        return bcast.ping({ timeout, force }).then(result => {
-            window.console.timeEnd('ping');
-            window.console.info('ping result: ok', result);
-            return result;
-        }).catch(result => {
-            window.console.timeEnd('ping');
-            window.console.error('ping fail: ', result);
-            return result;
-        });
-    };
+    startup.add('messageUtil:debug', () => {
+        global.debug.hello = bcast.hello;
+        global.debug.ping = ({ timeout, force } = {}) => {
+            window.console.time('ping');
+            return bcast.ping({ timeout, force }).then(result => {
+                window.console.timeEnd('ping');
+                window.console.info('ping result: ok', result);
+                return result;
+            }).catch(result => {
+                window.console.timeEnd('ping');
+                window.console.error('ping fail: ', result);
+                return result;
+            });
+        };
+    });
     if (location.host === 'www.nicovideo.jp') {
         if (channel) {
             channel.addEventListener('message', onBroadcastMessage);

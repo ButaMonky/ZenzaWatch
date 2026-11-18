@@ -405,7 +405,19 @@ class ModernAdvancedSettingsModel {
           ['480p','480p'],['360p','360p'],['144p','144p']])]
       ]),
       ...group('再生・音声','公式プレイヤー連携',[
-        ['overrideGinza','公式の視聴ページでZenzaWatchを優先',{description:'視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。初期値OFF。'}]
+        ['overrideGinza','公式の視聴ページでZenzaWatchを優先',{description:'視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。ZenzaWatch を開いた時は、公式プレイヤーを必ず一時停止します。初期値OFF。下の項目で細かい動きを選べます。'}],
+        ['overrideGinza.officialPlayer','ZenzaWatch が開いている間の公式プレイヤー',{
+          ...select([['manual','開いた時に止める。公式の再生ボタンを押した時だけ一緒に再生する'],['block','止めたままにする（公式の再生ボタンを押しても再生しない）']]),
+          dependsOn:'overrideGinza',
+          description:'「開いた時に止める」では、ZenzaWatch を開いた時（別の動画に切り替えた時も）は必ず公式を止めます。そのあと公式プレイヤーの画面の上で再生ボタンを押すと、ZenzaWatch と一緒に公式も再生できます（画面モード「小」などで公式が見えている時）。公式が自分で再生し直そうとしても再生しません。'}],
+        ['overrideGinza.followNavigation','公式の画面で別の動画へ移ったら、ZenzaWatch もその動画に切り替える',{type:'boolean',dependsOn:'overrideGinza',
+          description:'ZenzaWatch が開いている時に、公式の画面の関連動画・ショート動画の次の動画などへ移ると、ZenzaWatch もその動画を再生します。OFF にすると、ZenzaWatch は今の動画のまま、公式は止めたままにします。'}],
+        ['overrideGinza.openOnNavigation','ページを読み込まずに視聴ページへ移った時も ZenzaWatch で開く',{type:'boolean',dependsOn:'overrideGinza',
+          description:'検索・タグ・ユーザーページ・フォロー新着などから、公式の画面の中で（ページを読み込み直さずに）視聴ページへ移った時に、公式プレイヤーを止めて ZenzaWatch で開きます。視聴ページで ZenzaWatch を閉じた動画は、公式で見られます。'}],
+        ['overrideGinza.shorts','ショート動画も ZenzaWatch で開く',{type:'boolean',dependsOn:'overrideGinza',
+          description:'ショート動画のページ（/shorts/）でも、公式プレイヤーの代わりに ZenzaWatch で再生します。OFF にすると、ショート動画は公式プレイヤーに任せます。'}],
+        ['overrideGinza.resumeOnClose','ZenzaWatch を閉じたら、公式プレイヤーで続きから再生する',{type:'boolean',dependsOn:'overrideGinza',
+          description:'視聴ページで ZenzaWatch を閉じた時に、公式プレイヤーで同じ位置から再生を続けます。初期値OFF。'}]
       ]),
       ...group('画面・映像','画面フィルター',[
         ['screenFilter.showDescriptions','画面フィルターの説明を表示'],

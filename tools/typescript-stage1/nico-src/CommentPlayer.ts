@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const NicoChat: typeof import('./external/NicoChat').NicoChat;
@@ -191,7 +192,9 @@ class NicoCommentPlayer extends Emitter {
 
 //@require NicoComment
 //@require OffscreenLayer
+startup.add('CommentPlayer:config-1', () => {
 NicoComment.offscreenLayer = OffscreenLayer(Config);
+});
 //@require NicoCommentViewModel
 //@require NicoChatGroup
 //@require NicoChatGroupViewModel
@@ -216,17 +219,21 @@ const updateSpeedRate = () => {
     NicoChatViewModel.emitter.emit('updateCommentSpeedRate', rate);
   }
 };
+startup.add('CommentPlayer:config-2', () => {
 Config.onkey('commentSpeedRate', updateSpeedRate);
 Config.onkey('autoCommentSpeedRate', updateSpeedRate);
 Config.onkey('playbackRate', updateSpeedRate);
 updateSpeedRate();
+});
 
 
 //@require NicoCommentCss3PlayerView
 
+startup.add('CommentPlayer:config-3', () => {
 Object.assign(global.debug, {
   NicoChat,
   NicoChatViewModel
+});
 });
 
 export {

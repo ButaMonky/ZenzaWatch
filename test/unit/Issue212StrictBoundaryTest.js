@@ -23,6 +23,8 @@ function setup(root, overrideGinza=true) {
     initializeGinzaSlayer:()=>calls.push(['slayer']),
     // Task1065: 公式プレイヤーの見張り（本物は test/browser/task1065-official-player-guard.cjs で確かめる）
     createOfficialPlaybackGuard:()=>({attach:()=>calls.push(['guard.attach'])}),
+    // Task1077: ショート動画の設定（本物は test/browser/task1077-official-player-settings.cjs で確かめる）
+    shortsAllowed:()=>true,
     uq:{complete:async()=>{}}, window:{name:''}});
   run('globalThis.overrideGinza='+overrideCode,ctx);
   return {ctx,calls,video};

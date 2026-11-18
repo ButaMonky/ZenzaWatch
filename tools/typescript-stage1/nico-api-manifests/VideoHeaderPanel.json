@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/VideoHeaderPanel.ts",
   "runtime": "src/VideoHeaderPanel.js",
-  "sourceSha256": "d33939f6b0c3b87232a471a1c3fe883f477473c3b2181439ec1fa0ad0d453ede",
-  "runtimeSha256": "7237c5b33c8db501ecb857382ab7580df8e6ca7d00bd97025b9d64a822bb641b"
+  "sourceSha256": "162e646b29c156c8556c062ef912cd7dee8e2a79d07b2c03a84d70fa26662010",
+  "runtimeSha256": "97b6cf59234480051762a889dd9e6e2e9402d36c8cf3efae104f854b1714d8ec"
 }

@@ -15,6 +15,7 @@ declare class Emitter {
   promise(name: string): Promise<unknown>;
 }
 /** The lodash function used here. */
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const _: {debounce<T extends (...args: Loose[]) => unknown>(fn: T, wait?: number): T & {cancel(): void}};
 declare const global: {debug: Loose};
 declare const textUtil: {parseUrl(url: Loose): Loose; parseQuery(query: string): Loose};
@@ -591,7 +592,9 @@ const {YouTubeWrapper} = (() => {
   return {YouTubeWrapper};
 })();
 
+startup.add('YouTubeWrapper:debug', () => {
 global.debug.YouTubeWrapper = YouTubeWrapper;
+});
 
 export {
   YouTubeWrapper

@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const NicoSearchApiV2Loader: typeof import('./VideoSearch').NicoSearchApiV2Loader;
@@ -1298,12 +1299,14 @@ class VideoSearchForm extends Emitter {
 // 本家で昇順/降順を選べない並び順（ニコニコで人気・あなたへのおすすめ）
 VideoSearchForm.UNORDERABLE = ['h', 'p'];
 
+startup.add('VideoSearchForm:style', () => {
 css.addStyle(`
   .is-open .zenzaWatchVideoHeaderPanel .zenzaVideoSearchPanel {
     top: 120px;
     right: 32px;
   }
 `, {className: 'screenMode for-popup videoSearchPanel', disabled: true});
+});
 
 // Task 074: ショート動画(ss〜)と /shorts/ 形式のURLにも対応
 VideoSearchForm.VIDEO_ID_REG =

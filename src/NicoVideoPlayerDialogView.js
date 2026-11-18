@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 import * as $ from 'jquery';
 import * as _ from 'lodash';
 import {global} from './ZenzaContext';
@@ -985,7 +986,8 @@ for (const role of [NicoVideoPlayerDialogViewSmallMode, NicoVideoPlayerDialogVie
         Object.defineProperty(NicoVideoPlayerDialogView.prototype, key, { ...descriptor, enumerable: false });
     }
 }
-util.addStyle(`
+startup.add('NicoVideoPlayerDialogView:style', () => {
+    util.addStyle(`
   .is-watch .BaseLayout {
     display: none;
   }
@@ -1104,7 +1106,7 @@ util.addStyle(`
   }
 
 `, { className: 'screenMode for-full', disabled: true });
-util.addStyle(`
+    util.addStyle(`
   body #zenzaVideoPlayerDialog {
     contain: style size;
   }
@@ -1571,14 +1573,14 @@ util.addStyle(`
     }
   }
 `, { className: 'screenMode for-popup', disabled: true });
-util.addStyle(`
+    util.addStyle(`
 body.zenzaScreenMode_sideView,
 body.zenzaScreenMode_small {
   border-bottom: 40px solid;
   margin-top: 0;
 }
 `, { className: 'domain slack-com', disabled: true });
-util.addStyle(`
+    util.addStyle(`
 
   .zenzaScreenMode_normal .zenzaPlayerContainer .videoPlayer {
     left: 2.38%;
@@ -1591,7 +1593,7 @@ util.addStyle(`
 
 
 `, { className: 'screenMode for-dialog', disabled: true });
-util.addStyle(`
+    util.addStyle(`
   .zenzaScreenMode_3D,
   .zenzaScreenMode_normal,
   .zenzaScreenMode_big,
@@ -1645,6 +1647,7 @@ util.addStyle(`
     visibility: hidden !important;
   }
 `, { className: 'zenza-open', disabled: true });
+});
 NicoVideoPlayerDialogView.__css__ = `
 
   .zenzaVideoPlayerDialog {

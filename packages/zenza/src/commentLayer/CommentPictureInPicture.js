@@ -1,3 +1,4 @@
+import {startup} from '../../../../src/ZenzaContext';
 import {CommentLayer} from './CommentLayer';
 import {NicoChat} from './NicoChat';
 import {global} from '../../../../src/ZenzaContext';
@@ -679,7 +680,9 @@ const CommentPictureInPicture = (() => {
     CommentRenderer,
     getNakaXpos
   };
+  startup.add('CommentPictureInPicture:debug', () => {
   global.debug.commentPictureInPicture = api;
+  });
   return api;
 })();
 //===END===

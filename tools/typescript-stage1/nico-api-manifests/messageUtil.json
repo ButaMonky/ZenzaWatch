@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/messageUtil.ts",
   "runtime": "packages/lib/src/message/messageUtil.js",
-  "sourceSha256": "b9b34adb8ca9fe49feadb301b10acf2a5bdc457dfc5d1a43a241471ef43e9028",
-  "runtimeSha256": "97903406ab21f69526171772e93812abb574523e42a3ecb3eb6d9f5223b39bee"
+  "sourceSha256": "de61d830d45e6c37febe48081cf2b3e6cf5e6417289a9c2fd86e3c4321981e8d",
+  "runtimeSha256": "34369ebd3a920e338c56e7cf6a022f00f56a83c0f9485d1e6596f9ac143471fd"
 }

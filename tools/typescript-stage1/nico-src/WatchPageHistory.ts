@@ -29,7 +29,8 @@ const WatchPageHistory = (() => {
     return {
       initialize: () => {},
       pushHistory: () => {},
-      pushHistoryAgency: () => {}
+      pushHistoryAgency: () => {},
+      isZenzaUrl: () => false
     };
   }
 
@@ -232,7 +233,9 @@ const WatchPageHistory = (() => {
   return {
     initialize,
     pushHistory,
-    pushHistoryAgency
+    pushHistoryAgency,
+    /** Task1077: 今の URL が、Zenza が既読の色のために一時的に書き換えたものか（公式の画面の移動と見分けるため） */
+    isZenzaUrl: () => isPushed && window.location.href === pushedUrl
   };
 })();
 

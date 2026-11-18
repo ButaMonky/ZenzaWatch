@@ -1,3 +1,4 @@
+import {startup} from './ZenzaContext';
 import {CONSTANT} from './constant';
 import {Emitter} from './baselib';
 import {Config} from './Config';
@@ -66,7 +67,9 @@ const AsyncEmitter = (() => {
   emitter.prototype.emitAsync = Emitter.prototype.emitAsync;
   return emitter;
 })();
+startup.add('util:async-emitter', () => {
 (ZenzaWatch ? ZenzaWatch.lib : {}).AsyncEmitter = AsyncEmitter;
+});
 
 //@require Fullscreen
 util.fullscreen = Fullscreen;
@@ -87,8 +90,10 @@ for (const k of Object.keys(window.console)) {
 // Config.props is always populated here. Node's synchronous require chain
 // has no such ordering guarantee (see docs/design-pack/29_TASK_021_CONFIG_PROPS_RACE.md),
 // so guard against Config.props still being undefined rather than throwing.
+startup.add('util:console', () => {
 console = (Config.props && Config.props.debug) ? window.console : dummyConsole;
 Config.onkey('debug', v => console = v ? window.console : dummyConsole);
+});
 
 
 

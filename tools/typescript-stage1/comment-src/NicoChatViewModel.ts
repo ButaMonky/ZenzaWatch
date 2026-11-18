@@ -1,3 +1,4 @@
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 import {Emitter} from '../../../lib/src/Emitter';
 import {NicoChat} from './NicoChat';
 import {NicoTextParser} from './NicoTextParser';
@@ -675,6 +676,7 @@ NicoChatViewModel.LINE_HEIGHT = {
 
 NicoChatViewModel.CHAT_MARGIN = 5;
 
+startup.add('NicoChatViewModel:config', () => {
 NicoChatViewModel.BASE_SCALE = parseFloat(Config.props.baseChatScale, 10);
 Config.onkey('baseChatScale', scale => {
   if (isNaN(scale)) {
@@ -683,6 +685,7 @@ Config.onkey('baseChatScale', scale => {
   scale = parseFloat(scale, 10);
   NicoChatViewModel.BASE_SCALE = scale;
   NicoChatViewModel.emitter.emit('updateBaseChatScale', scale);
+});
 });
 
 NicoChatViewModel.SPEED_RATE = 1.0;

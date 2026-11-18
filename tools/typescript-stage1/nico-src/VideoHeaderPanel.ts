@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
+declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const CONSTANT: import('./shared-types/Constant').ZenzaConstant;
 declare const ClassList: typeof import('./ClassList').ClassList;
 declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
@@ -465,6 +466,7 @@ class VideoHeaderPanel extends Emitter {
   }
 }
 
+startup.add('VideoHeaderPanel:style', () => {
 css.addStyle(`
   .zenzaScreenMode_small .zenzaWatchVideoHeaderPanel {
     display: none;
@@ -580,6 +582,7 @@ css.addStyle(`
   }
 
 `, {className: 'screenMode for-full videoHeaderPanel', disabled: true});
+});
 
 VideoHeaderPanel.__css__ = (`
     .zenzaWatchVideoHeaderPanel {

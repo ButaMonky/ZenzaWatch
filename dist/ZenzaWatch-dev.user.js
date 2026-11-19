@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.477-task1100
+// @version        2.7.478-task1101
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 10:55Z a984250b
+// build: 2026-11-19 12:12Z 79dfa84a
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2255,10 +2255,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.477-task1100';
+    var VER = '2.7.478-task1101';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 10:55Z a984250b';
+    var BUILD = '2026-11-19 12:12Z 79dfa84a';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -13773,7 +13773,27 @@ const VideoInfoLoader = (function () {
 				return null;
 		};
 		const validWatchV4Structure = (data) => missingWatchV4Field(data) === null;
-		const normalizeWatchV4 = async (response, requestedWatchId) => {
+		const readOptionalJson = async (response, deadline, signal) => {
+				if (!response.body)
+						return response.json(); // Already buffered gate/legacy adapter.
+				const controller = new AbortController();
+				const abort = () => controller.abort();
+				const remaining = deadline - Date.now();
+				if (remaining <= 0 || signal?.aborted)
+						abort();
+				else
+						signal?.addEventListener('abort', abort, { once: true });
+				const timer = setTimeout(abort, Math.max(0, remaining));
+				try {
+						const stream = response.body.pipeThrough(new TransformStream(), { signal: controller.signal });
+						return await new Response(stream).json();
+				}
+				finally {
+						clearTimeout(timer);
+						signal?.removeEventListener('abort', abort);
+				}
+		};
+		const normalizeWatchV4 = async (response, requestedWatchId, signal) => {
 				const data = response?.$watchV4?.data;
 				if (!data || response.errorCode)
 						return response;
@@ -13786,14 +13806,16 @@ const VideoInfoLoader = (function () {
 				if (data.lazy?.authKey && typeof data.client.watchTrackId === 'string' &&
 						!!data.client.watchTrackId) {
 						try {
+								const timeout = 5000;
+								const deadline = Date.now() + timeout;
 								const result = await netUtil.fetch(`https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
-										method: 'POST', credentials: 'include', timeout: 5000,
+										method: 'POST', credentials: 'include', timeout, ...(signal ? { signal } : {}),
 										headers: {
 												'Content-Type': 'application/json', 'X-Frontend-Id': '6',
 												'X-Frontend-Version': '0', 'X-Request-With': 'https://www.nicovideo.jp'
 										},
 										body: JSON.stringify({ actionTrackId: data.client.watchTrackId, keyToken: data.lazy.authKey })
-								}).then(res => res.json());
+								}).then(res => readOptionalJson(res, deadline, signal));
 								if (result.meta?.status === 200)
 										lazy = result.data || {};
 						}
@@ -14082,9 +14104,11 @@ const VideoInfoLoader = (function () {
 				}
 				let ownerId = null, ownerName = null, ownerIcon = null, source = '';
 				try {
-						const res = await netUtil.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`, { credentials: 'omit', timeout: 3000 });
+						const timeout = 3000;
+						const deadline = Date.now() + timeout;
+						const res = await netUtil.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`, { credentials: 'omit', timeout });
 						if (res && res.ok) {
-								const json = await res.json();
+								const json = await readOptionalJson(res, deadline);
 								const d = json && json.data;
 								if (d && String(d.id) === videoId && d.ownerId) {
 										ownerId = d.ownerId;
@@ -14274,7 +14298,15 @@ const VideoInfoLoader = (function () {
 				const controller = new AbortController();
 				const economy = launchOptions.economy === true;
 				const owner = {};
-				const response = fetchWatchResponse(watchId, { economy, signal: controller.signal }, () => owner.isCurrent?.() === true);
+				const options = { economy, signal: controller.signal };
+				const response = fetchWatchResponse(watchId, options, () => owner.isCurrent?.() === true).then(async (page) => {
+						if (!page.data?.response?.$watchV4)
+								return page;
+						requireActive(options);
+						const normalized = await normalizeWatchV4(page.data.response, watchId, controller.signal);
+						requireActive(options);
+						return { ...page, data: { ...page.data, response: normalized } };
+				});
 				void response.catch(() => { });
 				pendingFirstOpen = { intent: launchOptions, watchId, economy, controller, response, owner };
 				return () => {
@@ -90317,7 +90349,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.477-task1100",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.478-task1101",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

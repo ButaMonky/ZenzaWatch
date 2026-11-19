@@ -102,8 +102,27 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
   };
   const validWatchV4Structure = (data: Loose): boolean => missingWatchV4Field(data) === null;
 
+  // netUtil's fetch timeout ends when the headers arrive. Keep the same deadline
+  // while consuming optional JSON so a stalled body cannot hold up playback.
+  const readOptionalJson = async (response: Response, deadline: number, signal?: AbortSignal): Promise<Loose> => {
+    if (!response.body) return response.json() as Promise<Loose>; // Already buffered gate/legacy adapter.
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, {once: true});
+    const timer = setTimeout(abort, Math.max(0, remaining));
+    try {
+      const stream = response.body.pipeThrough(new TransformStream(), {signal: controller.signal});
+      return await new Response(stream).json() as Loose;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    }
+  };
+
   // Task153: adapt watch v4 at the boundary; keep the existing player contract.
-  const normalizeWatchV4 = async (response: Loose | undefined, requestedWatchId: string): Promise<Loose | undefined> => {
+  const normalizeWatchV4 = async (response: Loose | undefined, requestedWatchId: string, signal?: AbortSignal): Promise<Loose | undefined> => {
     const data = response?.$watchV4?.data;
     if (!data || (response as Loose).errorCode) return response;
     if (data.errorCode) return data;
@@ -118,15 +137,17 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     if (data.lazy?.authKey && typeof data.client.watchTrackId === 'string' &&
         !!data.client.watchTrackId) {
       try {
+        const timeout = 5000;
+        const deadline = Date.now() + timeout;
         const result = await netUtil.fetch(
           `https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
-            method: 'POST', credentials: 'include', timeout: 5000,
+            method: 'POST', credentials: 'include', timeout, ...(signal ? {signal} : {}),
             headers: {
               'Content-Type': 'application/json', 'X-Frontend-Id': '6',
               'X-Frontend-Version': '0', 'X-Request-With': 'https://www.nicovideo.jp'
             },
             body: JSON.stringify({actionTrackId: data.client.watchTrackId, keyToken: data.lazy.authKey})
-          }).then(res => res.json() as Promise<Loose>);
+          }).then(res => readOptionalJson(res, deadline, signal));
         if (result.meta?.status === 200) lazy = result.data || {};
       } catch (_) {
         window.console.warn('watch v4 optional metadata unavailable');
@@ -552,11 +573,13 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     }
     let ownerId: unknown = null, ownerName: unknown = null, ownerIcon: unknown = null, source = '';
     try {
+      const timeout = 3000;
+      const deadline = Date.now() + timeout;
       const res = await netUtil.fetch(
         `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`,
-        {credentials: 'omit', timeout: 3000});
+        {credentials: 'omit', timeout});
       if (res && res.ok) {
-        const json = await res.json() as Loose;
+        const json = await readOptionalJson(res, deadline);
         const d = json && json.data;
         if (d && String(d.id) === videoId && d.ownerId) {
           ownerId = d.ownerId;
@@ -771,7 +794,16 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     const controller = new AbortController();
     const economy = launchOptions.economy === true;
     const owner: {isCurrent?: () => boolean} = {};
-    const response = fetchWatchResponse(watchId, {economy, signal: controller.signal}, () => owner.isCurrent?.() === true);
+    const options = {economy, signal: controller.signal};
+    const response = fetchWatchResponse(watchId, options, () => owner.isCurrent?.() === true).then(async page => {
+      if (!page.data?.response?.$watchV4) return page;
+      requireActive(options);
+      // Owner/series use the selected video's V4 key. Start their normal read while
+      // the dialog is being built; only the foreground loader publishes the result.
+      const normalized = await normalizeWatchV4(page.data.response, watchId, controller.signal);
+      requireActive(options);
+      return {...page, data: {...page.data, response: normalized}};
+    });
     // A rejection can precede adoption or follow abandonment. Keep the original
     // promise for normal error classification and retries if the dialog adopts it.
     void response.catch(() => {});

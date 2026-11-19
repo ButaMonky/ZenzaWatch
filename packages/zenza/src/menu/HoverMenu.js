@@ -4,13 +4,19 @@ import {nicoUtil} from '../../../lib/src/nico/nicoUtil';
 import {cssUtil} from '../../../lib/src/css/css';
 import {PagePreviewGuard} from '../init/PagePreviewGuard';
 import {WatchClickNavigation} from './WatchClickNavigation';
+import {VideoInfoLoader} from '../../../lib/src/nico/VideoInfoLoader';
 // GENERATED FROM tools/typescript-stage1/nico-src/HoverMenu.ts (Task902). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require PagePreviewGuard
 //@require WatchClickNavigation
+//@require VideoInfoLoader
 class HoverMenu {
     constructor(param) {
         this.initialize(param);
+    }
+    static canStartOnSearch(config) {
+        return location.host === 'www.nicovideo.jp' && /^\/search(?:\/|$)/.test(location.pathname) &&
+            !!document.body && !config.props.overrideWatchLink;
     }
     initialize(param) {
         this._playerConfig = param.playerConfig;
@@ -44,7 +50,47 @@ class HoverMenu {
                 .on('mouseover', this._onHoverEnd)
                 .on('mouseout', this._onMouseout.bind(this))
                 .append($view);
+            if (HoverMenu.canStartOnSearch(this._playerConfig)) {
+                // The pointer may already be inside a result when the page-world script starts.
+                const hovered = document.querySelectorAll('main :hover');
+                const target = hovered[hovered.length - 1];
+                if (target) {
+                    this._onHover({ target });
+                    this._onHoverEnd({ target }, true);
+                }
+            }
         }
+    }
+    waitForPlayerIdle() {
+        if (this._hoverElement || this._playerPromise || this._playerUnavailable ||
+            document.hidden || !window.requestIdleCallback) {
+            return Promise.resolve();
+        }
+        if (this._playerIdle) {
+            return this._playerIdle;
+        }
+        return this._playerIdle = new Promise(resolve => {
+            const end = performance.now() + 400;
+            let callback;
+            const finish = () => {
+                window.cancelIdleCallback(callback);
+                document.removeEventListener('visibilitychange', finish);
+                this._playerIdle = this._wakePlayerSetup = undefined;
+                resolve();
+            };
+            const idle = (deadline) => {
+                const remaining = end - performance.now();
+                if (deadline.didTimeout || remaining <= 0 || deadline.timeRemaining() >= 12) {
+                    finish();
+                }
+                else {
+                    callback = window.requestIdleCallback(idle, { timeout: Math.ceil(remaining) });
+                }
+            };
+            this._wakePlayerSetup = finish;
+            document.addEventListener('visibilitychange', finish);
+            callback = window.requestIdleCallback(idle, { timeout: 400 });
+        });
     }
     setPlayer(player) {
         if (this._player !== player) {
@@ -56,7 +102,17 @@ class HoverMenu {
             this._playerResolve(player);
         }
     }
+    setPlayerUnavailable() {
+        this._playerUnavailable = true;
+        this._wakePlayerSetup?.();
+        this._hideButton();
+        this._playerResolve?.(null);
+    }
     _getPlayer() {
+        this._wakePlayerSetup?.();
+        if (this._playerUnavailable) {
+            return Promise.resolve(null);
+        }
         if (this._player) {
             return Promise.resolve(this._player);
         }
@@ -133,6 +189,7 @@ class HoverMenu {
         const target = this._closest(e.target);
         if (target) {
             this._hoverElement = target;
+            this._wakePlayerSetup?.();
         }
     }
     _onMouseout(e) {
@@ -143,8 +200,11 @@ class HoverMenu {
             this._hoverElement = null;
         }
     }
-    _onHoverEnd(e) {
-        if (!this._hoverElement) {
+    _onHoverEnd(e, initial = false) {
+        if (this._playerUnavailable || !this._hoverElement) {
+            return;
+        }
+        if (initial && !e.target.matches('main :hover')) {
             return;
         }
         const target = this._closest(e.target);
@@ -210,13 +270,13 @@ class HoverMenu {
             this._send(watchId);
         }
         else {
-            this._open(watchId);
+            this._open(watchId, undefined, e.isTrusted === true);
         }
     }
     open(watchId, params) {
         this._open(watchId, params);
     }
-    async _open(watchId, params) {
+    async _open(watchId, params, fromButton = false) {
         // Keep the independent Task376 race fix: own each pending request's options.
         const option = Object.assign({
             economy: this._playerConfig.getValue('forceEconomy'),
@@ -224,20 +284,47 @@ class HoverMenu {
             eventType: 'click'
         }, params);
         this._playerOption = option;
-        const player = await this._getPlayer();
-        if (this._playerConfig.getValue('enableSingleton')) {
-            ZenzaWatch.external.sendOrOpen(watchId, option);
+        // A real first local click selects the video. Its watch-page read can run
+        // while the player is starting, using the very same options object at handoff.
+        const earlyRead = fromButton && !this._player?.watchId &&
+            !this._playerConfig.getValue('enableSingleton') && HoverMenu.canStartOnSearch(this._playerConfig);
+        if (earlyRead && this._pendingButtonOpen?.watchId === watchId) {
+            return;
         }
-        else {
-            player.open(watchId, option);
+        if (earlyRead && typeof option.economy !== 'boolean') {
+            option.economy = this._playerConfig.getValue('smileVideoQuality') === 'eco';
+        }
+        const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option) : undefined;
+        if (earlyRead) {
+            this._pendingButtonOpen = { watchId, option };
+        }
+        try {
+            const player = await this._getPlayer();
+            if (!player || (earlyRead && this._pendingButtonOpen?.option !== option)) {
+                return;
+            }
+            if (this._playerConfig.getValue('enableSingleton')) {
+                ZenzaWatch.external.sendOrOpen(watchId, option);
+            }
+            else {
+                await player.open(watchId, option);
+            }
+        }
+        finally {
+            if (this._pendingButtonOpen?.option === option) {
+                this._pendingButtonOpen = undefined;
+            }
+            abandon?.();
         }
     }
     send(watchId, params) {
         this._send(watchId, params);
     }
     async _send(watchId, params) {
-        await this._getPlayer();
-        ZenzaWatch.external.send(watchId, Object.assign({ query: this._query }, params));
+        const option = Object.assign({ query: this._query }, params);
+        if (await this._getPlayer()) {
+            ZenzaWatch.external.send(watchId, option);
+        }
     }
     /**
      * A card's delegated route is not permission to claim every descendant.

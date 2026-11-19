@@ -48,8 +48,9 @@ export interface VideoInfoLoaderClient {
   /** Passive, cancellable metadata read; does not touch active watch ownership or publish events. */
   prefetch(watchId:string,options:LoadOptions):Promise<Loose>;
   adoptPrefetched(watchId: string, data: Loose, options: LoadOptions): Promise<Loose>;
+  beginFirstOpenPageRead(watchId: string, launchOptions: {economy?: boolean}): () => void;
   /** Resolves the legacy `html5watchApi` data; rejects with a WatchLoadError. */
-  load(watchId: string, options: LoadOptions): Promise<Loose>;
+  load(watchId: string, options: LoadOptions, launchOptions?: object): Promise<Loose>;
 }
 
 const VideoInfoLoader: VideoInfoLoaderClient = (function () {
@@ -758,12 +759,54 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     };
   };
 
-  const loadPromise = function (this: unknown, watchId: string, options: LoadOptions, isRetry = false, isCurrent: () => boolean = () => true): Promise<Loose> {
+  // Only a confirmed local first open owns a pending read. The ordinary foreground
+  // path consumes its response once and keeps ownership of all playback effects.
+  let pendingFirstOpen: {
+    intent: object; watchId: string; economy: boolean; controller: AbortController;
+    response: Promise<Loose>; owner: {isCurrent?: () => boolean};
+  } | undefined;
+
+  const beginFirstOpenPageRead = (watchId: string, launchOptions: {economy?: boolean}): (() => void) => {
+    pendingFirstOpen?.controller.abort();
+    const controller = new AbortController();
+    const economy = launchOptions.economy === true;
+    const owner: {isCurrent?: () => boolean} = {};
+    const response = fetchWatchResponse(watchId, {economy, signal: controller.signal}, () => owner.isCurrent?.() === true);
+    // A rejection can precede adoption or follow abandonment. Keep the original
+    // promise for normal error classification and retries if the dialog adopts it.
+    void response.catch(() => {});
+    pendingFirstOpen = {intent: launchOptions, watchId, economy, controller, response, owner};
+    return () => {
+      if (pendingFirstOpen?.controller !== controller) return;
+      pendingFirstOpen = undefined;
+      controller.abort();
+    };
+  };
+
+  const takeFirstOpen = (watchId: string, options: LoadOptions, launchOptions: object | undefined,
+    isCurrent: () => boolean): Promise<Loose> | undefined => {
+    const read = pendingFirstOpen;
+    if (!read) return;
+    pendingFirstOpen = undefined;
+    if (read.intent !== launchOptions || read.watchId !== watchId ||
+      read.economy !== (options.economy === true) || isCancelled(options)) {
+      read.controller.abort();
+      return;
+    }
+    read.owner.isCurrent = isCurrent;
+    const signal = options.signal;
+    if (!signal) return read.response;
+    const abort = () => read.controller.abort();
+    signal.addEventListener('abort', abort, {once: true});
+    return read.response.finally(() => signal.removeEventListener('abort', abort));
+  };
+
+  const loadPromise = function (this: unknown, watchId: string, options: LoadOptions, isRetry = false, isCurrent: () => boolean = () => true, firstResponse?: Promise<Loose>): Promise<Loose> {
     if (isCancelled(options)) { return Promise.reject(cancelledError()); }
     const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
       RequestDiagnostics.begin('video-info', watchId, 'response', () => isCurrent() && !isCancelled(options));
     console.log('loadFromWatchApiData');
-    return fetchWatchResponse(watchId, options, isCurrent)
+    return (firstResponse ?? fetchWatchResponse(watchId, options, isCurrent))
       .catch(err => {
         diagnostic?.failure(err);
         return Promise.reject(isCancelled(options) ? cancelledError() :
@@ -820,6 +863,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
   };
 
   return {
+    beginFirstOpenPageRead,
     // Passive lookup: never increments playback ownership, publishes video
     // events, resolves owners, loads lazy metadata, or follows paid-video links.
     loadStoryboardInfo: async (watchId:string,options:LoadOptions):Promise<Loose> => {
@@ -881,7 +925,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       }
       return data;
     },
-    load: function (watchId: string, options: LoadOptions): Promise<Loose> {
+    load: function (watchId: string, options: LoadOptions, launchOptions?: object): Promise<Loose> {
       debug.watchApiData = undefined;
       const generation = ++anonymousWatchLoadSerial;
       const callerSignal = options.signal;
@@ -890,7 +934,8 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
           callerSignal.aborted === true);
       const timeKey = `watchAPI:${generation}`;
       console.time(timeKey);
-      return loadPromise(watchId, options, false, isCurrent).then(
+      const firstResponse = takeFirstOpen(watchId, options, launchOptions, isCurrent);
+      return loadPromise(watchId, options, false, isCurrent, firstResponse).then(
         (result) => {
           console.timeEnd(timeKey);
           return result;

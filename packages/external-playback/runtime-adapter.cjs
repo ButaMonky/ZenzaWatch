@@ -90,7 +90,7 @@ module.exports=function adaptRuntime(base) {
     } else {
 `+original+'\n    }'+body.slice(end+endMarker.length);
  once('  boot(monkey, PRODUCT, START_PAGE_QUERY);',`  if (externalTrial && window.name === 'ZenzaWatchExternalTrialPlayer') return monkey(PRODUCT, encodeURIComponent(''), externalTrial);
-  return boot(monkey, PRODUCT, START_PAGE_QUERY);`);
+  return boot(monkey, PRODUCT, START_PAGE_QUERY, !externalTrial);`);
  once('const hoverMenu = global.debug.hoverMenu = new HoverMenu({ playerConfig: Config });',
  'const hoverMenu = externalTrial ? {setPlayer() {}} : (global.debug.hoverMenu = new HoverMenu({ playerConfig: Config }));');
  if(body.split('new this.win.MutationObserver(()=>this._listen())').length!==3)throw Error('Comment observer count changed');

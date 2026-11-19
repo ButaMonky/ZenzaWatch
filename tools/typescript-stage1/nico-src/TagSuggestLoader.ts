@@ -45,23 +45,38 @@ const TagSuggestLoader: TagSuggestLoaderClient = (() => {
       return cache.get(w) as string[];
     }
 
-    let schemaValid = false;
-    const execute = async () => {
-      const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u: string, o?: NetFetchOptions) => fetch(u, o as RequestInit | undefined)};
-      const res = await net.fetch(API_BASE + encodeURIComponent(w), {credentials: 'omit', timeout: 5000});
-      const json: unknown = await res.json();
-      schemaValid = !!json && Array.isArray((json as UnknownPropertyBag).candidates) &&
-        ((json as UnknownPropertyBag).candidates as unknown[]).every(c => typeof c === 'string');
-      const candidates = (json && Array.isArray((json as UnknownPropertyBag).candidates)) ? ((json as UnknownPropertyBag).candidates as unknown[]).filter((c: unknown): c is string => typeof c === 'string') : [];
-      cache.set(w, candidates);
-      if (cache.size > CACHE_LIMIT) {
-        cache.delete(cache.keys().next().value as string);
+    const diag = typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics;
+    const ticket = diag?.begin('tag-suggest', w, 'response');
+    const net: NetUtilFetcher = typeof netUtil !== 'undefined' ? netUtil :
+      {fetch: (url, opts) => fetch(url, opts as RequestInit | undefined)};
+    let res: Response | undefined;
+    let json: unknown;
+    try {
+      res = await net.fetch(API_BASE + encodeURIComponent(w), {
+        credentials: 'omit', timeout: 5000, ...(ticket ? {diagnosticActive: () => false} : {})
+      });
+      if (res.status >= 300 || res.status < 200) {
+        ticket?.failure({httpStatus: res.status});
+        return [];
       }
+      json = await res.json();
+    } catch (cause) {
+      ticket?.failure(diag?.readFailure(res, cause));
+      throw cause;
+    }
+    const rows = (json as UnknownPropertyBag | null)?.candidates;
+    const candidates = Array.isArray(rows) ? rows.filter((item): item is string => typeof item === 'string') : [];
+    if (!Array.isArray(rows) || candidates.length !== rows.length) {
+      ticket?.failure({httpStatus:res.status, kind:'schema', errorCode:'RESPONSE_SCHEMA',
+        missing:Array.isArray(rows) ? 'candidates[]' : 'candidates'});
       return candidates;
-
-    };
-    return typeof RequestDiagnostics === 'undefined' ? execute() :
-      RequestDiagnostics.observe('tag-suggest', w, execute, () => schemaValid, () => true);
+    }
+    ticket?.success();
+    cache.set(w, candidates);
+    if (cache.size > CACHE_LIMIT) {
+      cache.delete(cache.keys().next().value as string);
+    }
+    return candidates;
   };
 
   return {load};

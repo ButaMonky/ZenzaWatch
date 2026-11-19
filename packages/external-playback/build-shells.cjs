@@ -1,4 +1,5 @@
 'use strict';
+const {startOrdinaryRuntime} = require('./ordinary-startup.cjs');
 module.exports=function buildShells({base,legacyBlog,header,runtime,externalModules,launcher,transport,network,closeRuntime,host,display,panelObserver,preferenceNames}) {
  const shared=`
  const official=/(^|\\.)nicovideo\\.jp$/.test(location.hostname);
@@ -81,26 +82,28 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}
-   // The ordinary player remains in the page realm, with no GM capabilities.
-   // Keep lodash lexical to avoid overwriting the site's own lodash instance.
-   const dependency=GM_getResourceText('zenzaLodash');
-   if(!dependency)throw Error('ZenzaWatch lodash resource unavailable');
-   // Task1036: sourceURL を付けて、ZenzaWatch 自身のエラーをページのエラーと区別できるようにする（通知履歴のスクリプトエラー記録）。
-   const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>console.error("ZenzaWatch initialization failed",error));})();\\n//# sourceURL=ZenzaWatchRuntime.js';
-   // Task1059: 本文を Blob の <script src> で入れる。インラインの <script> はメインスレッドで約3MBを
-   // コンパイルするため起動時に画面が固まっていた（手元の計測で長いタスク合計 約290ms → 約110ms）。
-   // 外部スクリプト扱いならブラウザが裏のスレッドでコンパイルできる。sourceURL はそのまま効く。
-   // Blob が使えない・止められた（厳しい CSP など）時は、従来どおりインラインで入れる。
-   const injectInline=()=>{const script=GM_addElement(document.head||document.documentElement,'script',{textContent:source});script?.remove();};
-   let blobUrl=null;
-   try{blobUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));}catch(_){blobUrl=null;}
-   if(!blobUrl){injectInline();return;}
-   const release=()=>{try{URL.revokeObjectURL(blobUrl);}catch(_){}};
-   let runtimeScript=null;
-   try{runtimeScript=GM_addElement(document.head||document.documentElement,'script',{src:blobUrl});}catch(_){runtimeScript=null;}
-   if(!runtimeScript){release();injectInline();return;}
-   runtimeScript.addEventListener('load',()=>{release();runtimeScript.remove();},{once:true});
-   runtimeScript.addEventListener('error',()=>{release();runtimeScript.remove();if(!window.ZenzaWatch)injectInline();},{once:true});
+   (${startOrdinaryRuntime})(window, () => {
+     // The ordinary player remains in the page realm, with no GM capabilities.
+     // Keep lodash lexical to avoid overwriting the site's own lodash instance.
+     const dependency=GM_getResourceText('zenzaLodash');
+     if(!dependency)throw Error('ZenzaWatch lodash resource unavailable');
+     // Task1036: sourceURL を付けて、ZenzaWatch 自身のエラーをページのエラーと区別できるようにする（通知履歴のスクリプトエラー記録）。
+     const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>{if(error?.name==="ZenzaWatchStartupError")throw error;console.error("ZenzaWatch initialization failed",error);});})();\\n//# sourceURL=ZenzaWatchRuntime.js';
+     // Task1059: 本文を Blob の <script src> で入れる。インラインの <script> はメインスレッドで約3MBを
+     // コンパイルするため起動時に画面が固まっていた（手元の計測で長いタスク合計 約290ms → 約110ms）。
+     // 外部スクリプト扱いならブラウザが裏のスレッドでコンパイルできる。sourceURL はそのまま効く。
+     // Blob が使えない・止められた（厳しい CSP など）時は、従来どおりインラインで入れる。
+     const injectInline=()=>{const script=GM_addElement(document.head||document.documentElement,'script',{textContent:source});script?.remove();};
+     let blobUrl=null;
+     try{blobUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));}catch(_){blobUrl=null;}
+     if(!blobUrl){injectInline();return;}
+     const release=()=>{try{URL.revokeObjectURL(blobUrl);}catch(_){}};
+     let runtimeScript=null;
+     try{runtimeScript=GM_addElement(document.head||document.documentElement,'script',{src:blobUrl});}catch(_){runtimeScript=null;}
+     if(!runtimeScript){release();injectInline();return;}
+     runtimeScript.addEventListener('load',()=>{release();runtimeScript.remove();},{once:true});
+     runtimeScript.addEventListener('error',()=>{release();runtimeScript.remove();if(!window.ZenzaWatch)injectInline();},{once:true});
+   });
    return;
  }
  try{

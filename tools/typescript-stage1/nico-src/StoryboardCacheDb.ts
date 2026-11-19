@@ -58,7 +58,7 @@ export interface StoryboardCacheFacade {
 }
 
 export interface StoryboardCacheDbClient {
-  configure(policy: StoryboardCachePolicy): Promise<unknown>;
+  configure(policy: StoryboardCachePolicy, onFirstUse?: boolean): Promise<unknown>;
   clear(): Promise<unknown>;
   stats(): Promise<StoryboardCacheStats>;
   captureGeneration(): number;
@@ -92,13 +92,20 @@ const StoryboardCacheDb: StoryboardCacheDbClient = (() => {
 
   let db: StoryboardDb | undefined, instance: StoryboardCacheFacade | undefined, NicoVideoApi: StoryboardDbBridge | undefined;
   let dbOpening: Promise<StoryboardDb> | null | undefined, instanceOpening: Promise<StoryboardCacheFacade> | null | undefined;
+  let initialPolicy: StoryboardCachePolicy | undefined;
   let generationFloor = 0;
   const captureGeneration = (): number => Math.max(Date.now(), generationFloor);
   const operation = async (data: unknown): Promise<unknown> => {
     const connection = await initWorker();
     return (connection.cache as StoryboardIdbStore).storyboardCache(data);
   };
-  const configure = (policy: StoryboardCachePolicy): Promise<unknown> => operation({op: 'configure', ...policy});
+  const configure = (policy: StoryboardCachePolicy, onFirstUse = false): Promise<unknown> => {
+    if (onFirstUse && !db && !dbOpening) {
+      initialPolicy = policy;
+      return Promise.resolve();
+    }
+    return operation({op: 'configure', ...policy});
+  };
   const clear = async (): Promise<unknown> => {
     generationFloor = Math.max(Date.now(), generationFloor) + 1;
     const result = await operation({op: 'clear'}) as StoryboardCacheStats;
@@ -119,6 +126,12 @@ const StoryboardCacheDb: StoryboardCacheDbClient = (() => {
       const connection = location.host === 'www.nicovideo.jp' ?
         await IndexedDbStorage.open(WATCH_INFO) :
         await (NicoVideoApi as StoryboardDbBridge).bridgeDb(WATCH_INFO) as StoryboardDb;
+      if (initialPolicy) {
+        const policy = initialPolicy;
+        initialPolicy = undefined;
+        await (connection.cache as StoryboardIdbStore).storyboardCache({op: 'configure', ...policy})
+          .catch(() => console.warn('Scene cache settings unavailable'));
+      }
       db = connection;
       return connection;
     })();

@@ -264,7 +264,7 @@ class TagListView extends BaseViewComponent {
         }
         const err = result.error_msg;
         if (err) {
-            this.emit('command', 'alert', err);
+            this._onTagEditError(watchId, undefined, 'タグ一覧の取得');
         }
         this.update(result.tags);
     }
@@ -279,12 +279,13 @@ class TagListView extends BaseViewComponent {
     // Task 066: 以前は失敗時にresultがundefinedになり、result.tags等の参照で
     // 例外になって「更新中」のまま固まっていた。失敗時は状態を戻して通知する。
     _onTagEditError(watchId, err, label) {
-        window.console.warn(`[TagListView] ${label}`, err);
         if (watchId !== this._watchId) {
             return;
         }
         this.setState({ isUpdating: false });
-        this.emit('command', 'alert', (err && err.message) || `${label}に失敗しました`);
+        const status = Number.isInteger(err?.status) && err.status >= 100 && err.status <= 599 ? err.status : undefined;
+        const detail = status ? `（${status}）` : '';
+        this.emit('command', 'alert', `${label}の結果を確認できません${detail}。通知履歴の詳細を確認してください。`);
     }
     _addTag(tag) {
         if (!this._canEditTags()) {
@@ -315,7 +316,7 @@ class TagListView extends BaseViewComponent {
             }
             this.setState({ isInputing: false, isUpdating: false, isEditing: false });
             if (result.error_msg) {
-                this.emit('command', 'alert', result.error_msg);
+                this._onTagEditError(watchId, undefined, 'タグの追加');
             }
         }).catch(err => this._onTagEditError(watchId, err, 'タグの追加'));
     }
@@ -349,7 +350,7 @@ class TagListView extends BaseViewComponent {
             }
             this.setState({ isUpdating: false });
             if (result.error_msg) {
-                this.emit('command', 'alert', result.error_msg);
+                this._onTagEditError(watchId, undefined, 'タグの削除');
             }
         }).catch(err => this._onTagEditError(watchId, err, 'タグの削除'));
     }

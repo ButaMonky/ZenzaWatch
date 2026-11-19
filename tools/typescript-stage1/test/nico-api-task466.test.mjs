@@ -62,7 +62,9 @@ async function parity(label,scenario,steps){
     const actual=await settle(()=>step(now,r));
     assert.deepEqual(snapshot(actual),snapshot(expected),label+' step '+i);
   }
-  assert.deepEqual(snapshot(r.log),snapshot(l.log),label+' side effects');
+  // The updated logger omits the exception, which can contain the requested title.
+  const safeLog = l.log.map(row => row[0] === 'warn' ? row.slice(0,2) : row);
+  assert.deepEqual(snapshot(r.log),snapshot(safeLog),label+' side effects');
   return l.log.filter(row=>row[0]==='fetch').length;
 }
 const exists=name=>(api)=>api.exists(name);

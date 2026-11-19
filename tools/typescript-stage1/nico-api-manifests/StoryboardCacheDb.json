@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/StoryboardCacheDb.ts",
   "runtime": "packages/lib/src/nico/StoryboardCacheDb.js",
-  "sourceSha256": "cf113426af570146eab4633c75f09ca4352ecfb425a0c76ed331d2d7a13a626e",
-  "runtimeSha256": "039cb550507c637479e3f36504f008aaf2c3274d0e5831e98c8ad61794893a39"
+  "sourceSha256": "82c05a67b741a19956131c9e60369b818e0caf586bf3f25e98934d9f1a55338b",
+  "runtimeSha256": "e67666229ad9317fb15fa97634cf6e0fe27f949242a6be544502eb11e52181ca"
 }

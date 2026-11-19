@@ -134,7 +134,9 @@ const NotificationJournalPolicy = (() => {
             'comment-read': 'comment', 'comment-history-read': 'comment', 'comment-key': 'comment',
             'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
             like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
-            tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
+            'playback-position': 'player', 'mylist-add': 'mylist', 'mylist-remove': 'mylist',
+            'watch-later-add': 'mylist', 'watch-later-remove': 'mylist',
+            'tag-add': 'tags', 'tag-remove': 'tags', tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
             recommend: 'related', 'owner-videos': 'related', owner: 'related', dictionary: 'related'
         };
         return groups[operation] || entry.category;

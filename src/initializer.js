@@ -229,7 +229,7 @@ const { initialize } = (() => {
         const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
             window.name !== 'watchGinza' && (!isShortsPage() || setting('overrideGinza.shorts') !== false);
         let manual = null;
-        let disposeButton;
+        let queuedManualId = null;
         let recovering = false;
         const launchId = () => location.pathname.startsWith('/watch/') && !zenzaOwnUrl() &&
             window.name !== 'watchGinza' && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) ? currentWatchId() : null;
@@ -438,6 +438,15 @@ const { initialize } = (() => {
             void openManual().catch(() => failLaunch(session));
             return true;
         };
+        // Keep the dedicated Zen button usable while HLS and the dialog are still starting.
+        const disposeButton = installOfficialLaunchButton(launchId, () => {
+            if (dialog) {
+                launch();
+            }
+            else {
+                queuedManualId = launchId();
+            }
+        });
         window.addEventListener('play', onPlay, true);
         window.addEventListener('playing', onPlay, true);
         window.addEventListener('pointerdown', onPointerDown, true);
@@ -445,7 +454,6 @@ const { initialize } = (() => {
         return {
             attach(next) {
                 dialog = next;
-                disposeButton = installOfficialLaunchButton(launchId, () => launch());
                 next.on?.('requestOfficialLaunch', (e) => {
                     if (launch()) {
                         e.preventDefault();
@@ -488,17 +496,23 @@ const { initialize } = (() => {
                 if (next.isOpen) {
                     watchNew();
                 }
+                if (queuedManualId && queuedManualId === launchId()) {
+                    launch();
+                }
+                queuedManualId = null;
             },
             release() {
                 active = false;
                 manual = null;
-                disposeButton?.();
+                queuedManualId = null;
+                disposeButton();
                 unwatchNew();
                 releaseHeld();
                 window.removeEventListener('play', onPlay, true);
                 window.removeEventListener('playing', onPlay, true);
                 window.removeEventListener('pointerdown', onPointerDown, true);
             },
+            get manualLaunchActive() { return !!manual; },
             get active() { return active; }
         };
     };
@@ -520,7 +534,7 @@ const { initialize } = (() => {
         // 視聴ページを直接開いた（アドレス・ブックマーク・別タブ）ときに公式プレイヤーしか
         // 開かなくなり、利用者から「公式のプレイヤーでしか再生されなくなった」と報告された。
         // 設定は従来どおり任意（初期値OFF）。ONにしている利用者だけ以前の動作に戻る。
-        if (!Config.props.overrideGinza || !shortsAllowed()) {
+        if (!Config.props.overrideGinza || !shortsAllowed() || guard?.manualLaunchActive) {
             return;
         }
         // 公式プレイヤーの再生を止める見張りは initialize でダイアログにつないである（Task1075）
@@ -596,13 +610,20 @@ const { initialize } = (() => {
         const watchData = response?.$watchV4 ? response.$watchV4.data : response;
         return typeof watchData?.okReason === 'string';
     };
-    const initWorker = () => {
+    const warmWatchCache = () => WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
+    const initWorker = (warmThumbnail = true, pendingCache) => {
         // 動画ロード直後に初期化するとつっかかる原因になるのでWorkerだけ作っておく
         if (!location.host.endsWith('.nicovideo.jp')) {
             return;
         }
+        if (pendingCache) {
+            // Search cards need neither comment layout nor a storyboard canvas until the player uses them.
+            return Promise.all([VideoSessionWorker.initWorker(), pendingCache]).then(() => { });
+        }
         CommentLayoutWorker.getInstance();
-        void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
+        if (warmThumbnail) {
+            void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
+        }
         console.time('init Workers');
         // Storyboard cache is optional for playback readiness. Keep the Watch
         // history DB prewarm gate: first-open WatchInfoCacheDb.get may otherwise
@@ -612,23 +633,52 @@ const { initialize } = (() => {
             VideoSessionWorker.initWorker()
         ];
         void StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable'));
-        const watchCacheReady = WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
+        const watchCacheReady = warmWatchCache();
         return Promise.all([...requiredWorkers, watchCacheReady]).then(() => console.timeEnd('init Workers'));
     };
     //@require replaceRedirectLinks
+    const addCommonStyle = () => cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });
+    const createHoverMenu = () => {
+        const hoverMenu = global.debug.hoverMenu = new HoverMenu({ playerConfig: Config });
+        return hoverMenu;
+    };
     const initialize = async function () {
         // Task1065: 公式プレイヤーの見張りは、ほかの準備（設定・Worker・lit の読み込み）を待たずに最初に置く。
-        const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
         // Task1075: 視聴ページ以外でも置く（ページを読み込まずに視聴ページへ移った時のため）。設定が OFF なら何もしない。
         const officialGuard = location.host === 'www.nicovideo.jp' ? createOfficialPlaybackGuard() : null;
+        const earlySearch = HoverMenu.canStartOnSearch(Config);
+        if (earlySearch) {
+            addCommonStyle();
+        }
+        const earlyHoverMenu = earlySearch ? createHoverMenu() : null;
+        try {
+            await initializePlayer(officialGuard, earlyHoverMenu);
+        }
+        catch (error) {
+            earlyHoverMenu?.setPlayerUnavailable();
+            officialGuard?.release();
+            throw error;
+        }
+    };
+    const initializePlayer = async (officialGuard, earlyHoverMenu) => {
+        let idleSearch = false;
+        if (earlyHoverMenu && !Config.props.overrideGinza && !window.name && !location.hash &&
+            !/(Android|iPad;|CriOS)/i.test(navigator.userAgent) && !document.hidden &&
+            typeof window.requestIdleCallback === 'function') {
+            try {
+                idleSearch = sessionStorage.getItem('ZenzaWatch_PlayingStatus') === null &&
+                    ![...new URLSearchParams(location.search).keys()].some(key => /^(zenza|playlist|continuous|shuffle)/i.test(key));
+            }
+            catch (_) { /* Inaccessible storage keeps setup immediate. */ }
+        }
         if (typeof StoryboardCacheDb !== 'undefined' && StoryboardCacheDb.configure) {
-            const configureSceneCache = () => {
+            const configureSceneCache = (onFirstUse = false) => {
                 const capacity = Number(Config.getValue('storyboardCacheMaxMB'));
                 const days = Number(Config.getValue('storyboardCacheDays'));
                 void StoryboardCacheDb.configure({ maxBytes: ([0, 32, 64, 128, 256, 512].includes(capacity) ? capacity : 128) * 1024 * 1024,
-                    maxAgeMs: ([1, 3, 7, 14, 30].includes(days) ? days : 7) * 86400000 }).catch(() => console.warn('Scene cache settings unavailable'));
+                    maxAgeMs: ([1, 3, 7, 14, 30].includes(days) ? days : 7) * 86400000 }, onFirstUse === true && capacity === 128 && days === 7).catch(() => console.warn('Scene cache settings unavailable'));
             };
-            configureSceneCache();
+            configureSceneCache(idleSearch);
             Config.onkey?.('storyboardCacheMaxMB', configureSceneCache);
             Config.onkey?.('storyboardCacheDays', configureSceneCache);
         }
@@ -663,10 +713,18 @@ const { initialize } = (() => {
         if (typeof NotificationJournal !== 'undefined') {
             installScriptErrorJournal();
         }
-        await HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
+        const pendingCache = idleSearch ? warmWatchCache() : undefined;
+        const hlsReady = HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
+        const searchWorkers = idleSearch && earlyHoverMenu ? earlyHoverMenu.waitForPlayerIdle()
+            .then(() => initWorker(false, pendingCache)) : undefined;
+        // The same rejection is propagated at the readiness gate after HLS installation.
+        void searchWorkers?.catch(() => { });
+        await hlsReady;
         console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
         domEvent.dispatchCustomEvent(document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, { bubbles: true, composed: true });
-        cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });
+        if (!earlyHoverMenu) {
+            addCommonStyle();
+        }
         initializeBySite();
         replaceRedirectLinks().catch(() => console.warn('Legacy redirect-link enhancement unavailable'));
         const query = textUtil.parseQuery(START_PAGE_QUERY);
@@ -678,12 +736,15 @@ const { initialize } = (() => {
         if (typeof Config.props.commentLanguage === 'string') {
             Config.props.commentLanguage = Config.props.commentLanguage.replace('_', '-').toLowerCase();
         }
-        const hoverMenu = global.debug.hoverMenu = new HoverMenu({ playerConfig: Config });
+        const hoverMenu = earlyHoverMenu || createHoverMenu();
         await Promise.all([
             NicoComment.offscreenLayer.get(Config),
             global.emitter.promise('lit-html'),
-            initWorker()
+            searchWorkers || initWorker(!earlyHoverMenu)
         ]);
+        if (idleSearch) {
+            await hoverMenu.waitForPlayerIdle();
+        }
         document.body.classList.toggle('is-watch', isWatch);
         const dialog = initializeDialogPlayer(Config);
         hoverMenu.setPlayer(dialog);

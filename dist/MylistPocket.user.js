@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.99-task1099
+// @version     0.5.100-task1100
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-19 07:11Z 76f1b645
+// build: 2026-11-19 10:46Z a984250b
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -3040,7 +3040,11 @@ const RequestDiagnostics = (() => {
 				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-history-read': 'コメント増量（過去のコメントを追加取得）', 'comment-key': 'コメント取得キーの更新',
 				'video-session': '再生セッション（映像の配信URL取得）', 'session-state': '再生セッションの維持',
 				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
-				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
+				'playback-position': '再生位置の保存',
+				'mylist-add': 'マイリストへの追加', 'mylist-remove': 'マイリストからの削除',
+				'watch-later-add': 'あとで見るへの追加', 'watch-later-remove': 'あとで見るからの削除',
+				'tag-add': 'タグの追加', 'tag-remove': 'タグの削除',
+				like: 'いいね', tags: 'タグ一覧', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
 				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
@@ -3057,6 +3061,10 @@ const RequestDiagnostics = (() => {
 				'comment-key': 'packages/comment-history/src/core.mjs', 'video-session': 'nico-src/VideoSessionWorker.ts',
 				'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
 				search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
+				'playback-position': 'nico-src/PlaybackPosition.ts',
+				'mylist-add': 'nico-src/MylistApiLoader.ts', 'mylist-remove': 'nico-src/MylistApiLoader.ts',
+				'watch-later-add': 'nico-src/MylistApiLoader.ts', 'watch-later-remove': 'nico-src/MylistApiLoader.ts',
+				'tag-add': 'nico-src/TagEditApi.ts', 'tag-remove': 'nico-src/TagEditApi.ts',
 				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
 				'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
 				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
@@ -3096,7 +3104,9 @@ const RequestDiagnostics = (() => {
 				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
 		const noteSuspect = (operation, key, failure, now) => {
 				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || (failure.reason === 'service' ? failure.apiStatus : undefined) || failure.statusCode || '') +
-						(operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ? '|' + (failure.missing || '') : '');
+						(operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ||
+								['dictionary', 'tags', 'tag-key', 'tag-suggest', 'tag-add', 'tag-remove', 'playback-position',
+										'watch-later-add', 'watch-later-remove', 'mylist-add', 'mylist-remove'].includes(operation) ? '|' + (failure.missing || '') : '');
 				const seen = suspects.get(group) || new Map();
 				seen.set(key, now);
 				for (const [k, at] of seen) {
@@ -3427,6 +3437,8 @@ const RequestDiagnostics = (() => {
 						if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v3\/users\/[^/]+\/videos\/?$/.test(p)) {
 								return url.searchParams.get('selectContentType') === 'short' ? 'playlist' : 'owner-videos';
 						}
+						if (url.hostname === 'nvapi.nicovideo.jp' && p === '/v2/users/me/watch/history/playback-position')
+								return 'playback-position';
 						if (/\/watch-later(?:\/|$)/.test(p)) {
 								return 'mylist';
 						}
@@ -5688,7 +5700,7 @@ const MylistApiLoader = (() => {
 						const execute = async () => {
 								const url = kind === 'watchLater' ?
 										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc&' :
-										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}?`;
+										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${encodeURIComponent(id)}?`;
 								const query = new URLSearchParams({ pageSize: '100', page: '1' });
 								const results = [];
 								const fingerprints = new Set();
@@ -5772,142 +5784,106 @@ const MylistApiLoader = (() => {
 								result: { watchId, groupId, list: 'mylist' }
 						});
 				}
-				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
-						const item = await this.findDeflistItemByWatchId(watchId, { frontendId, frontendVersion, isCurrent });
-						if (isCurrent && isCurrent() !== true)
-								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
-						const body = `itemIds=${item.itemId}`;
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
-						const cacheKey = 'deflistItems';
-						const result = await netUtil.fetch(url, {
-								method: 'DELETE',
-								headers: {
-										'X-Frontend-Id': frontendId,
-										'X-Frontend-Version': frontendVersion,
-										'X-Request-With': 'https://www.nicovideo.jp'
-								},
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((result) => {
-								throw createMylistError('あとで見るから削除失敗(2)', { result, cause: result });
-						});
-						if (result.meta.status && result.meta.status === 200) {
-								cacheStorage.removeItem(cacheKey);
-								emitter.emitAsync('deflistRemove', watchId);
-								return {
-										status: 'ok',
-										result,
-										message: 'あとで見るから削除'
-								};
+				async _writeItem(operation, url, watchId, groupId, frontend, label, body, onConfirmed, allowDuplicate = false) {
+						const { frontendId = 6, frontendVersion = 0, isCurrent } = frontend;
+						const active = () => {
+								try {
+										return !isCurrent || isCurrent() === true;
+								}
+								catch (_) {
+										return false;
+								}
+						};
+						const staleError = () => createMylistError('操作中止（動画が変更されました）', { code: 'STALE' });
+						if (!active()) {
+								throw staleError();
 						}
-						throw createMylistError(result.error.description, {
-								result, code: result.error.code
-						});
-				}
-				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
-						const item = await this.findMylistItemByWatchId(watchId, groupId, { frontendId, frontendVersion, isCurrent });
-						if (isCurrent && isCurrent() !== true)
-								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
-						let body = 'itemIds=' + item.itemId;
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
-						const cacheKey = `mylistItems: ${groupId}`;
-						const result = await netUtil.fetch(url, {
-								method: 'DELETE',
-								headers: {
-										'X-Frontend-Id': frontendId,
-										'X-Frontend-Version': frontendVersion,
-										'X-Request-With': 'https://www.nicovideo.jp'
-								},
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((result) => {
-								throw createMylistError('マイリストから削除失敗(2)', { result, cause: result });
-						});
-						if (result.meta.status && result.meta.status === 200) {
-								cacheStorage.removeItem(cacheKey);
-								emitter.emitAsync('mylistRemove', watchId, groupId);
-								return {
-										status: 'ok',
-										result,
-										message: 'マイリストから削除'
-								};
-						}
-						throw createMylistError(result.error.description, {
-								result,
-								code: result.error.code
-						});
-				}
-				async addDeflistItem(watchId, description, isRetry = false, { frontendId = 6, frontendVersion = 0 } = {}) {
-						let url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later';
-						let body = `watchId=${watchId}&memo=`;
-						if (description) {
-								body += `${encodeURIComponent(description)}`;
-						}
-						let cacheKey = 'deflistItems';
-						const result = await netUtil.fetch(url, {
-								method: 'POST',
-								body,
-								headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((err) => {
-								throw createMylistError('あとで見る登録失敗(200)', {
-										result: err,
-										cause: err
+						const scope = JSON.stringify([watchId, groupId === null ? null : String(groupId)]);
+						const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+								RequestDiagnostics.begin(operation, scope, 'response', active, watchId);
+						const adding = body !== undefined;
+						let response;
+						let result;
+						try {
+								response = await netUtil.fetch(url, {
+										method: adding ? 'POST' : 'DELETE',
+										...(adding ? { body } : {}),
+										headers: {
+												...(adding ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+												'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion,
+												'X-Request-With': 'https://www.nicovideo.jp'
+										},
+										credentials: 'include', ...(ticket ? { diagnosticActive: () => false } : {})
 								});
-						});
-						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
-								cacheStorage.removeItem(cacheKey);
-								emitter.emitAsync('deflistAdd', watchId, description);
-								return {
-										status: 'ok',
-										result,
-										message: 'あとで見る登録'
-								};
+								result = await response.json();
 						}
-						if (result.meta.status && result.meta.status === 409 && !isRetry) {
+						catch (cause) {
+								if (ticket) {
+										ticket.failure(RequestDiagnostics.readFailure(response, cause));
+								}
+								if (!active()) {
+										throw staleError();
+								}
+								throw createMylistError(label + (adding ? '失敗(200)' : '失敗(2)'), { result: cause, cause });
+						}
+						if (!active()) {
+								ticket?.failure({ name: 'AbortError' });
+								throw staleError();
+						}
+						const wire = response.status;
+						const httpOk = wire === undefined || (wire >= 200 && wire < 300);
+						const api = result?.meta?.status;
+						const code = result?.meta?.errorCode || result?.error?.code;
+						if (allowDuplicate && api === 409 && (httpOk || wire === 409)) {
+								ticket?.failure({ name: 'AbortError' });
 								return { status: 'ok', result, message: 'あとで見るに登録済み（既存の登録を保持しました）' };
 						}
-						if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-								throw createMylistError('あとで見る登録失敗(100)', {
-										result
-								});
+						if (!httpOk || !(api === 200 || (adding && api === 201)) || code) {
+								if (ticket) {
+										ticket.failure(wire === 0 ? { kind: 'network' } :
+												RequestDiagnostics.responseFailure(response, { status: api, errorCode: code }, 'meta.status'));
+								}
+								const description = result?.error?.description;
+								const message = typeof description === 'string' && description ? description :
+										label + (adding ? '失敗(100)' : '失敗(1)');
+								throw createMylistError(message, { result, code: result?.error?.code ?? result?.meta?.errorCode });
 						}
-						throw createMylistError(result.error.description, {
-								result,
-								code: result.error.code
+						ticket?.success();
+						onConfirmed();
+						return { status: 'ok', result, message: label };
+				}
+				async removeDeflistItem(watchId, frontend = {}) {
+						const item = await this.findDeflistItemByWatchId(watchId, frontend);
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?itemIds=' + encodeURIComponent(String(item.itemId));
+						return this._writeItem('watch-later-remove', url, watchId, null, frontend, 'あとで見るから削除', undefined, () => {
+								cacheStorage.removeItem('deflistItems');
+								emitter.emitAsync('deflistRemove', watchId);
 						});
 				}
-				async addMylistItem(watchId, groupId, description, { frontendId = 6, frontendVersion = 0 } = {}) {
-						let body = 'itemId=' + watchId + '&description='; //+ '&token=' + token + '&group_id=' + groupId;
-						if (description) {
-								body += encodeURIComponent(description);
-						}
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
-						const cacheKey = `mylistItems: ${groupId}`;
-						const result = await netUtil.fetch(url, {
-								method: 'POST',
-								body,
-								headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((err) => {
-								throw createMylistError('マイリスト登録失敗(200)', {
-										result: err,
-										cause: err
-								});
+				async removeMylistItem(watchId, groupId, frontend = {}) {
+						const item = await this.findMylistItemByWatchId(watchId, groupId, frontend);
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + encodeURIComponent(groupId) +
+								'/items?itemIds=' + encodeURIComponent(String(item.itemId));
+						return this._writeItem('mylist-remove', url, watchId, groupId, frontend, 'マイリストから削除', undefined, () => {
+								cacheStorage.removeItem(`mylistItems: ${groupId}`);
+								emitter.emitAsync('mylistRemove', watchId, groupId);
 						});
-						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
-								cacheStorage.removeItem(cacheKey);
+				}
+				async addDeflistItem(watchId, description, isRetry = false, frontend = {}) {
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later';
+						const body = 'watchId=' + encodeURIComponent(watchId) + '&memo=' + encodeURIComponent(description || '');
+						return this._writeItem('watch-later-add', url, watchId, null, frontend, 'あとで見る登録', body, () => {
+								cacheStorage.removeItem('deflistItems');
+								emitter.emitAsync('deflistAdd', watchId, description);
+						}, !isRetry);
+				}
+				async addMylistItem(watchId, groupId, description, frontend = {}) {
+						const body = 'itemId=' + encodeURIComponent(watchId) + '&description=' + encodeURIComponent(description || '');
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + encodeURIComponent(groupId) + '/items?' + body;
+						return this._writeItem('mylist-add', url, watchId, groupId, frontend, 'マイリスト登録', body, () => {
+								cacheStorage.removeItem(`mylistItems: ${groupId}`);
 								emitter.emitAsync('mylistAdd', watchId, groupId, description);
-								this.removeDeflistItem(watchId).catch(() => { });
-								return { status: 'ok', result, message: 'マイリスト登録' };
-						}
-						if (!result.meta.status /*|| !result.error*/) {
-								throw createMylistError('マイリスト登録失敗(100)', { result });
-						}
-						throw createMylistError(result.error.description, {
-								result, code: result.error.code
+								this.removeDeflistItem(watchId, frontend).catch(() => { });
 						});
 				}
 		}
@@ -7629,7 +7605,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.99-task1099', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.100-task1100', 'background: #ccf;');
       await config.promise('restore');
       window.addEventListener('click', openPocketLinkInNewTab, true);
       initDom();

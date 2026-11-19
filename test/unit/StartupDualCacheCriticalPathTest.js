@@ -61,11 +61,11 @@ function harness() {
       return optionalStoryboard.promise;
     }}
   });
-  // Both symbols below are evaluated from the actual GitHub candidate JS,
-  // not parallel approximations of their algorithm.
+  // Evaluate the generated cache and startup code together in the same context.
   run(beginSection('packages/lib/src/nico/WatchInfoCacheDb.js') +
     ';\nglobalThis.__watchCacheSubject = WatchInfoCacheDb;', ctx);
   ctx.WatchInfoCacheDb = ctx.__watchCacheSubject;
+  run('const warmWatchCache = ' + extract('src/initializer.js', 'warmWatchCache', 'var') + ';', ctx);
   run('globalThis.__startupInitWorkerSubject = ' +
     extract('src/initializer.js', 'initWorker', 'var') + ';', ctx);
   return {

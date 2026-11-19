@@ -54,9 +54,9 @@ const NicoVideoPlayerDialogUserActions = {
         `元動画: ${info.originalVideoId}` : '';
       description = enableAutoMylistComment ?
           `投稿者: ${info.owner.name} ${info.owner.linkId} ${originalVideoId}` : '';
-    }).then(() => this._mylistApiLoader.addDeflistItem(watchId, description))
+    }).then(() => this._mylistApiLoader.addDeflistItem(watchId, description, false, {isCurrent}))
       .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', result.message); } })
-      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', err.message ? err.message : 'あとで見るに登録失敗'); } })
+      .catch(() => { if (isCurrent()) { this.execCommand('alert', 'あとで見るへの追加を確認できません。一覧で登録状態を確認してください。'); } })
       .then(() => {
       window.setTimeout(unlock, 2000);
     });
@@ -84,9 +84,12 @@ const NicoVideoPlayerDialogUserActions = {
       this._mylistApiLoader = MylistApiLoader;
     }
 
-    Promise.resolve().then(() => this._mylistApiLoader.removeDeflistItem(watchId))
+    Promise.resolve().then(() => this._mylistApiLoader.removeDeflistItem(watchId, {isCurrent}))
       .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', result.message); } })
-      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', err.message); } })
+      .catch((err?: Loose) => {
+        if (isCurrent()) { this.execCommand('alert', err?.status === 'not_found' ? 'あとで見るに動画が見つかりません。' :
+          'あとで見るからの削除を確認できません。一覧で登録状態を確認してください。'); }
+      })
       .then(() => {
         window.setTimeout(unlock, 2000);
       });
@@ -185,9 +188,9 @@ const NicoVideoPlayerDialogUserActions = {
       this._mylistApiLoader = MylistApiLoader;
     }
 
-    Promise.resolve().then(() => this._mylistApiLoader.addMylistItem(watchId, groupId, description))
+    Promise.resolve().then(() => this._mylistApiLoader.addMylistItem(watchId, groupId, description, {isCurrent}))
       .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', `${result.message}: ${mylistName}`); } })
-      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', `${err.message}: ${mylistName}`); } })
+      .catch(() => { if (isCurrent()) { this.execCommand('alert', 'マイリストへの追加を確認できません。一覧で登録状態を確認してください。'); } })
       .then(() => {
         window.setTimeout(unlock, 2000);
       });
@@ -218,9 +221,12 @@ const NicoVideoPlayerDialogUserActions = {
       this._mylistApiLoader = MylistApiLoader;
     }
 
-    Promise.resolve().then(() => this._mylistApiLoader.removeMylistItem(watchId, groupId))
+    Promise.resolve().then(() => this._mylistApiLoader.removeMylistItem(watchId, groupId, {isCurrent}))
       .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', `${result.message}: ${mylistName}`); } })
-      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', `${err.message}: ${mylistName}`); } })
+      .catch((err?: Loose) => {
+        if (isCurrent()) { this.execCommand('alert', err?.status === 'not_found' ? 'マイリストに動画が見つかりません。' :
+          'マイリストからの削除を確認できません。一覧で登録状態を確認してください。'); }
+      })
       .then(() => {
         window.setTimeout(unlock, 2000);
       });

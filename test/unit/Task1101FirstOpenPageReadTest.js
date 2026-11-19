@@ -1,0 +1,118 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const {beginSection, createContext, run} = require('../helpers/extractSource');
+const fixture = require('../fixtures/watch-legacy-darasan.sanitized.json');
+const id = fixture.data.response.video.id;
+
+function setup() {
+  const requests = [], events = [];
+  const context = createContext({
+    AbortController, CacheStorage: class {setItem() {}}, sessionStorage: {},
+    debug: {}, Config: {getValue: () => false}, textUtil: {},
+    nicoUtil: {hasLargeThumbnail: () => false},
+    emitter: {emitAsync: (...args) => events.push(args)},
+    console: {log(){}, info(){}, warn(){}, error(){}, time(){}, timeEnd(){}},
+    setTimeout: fn => queueMicrotask(fn),
+    netUtil: {fetch(url, options) {
+      return new Promise((resolve, reject) => {
+        requests.push({url, signal: options.signal, respond: data => resolve({json: async () => data}), reject});
+        options.signal?.addEventListener('abort', () => reject(Error('aborted')), {once:true});
+      });
+    }}
+  });
+  run(beginSection('packages/lib/src/nico/VideoInfoLoader.js') + '\nglobalThis.loader = VideoInfoLoader;', context);
+  return {loader: context.loader, requests, events};
+}
+
+describe('Task1101 first local open watch-page read', () => {
+  it('publishes only on foreground load and adopts exactly once', async () => {
+    const {loader, requests, events} = setup();
+    const intent = {};
+    const abandon = loader.beginFirstOpenPageRead(id, intent);
+    assert.equal(requests.length, 1);
+    requests[0].respond(fixture);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(events.length, 0);
+    const first = loader.load(id, {}, intent);
+    abandon();
+    assert.equal(requests[0].signal.aborted, false);
+    assert.equal((await first).isPlayable, true);
+    assert.equal(requests.length, 1);
+    assert.equal(events.filter(e => e[0] === 'loadVideoInfo').length, 1);
+    const next = loader.load(id, {}, intent);
+    assert.equal(requests.length, 2);
+    requests[1].respond(fixture);
+    await next;
+  });
+
+  it('aborts a superseded or abandoned read and isolates stale cleanup', async () => {
+    const {loader, requests, events} = setup();
+    const intent = {};
+    const old = loader.beginFirstOpenPageRead(id, intent);
+    const current = loader.beginFirstOpenPageRead(id, intent);
+    assert.equal(requests[0].signal.aborted, true);
+    old();
+    assert.equal(requests[1].signal.aborted, false);
+    current();
+    assert.equal(requests[1].signal.aborted, true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(events.length, 0);
+  });
+
+  for (const mismatch of ['watchId', 'economy', 'intent']) {
+    it('discards a read on mismatched ' + mismatch, async () => {
+      const {loader, requests} = setup();
+      const intent = {economy:true};
+      loader.beginFirstOpenPageRead(id, intent);
+      const actual = mismatch === 'watchId' ? 'sm2' : id;
+      const options = {economy:mismatch !== 'economy'};
+      const load = loader.load(actual, options, mismatch === 'intent' ? {...intent} : intent);
+      assert.equal(requests[0].signal.aborted, true);
+      assert.equal(requests[1].url, 'https://www.nicovideo.jp/watch/' + actual + (options.economy ? '?eco=1' : ''));
+      requests[1].respond({data:{response:{statusCode:404,errorCode:'NOT_FOUND'}}});
+      await assert.rejects(load, e => e.watchId === actual && e.reason === 'not found');
+      assert.equal(requests.length, 2);
+    });
+  }
+
+  it('adopts an already rejected raw read into the ordinary single network retry', async () => {
+    const {loader, requests} = setup();
+    const intent = {};
+    loader.beginFirstOpenPageRead(id, intent);
+    requests[0].reject(Error('offline'));
+    await new Promise(resolve => setImmediate(resolve));
+    const load = loader.load(id, {}, intent);
+    assert.equal(requests.length, 1);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests.length, 2);
+    requests[1].respond(fixture);
+    assert.equal((await load).isPlayable, true);
+  });
+
+  it('keeps the ordinary publication generation when replacing a foreground load', async () => {
+    const {loader, requests, events} = setup();
+    const intent = {};
+    loader.beginFirstOpenPageRead(id, intent);
+    const first = loader.load(id, {}, intent);
+    const next = loader.load(id, {});
+    requests[1].respond(fixture);
+    await next;
+    requests[0].respond(fixture);
+    await first;
+    assert.equal(events.filter(e => e[0] === 'loadVideoInfo').length, 1);
+    assert.equal(requests.length, 2);
+  });
+
+  it('honors foreground cancellation while the adopted request is in flight', async () => {
+    const {loader, requests, events} = setup();
+    const intent = {}, foreground = new AbortController();
+    loader.beginFirstOpenPageRead(id, intent);
+    const load = loader.load(id, {signal:foreground.signal}, intent);
+    foreground.abort();
+    assert.equal(requests[0].signal.aborted, true);
+    await assert.rejects(load, e => e.reason === 'cancelled');
+    assert.equal(events.length, 0);
+    assert.equal(requests.length, 1);
+  });
+});

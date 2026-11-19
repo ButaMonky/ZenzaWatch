@@ -27,6 +27,7 @@ declare class PagePreviewGuard {
 }
 
 
+declare const VideoInfoLoader: typeof import('./VideoInfoLoader').VideoInfoLoader;
 declare const WatchClickNavigation: {begin(w: Window & typeof globalThis, event: MouseEvent, watchId: string, launch: () => void): void};
 
 class HoverMenu {
@@ -38,11 +39,19 @@ class HoverMenu {
   declare _playerOption: Loose;
   declare _playerPromise: Loose;
   declare _playerResolve: Loose;
+  declare _playerUnavailable: boolean;
+  declare _wakePlayerSetup: (() => void) | undefined;
+  declare _playerIdle: Promise<void> | undefined;
+  declare _pendingButtonOpen: {watchId: string; option: Loose} | undefined;
   declare _query: Loose;
   declare _watchId: Loose;
   declare _watchLinkClick: Loose;
   constructor(param?: Loose) {
     this.initialize(param);
+  }
+  static canStartOnSearch(config: Loose) {
+    return location.host === 'www.nicovideo.jp' && /^\/search(?:\/|$)/.test(location.pathname) &&
+      !!document.body && !config.props.overrideWatchLink;
   }
   initialize(param?: Loose) {
     this._playerConfig = param.playerConfig;
@@ -78,7 +87,39 @@ class HoverMenu {
         .on('mouseover', this._onHoverEnd)
         .on('mouseout', this._onMouseout.bind(this))
         .append($view);
+      if (HoverMenu.canStartOnSearch(this._playerConfig)) {
+        // The pointer may already be inside a result when the page-world script starts.
+        const hovered = document.querySelectorAll('main :hover');
+        const target = hovered[hovered.length - 1];
+        if (target) {
+          this._onHover({target});
+          this._onHoverEnd({target}, true);
+        }
+      }
     }
+  }
+  waitForPlayerIdle(): Promise<void> {
+    if (this._hoverElement || this._playerPromise || this._playerUnavailable ||
+        document.hidden || !window.requestIdleCallback) { return Promise.resolve(); }
+    if (this._playerIdle) { return this._playerIdle; }
+    return this._playerIdle = new Promise(resolve => {
+      const end = performance.now() + 400;
+      let callback: number;
+      const finish = () => {
+        window.cancelIdleCallback(callback);
+        document.removeEventListener('visibilitychange', finish);
+        this._playerIdle = this._wakePlayerSetup = undefined;
+        resolve();
+      };
+      const idle = (deadline: IdleDeadline) => {
+        const remaining = end - performance.now();
+        if (deadline.didTimeout || remaining <= 0 || deadline.timeRemaining() >= 12) { finish(); }
+        else { callback = window.requestIdleCallback(idle, {timeout: Math.ceil(remaining)}); }
+      };
+      this._wakePlayerSetup = finish;
+      document.addEventListener('visibilitychange', finish);
+      callback = window.requestIdleCallback(idle, {timeout: 400});
+    });
   }
   setPlayer(player?: Loose) {
     if (this._player !== player) {
@@ -90,7 +131,15 @@ class HoverMenu {
       this._playerResolve(player);
     }
   }
+  setPlayerUnavailable() {
+    this._playerUnavailable = true;
+    this._wakePlayerSetup?.();
+    this._hideButton();
+    this._playerResolve?.(null);
+  }
   _getPlayer() {
+    this._wakePlayerSetup?.();
+    if (this._playerUnavailable) { return Promise.resolve(null); }
     if (this._player) {
       return Promise.resolve(this._player);
     }
@@ -154,6 +203,7 @@ class HoverMenu {
     const target = this._closest(e.target);
     if (target) {
       this._hoverElement = target;
+      this._wakePlayerSetup?.();
     }
   }
   _onMouseout(e: Loose) {
@@ -162,8 +212,9 @@ class HoverMenu {
       this._hoverElement = null;
     }
   }
-  _onHoverEnd(e?: Loose) {
-    if (!this._hoverElement) { return; }
+  _onHoverEnd(e?: Loose, initial = false) {
+    if (this._playerUnavailable || !this._hoverElement) { return; }
+    if (initial && !e.target.matches('main :hover')) { return; }
     const target = this._closest(e.target);
     if (this._hoverElement !== target) {
       return;
@@ -217,13 +268,13 @@ class HoverMenu {
       // 秘密機能。最後にZenzaWatchを開いたウィンドウで開く
       this._send(watchId);
     } else {
-      this._open(watchId);
+      this._open(watchId, undefined, e.isTrusted === true);
     }
   }
   open(watchId: Loose, params?: Loose) {
     this._open(watchId, params);
   }
-  async _open(watchId: Loose, params?: Loose) {
+  async _open(watchId: Loose, params?: Loose, fromButton = false) {
     // Keep the independent Task376 race fix: own each pending request's options.
     const option = Object.assign({
       economy: this._playerConfig.getValue('forceEconomy'),
@@ -232,19 +283,35 @@ class HoverMenu {
     }, params);
     this._playerOption = option;
 
-    const player = await this._getPlayer();
-    if (this._playerConfig.getValue('enableSingleton')) {
-      ZenzaWatch.external.sendOrOpen(watchId, option);
-    } else {
-      player.open(watchId, option);
+    // A real first local click selects the video. Its watch-page read can run
+    // while the player is starting, using the very same options object at handoff.
+    const earlyRead = fromButton && !this._player?.watchId &&
+      !this._playerConfig.getValue('enableSingleton') && HoverMenu.canStartOnSearch(this._playerConfig);
+    if (earlyRead && this._pendingButtonOpen?.watchId === watchId) { return; }
+    if (earlyRead && typeof option.economy !== 'boolean') {
+      option.economy = this._playerConfig.getValue('smileVideoQuality') === 'eco';
+    }
+    const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option) : undefined;
+    if (earlyRead) { this._pendingButtonOpen = {watchId, option}; }
+    try {
+      const player = await this._getPlayer();
+      if (!player || (earlyRead && this._pendingButtonOpen?.option !== option)) { return; }
+      if (this._playerConfig.getValue('enableSingleton')) {
+        ZenzaWatch.external.sendOrOpen(watchId, option);
+      } else {
+        await player.open(watchId, option);
+      }
+    } finally {
+      if (this._pendingButtonOpen?.option === option) { this._pendingButtonOpen = undefined; }
+      abandon?.();
     }
   }
   send(watchId: Loose, params?: Loose) {
     this._send(watchId, params);
   }
   async _send(watchId: Loose, params?: Loose) {
-    await this._getPlayer();
-    ZenzaWatch.external.send(watchId, Object.assign({query: this._query}, params));
+    const option = Object.assign({query: this._query}, params);
+    if (await this._getPlayer()) { ZenzaWatch.external.send(watchId, option); }
   }
   /**
    * A card's delegated route is not permission to claim every descendant.

@@ -18,27 +18,37 @@ const NicodicArticleLoader = (() => {
             RequestDiagnostics.begin('dictionary', JSON.stringify(entries.map(([name]) => name)), 'response');
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
+        let res;
         let articles = null;
         try {
             const query = new URLSearchParams();
             entries.forEach(([name]) => query.append('titles[]', name));
-            const res = await fetch(`${API_URL}?${query}`, { credentials: 'omit', signal: controller.signal });
+            res = await fetch(`${API_URL}?${query}`, { credentials: 'omit', signal: controller.signal });
             if (!res.ok) {
                 diagnostic?.failure({ status: res.status });
                 throw new Error(`Nicodic HTTP ${res.status}`);
             }
             const data = await res.json();
-            if (!Array.isArray(data) || data.some((a) => !a || typeof a.request_title !== 'string' ||
-                typeof a.title !== 'string')) {
-                diagnostic?.failure({ kind: 'schema' });
+            let missing;
+            if (!Array.isArray(data))
+                missing = 'articles';
+            else if (data.some(a => typeof a?.request_title !== 'string'))
+                missing = 'articles[].request_title';
+            else if (data.some(a => typeof a?.title !== 'string'))
+                missing = 'articles[].title';
+            if (missing) {
+                diagnostic?.failure({ kind: 'schema', httpStatus: res.status, missing });
                 throw new Error('Invalid Nicodic batch response');
             }
             diagnostic?.success();
             articles = new Map(data.map(a => [a.request_title, a]));
         }
         catch (e) {
-            diagnostic?.failure(controller.signal.aborted ? { name: 'TimeoutError' } : e);
-            window.console.warn('大百科の記事有無を調べられませんでした', e);
+            if (diagnostic) {
+                const failure = RequestDiagnostics.readFailure(res, controller.signal.aborted ? { name: 'TimeoutError' } : e);
+                diagnostic.failure('missing' in failure && failure.missing === 'json' ? { ...failure, missing: 'response.json' } : failure);
+            }
+            window.console.warn('大百科の記事有無を調べられませんでした');
         }
         finally {
             clearTimeout(timeout);

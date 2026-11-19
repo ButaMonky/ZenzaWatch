@@ -66,6 +66,7 @@ function makeSubject(sourcePath = 'src/TagListView.js') {
 
   return {
     view,
+    window,
     bodyListeners,
     timers,
     runTimers() {
@@ -79,6 +80,20 @@ function makeSubject(sourcePath = 'src/TagListView.js') {
 }
 
 describe('Task242 TagListView listener lifetime', () => {
+  it('keeps rejected tag request data out of the alert and console', () => {
+    const {view,window} = makeSubject();
+    const alerts = [], warnings = [];
+    window.console = {warn:(...args) => warnings.push(args)};
+    view.emit = (...args) => alerts.push(args);
+    view._watchId = 'sm10';
+    const error = Object.assign(new Error('private-tag-value'), {response:{data:{editKey:'private-fixture'}}});
+    view._onTagEditError('sm9',error,'タグの追加');
+    view._onTagEditError('sm10',error,'タグの追加');
+    assert.equal(alerts.length,1);
+    assert(alerts[0][2].includes('通知履歴'));
+    assert(!JSON.stringify([alerts,warnings]).includes('private'));
+    assert(!warnings.flat().includes(error));
+  });
   it('removes the owned body click listener when a video update interrupts edit mode', () => {
     const s = makeSubject();
 

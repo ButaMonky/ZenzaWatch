@@ -5,7 +5,11 @@ const RequestDiagnostics = (() => {
         'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-history-read': 'コメント増量（過去のコメントを追加取得）', 'comment-key': 'コメント取得キーの更新',
         'video-session': '再生セッション（映像の配信URL取得）', 'session-state': '再生セッションの維持',
         storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
-        like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
+        'playback-position': '再生位置の保存',
+        'mylist-add': 'マイリストへの追加', 'mylist-remove': 'マイリストからの削除',
+        'watch-later-add': 'あとで見るへの追加', 'watch-later-remove': 'あとで見るからの削除',
+        'tag-add': 'タグの追加', 'tag-remove': 'タグの削除',
+        like: 'いいね', tags: 'タグ一覧', 'nico-api': 'ニコニコAPI',
         'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
         'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
         dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
@@ -26,6 +30,10 @@ const RequestDiagnostics = (() => {
         'comment-key': 'packages/comment-history/src/core.mjs', 'video-session': 'nico-src/VideoSessionWorker.ts',
         'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
         search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
+        'playback-position': 'nico-src/PlaybackPosition.ts',
+        'mylist-add': 'nico-src/MylistApiLoader.ts', 'mylist-remove': 'nico-src/MylistApiLoader.ts',
+        'watch-later-add': 'nico-src/MylistApiLoader.ts', 'watch-later-remove': 'nico-src/MylistApiLoader.ts',
+        'tag-add': 'nico-src/TagEditApi.ts', 'tag-remove': 'nico-src/TagEditApi.ts',
         like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
         'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
         'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
@@ -72,7 +80,9 @@ const RequestDiagnostics = (() => {
         ['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
     const noteSuspect = (operation, key, failure, now) => {
         const group = operation + '|' + failure.reason + '|' + (failure.errorCode || (failure.reason === 'service' ? failure.apiStatus : undefined) || failure.statusCode || '') +
-            (operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ? '|' + (failure.missing || '') : '');
+            (operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ||
+                ['dictionary', 'tags', 'tag-key', 'tag-suggest', 'tag-add', 'tag-remove', 'playback-position',
+                    'watch-later-add', 'watch-later-remove', 'mylist-add', 'mylist-remove'].includes(operation) ? '|' + (failure.missing || '') : '');
         const seen = suspects.get(group) || new Map();
         seen.set(key, now);
         for (const [k, at] of seen) {
@@ -415,6 +425,8 @@ const RequestDiagnostics = (() => {
             if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v3\/users\/[^/]+\/videos\/?$/.test(p)) {
                 return url.searchParams.get('selectContentType') === 'short' ? 'playlist' : 'owner-videos';
             }
+            if (url.hostname === 'nvapi.nicovideo.jp' && p === '/v2/users/me/watch/history/playback-position')
+                return 'playback-position';
             if (/\/watch-later(?:\/|$)/.test(p)) {
                 return 'mylist';
             }

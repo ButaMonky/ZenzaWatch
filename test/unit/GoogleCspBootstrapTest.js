@@ -2,7 +2,7 @@
 const assert = require('assert');
 const {extract, createContext, run} = require('../helpers/extractSource');
 
-function makeHarness(injection = 'fail') {
+function makeHarness(injection = 'fail', logger = console) {
   const calls = [];
   const win = {name: '', location: {host: 'www.google.com', href: 'https://www.google.com/search?q=test'}};
   win.top = win;
@@ -29,7 +29,7 @@ function makeHarness(injection = 'fail') {
     Blob: class {constructor(parts) {win.injectedCode=parts.join('');}},
     AntiPrototypeJs: async () => {},
     GateAPI: {},
-    console
+    console: logger
   });
   run('const boot = ' + extract('src/boot.js', 'boot', 'var') +
     ';globalThis.subjectBoot=boot;', context);
@@ -41,6 +41,27 @@ function makeHarness(injection = 'fail') {
 }
 
 describe('Task311 Google strict CSP startup recovery', () => {
+  it('runs once in the ordinary Nico page realm without a second script or losing the watch query', async () => {
+    const h = makeHarness('success');
+    h.win.location.host = 'www.nicovideo.jp';
+    const query = "word=rock'n'roll&from=search";
+    await h.boot(h.monkey, 'ZenzaWatch', query, true);
+    assert.deepStrictEqual(h.calls, [['run', 'ZenzaWatch', encodeURIComponent(query)]]);
+    await h.boot(h.monkey, 'ZenzaWatch', query, true);
+    assert.strictEqual(h.calls.length, 1);
+  });
+  it('reports a rejected direct startup once without retrying or printing query or error values', async () => {
+    const messages = [];
+    const h = makeHarness('success', {warn: (...args) => messages.push(args)});
+    h.win.location.host = 'www.nicovideo.jp';
+    let attempts = 0;
+    const cause = Object.assign(Error('private-failure'), {stack:'Error: private-failure\n    at privateFunction (ZenzaWatchRuntime.js:20:3)'});
+    await assert.rejects(h.boot(async () => { attempts++; throw cause; }, 'ZenzaWatch', 'private-query', true),
+      error => error.name === 'ZenzaWatchStartupError' && error.stack.includes('ZenzaWatchRuntime.js:20:3') && !/private/.test(error.stack));
+    assert.strictEqual(attempts, 1);
+    assert.deepStrictEqual(h.calls, []);
+    assert.deepStrictEqual(messages, [['[ZenzaWatch] 起動診断：プレイヤー本体の初期化に失敗しました。']]);
+  });
   it('falls back to userscript execution after a blocked blob script', async () => {
     const h = makeHarness('fail');
     await h.boot(h.monkey, 'ZenzaWatch', 'q=test');

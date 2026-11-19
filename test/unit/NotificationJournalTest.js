@@ -32,10 +32,12 @@ describe('NotificationJournal source-only, no network', () => {
     assert.equal((await journal.list()).length, 0);
     emit('ZenzaWatchMain.js');
     emit('ZenzaWatchMain.js');
+    handlers.get('error')({filename:'', error:{name:'TypeError', message:'private fixture text',
+      stack:'TypeError\n    at Module.read (ZenzaWatchRuntime.js:15:3)'}});
     const entries = await journal.list();
     assert.equal(entries.length, 1);
     assert.equal(entries[0].source, 'script-error');
-    assert.equal(entries[0].details.count, 2);
+    assert.equal(entries[0].details.count, 3);
     assert(!JSON.stringify(entries).includes('private fixture text'));
   });
   it('captures occurrence build and separates first/last failure from recovery time', () => {

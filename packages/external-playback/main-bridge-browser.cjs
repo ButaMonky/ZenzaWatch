@@ -8,7 +8,7 @@ let chrome,ws,server,id=0;const pending=new Map();
 function send(method,params={}){return new Promise((resolve,reject)=>{const n=++id;const timer=setTimeout(()=>{pending.delete(n);reject(Error(method));},15000);pending.set(n,{resolve,reject,timer});ws.send(JSON.stringify({id:n,method,params}));});}
 async function evaluate(expression,contextId){const r=await send('Runtime.evaluate',{expression,contextId,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;}
 (async()=>{try{
- server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(req.url==='/robots.txt'?'<html><body>static fixture</body></html>':'<!doctype html><body><iframe name="ZenzaWatchExternalTrialPlayer" src="/robots.txt"></iframe>');});
+ server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end(req.url==='/robots.txt'?'<html><body>static fixture</body></html>':'<!doctype html><body><iframe name="ZenzaWatchExternalTrialPlayer" src="/robots.txt"></iframe>');});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const origin='http://127.0.0.1:'+server.address().port;
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'zenza-main-bridge-'));
@@ -39,9 +39,10 @@ async function evaluate(expression,contextId){const r=await send('Runtime.evalua
  const parentWorld=(await send('Page.createIsolatedWorld',{frameId:tree.frame.id,worldName:'normal-main-userscript'})).executionContextId;
  const lodash=fs.readFileSync(require.resolve('lodash/lodash.min.js'),'utf8');
  const bundle=fs.readFileSync(path.join(__dirname,'../../dist/ZenzaWatch-dev.user.js'),'utf8')
-   .replace('return boot(monkey, PRODUCT, START_PAGE_QUERY);',"document.body.dataset.boot=PRODUCT;document.body.dataset.gm=typeof GM_xmlhttpRequest;");
+   .replace('return boot(monkey, PRODUCT, START_PAGE_QUERY, !externalTrial);',"document.body.dataset.boot=PRODUCT;document.body.dataset.gm=typeof GM_xmlhttpRequest;");
  const code='(()=>{const GM_getValue=()=>undefined,GM_setValue=()=>{},GM_deleteValue=()=>{},GM_addValueChangeListener=()=>1,GM_removeValueChangeListener=()=>{},GM_xmlhttpRequest=()=>{throw Error("unexpected transport")},GM_getResourceText=()=>'+JSON.stringify(lodash)+',GM_addElement=(parent,tag,attrs)=>{const element=document.createElement(tag);Object.assign(element,attrs);parent.append(element);return element;};'+bundle+'})();';
- await evaluate(code,parentWorld);await wait(100);
+ await evaluate(code,parentWorld);
+ for(let i=0;i<100&&!await evaluate('document.body.dataset.boot');i++)await wait(25);
  assert.deepEqual(await evaluate('[document.body.dataset.boot,document.body.dataset.gm]'),['ZenzaWatch','undefined']);
  console.log('PASS normal main executes in page realm without privileged GM APIs');
 }catch(error){console.error(error);process.exitCode=1;}finally{

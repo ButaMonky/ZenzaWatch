@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.476-task1099
+// @version        2.7.477-task1100
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 07:11Z 76f1b645
+// build: 2026-11-19 10:55Z a984250b
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1738,7 +1738,11 @@ const RequestDiagnostics = (() => {
 				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-history-read': 'コメント増量（過去のコメントを追加取得）', 'comment-key': 'コメント取得キーの更新',
 				'video-session': '再生セッション（映像の配信URL取得）', 'session-state': '再生セッションの維持',
 				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
-				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
+				'playback-position': '再生位置の保存',
+				'mylist-add': 'マイリストへの追加', 'mylist-remove': 'マイリストからの削除',
+				'watch-later-add': 'あとで見るへの追加', 'watch-later-remove': 'あとで見るからの削除',
+				'tag-add': 'タグの追加', 'tag-remove': 'タグの削除',
+				like: 'いいね', tags: 'タグ一覧', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
 				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
@@ -1755,6 +1759,10 @@ const RequestDiagnostics = (() => {
 				'comment-key': 'packages/comment-history/src/core.mjs', 'video-session': 'nico-src/VideoSessionWorker.ts',
 				'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
 				search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
+				'playback-position': 'nico-src/PlaybackPosition.ts',
+				'mylist-add': 'nico-src/MylistApiLoader.ts', 'mylist-remove': 'nico-src/MylistApiLoader.ts',
+				'watch-later-add': 'nico-src/MylistApiLoader.ts', 'watch-later-remove': 'nico-src/MylistApiLoader.ts',
+				'tag-add': 'nico-src/TagEditApi.ts', 'tag-remove': 'nico-src/TagEditApi.ts',
 				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
 				'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
 				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
@@ -1794,7 +1802,9 @@ const RequestDiagnostics = (() => {
 				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
 		const noteSuspect = (operation, key, failure, now) => {
 				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || (failure.reason === 'service' ? failure.apiStatus : undefined) || failure.statusCode || '') +
-						(operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ? '|' + (failure.missing || '') : '');
+						(operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ||
+								['dictionary', 'tags', 'tag-key', 'tag-suggest', 'tag-add', 'tag-remove', 'playback-position',
+										'watch-later-add', 'watch-later-remove', 'mylist-add', 'mylist-remove'].includes(operation) ? '|' + (failure.missing || '') : '');
 				const seen = suspects.get(group) || new Map();
 				seen.set(key, now);
 				for (const [k, at] of seen) {
@@ -2125,6 +2135,8 @@ const RequestDiagnostics = (() => {
 						if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v3\/users\/[^/]+\/videos\/?$/.test(p)) {
 								return url.searchParams.get('selectContentType') === 'short' ? 'playlist' : 'owner-videos';
 						}
+						if (url.hostname === 'nvapi.nicovideo.jp' && p === '/v2/users/me/watch/history/playback-position')
+								return 'playback-position';
 						if (/\/watch-later(?:\/|$)/.test(p)) {
 								return 'mylist';
 						}
@@ -2243,10 +2255,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.476-task1099';
+    var VER = '2.7.477-task1100';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 07:11Z 76f1b645';
+    var BUILD = '2026-11-19 10:55Z a984250b';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -8011,7 +8023,9 @@ const NotificationJournalPolicy = (() => {
 						'comment-read': 'comment', 'comment-history-read': 'comment', 'comment-key': 'comment',
 						'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
 						like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
-						tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
+						'playback-position': 'player', 'mylist-add': 'mylist', 'mylist-remove': 'mylist',
+						'watch-later-add': 'mylist', 'watch-later-remove': 'mylist',
+						'tag-add': 'tags', 'tag-remove': 'tags', tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
 						recommend: 'related', 'owner-videos': 'related', owner: 'related', dictionary: 'related'
 				};
 				return groups[operation] || entry.category;
@@ -14254,14 +14268,48 @@ const VideoInfoLoader = (function () {
 						message: '動画情報が見つかりません（公式ページの構造を要確認）'
 				};
 		};
-		const loadPromise = function (watchId, options, isRetry = false, isCurrent = () => true) {
+		let pendingFirstOpen;
+		const beginFirstOpenPageRead = (watchId, launchOptions) => {
+				pendingFirstOpen?.controller.abort();
+				const controller = new AbortController();
+				const economy = launchOptions.economy === true;
+				const owner = {};
+				const response = fetchWatchResponse(watchId, { economy, signal: controller.signal }, () => owner.isCurrent?.() === true);
+				void response.catch(() => { });
+				pendingFirstOpen = { intent: launchOptions, watchId, economy, controller, response, owner };
+				return () => {
+						if (pendingFirstOpen?.controller !== controller)
+								return;
+						pendingFirstOpen = undefined;
+						controller.abort();
+				};
+		};
+		const takeFirstOpen = (watchId, options, launchOptions, isCurrent) => {
+				const read = pendingFirstOpen;
+				if (!read)
+						return;
+				pendingFirstOpen = undefined;
+				if (read.intent !== launchOptions || read.watchId !== watchId ||
+						read.economy !== (options.economy === true) || isCancelled(options)) {
+						read.controller.abort();
+						return;
+				}
+				read.owner.isCurrent = isCurrent;
+				const signal = options.signal;
+				if (!signal)
+						return read.response;
+				const abort = () => read.controller.abort();
+				signal.addEventListener('abort', abort, { once: true });
+				return read.response.finally(() => signal.removeEventListener('abort', abort));
+		};
+		const loadPromise = function (watchId, options, isRetry = false, isCurrent = () => true, firstResponse) {
 				if (isCancelled(options)) {
 						return Promise.reject(cancelledError());
 				}
 				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
 						RequestDiagnostics.begin('video-info', watchId, 'response', () => isCurrent() && !isCancelled(options));
 				console.log('loadFromWatchApiData');
-				return fetchWatchResponse(watchId, options, isCurrent)
+				return (firstResponse ?? fetchWatchResponse(watchId, options, isCurrent))
 						.catch(err => {
 						diagnostic?.failure(err);
 						return Promise.reject(isCancelled(options) ? cancelledError() :
@@ -14320,6 +14368,7 @@ const VideoInfoLoader = (function () {
 				});
 		};
 		return {
+				beginFirstOpenPageRead,
 				loadStoryboardInfo: async (watchId, options) => {
 						if (!/^(?:sm|so|nm)?\d+$/.test(watchId))
 								throw new TypeError('Invalid video ID');
@@ -14375,7 +14424,7 @@ const VideoInfoLoader = (function () {
 						}
 						return data;
 				},
-				load: function (watchId, options) {
+				load: function (watchId, options, launchOptions) {
 						debug.watchApiData = undefined;
 						const generation = ++anonymousWatchLoadSerial;
 						const callerSignal = options.signal;
@@ -14384,7 +14433,8 @@ const VideoInfoLoader = (function () {
 										callerSignal.aborted === true);
 						const timeKey = `watchAPI:${generation}`;
 						console.time(timeKey);
-						return loadPromise(watchId, options, false, isCurrent).then((result) => {
+						const firstResponse = takeFirstOpen(watchId, options, launchOptions, isCurrent);
+						return loadPromise(watchId, options, false, isCurrent, firstResponse).then((result) => {
 								console.timeEnd(timeKey);
 								return result;
 						}, (err) => {
@@ -14845,7 +14895,7 @@ const MylistApiLoader = (() => {
 						const execute = async () => {
 								const url = kind === 'watchLater' ?
 										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc&' :
-										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}?`;
+										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${encodeURIComponent(id)}?`;
 								const query = new URLSearchParams({ pageSize: '100', page: '1' });
 								const results = [];
 								const fingerprints = new Set();
@@ -14929,142 +14979,106 @@ const MylistApiLoader = (() => {
 								result: { watchId, groupId, list: 'mylist' }
 						});
 				}
-				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
-						const item = await this.findDeflistItemByWatchId(watchId, { frontendId, frontendVersion, isCurrent });
-						if (isCurrent && isCurrent() !== true)
-								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
-						const body = `itemIds=${item.itemId}`;
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
-						const cacheKey = 'deflistItems';
-						const result = await netUtil.fetch(url, {
-								method: 'DELETE',
-								headers: {
-										'X-Frontend-Id': frontendId,
-										'X-Frontend-Version': frontendVersion,
-										'X-Request-With': 'https://www.nicovideo.jp'
-								},
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((result) => {
-								throw createMylistError('あとで見るから削除失敗(2)', { result, cause: result });
-						});
-						if (result.meta.status && result.meta.status === 200) {
-								cacheStorage.removeItem(cacheKey);
-								emitter.emitAsync('deflistRemove', watchId);
-								return {
-										status: 'ok',
-										result,
-										message: 'あとで見るから削除'
-								};
+				async _writeItem(operation, url, watchId, groupId, frontend, label, body, onConfirmed, allowDuplicate = false) {
+						const { frontendId = 6, frontendVersion = 0, isCurrent } = frontend;
+						const active = () => {
+								try {
+										return !isCurrent || isCurrent() === true;
+								}
+								catch (_) {
+										return false;
+								}
+						};
+						const staleError = () => createMylistError('操作中止（動画が変更されました）', { code: 'STALE' });
+						if (!active()) {
+								throw staleError();
 						}
-						throw createMylistError(result.error.description, {
-								result, code: result.error.code
-						});
-				}
-				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
-						const item = await this.findMylistItemByWatchId(watchId, groupId, { frontendId, frontendVersion, isCurrent });
-						if (isCurrent && isCurrent() !== true)
-								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
-						let body = 'itemIds=' + item.itemId;
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
-						const cacheKey = `mylistItems: ${groupId}`;
-						const result = await netUtil.fetch(url, {
-								method: 'DELETE',
-								headers: {
-										'X-Frontend-Id': frontendId,
-										'X-Frontend-Version': frontendVersion,
-										'X-Request-With': 'https://www.nicovideo.jp'
-								},
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((result) => {
-								throw createMylistError('マイリストから削除失敗(2)', { result, cause: result });
-						});
-						if (result.meta.status && result.meta.status === 200) {
-								cacheStorage.removeItem(cacheKey);
-								emitter.emitAsync('mylistRemove', watchId, groupId);
-								return {
-										status: 'ok',
-										result,
-										message: 'マイリストから削除'
-								};
-						}
-						throw createMylistError(result.error.description, {
-								result,
-								code: result.error.code
-						});
-				}
-				async addDeflistItem(watchId, description, isRetry = false, { frontendId = 6, frontendVersion = 0 } = {}) {
-						let url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later';
-						let body = `watchId=${watchId}&memo=`;
-						if (description) {
-								body += `${encodeURIComponent(description)}`;
-						}
-						let cacheKey = 'deflistItems';
-						const result = await netUtil.fetch(url, {
-								method: 'POST',
-								body,
-								headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((err) => {
-								throw createMylistError('あとで見る登録失敗(200)', {
-										result: err,
-										cause: err
+						const scope = JSON.stringify([watchId, groupId === null ? null : String(groupId)]);
+						const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+								RequestDiagnostics.begin(operation, scope, 'response', active, watchId);
+						const adding = body !== undefined;
+						let response;
+						let result;
+						try {
+								response = await netUtil.fetch(url, {
+										method: adding ? 'POST' : 'DELETE',
+										...(adding ? { body } : {}),
+										headers: {
+												...(adding ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+												'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion,
+												'X-Request-With': 'https://www.nicovideo.jp'
+										},
+										credentials: 'include', ...(ticket ? { diagnosticActive: () => false } : {})
 								});
-						});
-						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
-								cacheStorage.removeItem(cacheKey);
-								emitter.emitAsync('deflistAdd', watchId, description);
-								return {
-										status: 'ok',
-										result,
-										message: 'あとで見る登録'
-								};
+								result = await response.json();
 						}
-						if (result.meta.status && result.meta.status === 409 && !isRetry) {
+						catch (cause) {
+								if (ticket) {
+										ticket.failure(RequestDiagnostics.readFailure(response, cause));
+								}
+								if (!active()) {
+										throw staleError();
+								}
+								throw createMylistError(label + (adding ? '失敗(200)' : '失敗(2)'), { result: cause, cause });
+						}
+						if (!active()) {
+								ticket?.failure({ name: 'AbortError' });
+								throw staleError();
+						}
+						const wire = response.status;
+						const httpOk = wire === undefined || (wire >= 200 && wire < 300);
+						const api = result?.meta?.status;
+						const code = result?.meta?.errorCode || result?.error?.code;
+						if (allowDuplicate && api === 409 && (httpOk || wire === 409)) {
+								ticket?.failure({ name: 'AbortError' });
 								return { status: 'ok', result, message: 'あとで見るに登録済み（既存の登録を保持しました）' };
 						}
-						if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-								throw createMylistError('あとで見る登録失敗(100)', {
-										result
-								});
+						if (!httpOk || !(api === 200 || (adding && api === 201)) || code) {
+								if (ticket) {
+										ticket.failure(wire === 0 ? { kind: 'network' } :
+												RequestDiagnostics.responseFailure(response, { status: api, errorCode: code }, 'meta.status'));
+								}
+								const description = result?.error?.description;
+								const message = typeof description === 'string' && description ? description :
+										label + (adding ? '失敗(100)' : '失敗(1)');
+								throw createMylistError(message, { result, code: result?.error?.code ?? result?.meta?.errorCode });
 						}
-						throw createMylistError(result.error.description, {
-								result,
-								code: result.error.code
+						ticket?.success();
+						onConfirmed();
+						return { status: 'ok', result, message: label };
+				}
+				async removeDeflistItem(watchId, frontend = {}) {
+						const item = await this.findDeflistItemByWatchId(watchId, frontend);
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?itemIds=' + encodeURIComponent(String(item.itemId));
+						return this._writeItem('watch-later-remove', url, watchId, null, frontend, 'あとで見るから削除', undefined, () => {
+								cacheStorage.removeItem('deflistItems');
+								emitter.emitAsync('deflistRemove', watchId);
 						});
 				}
-				async addMylistItem(watchId, groupId, description, { frontendId = 6, frontendVersion = 0 } = {}) {
-						let body = 'itemId=' + watchId + '&description='; //+ '&token=' + token + '&group_id=' + groupId;
-						if (description) {
-								body += encodeURIComponent(description);
-						}
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
-						const cacheKey = `mylistItems: ${groupId}`;
-						const result = await netUtil.fetch(url, {
-								method: 'POST',
-								body,
-								headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((err) => {
-								throw createMylistError('マイリスト登録失敗(200)', {
-										result: err,
-										cause: err
-								});
+				async removeMylistItem(watchId, groupId, frontend = {}) {
+						const item = await this.findMylistItemByWatchId(watchId, groupId, frontend);
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + encodeURIComponent(groupId) +
+								'/items?itemIds=' + encodeURIComponent(String(item.itemId));
+						return this._writeItem('mylist-remove', url, watchId, groupId, frontend, 'マイリストから削除', undefined, () => {
+								cacheStorage.removeItem(`mylistItems: ${groupId}`);
+								emitter.emitAsync('mylistRemove', watchId, groupId);
 						});
-						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
-								cacheStorage.removeItem(cacheKey);
+				}
+				async addDeflistItem(watchId, description, isRetry = false, frontend = {}) {
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later';
+						const body = 'watchId=' + encodeURIComponent(watchId) + '&memo=' + encodeURIComponent(description || '');
+						return this._writeItem('watch-later-add', url, watchId, null, frontend, 'あとで見る登録', body, () => {
+								cacheStorage.removeItem('deflistItems');
+								emitter.emitAsync('deflistAdd', watchId, description);
+						}, !isRetry);
+				}
+				async addMylistItem(watchId, groupId, description, frontend = {}) {
+						const body = 'itemId=' + encodeURIComponent(watchId) + '&description=' + encodeURIComponent(description || '');
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + encodeURIComponent(groupId) + '/items?' + body;
+						return this._writeItem('mylist-add', url, watchId, groupId, frontend, 'マイリスト登録', body, () => {
+								cacheStorage.removeItem(`mylistItems: ${groupId}`);
 								emitter.emitAsync('mylistAdd', watchId, groupId, description);
-								this.removeDeflistItem(watchId).catch(() => { });
-								return { status: 'ok', result, message: 'マイリスト登録' };
-						}
-						if (!result.meta.status /*|| !result.error*/) {
-								throw createMylistError('マイリスト登録失敗(100)', { result });
-						}
-						throw createMylistError(result.error.description, {
-								result, code: result.error.code
+								this.removeDeflistItem(watchId, frontend).catch(() => { });
 						});
 				}
 		}
@@ -15641,27 +15655,37 @@ const NicodicArticleLoader = (() => {
 						RequestDiagnostics.begin('dictionary', JSON.stringify(entries.map(([name]) => name)), 'response');
 				const controller = new AbortController();
 				const timeout = setTimeout(() => controller.abort(), 10000);
+				let res;
 				let articles = null;
 				try {
 						const query = new URLSearchParams();
 						entries.forEach(([name]) => query.append('titles[]', name));
-						const res = await fetch(`${API_URL}?${query}`, { credentials: 'omit', signal: controller.signal });
+						res = await fetch(`${API_URL}?${query}`, { credentials: 'omit', signal: controller.signal });
 						if (!res.ok) {
 								diagnostic?.failure({ status: res.status });
 								throw new Error(`Nicodic HTTP ${res.status}`);
 						}
 						const data = await res.json();
-						if (!Array.isArray(data) || data.some((a) => !a || typeof a.request_title !== 'string' ||
-								typeof a.title !== 'string')) {
-								diagnostic?.failure({ kind: 'schema' });
+						let missing;
+						if (!Array.isArray(data))
+								missing = 'articles';
+						else if (data.some(a => typeof a?.request_title !== 'string'))
+								missing = 'articles[].request_title';
+						else if (data.some(a => typeof a?.title !== 'string'))
+								missing = 'articles[].title';
+						if (missing) {
+								diagnostic?.failure({ kind: 'schema', httpStatus: res.status, missing });
 								throw new Error('Invalid Nicodic batch response');
 						}
 						diagnostic?.success();
 						articles = new Map(data.map(a => [a.request_title, a]));
 				}
 				catch (e) {
-						diagnostic?.failure(controller.signal.aborted ? { name: 'TimeoutError' } : e);
-						window.console.warn('大百科の記事有無を調べられませんでした', e);
+						if (diagnostic) {
+								const failure = RequestDiagnostics.readFailure(res, controller.signal.aborted ? { name: 'TimeoutError' } : e);
+								diagnostic.failure('missing' in failure && failure.missing === 'json' ? { ...failure, missing: 'response.json' } : failure);
+						}
+						window.console.warn('大百科の記事有無を調べられませんでした');
 				}
 				finally {
 						clearTimeout(timeout);
@@ -15854,16 +15878,17 @@ const NVWatchCaller = (() => {
 		};
 		return { call };
 })();
+// already required
 const PlaybackPosition = (() => {
 		const URL_V2 = 'https://nvapi.nicovideo.jp/v2/users/me/watch/history/playback-position';
 		const isVideoId = (id) => typeof id === 'string' && /^[a-z]{2}\d+$/.test(id);
 		const readBody = async (res) => {
 				if (res.status === 204)
-						return null;
+						return undefined;
 				if (typeof res.text === 'function') {
 						const text = await res.text();
 						if (!text || !text.trim())
-								return null;
+								return undefined;
 						try {
 								return JSON.parse(text);
 						}
@@ -15879,7 +15904,7 @@ const PlaybackPosition = (() => {
 								throw { reason: 'invalid-body', status: res.status };
 						}
 				}
-				return null;
+				return undefined;
 		};
 		const readMeta = (body) => {
 				if (!body || typeof body !== 'object' || !('meta' in body))
@@ -15895,29 +15920,51 @@ const PlaybackPosition = (() => {
 				if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
 						throw { reason: 'invalid-seconds' };
 				}
-				const res = await netUtil.fetch(URL_V2, {
-						method: 'PUT',
-						credentials: 'include',
-						headers: {
-								'Content-Type': 'application/json',
-								'X-Frontend-Id': String(frontendId ?? 6),
-								'X-Frontend-Version': String(frontendVersion ?? 0),
-								'X-Request-With': 'https://www.nicovideo.jp'
-						},
-						body: JSON.stringify({ videoId, seconds })
-				});
-				if (!res)
-						throw { reason: 'no-response' };
-				if (typeof res.status === 'number' && (res.status < 200 || res.status > 299)) {
-						throw { reason: 'http', status: res.status };
+				const ticket = typeof RequestDiagnostics === 'undefined' ? undefined :
+						RequestDiagnostics.begin('playback-position', videoId, 'response');
+				let res;
+				try {
+						res = await netUtil.fetch(URL_V2, {
+								method: 'PUT',
+								credentials: 'include',
+								headers: {
+										'Content-Type': 'application/json',
+										'X-Frontend-Id': String(frontendId ?? 6),
+										'X-Frontend-Version': String(frontendVersion ?? 0),
+										'X-Request-With': 'https://www.nicovideo.jp'
+								},
+								body: JSON.stringify({ videoId, seconds }),
+								...(ticket ? { diagnosticActive: () => false } : {})
+						});
+						if (!res)
+								throw { reason: 'no-response' };
+						if (typeof res.status === 'number' && (res.status < 200 || res.status > 299)) {
+								throw { reason: 'http', status: res.status };
+						}
+						const body = await readBody(res);
+						const meta = readMeta(body);
+						const metaStatus = meta?.status;
+						if (ticket && body !== undefined) {
+								const status = typeof metaStatus === 'string' && /^\d{3}$/.test(metaStatus) ? Number(metaStatus) : metaStatus;
+								const failure = RequestDiagnostics.responseFailure(res, { status, errorCode: meta?.errorCode });
+								if (failure)
+										ticket.failure(failure);
+						}
+						if (meta?.errorCode || (metaStatus !== undefined && !(metaStatus >= 200 && metaStatus <= 299))) {
+								throw { reason: 'api', status: metaStatus, errorCode: meta?.errorCode || null };
+						}
+						ticket?.success();
+						return { status: res.status, metaStatus };
 				}
-				const body = await readBody(res);
-				const meta = readMeta(body);
-				const metaStatus = meta ? meta.status : undefined;
-				if (metaStatus !== undefined && !(metaStatus >= 200 && metaStatus <= 299)) {
-						throw { reason: 'api', status: metaStatus, errorCode: meta?.errorCode || null };
+				catch (error) {
+						if (ticket) {
+								const failure = error?.reason === 'invalid-body'
+										? { kind: 'schema', httpStatus: res?.status, missing: 'response.json' }
+										: RequestDiagnostics.readFailure(res, error);
+								ticket.failure(failure);
+						}
+						throw error;
 				}
-				return { status: res.status, metaStatus };
 		};
 		return { record };
 })();
@@ -20999,22 +21046,39 @@ const TagSuggestLoader = (() => {
 				if (cache.has(w)) {
 						return cache.get(w);
 				}
-				let schemaValid = false;
-				const execute = async () => {
-						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
-						const res = await net.fetch(API_BASE + encodeURIComponent(w), { credentials: 'omit', timeout: 5000 });
-						const json = await res.json();
-						schemaValid = !!json && Array.isArray(json.candidates) &&
-								json.candidates.every(c => typeof c === 'string');
-						const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter((c) => typeof c === 'string') : [];
-						cache.set(w, candidates);
-						if (cache.size > CACHE_LIMIT) {
-								cache.delete(cache.keys().next().value);
+				const diag = typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics;
+				const ticket = diag?.begin('tag-suggest', w, 'response');
+				const net = typeof netUtil !== 'undefined' ? netUtil :
+						{ fetch: (url, opts) => fetch(url, opts) };
+				let res;
+				let json;
+				try {
+						res = await net.fetch(API_BASE + encodeURIComponent(w), {
+								credentials: 'omit', timeout: 5000, ...(ticket ? { diagnosticActive: () => false } : {})
+						});
+						if (res.status >= 300 || res.status < 200) {
+								ticket?.failure({ httpStatus: res.status });
+								return [];
 						}
+						json = await res.json();
+				}
+				catch (cause) {
+						ticket?.failure(diag?.readFailure(res, cause));
+						throw cause;
+				}
+				const rows = json?.candidates;
+				const candidates = Array.isArray(rows) ? rows.filter((item) => typeof item === 'string') : [];
+				if (!Array.isArray(rows) || candidates.length !== rows.length) {
+						ticket?.failure({ httpStatus: res.status, kind: 'schema', errorCode: 'RESPONSE_SCHEMA',
+								missing: Array.isArray(rows) ? 'candidates[]' : 'candidates' });
 						return candidates;
-				};
-				return typeof RequestDiagnostics === 'undefined' ? execute() :
-						RequestDiagnostics.observe('tag-suggest', w, execute, () => schemaValid, () => true);
+				}
+				ticket?.success();
+				cache.set(w, candidates);
+				if (cache.size > CACHE_LIMIT) {
+						cache.delete(cache.keys().next().value);
+				}
+				return candidates;
 		};
 		return { load };
 })();
@@ -21067,35 +21131,55 @@ class TagEditApi {
 				}
 		}
 		async _requestOnce({ url, options }, label) {
-				const execute = async () => {
-						let res, json = null;
-						try {
-								res = await util.fetch(url, options);
+				const diag = typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics;
+				const operation = options.method === 'POST' ? 'tag-add' : options.method === 'DELETE' ? 'tag-remove' : 'tags';
+				const ticket = diag?.begin(operation, url.split('?')[0], 'response');
+				let res;
+				let json;
+				try {
+						res = await util.fetch(url, ticket ? { ...options, diagnosticActive: () => false } : options);
+						json = await res.json();
+				}
+				catch (cause) {
+						ticket?.failure(diag?.readFailure(res, cause));
+						if (!res) {
+								throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK', cause });
 						}
-						catch (e) {
-								throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK', cause: e });
-						}
-						try {
-								json = await res.json();
-						}
-						catch (e) {
-								json = null;
-						}
-						const meta = ((json && json.meta) || {});
-						const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
-						const errorCode = meta.errorCode || '';
-						if (errorCode === 'KEY_EXPIRED' || /KEY_EXPIRED/.test(JSON.stringify(meta)) ||
-								(status === 403 && errorCode === 'FORBIDDEN')) {
-								throw Object.assign(new Error(`${label}に失敗しました（タグ編集キーが無効または期限切れ: ${status} ${errorCode}）`), { kind: 'KEY_EXPIRED', status, errorCode });
-						}
-						if (!json || status < 200 || status >= 300 || !json.data) {
-								const detail = [status, errorCode, meta.errorMessage].filter(Boolean).join(' ');
-								throw Object.assign(new Error(`${label}に失敗しました${detail ? `（${detail}）` : ''}`), { kind: 'API', status, errorCode, response: json });
-						}
-						return json.data;
-				};
-				return typeof RequestDiagnostics === 'undefined' ? execute() :
-						RequestDiagnostics.observe('tags', (options?.method || 'GET') + ':' + url, execute, () => true, () => true);
+						throw Object.assign(new Error(`${label}に失敗しました（${res.status}）`), { kind: 'API', status: res.status, errorCode: '', response: null });
+				}
+				const meta = json?.meta;
+				const status = res.status >= 200 && res.status < 300 && typeof meta?.status === 'number' ? meta.status : res.status;
+				const errorCode = meta?.errorCode || '';
+				const rejected = this._rejected(res, meta);
+				const keyRejected = (errorCode === 'KEY_EXPIRED' && ((status >= 200 && status < 300) || (status >= 400 && status < 500))) ||
+						(status === 403 && errorCode === 'FORBIDDEN') ||
+						(status >= 400 && status < 500 && !errorCode && typeof meta?.errorMessage === 'string' &&
+								/\bKEY_EXPIRED\b/.test(meta.errorMessage));
+				if (keyRejected) {
+						ticket?.failure(diag?.responseFailure(res, meta));
+						throw Object.assign(new Error(`${label}に失敗しました（タグ編集キーが無効または期限切れ: ${status} ${errorCode}）`), { kind: 'KEY_EXPIRED', status, errorCode });
+				}
+				const data = json?.data;
+				const tags = data?.tags;
+				const missing = !Array.isArray(tags) ? 'data.tags' : tags.some(row => typeof row?.name !== 'string' || !row.name.trim()) ? 'data.tags[].name' : undefined;
+				if (rejected || missing) {
+						ticket?.failure(diag?.responseFailure(res, meta, rejected ? 'meta.status' : missing));
+						const detail = [status, errorCode, meta?.errorMessage].filter(Boolean).join(' ');
+						throw Object.assign(new Error(`${label}に失敗しました${detail ? `（${detail}）` : ''}`), { kind: 'API', status, errorCode, response: json });
+				}
+				if (data?.error_msg) {
+						ticket?.failure({ kind: 'service', httpStatus: res.status, apiStatus: meta?.status });
+				}
+				else {
+						ticket?.success();
+				}
+				return data;
+		}
+		_rejected(res, meta) {
+				const apiStatus = meta?.status;
+				return res.status < 200 || res.status >= 300 || !!meta?.errorCode ||
+						(apiStatus !== undefined && (typeof apiStatus !== 'number' || !Number.isInteger(apiStatus) ||
+								apiStatus < 200 || apiStatus >= 300));
 		}
 		_createActionTrackId() {
 				const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -21106,32 +21190,34 @@ class TagEditApi {
 				return `${s}_${Date.now()}`;
 		}
 		async _refreshEditKey(videoId) {
-				const execute = async () => {
-						const query = new URLSearchParams({
-								_frontendId: 6,
-								_frontendVersion: 0,
-								actionTrackId: this._createActionTrackId(),
-								noSideEffect: 'true',
-								skips: 'adult',
-								t: Date.now()
-						});
-						const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
-						let json = null;
-						try {
-								const res = await util.fetch(url, { credentials: 'include' });
-								json = await res.json();
-						}
-						catch (e) {
-								throw Object.assign(new Error('タグ編集キーの再取得に失敗しました（通信エラー）'), { kind: 'NETWORK', cause: e });
-						}
-						const editKey = json && json.data && json.data.tag && json.data.tag.edit && json.data.tag.edit.editKey;
-						if (!editKey) {
-								throw Object.assign(new Error('タグ編集キーが返却されませんでした'), { kind: 'NO_KEY', response: json });
-						}
-						return editKey;
-				};
-				return typeof RequestDiagnostics === 'undefined' ? execute() :
-						RequestDiagnostics.observe('tag-key', videoId, execute, value => typeof value === 'string' && value.length > 0, () => true);
+				const query = new URLSearchParams({
+						_frontendId: '6', _frontendVersion: '0', actionTrackId: this._createActionTrackId(),
+						noSideEffect: 'true', skips: 'adult', t: String(Date.now())
+				});
+				const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
+				const diag = typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics;
+				const ticket = diag?.begin('tag-key', videoId, 'response');
+				let res;
+				let json;
+				try {
+						res = await util.fetch(url, { credentials: 'include', ...(ticket ? { diagnosticActive: () => false } : {}) });
+						json = await res.json();
+				}
+				catch (cause) {
+						ticket?.failure(diag?.readFailure(res, cause));
+						throw Object.assign(new Error('タグ編集キーの再取得に失敗しました（通信エラー）'), { kind: 'NETWORK', cause });
+				}
+				if (this._rejected(res, json?.meta)) {
+						ticket?.failure(diag?.responseFailure(res, json?.meta, 'meta.status'));
+						throw Object.assign(new Error('タグ編集キーの再取得に失敗しました'), { kind: 'API', status: res.status });
+				}
+				const editKey = json?.data?.tag?.edit?.editKey;
+				if (typeof editKey !== 'string' || !editKey.trim()) {
+						ticket?.failure(diag?.responseFailure(res, json?.meta, 'data.tag.edit.editKey'));
+						throw Object.assign(new Error('タグ編集キーが返却されませんでした'), { kind: 'NO_KEY', response: json });
+				}
+				ticket?.success();
+				return editKey;
 		}
 		_buildQuery(params) {
 				const t = [];
@@ -54559,6 +54645,7 @@ const NotificationHistoryPanel = (() => {
 				'data.items', 'data.totalCount', 'data.items.essential', 'data.items.id', 'data.contentId', 'meta.totalCount', 'last_modified',
 				'data.items.content', 'data.items[].watchId', 'data.items[].essential.id', 'data.watchLater.items', 'data.mylist.items',
 				'data.mylists', 'data.hasNext', 'data.watchLater.hasNext', 'data.mylist.hasNext', 'data.additionals', 'storyboard',
+				'articles', 'articles[].request_title', 'articles[].title', 'data.tags', 'data.tags[].name', 'data.tag.edit.editKey', 'candidates', 'candidates[]',
 				'meta.errorCode', 'data.postKey', 'data.no', 'data.challenge', 'data.nicoruKey', 'data.deleteKey', 'data.nicoruId'
 		]);
 		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
@@ -60191,12 +60278,12 @@ const NicoVideoPlayerDialogUserActions = {
 								`元動画: ${info.originalVideoId}` : '';
 						description = enableAutoMylistComment ?
 								`投稿者: ${info.owner.name} ${info.owner.linkId} ${originalVideoId}` : '';
-				}).then(() => this._mylistApiLoader.addDeflistItem(watchId, description))
+				}).then(() => this._mylistApiLoader.addDeflistItem(watchId, description, false, { isCurrent }))
 						.then((result) => { if (isCurrent()) {
 						this.execCommand('notify', result.message);
 				} })
-						.catch((err) => { if (isCurrent()) {
-						this.execCommand('alert', err.message ? err.message : 'あとで見るに登録失敗');
+						.catch(() => { if (isCurrent()) {
+						this.execCommand('alert', 'あとで見るへの追加を確認できません。一覧で登録状態を確認してください。');
 				} })
 						.then(() => {
 						window.setTimeout(unlock, 2000);
@@ -60222,13 +60309,16 @@ const NicoVideoPlayerDialogUserActions = {
 				if (!this._mylistApiLoader) {
 						this._mylistApiLoader = MylistApiLoader;
 				}
-				Promise.resolve().then(() => this._mylistApiLoader.removeDeflistItem(watchId))
+				Promise.resolve().then(() => this._mylistApiLoader.removeDeflistItem(watchId, { isCurrent }))
 						.then((result) => { if (isCurrent()) {
 						this.execCommand('notify', result.message);
 				} })
-						.catch((err) => { if (isCurrent()) {
-						this.execCommand('alert', err.message);
-				} })
+						.catch((err) => {
+						if (isCurrent()) {
+								this.execCommand('alert', err?.status === 'not_found' ? 'あとで見るに動画が見つかりません。' :
+										'あとで見るからの削除を確認できません。一覧で登録状態を確認してください。');
+						}
+				})
 						.then(() => {
 						window.setTimeout(unlock, 2000);
 				});
@@ -60320,12 +60410,12 @@ const NicoVideoPlayerDialogUserActions = {
 				if (!this._mylistApiLoader) {
 						this._mylistApiLoader = MylistApiLoader;
 				}
-				Promise.resolve().then(() => this._mylistApiLoader.addMylistItem(watchId, groupId, description))
+				Promise.resolve().then(() => this._mylistApiLoader.addMylistItem(watchId, groupId, description, { isCurrent }))
 						.then((result) => { if (isCurrent()) {
 						this.execCommand('notify', `${result.message}: ${mylistName}`);
 				} })
-						.catch((err) => { if (isCurrent()) {
-						this.execCommand('alert', `${err.message}: ${mylistName}`);
+						.catch(() => { if (isCurrent()) {
+						this.execCommand('alert', 'マイリストへの追加を確認できません。一覧で登録状態を確認してください。');
 				} })
 						.then(() => {
 						window.setTimeout(unlock, 2000);
@@ -60351,13 +60441,16 @@ const NicoVideoPlayerDialogUserActions = {
 				if (!this._mylistApiLoader) {
 						this._mylistApiLoader = MylistApiLoader;
 				}
-				Promise.resolve().then(() => this._mylistApiLoader.removeMylistItem(watchId, groupId))
+				Promise.resolve().then(() => this._mylistApiLoader.removeMylistItem(watchId, groupId, { isCurrent }))
 						.then((result) => { if (isCurrent()) {
 						this.execCommand('notify', `${result.message}: ${mylistName}`);
 				} })
-						.catch((err) => { if (isCurrent()) {
-						this.execCommand('alert', `${err.message}: ${mylistName}`);
-				} })
+						.catch((err) => {
+						if (isCurrent()) {
+								this.execCommand('alert', err?.status === 'not_found' ? 'マイリストに動画が見つかりません。' :
+										'マイリストからの削除を確認できません。一覧で登録状態を確認してください。');
+						}
+				})
 						.then(() => {
 						window.setTimeout(unlock, 2000);
 				});
@@ -61572,7 +61665,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								timing.infoSource = 'network';
 								timing.infoReuseBlocked = reason;
 						}
-						return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+						return VideoInfoLoader.load(watchId, options.videoLoadOptions, options.rawData);
 				}
 				if (timing) {
 						timing.infoSource = 'prefetch';
@@ -66861,7 +66954,7 @@ class TagListView extends BaseViewComponent {
 				}
 				const err = result.error_msg;
 				if (err) {
-						this.emit('command', 'alert', err);
+						this._onTagEditError(watchId, undefined, 'タグ一覧の取得');
 				}
 				this.update(result.tags);
 		}
@@ -66872,12 +66965,13 @@ class TagListView extends BaseViewComponent {
 				this._tagEdit = Object.assign({}, this._tagEdit || {}, { editKey: newKey });
 		}
 		_onTagEditError(watchId, err, label) {
-				window.console.warn(`[TagListView] ${label}`, err);
 				if (watchId !== this._watchId) {
 						return;
 				}
 				this.setState({ isUpdating: false });
-				this.emit('command', 'alert', (err && err.message) || `${label}に失敗しました`);
+				const status = Number.isInteger(err?.status) && err.status >= 100 && err.status <= 599 ? err.status : undefined;
+				const detail = status ? `（${status}）` : '';
+				this.emit('command', 'alert', `${label}の結果を確認できません${detail}。通知履歴の詳細を確認してください。`);
 		}
 		_addTag(tag) {
 				if (!this._canEditTags()) {
@@ -66908,7 +67002,7 @@ class TagListView extends BaseViewComponent {
 						}
 						this.setState({ isInputing: false, isUpdating: false, isEditing: false });
 						if (result.error_msg) {
-								this.emit('command', 'alert', result.error_msg);
+								this._onTagEditError(watchId, undefined, 'タグの追加');
 						}
 				}).catch(err => this._onTagEditError(watchId, err, 'タグの追加'));
 		}
@@ -66942,7 +67036,7 @@ class TagListView extends BaseViewComponent {
 						}
 						this.setState({ isUpdating: false });
 						if (result.error_msg) {
-								this.emit('command', 'alert', result.error_msg);
+								this._onTagEditError(watchId, undefined, 'タグの削除');
 						}
 				}).catch(err => this._onTagEditError(watchId, err, 'タグの削除'));
 		}
@@ -69628,6 +69722,7 @@ startup.add('VideoHeaderPanel:style', () => {
 	}
 	.zenzaScreenMode_sideView .zenzaWatchVideoHeaderPanel {
 		top: 0;
+		pointer-events: auto;
 		left: 400px;
 		width: calc(100vw - 400px);
 		bottom: auto;
@@ -69669,6 +69764,11 @@ startup.add('VideoHeaderPanel:style', () => {
 		css.addStyle(`
 	body .is-open .zenzaWatchVideoHeaderPanel {
 		width: calc(100% + ${CONSTANT.RIGHT_PANEL_WIDTH}px);
+	}
+	/* The outside header can be reached directly from the surrounding page,
+		before the player receives any mousemove to reveal its overlay controls. */
+	.zenzaWatchVideoHeaderPanel:not(.is-onscreen) {
+		pointer-events: auto;
 	}
 		.zenzaWatchVideoHeaderPanel.is-onscreen {
 			top: 0px;
@@ -69712,6 +69812,7 @@ startup.add('VideoHeaderPanel:style', () => {
 	.is-open .showVideoHeaderPanel .zenzaWatchVideoHeaderPanel,
 	.is-open .zenzaWatchVideoHeaderPanel:hover {
 		opacity: 1;
+		pointer-events: auto;
 		transition: 0.5s opacity;
 	}
 	.is-open .zenzaWatchVideoHeaderPanel:not(:hover) .videoTagsContainer {
@@ -76537,9 +76638,14 @@ class WatchClickNavigation {
 	}
 }
 WatchClickNavigation.install(window);
+// already required
 class HoverMenu {
 		constructor(param) {
 				this.initialize(param);
+		}
+		static canStartOnSearch(config) {
+				return location.host === 'www.nicovideo.jp' && /^\/search(?:\/|$)/.test(location.pathname) &&
+						!!document.body && !config.props.overrideWatchLink;
 		}
 		initialize(param) {
 				this._playerConfig = param.playerConfig;
@@ -76568,7 +76674,46 @@ class HoverMenu {
 								.on('mouseover', this._onHoverEnd)
 								.on('mouseout', this._onMouseout.bind(this))
 								.append($view);
+						if (HoverMenu.canStartOnSearch(this._playerConfig)) {
+								const hovered = document.querySelectorAll('main :hover');
+								const target = hovered[hovered.length - 1];
+								if (target) {
+										this._onHover({ target });
+										this._onHoverEnd({ target }, true);
+								}
+						}
 				}
+		}
+		waitForPlayerIdle() {
+				if (this._hoverElement || this._playerPromise || this._playerUnavailable ||
+						document.hidden || !window.requestIdleCallback) {
+						return Promise.resolve();
+				}
+				if (this._playerIdle) {
+						return this._playerIdle;
+				}
+				return this._playerIdle = new Promise(resolve => {
+						const end = performance.now() + 400;
+						let callback;
+						const finish = () => {
+								window.cancelIdleCallback(callback);
+								document.removeEventListener('visibilitychange', finish);
+								this._playerIdle = this._wakePlayerSetup = undefined;
+								resolve();
+						};
+						const idle = (deadline) => {
+								const remaining = end - performance.now();
+								if (deadline.didTimeout || remaining <= 0 || deadline.timeRemaining() >= 12) {
+										finish();
+								}
+								else {
+										callback = window.requestIdleCallback(idle, { timeout: Math.ceil(remaining) });
+								}
+						};
+						this._wakePlayerSetup = finish;
+						document.addEventListener('visibilitychange', finish);
+						callback = window.requestIdleCallback(idle, { timeout: 400 });
+				});
 		}
 		setPlayer(player) {
 				if (this._player !== player) {
@@ -76580,7 +76725,17 @@ class HoverMenu {
 						this._playerResolve(player);
 				}
 		}
+		setPlayerUnavailable() {
+				this._playerUnavailable = true;
+				this._wakePlayerSetup?.();
+				this._hideButton();
+				this._playerResolve?.(null);
+		}
 		_getPlayer() {
+				this._wakePlayerSetup?.();
+				if (this._playerUnavailable) {
+						return Promise.resolve(null);
+				}
 				if (this._player) {
 						return Promise.resolve(this._player);
 				}
@@ -76650,6 +76805,7 @@ class HoverMenu {
 				const target = this._closest(e.target);
 				if (target) {
 						this._hoverElement = target;
+						this._wakePlayerSetup?.();
 				}
 		}
 		_onMouseout(e) {
@@ -76660,8 +76816,11 @@ class HoverMenu {
 						this._hoverElement = null;
 				}
 		}
-		_onHoverEnd(e) {
-				if (!this._hoverElement) {
+		_onHoverEnd(e, initial = false) {
+				if (this._playerUnavailable || !this._hoverElement) {
+						return;
+				}
+				if (initial && !e.target.matches('main :hover')) {
 						return;
 				}
 				const target = this._closest(e.target);
@@ -76724,33 +76883,58 @@ class HoverMenu {
 						this._send(watchId);
 				}
 				else {
-						this._open(watchId);
+						this._open(watchId, undefined, e.isTrusted === true);
 				}
 		}
 		open(watchId, params) {
 				this._open(watchId, params);
 		}
-		async _open(watchId, params) {
+		async _open(watchId, params, fromButton = false) {
 				const option = Object.assign({
 						economy: this._playerConfig.getValue('forceEconomy'),
 						query: this._query,
 						eventType: 'click'
 				}, params);
 				this._playerOption = option;
-				const player = await this._getPlayer();
-				if (this._playerConfig.getValue('enableSingleton')) {
-						ZenzaWatch.external.sendOrOpen(watchId, option);
+				const earlyRead = fromButton && !this._player?.watchId &&
+						!this._playerConfig.getValue('enableSingleton') && HoverMenu.canStartOnSearch(this._playerConfig);
+				if (earlyRead && this._pendingButtonOpen?.watchId === watchId) {
+						return;
 				}
-				else {
-						player.open(watchId, option);
+				if (earlyRead && typeof option.economy !== 'boolean') {
+						option.economy = this._playerConfig.getValue('smileVideoQuality') === 'eco';
+				}
+				const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option) : undefined;
+				if (earlyRead) {
+						this._pendingButtonOpen = { watchId, option };
+				}
+				try {
+						const player = await this._getPlayer();
+						if (!player || (earlyRead && this._pendingButtonOpen?.option !== option)) {
+								return;
+						}
+						if (this._playerConfig.getValue('enableSingleton')) {
+								ZenzaWatch.external.sendOrOpen(watchId, option);
+						}
+						else {
+								await player.open(watchId, option);
+						}
+				}
+				finally {
+						if (this._pendingButtonOpen?.option === option) {
+								this._pendingButtonOpen = undefined;
+						}
+						abandon?.();
 				}
 		}
 		send(watchId, params) {
 				this._send(watchId, params);
 		}
 		async _send(watchId, params) {
-				await this._getPlayer();
-				ZenzaWatch.external.send(watchId, Object.assign({ query: this._query }, params));
+				const option = Object.assign({ query: this._query }, params);
+				if (await this._getPlayer()) {
+						ZenzaWatch.external.send(watchId, option);
+				}
 		}
 		_isCardContentClick(card, e, watchId) {
 				const hit = e.composedPath().find((node) => typeof node?.matches === 'function');
@@ -77038,7 +77222,7 @@ class HoverMenu {
 				const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
 						window.name !== 'watchGinza' && (!isShortsPage() || setting('overrideGinza.shorts') !== false);
 				let manual = null;
-				let disposeButton;
+				let queuedManualId = null;
 				let recovering = false;
 				const launchId = () => location.pathname.startsWith('/watch/') && !zenzaOwnUrl() &&
 						window.name !== 'watchGinza' && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) ? currentWatchId() : null;
@@ -77242,6 +77426,14 @@ class HoverMenu {
 						void openManual().catch(() => failLaunch(session));
 						return true;
 				};
+				const disposeButton = installOfficialLaunchButton(launchId, () => {
+						if (dialog) {
+								launch();
+						}
+						else {
+								queuedManualId = launchId();
+						}
+				});
 				window.addEventListener('play', onPlay, true);
 				window.addEventListener('playing', onPlay, true);
 				window.addEventListener('pointerdown', onPointerDown, true);
@@ -77249,7 +77441,6 @@ class HoverMenu {
 				return {
 						attach(next) {
 								dialog = next;
-								disposeButton = installOfficialLaunchButton(launchId, () => launch());
 								next.on?.('requestOfficialLaunch', (e) => {
 										if (launch()) {
 												e.preventDefault();
@@ -77291,17 +77482,23 @@ class HoverMenu {
 								if (next.isOpen) {
 										watchNew();
 								}
+								if (queuedManualId && queuedManualId === launchId()) {
+										launch();
+								}
+								queuedManualId = null;
 						},
 						release() {
 								active = false;
 								manual = null;
-								disposeButton?.();
+								queuedManualId = null;
+								disposeButton();
 								unwatchNew();
 								releaseHeld();
 								window.removeEventListener('play', onPlay, true);
 								window.removeEventListener('playing', onPlay, true);
 								window.removeEventListener('pointerdown', onPointerDown, true);
 						},
+						get manualLaunchActive() { return !!manual; },
 						get active() { return active; }
 				};
 		};
@@ -77315,7 +77512,7 @@ class HoverMenu {
 						}
 						return;
 				}
-				if (!Config.props.overrideGinza || !shortsAllowed()) {
+				if (!Config.props.overrideGinza || !shortsAllowed() || guard?.manualLaunchActive) {
 						return;
 				}
 				if (!guard) {
@@ -77383,19 +77580,25 @@ class HoverMenu {
 				const watchData = response?.$watchV4 ? response.$watchV4.data : response;
 				return typeof watchData?.okReason === 'string';
 		};
-		const initWorker = () => {
+		const warmWatchCache = () => WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
+		const initWorker = (warmThumbnail = true, pendingCache) => {
 				if (!location.host.endsWith('.nicovideo.jp')) {
 						return;
 				}
+				if (pendingCache) {
+						return Promise.all([VideoSessionWorker.initWorker(), pendingCache]).then(() => { });
+				}
 				CommentLayoutWorker.getInstance();
-				void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
+				if (warmThumbnail) {
+						void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
+				}
 				console.time('init Workers');
 				const requiredWorkers = [
 						StoryboardWorker.initWorker(),
 						VideoSessionWorker.initWorker()
 				];
 				void StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable'));
-				const watchCacheReady = WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
+				const watchCacheReady = warmWatchCache();
 				return Promise.all([...requiredWorkers, watchCacheReady]).then(() => console.timeEnd('init Workers'));
 		};
 const replaceRedirectLinks = async () => {
@@ -77570,17 +77773,46 @@ const replaceRedirectLinks = async () => {
 				});
 		}
 };
+		const addCommonStyle = () => cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });
+		const createHoverMenu = () => {
+				const hoverMenu = externalTrial ? {setPlayer() {}} : (global.debug.hoverMenu = new HoverMenu({ playerConfig: Config }));
+				return hoverMenu;
+		};
 		const initialize = async function () {
-				const startQuery = textUtil.parseQuery(START_PAGE_QUERY);
 				const officialGuard = location.host === 'www.nicovideo.jp' ? createOfficialPlaybackGuard() : null;
+				const earlySearch = HoverMenu.canStartOnSearch(Config);
+				if (earlySearch) {
+						addCommonStyle();
+				}
+				const earlyHoverMenu = earlySearch ? createHoverMenu() : null;
+				try {
+						await initializePlayer(officialGuard, earlyHoverMenu);
+				}
+				catch (error) {
+						earlyHoverMenu?.setPlayerUnavailable();
+						officialGuard?.release();
+						throw error;
+				}
+		};
+		const initializePlayer = async (officialGuard, earlyHoverMenu) => {
+				let idleSearch = false;
+				if (earlyHoverMenu && !Config.props.overrideGinza && !window.name && !location.hash &&
+						!/(Android|iPad;|CriOS)/i.test(navigator.userAgent) && !document.hidden &&
+						typeof window.requestIdleCallback === 'function') {
+						try {
+								idleSearch = sessionStorage.getItem('ZenzaWatch_PlayingStatus') === null &&
+										![...new URLSearchParams(location.search).keys()].some(key => /^(zenza|playlist|continuous|shuffle)/i.test(key));
+						}
+						catch (_) { /* Inaccessible storage keeps setup immediate. */ }
+				}
 				if (typeof StoryboardCacheDb !== 'undefined' && StoryboardCacheDb.configure) {
-						const configureSceneCache = () => {
+						const configureSceneCache = (onFirstUse = false) => {
 								const capacity = Number(Config.getValue('storyboardCacheMaxMB'));
 								const days = Number(Config.getValue('storyboardCacheDays'));
 								void StoryboardCacheDb.configure({ maxBytes: ([0, 32, 64, 128, 256, 512].includes(capacity) ? capacity : 128) * 1024 * 1024,
-										maxAgeMs: ([1, 3, 7, 14, 30].includes(days) ? days : 7) * 86400000 }).catch(() => console.warn('Scene cache settings unavailable'));
+										maxAgeMs: ([1, 3, 7, 14, 30].includes(days) ? days : 7) * 86400000 }, onFirstUse === true && capacity === 128 && days === 7).catch(() => console.warn('Scene cache settings unavailable'));
 						};
-						configureSceneCache();
+						configureSceneCache(idleSearch);
 						Config.onkey?.('storyboardCacheMaxMB', configureSceneCache);
 						Config.onkey?.('storyboardCacheDays', configureSceneCache);
 				}
@@ -77613,10 +77845,17 @@ const replaceRedirectLinks = async () => {
 				if (typeof NotificationJournal !== 'undefined') {
 						installScriptErrorJournal();
 				}
-				await HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
+				const pendingCache = idleSearch ? warmWatchCache() : undefined;
+				const hlsReady = HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
+				const searchWorkers = idleSearch && earlyHoverMenu ? earlyHoverMenu.waitForPlayerIdle()
+						.then(() => initWorker(false, pendingCache)) : undefined;
+				void searchWorkers?.catch(() => { });
+				await hlsReady;
 				console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
 				if(!externalTrial) domEvent.dispatchCustomEvent(document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, { bubbles: true, composed: true });
-				cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });
+				if (!earlyHoverMenu) {
+						addCommonStyle();
+				}
 				initializeBySite();
 				if(!externalTrial) replaceRedirectLinks().catch(() => console.warn('Legacy redirect-link enhancement unavailable'));
 				const query = textUtil.parseQuery(START_PAGE_QUERY);
@@ -77625,12 +77864,15 @@ const replaceRedirectLinks = async () => {
 				if (typeof Config.props.commentLanguage === 'string') {
 						Config.props.commentLanguage = Config.props.commentLanguage.replace('_', '-').toLowerCase();
 				}
-				const hoverMenu = externalTrial ? {setPlayer() {}} : (global.debug.hoverMenu = new HoverMenu({ playerConfig: Config }));
+				const hoverMenu = earlyHoverMenu || createHoverMenu();
 				await Promise.all([
 						NicoComment.offscreenLayer.get(Config),
 						global.emitter.promise('lit-html'),
-						initWorker()
+						searchWorkers || initWorker(!earlyHoverMenu)
 				]);
+				if (idleSearch) {
+						await hoverMenu.waitForPlayerIdle();
+				}
 				document.body.classList.toggle('is-watch', isWatch);
 				const dialog = initializeDialogPlayer(Config);
 				hoverMenu.setPlayer(dialog);
@@ -87792,13 +88034,20 @@ const StoryboardCacheDb = (() => {
 		};
 		let db, instance, NicoVideoApi;
 		let dbOpening, instanceOpening;
+		let initialPolicy;
 		let generationFloor = 0;
 		const captureGeneration = () => Math.max(Date.now(), generationFloor);
 		const operation = async (data) => {
 				const connection = await initWorker();
 				return connection.cache.storyboardCache(data);
 		};
-		const configure = (policy) => operation({ op: 'configure', ...policy });
+		const configure = (policy, onFirstUse = false) => {
+				if (onFirstUse && !db && !dbOpening) {
+						initialPolicy = policy;
+						return Promise.resolve();
+				}
+				return operation({ op: 'configure', ...policy });
+		};
 		const clear = async () => {
 				generationFloor = Math.max(Date.now(), generationFloor) + 1;
 				const result = await operation({ op: 'clear' });
@@ -87826,6 +88075,12 @@ const StoryboardCacheDb = (() => {
 						const connection = location.host === 'www.nicovideo.jp' ?
 								await IndexedDbStorage.open(WATCH_INFO) :
 								await NicoVideoApi.bridgeDb(WATCH_INFO);
+						if (initialPolicy) {
+								const policy = initialPolicy;
+								initialPolicy = undefined;
+								await connection.cache.storyboardCache({ op: 'configure', ...policy })
+										.catch(() => console.warn('Scene cache settings unavailable'));
+						}
 						db = connection;
 						return connection;
 				})();
@@ -89852,7 +90107,7 @@ const ThumbInfoCacheDb = (() => {
 		return { thumbInfo, nicovideo, smile, search, nicodic };
 })();
 
-const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
+const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
 	if (window.ZenzaWatch) {
 		return;
 	}
@@ -89872,6 +90127,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 	} else if (host === 'dic.nicovideo.jp' && name.startsWith(`nicodic${PRODUCT}Loader`)) {
 		GateAPI.nicodic();
 	} else if (window === window.top) {
+		let startup;
 		await AntiPrototypeJs();
 		if (window.ZenzaLib) {
 			window.ZenzaJQuery = window.ZenzaLib.$;
@@ -89880,38 +90136,50 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 					console.warn('[ZenzaWatch] 起動診断：プレイヤー本体の初期化に失敗しました。');
 				}
 			};
-			const blob = new Blob([
-				`(${monkey})(${JSON.stringify(PRODUCT)}, ${JSON.stringify(encodeURIComponent(START_PAGE_QUERY))}).catch(error => { (${reportStartupFailure})(); throw error; });\n//# sourceURL=ZenzaWatchMain.js`
-			], {type: 'text/javascript'});
-			const src = URL.createObjectURL(blob);
-			const handler = () => {
-				URL.revokeObjectURL(src);
-				script.remove();
-			};
 			const runDirectly = () => {
 				if (window.ZenzaWatch) { return; }
-				Promise.resolve()
+				return Promise.resolve()
 					.then(() => monkey(PRODUCT, encodeURIComponent(START_PAGE_QUERY)))
 					.catch(err => {
-						if (host === 'www.nicovideo.jp') { reportStartupFailure(); }
-						else { console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err); }
+						if (host === 'www.nicovideo.jp') {
+							reportStartupFailure();
+							if (pageRealm) {
+								const failure = new Error('ZenzaWatch player initialization failed');
+								failure.name = 'ZenzaWatchStartupError';
+								const frame = typeof err?.stack === 'string' && /\n[^\n]*?\b(ZenzaWatch(?:Runtime|Main)\.js:\d+:\d+)\)?(?:\n|$)/.exec(err.stack);
+								if (frame) failure.stack = failure.name + ': ' + failure.message + '\n    at startup (' + frame[1] + ')';
+								throw failure;
+							}
+						} else { console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err); }
 					});
 			};
-			const script = Object.assign(document.createElement('script'), {
-				id: `${PRODUCT}Loader`,
-				type: 'text/javascript',
-				src,
-				onload: handler,
-				onerror: () => {
+			if (pageRealm && host === 'www.nicovideo.jp') {
+				startup = runDirectly();
+			} else {
+				const blob = new Blob([
+					`(${monkey})(${JSON.stringify(PRODUCT)}, ${JSON.stringify(encodeURIComponent(START_PAGE_QUERY))}).catch(error => { (${reportStartupFailure})(); throw error; });\n//# sourceURL=ZenzaWatchMain.js`
+				], {type: 'text/javascript'});
+				const src = URL.createObjectURL(blob);
+				const handler = () => {
+					URL.revokeObjectURL(src);
+					script.remove();
+				};
+				const script = Object.assign(document.createElement('script'), {
+					id: `${PRODUCT}Loader`,
+					type: 'text/javascript',
+					src,
+					onload: handler,
+					onerror: () => {
+						handler();
+						runDirectly();
+					}
+				});
+				try {
+					document.head.append(script);
+				} catch (_) {
 					handler();
 					runDirectly();
 				}
-			});
-			try {
-				document.head.append(script);
-			} catch (_) {
-				handler();
-				runDirectly();
 			}
 		}
 (() => { // 古いページで使われているがパフォーマンス的にちょっとアレなのでリプレースする
@@ -90031,10 +90299,11 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 		window.addEventListener('DOMContentLoaded', override, {once: true, bubbles: true});
 	}
 })();
+		return startup;
 	}
 };
   if (externalTrial && window.name === 'ZenzaWatchExternalTrialPlayer') return monkey(PRODUCT, encodeURIComponent(''), externalTrial);
-  return boot(monkey, PRODUCT, START_PAGE_QUERY);
+  return boot(monkey, PRODUCT, START_PAGE_QUERY, !externalTrial);
 
 })(window);
  }
@@ -90048,30 +90317,77 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.476-task1099",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.477-task1100",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}
-   // The ordinary player remains in the page realm, with no GM capabilities.
-   // Keep lodash lexical to avoid overwriting the site's own lodash instance.
-   const dependency=GM_getResourceText('zenzaLodash');
-   if(!dependency)throw Error('ZenzaWatch lodash resource unavailable');
-   // Task1036: sourceURL を付けて、ZenzaWatch 自身のエラーをページのエラーと区別できるようにする（通知履歴のスクリプトエラー記録）。
-   const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>console.error("ZenzaWatch initialization failed",error));})();\n//# sourceURL=ZenzaWatchRuntime.js';
-   // Task1059: 本文を Blob の <script src> で入れる。インラインの <script> はメインスレッドで約3MBを
-   // コンパイルするため起動時に画面が固まっていた（手元の計測で長いタスク合計 約290ms → 約110ms）。
-   // 外部スクリプト扱いならブラウザが裏のスレッドでコンパイルできる。sourceURL はそのまま効く。
-   // Blob が使えない・止められた（厳しい CSP など）時は、従来どおりインラインで入れる。
-   const injectInline=()=>{const script=GM_addElement(document.head||document.documentElement,'script',{textContent:source});script?.remove();};
-   let blobUrl=null;
-   try{blobUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));}catch(_){blobUrl=null;}
-   if(!blobUrl){injectInline();return;}
-   const release=()=>{try{URL.revokeObjectURL(blobUrl);}catch(_){}};
-   let runtimeScript=null;
-   try{runtimeScript=GM_addElement(document.head||document.documentElement,'script',{src:blobUrl});}catch(_){runtimeScript=null;}
-   if(!runtimeScript){release();injectInline();return;}
-   runtimeScript.addEventListener('load',()=>{release();runtimeScript.remove();},{once:true});
-   runtimeScript.addEventListener('error',()=>{release();runtimeScript.remove();if(!window.ZenzaWatch)injectInline();},{once:true});
+   (function startOrdinaryRuntime(w, start) {
+  const doc = w.document;
+  const paint = 'first-contentful-paint';
+  if (w !== w.top || w.location.hostname !== 'www.nicovideo.jp' || w.name ||
+      doc.visibilityState !== 'visible' || !w.PerformanceObserver?.supportedEntryTypes?.includes('paint')) {
+    start();
+    return;
+  }
+  let immediate = true;
+  try {
+    const setting = key => w.localStorage.getItem('ZenzaWatch_' + key);
+    // Match Config's mobile default for link interception. Invalid or inaccessible storage starts immediately.
+    const links = setting('overrideWatchLink');
+    immediate = JSON.parse(setting('overrideGinza')) ||
+        (links === null ? /(Android|iPad;|CriOS)/i.test(w.navigator.userAgent) : JSON.parse(links)) ||
+        w.sessionStorage.getItem('ZenzaWatch_PlayingStatus') !== null ||
+        w.location.hash || (/^\/(watch|shorts)\//.test(w.location.pathname) && w.location.search) ||
+        [...new URLSearchParams(w.location.search).keys()].some(key => /^(zenza|playlist|continuous|shuffle)/i.test(key)) ||
+        w.performance.getEntriesByName(paint, 'paint').length > 0;
+  } catch (_) { /* Leave startup immediate when the platform cannot be inspected. */ }
+  if (immediate) {
+    start();
+    return;
+  }
+
+  let started = false, observer;
+  const inputs = ['pointerdown', 'pointermove', 'keydown', 'click', 'touchstart', 'wheel'];
+  const launch = () => {
+    if (started) return;
+    started = true;
+    w.clearTimeout(timer);
+    observer?.disconnect();
+    doc.removeEventListener('visibilitychange', launch);
+    for (const type of inputs) w.removeEventListener(type, launch, true);
+    start();
+  };
+  const timer = w.setTimeout(launch, 1200);
+  doc.addEventListener('visibilitychange', launch);
+  for (const type of inputs) w.addEventListener(type, launch, {capture:true, passive:true});
+  try {
+    observer = new w.PerformanceObserver(list => {
+      if (list.getEntriesByName(paint).length) launch();
+    });
+    observer.observe({type:'paint', buffered:true});
+  } catch (_) { launch(); }
+})(window, () => {
+     // The ordinary player remains in the page realm, with no GM capabilities.
+     // Keep lodash lexical to avoid overwriting the site's own lodash instance.
+     const dependency=GM_getResourceText('zenzaLodash');
+     if(!dependency)throw Error('ZenzaWatch lodash resource unavailable');
+     // Task1036: sourceURL を付けて、ZenzaWatch 自身のエラーをページのエラーと区別できるようにする（通知履歴のスクリプトエラー記録）。
+     const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>{if(error?.name==="ZenzaWatchStartupError")throw error;console.error("ZenzaWatch initialization failed",error);});})();\n//# sourceURL=ZenzaWatchRuntime.js';
+     // Task1059: 本文を Blob の <script src> で入れる。インラインの <script> はメインスレッドで約3MBを
+     // コンパイルするため起動時に画面が固まっていた（手元の計測で長いタスク合計 約290ms → 約110ms）。
+     // 外部スクリプト扱いならブラウザが裏のスレッドでコンパイルできる。sourceURL はそのまま効く。
+     // Blob が使えない・止められた（厳しい CSP など）時は、従来どおりインラインで入れる。
+     const injectInline=()=>{const script=GM_addElement(document.head||document.documentElement,'script',{textContent:source});script?.remove();};
+     let blobUrl=null;
+     try{blobUrl=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));}catch(_){blobUrl=null;}
+     if(!blobUrl){injectInline();return;}
+     const release=()=>{try{URL.revokeObjectURL(blobUrl);}catch(_){}};
+     let runtimeScript=null;
+     try{runtimeScript=GM_addElement(document.head||document.documentElement,'script',{src:blobUrl});}catch(_){runtimeScript=null;}
+     if(!runtimeScript){release();injectInline();return;}
+     runtimeScript.addEventListener('load',()=>{release();runtimeScript.remove();},{once:true});
+     runtimeScript.addEventListener('error',()=>{release();runtimeScript.remove();if(!window.ZenzaWatch)injectInline();},{once:true});
+   });
    return;
  }
  try{

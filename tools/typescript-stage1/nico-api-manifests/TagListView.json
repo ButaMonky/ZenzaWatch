@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/TagListView.ts",
   "runtime": "src/TagListView.js",
-  "sourceSha256": "eca1173b0a7c4a782b6bd9ceb4cd0edc77f3091400f651ef129d3c09b6dc7381",
-  "runtimeSha256": "9754f6b6ed46d556d35f44898e457e6afcf7bd818d712ad3680e580b646dd3e3"
+  "sourceSha256": "b13f1a684ff287dc6017dc684f74331c76cd46a183401d2b1b4d2a04b9158954",
+  "runtimeSha256": "db8e5bfa04b441ac8ea4a454f2f51f7057445ad6658308fb49a676a6d498b5d4"
 }

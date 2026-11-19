@@ -36,7 +36,7 @@ async function compare(label,run,scenario){
   assert.deepEqual(snapshot(b.log),snapshot(a.log),label+' requests/logs');
   assert.deepEqual(updatesB,updatesA,label+' onEditKeyUpdate');
 }
-const data={tags:[{tag:'東方'}]};
+const data={tags:[{name:'東方'}]};
 const okBody={body:{meta:{status:200},data}};
 const watchKey=k=>({body:{data:{tag:{edit:{editKey:k}}}}});
 const load=api=>api.load('sm9','KEY0');
@@ -75,7 +75,7 @@ test('failure classification without retry',async()=>{
   await compare('500 with errorMessage',add,{responses:[{status:500,body:{meta:{status:500,errorCode:'INTERNAL',errorMessage:'boom'}}}]});
   await compare('403 other code',add,{responses:[{status:403,body:{meta:{status:403,errorCode:'NOT_OWNER'}}}]});
   await compare('2xx without data',load,{responses:[{body:{meta:{status:200}}}]});
-  await compare('meta status from http',load,{responses:[{status:201,body:{data:{x:1}}}]});
+  await compare('meta status from http',load,{responses:[{status:201,body:{data:{tags:[]}}}]});
   await compare('primitive body',load,{responses:[{body:'text'}]});
 });
 

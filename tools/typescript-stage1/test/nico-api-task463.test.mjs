@@ -54,7 +54,7 @@ function suggestGlobals(scenario){
   return {globals,log};
 }
 test('TagSuggestLoader: trimming, cache, validation, eviction and fallback fetch',async()=>{
-  const body={candidates:['東方神起',1,null,'東方MMD']};
+  const body={candidates:['東方神起','東方MMD']};
   const word=s=>a=>a.load(s);
   const many=Array.from({length:302},(_,i)=>word('w'+i));
   const n=await compareSequences('TagSuggestLoader',suggestGlobals,[

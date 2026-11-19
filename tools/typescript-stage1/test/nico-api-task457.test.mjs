@@ -81,6 +81,7 @@ test('legacy build directives are preserved in each runtime',()=>{
       AdDecorationLoader:'../infra/RequestDiagnostics',
       UaaLoader:'../infra/RequestDiagnostics',
       LikeApi:'../infra/RequestDiagnostics',
+      PlaybackPosition:'../infra/RequestDiagnostics',
       RecommendAPILoader:'../infra/RequestDiagnostics',
       VideoSearch:'../infra/RequestDiagnostics',
       PlaylistApiLoader:'../infra/RequestDiagnostics',
@@ -166,8 +167,9 @@ test('legacy build directives are preserved in each runtime',()=>{
       // Task202: real video clicks are claimed by WatchClickNavigation before
       // page/React navigation. Keep the single added owner and its require order exact.
       expected.splice(expected.indexOf('//===BEGIN==='), 0,
-        "import {WatchClickNavigation} from './WatchClickNavigation';");
-      expected.splice(expected.indexOf('//===END==='), 0, '//@require WatchClickNavigation');
+        "import {WatchClickNavigation} from './WatchClickNavigation';",
+        "import {VideoInfoLoader} from '../../../lib/src/nico/VideoInfoLoader';");
+      expected.splice(expected.indexOf('//===END==='), 0, '//@require WatchClickNavigation', '//@require VideoInfoLoader');
     }
     if (spec.name === 'NicoVideoPlayerDialog') {
       // P12's local auto-clear coordinator and independent bookmark dock are

@@ -80,6 +80,14 @@ describe('NotificationHistoryPanel (synthetic DOM)', () => {
 
   it('identifies the failed key or playback field in the copied report', async () => {
     for (const [source, field, label] of [
+      ['playback-position','response.json','再生位置の保存'],
+      ['watch-later-add','meta.status','あとで見るへの追加'],
+      ['mylist-remove','meta.status','マイリストからの削除'],
+      ['tag-add','data.tags[].name','タグの追加'],
+      ['tag-remove','meta.status','タグの削除'],
+      ['tag-key','data.tag.edit.editKey','タグ編集キー'],
+      ['tag-suggest','candidates[]','タグ候補'],
+      ['dictionary','articles[].request_title','大百科'],
       ['comment-key','data.threadKey','コメント取得キー'],
       ['video-session','data.contentUrl','配信URL'],
       ['video-session','response.json','配信URL'],

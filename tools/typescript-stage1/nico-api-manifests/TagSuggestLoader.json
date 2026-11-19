@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/TagSuggestLoader.ts",
   "runtime": "packages/lib/src/nico/TagSuggestLoader.js",
-  "sourceSha256": "779d6ff10c135b28f9e3036c80ef843ee29828dc182c9c199eb82df94236f218",
-  "runtimeSha256": "c8683b0f9fb54a17aa602e48904aa5083da1c880d7bca28ddb71d5483fabb3b4"
+  "sourceSha256": "8cbd0bbda3bc68f3c50379ba9dd79cd099dc1e684f2fe3e64c7b261780e4bc4e",
+  "runtimeSha256": "dde296e075b85c8a2699a26dca7bb91aa850bf7b2ce0701fcd1baeda2c42cbb8"
 }

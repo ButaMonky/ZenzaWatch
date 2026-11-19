@@ -60,3 +60,95 @@ test('REDIRECTLINKS-SERIES-CONTAINER-001: a series page without the container is
   // The buttons are still built; only the missing container is skipped.
   assert.deepEqual(out.newAppended,[2]);
 });
+
+test('an initialization failure settles queued Zen clicks and leaves the native result usable', async () => {
+  const actions = [];
+  const H = loadLegacy(pair('HoverMenu').new, 'HoverMenu', {
+    PagePreviewGuard:class {}, ZenzaWatch:{external:{send:(...args) => actions.push(args)}}
+  });
+  const menu = Object.create(H.prototype);
+  menu._playerConfig = {getValue:() => false};
+  menu._$view = {removeClass() {}};
+  const pending = [menu._open('sm9'), menu._send('sm10')];
+  menu.setPlayerUnavailable();
+  await Promise.all(pending);
+  assert.equal(await menu._getPlayer(),null);
+  assert.deepEqual(actions,[]);
+});
+
+test('an explicit first local Zen click starts one watch-page read while the player is pending', async () => {
+  let options, cancelled = 0, reads = 0;
+  const opens = [];
+  const H = loadLegacy(pair('HoverMenu').new, 'HoverMenu', {
+    location:{host:'www.nicovideo.jp',pathname:'/search/test'}, document:{body:{}},
+    VideoInfoLoader:{beginFirstOpenPageRead:(id, opts)=>{
+      assert.equal(id,'sm9'); reads++; options=opts; return ()=>{cancelled++;};
+    }},
+    PagePreviewGuard:class {}
+  });
+  const menu = Object.create(H.prototype);
+  menu._watchId='sm9';
+  menu._playerConfig={props:{overrideWatchLink:false},getValue:()=>false};
+  menu._hideButton=()=>{};
+  menu._onClick({isTrusted:true,preventDefault(){},stopPropagation(){}});
+  menu._onClick({isTrusted:true,preventDefault(){},stopPropagation(){}});
+  assert.ok(options, 'read starts in the trusted click even before setPlayer');
+  assert.equal(reads,1,'repeated clicks on the pending video reuse the same read');
+  assert.equal(cancelled,0);
+  menu.setPlayer({open:(id, opts)=>{assert.strictEqual(opts,options); opens.push(id);}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(opens,['sm9']);
+  assert.equal(cancelled,1);
+});
+
+test('search setup yields until enough idle time, the deadline, or playback intent', async () => {
+  for (const wake of ['idle', 'timeout', 'hover', 'open', 'hidden', 'unavailable']) {
+    const callbacks = new Map(), listeners = new Map();
+    let next = 0, now = 100;
+    const window = {
+      requestIdleCallback(fn, {timeout}) {
+        assert.ok(timeout > 0 && timeout <= 400);
+        callbacks.set(++next, fn);
+        return next;
+      },
+      cancelIdleCallback: id => callbacks.delete(id)
+    };
+    const document = {
+      hidden: false,
+      addEventListener: (type, fn) => listeners.set(type, fn),
+      removeEventListener(type, fn) { assert.equal(listeners.get(type), fn); listeners.delete(type); }
+    };
+    const H = loadLegacy(pair('HoverMenu').new, 'HoverMenu', {document, window, performance: {now: () => now}});
+    const menu = Object.create(H.prototype);
+    const wait = menu.waitForPlayerIdle();
+    assert.equal(menu.waitForPlayerIdle(), wait);
+    const fire = (time, timedOut) => {
+      const [[id, fn]] = callbacks;
+      callbacks.delete(id);
+      fn({didTimeout: timedOut, timeRemaining: () => time});
+    };
+    fire(2, false);
+    assert.equal(callbacks.size, 1);
+    assert.equal(listeners.size, 1);
+    if (wake === 'idle') fire(14, false);
+    if (wake === 'timeout') { now += 400; fire(0, false); }
+    if (wake === 'hover') {
+      menu._$view = [];
+      const target = {};
+      menu._closest = node => node === target ? node : null;
+      menu._onHover({target: {}});
+      assert.equal(callbacks.size, 1);
+      menu._onHover({target});
+    }
+    if (wake === 'open') void menu._getPlayer();
+    if (wake === 'hidden') { document.hidden = true; listeners.get('visibilitychange')(); }
+    if (wake === 'unavailable') { menu._$view = {removeClass() {}}; menu.setPlayerUnavailable(); }
+    await wait;
+    assert.equal(callbacks.size, 0);
+    assert.equal(listeners.size, 0);
+    if (['hover', 'open', 'hidden', 'unavailable'].includes(wake)) {
+      await menu.waitForPlayerIdle();
+      assert.equal(callbacks.size, 0);
+    }
+  }
+});

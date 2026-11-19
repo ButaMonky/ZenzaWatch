@@ -26,13 +26,20 @@ const StoryboardCacheDb = (() => {
     };
     let db, instance, NicoVideoApi;
     let dbOpening, instanceOpening;
+    let initialPolicy;
     let generationFloor = 0;
     const captureGeneration = () => Math.max(Date.now(), generationFloor);
     const operation = async (data) => {
         const connection = await initWorker();
         return connection.cache.storyboardCache(data);
     };
-    const configure = (policy) => operation({ op: 'configure', ...policy });
+    const configure = (policy, onFirstUse = false) => {
+        if (onFirstUse && !db && !dbOpening) {
+            initialPolicy = policy;
+            return Promise.resolve();
+        }
+        return operation({ op: 'configure', ...policy });
+    };
     const clear = async () => {
         generationFloor = Math.max(Date.now(), generationFloor) + 1;
         const result = await operation({ op: 'clear' });
@@ -62,6 +69,12 @@ const StoryboardCacheDb = (() => {
             const connection = location.host === 'www.nicovideo.jp' ?
                 await IndexedDbStorage.open(WATCH_INFO) :
                 await NicoVideoApi.bridgeDb(WATCH_INFO);
+            if (initialPolicy) {
+                const policy = initialPolicy;
+                initialPolicy = undefined;
+                await connection.cache.storyboardCache({ op: 'configure', ...policy })
+                    .catch(() => console.warn('Scene cache settings unavailable'));
+            }
             db = connection;
             return connection;
         })();

@@ -89,6 +89,13 @@ async function startupErrors(src, url, {hasLodash}) {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>',
     {url, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: vc});
   const w = dom.window;
+  // jsdom omits the browser MediaError constants used by the HLS element.
+  if (!w.MediaError) {
+    w.MediaError = Object.freeze({
+      MEDIA_ERR_ABORTED: 1, MEDIA_ERR_NETWORK: 2,
+      MEDIA_ERR_DECODE: 3, MEDIA_ERR_SRC_NOT_SUPPORTED: 4
+    });
+  }
   // ネットワークには出さない
   w.fetch = () => new Promise(() => {});
   w.XMLHttpRequest = function() {

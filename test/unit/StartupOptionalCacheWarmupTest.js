@@ -48,10 +48,11 @@ function harness(host = 'www.nicovideo.jp') {
       return optionalWatch.promise;
     }}
   });
+  run('const warmWatchCache = ' + extract('src/initializer.js', 'warmWatchCache', 'var') + ';', context);
   run('globalThis.__startupInitWorker = ' +
     extract('src/initializer.js', 'initWorker', 'var') + ';', context);
   return {
-    invoke: () => context.__startupInitWorker(),
+    invoke: (...args) => context.__startupInitWorker(...args),
     calls, warnings,
     requiredStoryboard, requiredVideo,
     optionalStoryboard, optionalWatch
@@ -59,6 +60,66 @@ function harness(host = 'www.nicovideo.jp') {
 }
 
 describe('Startup optional cache warm-up gate, actual current initializer (synthetic)', function() {
+  it('warms watch history during HLS setup only on an ordinary visible desktop search', async () => {
+    for (const mode of ['ordinary', 'explicit', 'resume', 'hidden', 'noIdle', 'override', 'otherPage', 'failedWorker']) {
+      const calls = [];
+      const hls = deferred(), cache = deferred(), stop = new Error('end of probe');
+      const policies = [], updates = {};
+      let capacity = 128;
+      const ordinary = mode === 'ordinary' || mode === 'failedWorker';
+      const workerError = new Error('worker unavailable');
+      const menu = {waitForPlayerIdle: async () => { calls.push('idle'); }};
+      const context = createContext({
+        window: {name: '', requestIdleCallback: mode === 'noIdle' ? undefined : () => {}},
+        location: {hash: '', search: mode === 'explicit' ? '?playlist=1' : '?sort=h'},
+        sessionStorage: {getItem: () => mode === 'resume' ? '' : null},
+        navigator: {userAgent: 'desktop'}, document: {hidden: mode === 'hidden', body: {classList: {toggle() {}}}},
+        URLSearchParams, Config: {props: {overrideGinza: mode === 'override'},
+          getValue: key => key === 'storyboardCacheMaxMB' ? capacity : 7,
+          onkey: (key, handler) => { updates[key] = handler; }},
+        StoryboardCacheDb: {configure: async (policy, onFirstUse) => { policies.push([policy.maxBytes, onFirstUse]); }},
+        ZenzaWatch: {}, Emitter: {}, dimport() {},
+        HlsRuntime: {install: () => hls.promise}, warmWatchCache: () => { calls.push('cache'); return cache.promise; },
+        domEvent: {dispatchCustomEvent() {}}, textUtil: {parseQuery: () => ({})}, START_PAGE_QUERY: '',
+        initializeBySite() {}, addCommonStyle() {}, replaceRedirectLinks: async () => {}, uq: {ready: async () => {}},
+        isWatchPage: async () => false, createHoverMenu: () => menu, global: {emitter: {promise: async () => {}}},
+        NicoComment: {offscreenLayer: {get: async () => {}}},
+        initWorker: async (thumbnail, pending) => {
+          calls.push([thumbnail, pending === cache.promise]);
+          if (mode === 'failedWorker') throw workerError;
+        },
+        initializeDialogPlayer() { throw stop; }
+      });
+      const initialize = run('(' + extract('src/initializer.js', 'initializePlayer', 'var') + ')', context);
+      const completion = initialize(null, mode === 'otherPage' ? null : menu);
+      assert.deepStrictEqual(policies, [[128 * 1024 * 1024, ordinary]], mode);
+      capacity = 0;
+      updates.storyboardCacheMaxMB(0);
+      assert.deepStrictEqual(policies.at(-1), [0, false], mode);
+      await flush();
+      assert.deepStrictEqual(calls, ordinary ? ['cache','idle',[false,true]] : [], mode);
+      hls.resolve();
+      await assert.rejects(completion, error => error === (mode === 'failedWorker' ? workerError : stop));
+      const expected = ordinary ? ['cache','idle',[false,true]] : [[mode === 'otherPage',false]];
+      if (mode === 'ordinary') expected.push('idle');
+      assert.deepStrictEqual(calls, expected, mode);
+    }
+  });
+
+  it('reuses the early search watch cache and omits the unrelated thumbnail warm-up', async () => {
+    const h = harness();
+    const cache = deferred();
+    let ready = false;
+    const complete = h.invoke(false, cache.promise).then(() => { ready = true; });
+    h.requiredStoryboard.resolve();
+    h.requiredVideo.resolve();
+    await flush();
+    assert.strictEqual(ready, false);
+    assert.deepStrictEqual(h.calls, ['requiredVideo']);
+    cache.resolve();
+    await complete;
+  });
+
   it('starts all four worker/cache warmups without dropping any', async () => {
     const h = harness();
     const complete = h.invoke();

@@ -473,6 +473,7 @@ css.addStyle(`
   }
   .zenzaScreenMode_sideView .zenzaWatchVideoHeaderPanel {
     top: 0;
+    pointer-events: auto;
     left: 400px;
     width: calc(100vw - 400px);
     bottom: auto;
@@ -519,6 +520,11 @@ css.addStyle(`
 css.addStyle(`
   body .is-open .zenzaWatchVideoHeaderPanel {
     width: calc(100% + ${CONSTANT.RIGHT_PANEL_WIDTH}px);
+  }
+  /* The outside header can be reached directly from the surrounding page,
+     before the player receives any mousemove to reveal its overlay controls. */
+  .zenzaWatchVideoHeaderPanel:not(.is-onscreen) {
+    pointer-events: auto;
   }
     .zenzaWatchVideoHeaderPanel.is-onscreen {
       top: 0px;
@@ -570,6 +576,7 @@ css.addStyle(`
   .is-open .showVideoHeaderPanel .zenzaWatchVideoHeaderPanel,
   .is-open .zenzaWatchVideoHeaderPanel:hover {
     opacity: 1;
+    pointer-events: auto;
     transition: 0.5s opacity;
   }
 

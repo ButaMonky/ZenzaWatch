@@ -99,3 +99,58 @@ test('other hosts use the injected bridge',async()=>{
   const unavailable=world({host:'live.nicovideo.jp'});
   assert.equal(await loadLegacy(after,'StoryboardCacheDb',unavailable.globals).get('sm9'),null);
 });
+
+test('default search policy waits for the first image operation and shares its open across readers', async () => {
+  const calls = [];
+  let release;
+  const policy = new Promise(resolve => { release = resolve; });
+  const db = loadLegacy(after, 'StoryboardCacheDb', {
+    location: {host:'www.nicovideo.jp'},
+    IndexedDbStorage: {open:async () => {
+      calls.push('open');
+      return {cache:{storyboardCache:async data => {
+        calls.push(data.op);
+        if (data.op === 'configure') await policy;
+      }}};
+    }}
+  });
+  await db.configure({maxBytes:128 * 1024 * 1024, maxAgeMs:7 * 86400000}, true);
+  assert.deepEqual(calls, []);
+  const reads = Promise.all([db.stats(), db.getPreview('sm9', 0)]);
+  await tick();
+  assert.deepEqual(calls,['open','configure']);
+  release();
+  await reads;
+  assert.deepEqual(calls,['open','configure','stats','get']);
+});
+
+test('custom and disabled policies apply immediately, including after a deferred default', async () => {
+  const events = [];
+  const cache = {storyboardCache: async data => { events.push([data.op, data.maxBytes]); }};
+  const db = loadLegacy(after, 'StoryboardCacheDb', {
+    location:{host:'www.nicovideo.jp'}, IndexedDbStorage:{open:async () => {events.push(['open']);return {cache};}}
+  });
+  await db.configure({maxBytes:128}, true);
+  assert.deepEqual(events, []);
+  await db.configure({maxBytes:0});
+  assert.deepEqual(events, [['open'],['configure',128],['configure',0]]);
+  await db.configure({maxBytes:32});
+  assert.deepEqual(events.at(-1), ['configure',32]);
+});
+
+test('a failed first use retries the DB open and retains the deferred policy', async () => {
+  const events = [];
+  let opens = 0;
+  const db = loadLegacy(after, 'StoryboardCacheDb', {
+    location:{host:'www.nicovideo.jp'},
+    IndexedDbStorage:{open:async () => {
+      if (++opens === 1) throw new Error('unavailable');
+      return {cache:{storyboardCache:async data => { events.push(data.op); }}};
+    }}
+  });
+  await db.configure({maxBytes:128}, true);
+  await assert.rejects(db.stats(), /unavailable/);
+  await db.stats();
+  assert.equal(opens, 2);
+  assert.deepEqual(events, ['configure','stats']);
+});

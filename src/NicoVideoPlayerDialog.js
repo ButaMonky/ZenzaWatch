@@ -734,7 +734,7 @@ class NicoVideoPlayerDialog extends Emitter {
                 timing.infoSource = 'network';
                 timing.infoReuseBlocked = reason;
             }
-            return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+            return VideoInfoLoader.load(watchId, options.videoLoadOptions, options.rawData);
         }
         if (timing) {
             timing.infoSource = 'prefetch';

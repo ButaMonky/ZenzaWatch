@@ -625,14 +625,52 @@ const VideoInfoLoader = (function () {
             message: '動画情報が見つかりません（公式ページの構造を要確認）'
         };
     };
-    const loadPromise = function (watchId, options, isRetry = false, isCurrent = () => true) {
+    // Only a confirmed local first open owns a pending read. The ordinary foreground
+    // path consumes its response once and keeps ownership of all playback effects.
+    let pendingFirstOpen;
+    const beginFirstOpenPageRead = (watchId, launchOptions) => {
+        pendingFirstOpen?.controller.abort();
+        const controller = new AbortController();
+        const economy = launchOptions.economy === true;
+        const owner = {};
+        const response = fetchWatchResponse(watchId, { economy, signal: controller.signal }, () => owner.isCurrent?.() === true);
+        // A rejection can precede adoption or follow abandonment. Keep the original
+        // promise for normal error classification and retries if the dialog adopts it.
+        void response.catch(() => { });
+        pendingFirstOpen = { intent: launchOptions, watchId, economy, controller, response, owner };
+        return () => {
+            if (pendingFirstOpen?.controller !== controller)
+                return;
+            pendingFirstOpen = undefined;
+            controller.abort();
+        };
+    };
+    const takeFirstOpen = (watchId, options, launchOptions, isCurrent) => {
+        const read = pendingFirstOpen;
+        if (!read)
+            return;
+        pendingFirstOpen = undefined;
+        if (read.intent !== launchOptions || read.watchId !== watchId ||
+            read.economy !== (options.economy === true) || isCancelled(options)) {
+            read.controller.abort();
+            return;
+        }
+        read.owner.isCurrent = isCurrent;
+        const signal = options.signal;
+        if (!signal)
+            return read.response;
+        const abort = () => read.controller.abort();
+        signal.addEventListener('abort', abort, { once: true });
+        return read.response.finally(() => signal.removeEventListener('abort', abort));
+    };
+    const loadPromise = function (watchId, options, isRetry = false, isCurrent = () => true, firstResponse) {
         if (isCancelled(options)) {
             return Promise.reject(cancelledError());
         }
         const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
             RequestDiagnostics.begin('video-info', watchId, 'response', () => isCurrent() && !isCancelled(options));
         console.log('loadFromWatchApiData');
-        return fetchWatchResponse(watchId, options, isCurrent)
+        return (firstResponse ?? fetchWatchResponse(watchId, options, isCurrent))
             .catch(err => {
             diagnostic?.failure(err);
             return Promise.reject(isCancelled(options) ? cancelledError() :
@@ -691,6 +729,7 @@ const VideoInfoLoader = (function () {
         });
     };
     return {
+        beginFirstOpenPageRead,
         // Passive lookup: never increments playback ownership, publishes video
         // events, resolves owners, loads lazy metadata, or follows paid-video links.
         loadStoryboardInfo: async (watchId, options) => {
@@ -756,7 +795,7 @@ const VideoInfoLoader = (function () {
             }
             return data;
         },
-        load: function (watchId, options) {
+        load: function (watchId, options, launchOptions) {
             debug.watchApiData = undefined;
             const generation = ++anonymousWatchLoadSerial;
             const callerSignal = options.signal;
@@ -765,7 +804,8 @@ const VideoInfoLoader = (function () {
                     callerSignal.aborted === true);
             const timeKey = `watchAPI:${generation}`;
             console.time(timeKey);
-            return loadPromise(watchId, options, false, isCurrent).then((result) => {
+            const firstResponse = takeFirstOpen(watchId, options, launchOptions, isCurrent);
+            return loadPromise(watchId, options, false, isCurrent, firstResponse).then((result) => {
                 console.timeEnd(timeKey);
                 return result;
             }, (err) => {

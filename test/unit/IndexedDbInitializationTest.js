@@ -91,7 +91,8 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
       StoryboardCacheDb: {initWorker: async () => { throw new Error('DB unavailable'); }},
       WatchInfoCacheDb: {initWorker: async () => { throw new Error('DB unavailable'); }}
     });
-    run(`globalThis.initialize = ${extract('src/initializer.js', 'initWorker', 'var')};`, context);
+    run(`const warmWatchCache = ${extract('src/initializer.js', 'warmWatchCache', 'var')};
+      globalThis.initialize = ${extract('src/initializer.js', 'initWorker', 'var')};`, context);
     const state = observe(context.initialize());
     await ticks(); assert.strictEqual(state.status, 'resolved');
   });
@@ -112,7 +113,8 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
       StoryboardCacheDb: {initWorker: async () => {}},
       WatchInfoCacheDb: {initWorker: async () => {}}
     });
-    run(`globalThis.initialize = ${extract('src/initializer.js', 'initWorker', 'var')};`, context);
+    run(`const warmWatchCache = ${extract('src/initializer.js', 'warmWatchCache', 'var')};
+      globalThis.initialize = ${extract('src/initializer.js', 'initWorker', 'var')};`, context);
     const state = observe(context.initialize());
     await ticks();
     assert.strictEqual(state.status, 'resolved');
@@ -145,7 +147,9 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
     const closing = `\n${indent}};`;
     const end = dist.indexOf(closing, anchor);
     assert.ok(start >= 0 && end > start, 'initializer initWorker block missing from generated dev dist');
-    run(`${dist.slice(start, end + closing.length)}\nglobalThis.initialize = initWorker;`, context);
+    const cacheStart = dist.lastIndexOf('const warmWatchCache =', start);
+    assert.ok(cacheStart >= 0, 'watch cache initializer missing from generated dev dist');
+    run(`${dist.slice(cacheStart, end + closing.length)}\nglobalThis.initialize = initWorker;`, context);
     const state = observe(context.initialize());
     await ticks();
     assert.strictEqual(state.status, 'resolved');

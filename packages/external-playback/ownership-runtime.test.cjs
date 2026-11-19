@@ -66,7 +66,7 @@ test('normal main bootstrap stays in page realm without granting page code privi
  const w=new JSDOM('',{url:'https://www.nicovideo.jp/my',runScripts:'outside-only',virtualConsole:new VirtualConsole()}).window;
  const store=storage();let product,seen=0;
  const dependency=fs.readFileSync(require.resolve('lodash/lodash.min.js'),'utf8');
- const source=read('ZenzaWatch-dev.user.js').replace('return boot(monkey, PRODUCT, START_PAGE_QUERY);','window.__seenBoot(PRODUCT, window.ZenzaLib._.VERSION);');
+ const source=read('ZenzaWatch-dev.user.js').replace('return boot(monkey, PRODUCT, START_PAGE_QUERY, !externalTrial);','window.__seenBoot(PRODUCT, window.ZenzaLib._.VERSION);');
  w.__seenBoot=(p,version)=>{product=p;seen++;assert.equal(version,require('lodash').VERSION);assert.equal(w.GM_xmlhttpRequest,undefined);};
  try{
   execute(w,source,store,{
@@ -77,4 +77,29 @@ test('normal main bootstrap stays in page realm without granting page code privi
   await wait(10);assert.equal(product,'ZenzaWatch');assert.equal(seen,1);
   assert.equal(w.GM_getValue,undefined);assert.equal(w.document.querySelector('script'),null);
  }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
+});
+
+test('ordinary startup failure crosses the outer page runtime as an attributable, redacted rejection',async()=>{
+ const w=new JSDOM('',{url:'https://www.nicovideo.jp/tag/private-query',runScripts:'outside-only',virtualConsole:new VirtualConsole()}).window;
+ // The bundled legacy image observer checks this browser global during boot.
+ w.IntersectionObserver=class {};
+ const call='return boot(monkey, PRODUCT, START_PAGE_QUERY, !externalTrial);';
+ const source=read('ZenzaWatch-dev.user.js').replace(call,call.replace('boot(monkey,','boot(async () => {throw Error("private-message");},'));
+ const warnings=[];
+ w.console.warn=(...args)=>warnings.push(args);
+ try{
+  execute(w,source,storage(),{
+   GM_getResourceText:()=>fs.readFileSync(require.resolve('lodash/lodash.min.js'),'utf8'),
+   GM_addElement:(parent,tag,attrs)=>{
+    // Observe the final page promise so this intentional rejection is handled by the test.
+    const observed=attrs.textContent.replace('const _=module.exports;(', 'const _=module.exports;window.fixtureStartup=(');
+    assert.notEqual(observed,attrs.textContent);
+    w.eval(observed);
+    w.fixtureStartup.catch(()=>{});
+   }
+  });
+  await assert.rejects(w.fixtureStartup,error=>error.name==='ZenzaWatchStartupError' &&
+    /ZenzaWatchRuntime\.js:\d+:\d+/.test(error.stack) && !/private-/.test(error.stack));
+  assert.deepEqual(warnings,[['[ZenzaWatch] 起動診断：プレイヤー本体の初期化に失敗しました。']]);
+ }finally{w.close();}
 });

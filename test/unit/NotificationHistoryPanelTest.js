@@ -83,6 +83,24 @@ describe('NotificationHistoryPanel (synthetic DOM)', () => {
     } finally { h.dom.window.close(); }
   });
 
+  it('copies distinct instructions for playback interruptions and comment display failures', async () => {
+    for (const [source,details,expected] of [
+      ['playback-interruption',{phase:'playback',reason:'playback-wait',lastStage:'progress',nextStage:'hls-buffer',elapsedMs:15000},
+        ['動画の再生途中','最後に成功した処理　再生時刻の前進','待機からの経過　15.0秒','hls-src/HlsVideoElement.ts']],
+      ['comment-display',{phase:'render',reason:'comment-apply'},
+        ['コメントの表示準備','コメントは取得済み','nico-src/CommentPlayer.ts']]
+    ]) {
+      const h=setup([{id:'issue',timestamp:1,category:'player',level:'error',source,details:{...details,module:'private-path'}}]);
+      try {
+        await flush();h.root.querySelector('[data-entry-id]').click();
+        h.root.querySelector('[data-history-action="copy"]').click();await flush();
+        const report=h.root.querySelector('textarea').value;
+        for(const field of expected) assert(report.includes(field),field);
+        assert(!report.includes('private-path'));
+      } finally {h.dom.window.close();}
+    }
+  });
+
   it('copies the history operation and fixed key rejection code without the actual key', async () => {
     const h = setup([{id:'history', timestamp:1, category:'network', level:'warning', source:'comment-history-read',
       details:{phase:'response', reason:'permission', statusCode:400, errorCode:'INVALID_TOKEN', threadKey:'private-value'}}]);

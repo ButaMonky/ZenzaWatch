@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.479-task1102
+// @version        2.7.480-task1103
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 13:34Z ad5a2bc1
+// build: 2026-11-19 14:51Z 13dc11ea
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2255,10 +2255,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.479-task1102';
+    var VER = '2.7.480-task1103';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 13:34Z ad5a2bc1';
+    var BUILD = '2026-11-19 14:51Z 13dc11ea';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -47445,6 +47445,132 @@ PlayList.SEARCH_LIMIT_MIN = 1;
 PlayList.SEARCH_LIMIT_MAX = 5000;
 
 // already required
+// already required
+const PlaybackInterruptionTrace = (() => {
+	const waitMs = 15000;
+	let sequence = 0;
+	function classifyError(error, dataStage) {
+		switch (error?.code) {
+			case 2: return {reason:'media-network', stage:dataStage};
+			case 3: return {reason:'media-decode', stage:'decode'};
+			case 4: return {reason:'media-format', stage:'decode'};
+			case 1002:
+				switch (error.message) {
+					case 'HLS playback could not be started': return {reason:'hls-library', stage:'hls-library'};
+					case 'manifestLoadError':
+					case 'manifestLoadTimeOut': return {reason:'hls-manifest', stage:'manifest'};
+					case 'fragLoadError':
+					case 'fragLoadTimeOut': return {reason:'hls-fragment', stage:'hls-buffer'};
+					default: return {reason:'hls-network', stage:dataStage};
+				}
+			case 1003: return {reason:'hls-decode', stage:'hls-decode'};
+			case 1004: return {reason:'hls-error', stage:'hls-process'};
+		}
+	}
+	function observe(wrapper) {
+		const video = wrapper.drawableElement || wrapper;
+		let observedPlaying = false, progressed = false;
+		let previousTime = video.currentTime, wait, timer;
+		const playable = () => !video.paused && !video.ended && !video.seeking && video.playbackRate !== 0;
+		const dataStage = () => /^HLS-/.test(wrapper.playerMode || '') ? 'hls-buffer' : 'media-buffer';
+		const waitingStage = () => {
+			const position = video.currentTime, ranges = video.buffered;
+			for (let i = 0; i < ranges.length; i++) {
+				if (ranges.start(i) <= position && ranges.end(i) > position + 0.25) return 'advance';
+			}
+			return dataStage();
+		};
+		const begin = () => {
+			const started = Date.now();
+			return {started, position:video.currentTime,
+				key:'diag-interruption-' + started.toString(36) + '-' + (++sequence).toString(36)};
+		};
+		const record = (reason, stage, outcome) => {
+			const recovered = outcome === 'recovered';
+			if (!recovered) wait.details = {operation:'playback-interruption',phase:'playback',reason,
+				lastStage:'progress',nextStage:stage,elapsedMs:Math.max(0, Date.now() - wait.started)};
+			try {
+				NotificationJournal.recordDiagnostic(wait.key, {
+					category:'player',source:'playback-interruption',
+					level:recovered ? 'success' : reason === 'playback-wait' ? 'warning' : 'error',
+					message:recovered ? '動画の再生時刻が再び進みました' : '再生途中の修復レポート',
+					details:{...wait.details,outcome}
+				});
+			} catch (_) { /* Diagnostics must not interrupt playback. */ }
+		};
+		const clearWait = () => {
+			clearTimeout(timer);
+			timer = undefined;
+			wait = undefined;
+		};
+		const resume = () => {
+			if (wait?.details) record(wait.details.reason, wait.details.nextStage, 'recovered');
+			clearWait();
+		};
+		const onTimeout = () => {
+			timer = undefined;
+			if (!wait || document.hidden || !playable()) return;
+			if (video.currentTime > wait.position) { resume(); return; }
+			record('playback-wait', waitingStage(), 'failed');
+		};
+		const onWaiting = () => {
+			if (!progressed || !observedPlaying || !playable() || wait) return;
+			wait = begin();
+			if (!document.hidden) timer = setTimeout(onTimeout, waitMs);
+		};
+		const onTime = () => {
+			if (!observedPlaying || !playable()) return;
+			const current = video.currentTime;
+			if (current > previousTime) {
+				progressed = true;
+				if (wait && current > wait.position) resume();
+			}
+			previousTime = current;
+		};
+		const onPlaying = () => {
+			if (!observedPlaying) previousTime = video.currentTime;
+			observedPlaying = true;
+		};
+		const onPause = () => {
+			clearWait();
+			observedPlaying = false;
+		};
+		const onReset = () => {
+			onPause();
+			progressed = false;
+			previousTime = video.currentTime;
+		};
+		const onVisibility = () => {
+			if (!wait || wait.details) return;
+			clearTimeout(timer);
+			if (document.hidden) return;
+			wait.started = Date.now();
+			wait.position = video.currentTime;
+			timer = setTimeout(onTimeout, waitMs);
+		};
+		const onError = event => {
+			if (!progressed) return;
+			const failure = classifyError(event.currentTarget.error, dataStage());
+			if (!failure || wait?.details?.reason === failure.reason) return;
+			clearTimeout(timer);
+			wait = wait || begin();
+			record(failure.reason, failure.stage, 'failed');
+		};
+		const events = {playing:onPlaying,timeupdate:onTime,waiting:onWaiting,stalled:onWaiting,
+			pause:onPause,seeking:onReset,seeked:() => { if (playable()) onPlaying(); },
+			ended:onReset,emptied:onReset,error:onError};
+		for (const [event, handler] of Object.entries(events)) video.addEventListener(event, handler);
+		if (wrapper !== video) wrapper.addEventListener('error', onError);
+		document.addEventListener('visibilitychange', onVisibility);
+		return () => {
+			onReset();
+			for (const [event, handler] of Object.entries(events)) video.removeEventListener(event, handler);
+			if (wrapper !== video) wrapper.removeEventListener('error', onError);
+			document.removeEventListener('visibilitychange', onVisibility);
+		};
+	}
+	return {observe, classifyError};
+})();
 const PlaybackStartupTrace = (() => {
 	const nico = 'tools/typescript-stage1/nico-src/';
 	const media = 'tools/typescript-stage1/hls-src/HlsVideoElement.ts';
@@ -47461,6 +47587,14 @@ const PlaybackStartupTrace = (() => {
 		['metadata', ['映像メタデータの受信', media]],
 		['frame', ['最初の映像フレームの表示', media]],
 		['decoded', ['最初の映像データのデコード', media]],
+		['progress', ['再生時刻の前進', nico + 'NicoVideoPlayer.ts']],
+		['hls-library', ['HLSライブラリの準備', media]],
+		['hls-process', ['HLSプレイヤーでの配信処理', media]],
+		['hls-decode', ['HLS配信データのデコード', media]],
+		['hls-buffer', ['再生位置に続くHLS映像データの受信', media]],
+		['media-buffer', ['再生位置に続く映像データの受信', nico + 'NicoVideoPlayer.ts']],
+		['advance', ['受信済み区間での再生時刻の前進', nico + 'NicoVideoPlayer.ts']],
+		['decode', ['映像データの読み取りとデコード', nico + 'NicoVideoPlayer.ts']],
 		['play', ['ブラウザでの再生開始', nico + 'NicoVideoPlayer.ts']]
 	]);
 	const next = {
@@ -47477,7 +47611,7 @@ const PlaybackStartupTrace = (() => {
 	function create() {
 		const started = Date.now(), key = 'diag-startup-' + started.toString(36) + '-' + (++sequence).toString(36);
 		let last = 'open', waiting = 'player', timer, removeMedia, closed = false, reported = false;
-		let pageReceived = false, previousWait;
+		let pageReceived = false, previousWait, stopInterruptions;
 		const details = () => ({lastStage:last, nextStage:waiting, elapsedMs:Math.max(0,Date.now()-started)});
 		const write = (reason, outcome, recoveryMessage = '最初の映像を確認しました') => {
 			const checkpoint = outcome === 'recovered' ? previousWait : details();
@@ -47508,18 +47642,23 @@ const PlaybackStartupTrace = (() => {
 			document.removeEventListener('visibilitychange', onVisible);
 			arm();
 		};
-		const cancel = () => {
+		const finishStartup = () => {
 			closed = true;
 			clearTimeout(timer);
 			document.removeEventListener('visibilitychange',onVisible);
 			removeMedia?.();
 			removeMedia = undefined;
 		};
+		const cancel = () => {
+			finishStartup();
+			stopInterruptions?.();
+			stopInterruptions = undefined;
+		};
 		const mark = stage => {
 			if (closed || !stages.has(stage)) return;
 			if (stage === 'frame' || stage === 'decoded') {
 				if (reported) write('startup-wait','recovered');
-				cancel();
+				finishStartup();
 				return;
 			}
 			if (stage === 'watch') {
@@ -47539,8 +47678,12 @@ const PlaybackStartupTrace = (() => {
 			if (stages.has(at)) waiting = at;
 			const checkpoint = details();
 			write(reason,'failed');
-			cancel();
+			finishStartup();
 			return {...checkpoint, phase:'startup', reason};
+		};
+		const failMedia = error => {
+			const failure = PlaybackInterruptionTrace.classifyError(error, waiting);
+			return fail(failure?.reason, failure?.stage);
 		};
 		const observeMedia = (wrapper, expectPlayback = true) => {
 			if (closed || !wrapper) return;
@@ -47549,6 +47692,8 @@ const PlaybackStartupTrace = (() => {
 			if (wrapper.playerMode === 'HLS-JS') waiting = 'manifest';
 			const video = wrapper.drawableElement || wrapper;
 			if (typeof video.addEventListener !== 'function') return;
+			stopInterruptions?.();
+			stopInterruptions = PlaybackInterruptionTrace.observe(wrapper);
 			let frame;
 			let canObserveFrame = typeof video.requestVideoFrameCallback === 'function';
 			const metadata = () => {
@@ -47556,7 +47701,7 @@ const PlaybackStartupTrace = (() => {
 				mark('metadata');
 				if (!expectPlayback && video.paused) {
 					if (reported) write('startup-wait', 'recovered', '動画の準備ができました（手動再生待ち）');
-					cancel();
+					finishStartup();
 				}
 			};
 			const decoded = () => {
@@ -47578,7 +47723,7 @@ const PlaybackStartupTrace = (() => {
 			}
 		};
 		arm();
-		return {mark,fail,cancel,observeMedia};
+		return {mark,fail,failMedia,cancel,observeMedia};
 	}
 	const reserve = intent => {
 		pending.get(intent)?.cancel();
@@ -54809,10 +54954,21 @@ const NotificationHistoryPanel = (() => {
 								entry.details?.reason === 'not-found' ? '対象なし・要確認' :
 										entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
 		const phaseLabels = new Map([
-				['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認'], ['startup', '再生開始']
+				['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認'], ['startup', '再生開始'], ['playback', '再生途中'], ['render', '表示準備']
 		]);
 		const explanations = {
 				schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+				'comment-apply': 'コメントは取得済みです。受け取ったデータを表示用に変換する処理でエラーが発生しました。',
+				'playback-wait': '再生が始まった後、読み込み待ちが続き、再生時刻の前進を確認できませんでした。',
+				'media-network': '再生中にブラウザが映像データの通信エラーを返しました。',
+				'media-decode': '再生中にブラウザが映像のデコードエラーを返しました。',
+				'hls-library': '映像ソースの設定後、HLSライブラリの読み込みまたは起動に失敗しました。',
+				'hls-manifest': 'HLSプレイヤーが配信リストの取得失敗を報告しました。',
+				'hls-fragment': 'HLSプレイヤーが映像の分割データの取得失敗を報告しました。',
+				'hls-network': 'HLSプレイヤーが通信エラーを報告しました。詳細は特定できていません。',
+				'hls-decode': 'HLSプレイヤーが配信データのデコードエラーを報告しました。',
+				'hls-error': 'HLSプレイヤーが再生を続けられないエラーを報告しました。',
+				'media-format': '再生中にブラウザが映像形式を再生できないと報告しました。',
 				'startup-wait': '再生操作の後、進行を待っています。遅延の原因はまだ判別できません。',
 				'startup-error': '最初の映像の確認前に、再生処理がエラーを返しました。',
 				'play-blocked': 'ブラウザが再生開始を許可しませんでした。',
@@ -54851,6 +55007,7 @@ const NotificationHistoryPanel = (() => {
 				'meta.errorCode', 'data.postKey', 'data.no', 'data.challenge', 'data.nicoruKey', 'data.deleteKey', 'data.nicoruId'
 		]);
 		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+		const commentDisplayFile = 'tools/typescript-stage1/nico-src/CommentPlayer.ts';
 		const repairGuide = 'docs/maintenance/REPAIR_GUIDE.md';
 		const repairReport = (entry) => {
 				const d = entry.details || {};
@@ -54859,17 +55016,21 @@ const NotificationHistoryPanel = (() => {
 				const registeredLabel = typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation);
 				let feature = Object.prototype.hasOwnProperty.call(labels, entry.category) ? labels[entry.category] : '通知';
 				let location = '修復ガイドの症状別の案内を参照';
-				const startup = d.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined';
-				const lastStage = startup && PlaybackStartupTrace.describe(d.lastStage);
-				const nextStage = startup && PlaybackStartupTrace.describe(d.nextStage);
-				if (startup) {
-						feature = '動画の再生開始';
+				const playbackTrace = (d.phase === 'startup' || d.phase === 'playback') && typeof PlaybackStartupTrace !== 'undefined';
+				const lastStage = playbackTrace && PlaybackStartupTrace.describe(d.lastStage);
+				const nextStage = playbackTrace && PlaybackStartupTrace.describe(d.nextStage);
+				if (playbackTrace) {
+						feature = d.phase === 'playback' ? '動画の再生途中' : '動画の再生開始';
 						if (nextStage)
 								location = nextStage.file;
 				}
 				else if (registeredLabel) {
 						feature = registeredLabel + '（' + operation + '）';
 						location = modulePath(RequestDiagnostics.moduleFor(operation));
+				}
+				else if (operation === 'comment-display') {
+						feature = 'コメントの表示準備';
+						location = commentDisplayFile;
 				}
 				else if (operation === 'script-error') {
 						feature = 'スクリプトエラー（script-error）';
@@ -54886,10 +55047,10 @@ const NotificationHistoryPanel = (() => {
 				const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
 						'段階　' + (phaseLabels.get(String(d.phase)) || unknown),
 						'理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
-				if (startup) {
+				if (playbackTrace) {
 						lines.push('最後に成功した処理　' + (lastStage ? lastStage.label : unknown), '次に待っていた処理　' + (nextStage ? nextStage.label : unknown));
 						if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
-								lines.push('操作からの経過　' + (d.elapsedMs / 1000).toFixed(1) + '秒');
+								lines.push((d.phase === 'playback' ? '待機からの経過　' : '操作からの経過　') + (d.elapsedMs / 1000).toFixed(1) + '秒');
 				}
 				if (d.outcome === 'recovered')
 						lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
@@ -55030,7 +55191,9 @@ const NotificationHistoryPanel = (() => {
 								activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
 								detailNode.append(activity);
 						}
-						if (entry.details?.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined') {
+						if (entry.source === 'comment-display')
+								detailNode.append(element('p', '', '修正箇所の目安　' + commentDisplayFile));
+						if ((entry.details?.phase === 'startup' || entry.details?.phase === 'playback') && typeof PlaybackStartupTrace !== 'undefined') {
 								const last = PlaybackStartupTrace.describe(entry.details?.lastStage);
 								const next = PlaybackStartupTrace.describe(entry.details?.nextStage);
 								if (last && next)
@@ -60073,7 +60236,20 @@ const NicoVideoPlayerDialogComments = {
 				};
 				this._nicoVideoPlayer.closeCommentPlayer();
 				this._threadInfo = result.threadInfo;
-				this._nicoVideoPlayer.setComment(result.body, options);
+				try {
+						this._nicoVideoPlayer.setComment(result.body, options);
+				}
+				catch (_) {
+						if (this._requestId !== requestId)
+								return;
+						this._state.isCommentReady = false;
+						this._threadInfo = null;
+						const message = 'コメントは取得済みですが、表示の準備中にエラーが発生しました。';
+						this._recordDiagnostic({ category: 'comment', level: 'error', source: 'comment-display', message,
+								details: { phase: 'render', reason: 'comment-apply', outcome: 'failed' } });
+						this.execCommand('alert', message);
+						return;
+				}
 				if (result.threadInfo.language && result.threadInfo.language !== this._playerConfig.props.commentLanguage) {
 						this._playerConfig.props.commentLanguage = result.threadInfo.language;
 				}
@@ -62367,7 +62543,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						}, 3000);
 				};
 				const requestId = this._requestId;
-				const checkpoint = this._startupTrace?.fail();
+				const checkpoint = this._startupTrace?.failMedia(e?.target?.error);
 				const sessionState = await this._videoSession.getState();
 				if (this._requestId !== requestId) {
 						return; // Task 090（ZW-012）: 待っている間に別の動画を開いた・閉じた
@@ -90584,7 +90760,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.479-task1102",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.480-task1103",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

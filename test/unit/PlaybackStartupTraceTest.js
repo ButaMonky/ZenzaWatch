@@ -9,6 +9,7 @@ function harness() {
   const c = createContext({document, Date:{now:()=>now},
     setTimeout(fn){timers.set(++sequence,fn);return sequence;}, clearTimeout(id){timers.delete(id);},
     NotificationJournal:{recordDiagnostic(key,entry){entries.push({key,...entry});}}});
+  run(beginSection('src/PlaybackInterruptionTrace.js'),c);
   run(beginSection('src/PlaybackStartupTrace.js')+'\nglobalThis.trace=PlaybackStartupTrace;',c);
   return {api:c.trace,entries,document,tick(){now+=15000;const callbacks=[...timers.values()];timers.clear();callbacks.forEach(fn=>fn());}};
 }
@@ -62,6 +63,16 @@ describe('再生開始の修復レポート',()=>{
       assert.equal(h.entries.length,2);
       assert.equal(h.entries[1].details.outcome,'recovered');
       assert.match(h.entries[1].message,/手動再生待ち/);
+    }
+  });
+  it('配信リストを受信する前のHLSライブラリ起動とリスト取得のエラーを区別する',()=>{
+    for(const [message,reason,stage] of [['HLS playback could not be started','hls-library','hls-library'],
+      ['manifestLoadError','hls-manifest','manifest'],['untrusted /private','hls-network','manifest']]){
+      const h=harness(),t=h.api.adopt({}),v=new EventTarget();v.playerMode='HLS-JS';
+      t.observeMedia(v);const checkpoint=t.failMedia({code:1002,message});
+      assert.equal(checkpoint.reason,reason);assert.equal(checkpoint.nextStage,stage);
+      assert.equal(h.entries[0].details.reason,reason);
+      assert(!JSON.stringify(h.entries).includes('private'));
     }
   });
   it('保存値をソースパスとして解釈しない',()=>{

@@ -1259,7 +1259,7 @@ class NicoVideoPlayerDialog extends Emitter {
             }, 3000);
         };
         const requestId = this._requestId;
-        const checkpoint = this._startupTrace?.fail();
+        const checkpoint = this._startupTrace?.failMedia(e?.target?.error);
         const sessionState = await this._videoSession.getState();
         if (this._requestId !== requestId) {
             return; // Task 090（ZW-012）: 待っている間に別の動画を開いた・閉じた

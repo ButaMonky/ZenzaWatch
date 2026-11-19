@@ -86,6 +86,25 @@ describe('Task159 ダイアログがコメント取得を所有する',()=>{
   h.dialog.open('smB');await flush();assert.equal(h.requests[1].options.signal.aborted,true);
   h.dialog.loadComment({});h.dialog.close();assert.equal(h.requests[2].options.signal.aborted,true);
  });
+ it('受信済みのコメントを表示用に変換できない場合は、通信成功後の失敗として通知する',async()=>{
+  for (const prefetched of [false,true]) {
+   const h=dialog(), records=[];
+   h.dialog._onCommentLoadSuccess=h.Dialog.prototype._onCommentLoadSuccess;
+   h.dialog._videoInfo={replacementWords:{},duration:30};
+   h.dialog._nicoVideoPlayer={closeCommentPlayer(){},setComment(){throw Error('private-comment');}};
+   h.dialog._recordDiagnostic=entry=>records.push(entry);
+   h.dialog.execCommand=()=>{};
+   const result={threadInfo:{threadId:'123'},body:{threads:[]},format:'threads'};
+   h.dialog._takePrefetchComments=()=>prefetched ? result : null;
+   const loading=h.dialog.loadComment({});
+   if (!prefetched) h.requests[0].resolve(result);
+   await loading;
+   assert.equal(records.length,1);
+   assert.equal(records[0].details.reason,'comment-apply');
+   assert.equal(h.dialog._state.isCommentReady,false);
+   assert(!JSON.stringify(records).includes('private-comment'));
+  }
+ });
  it('現在の読み込み失敗は通知し、所有者を解放する',async()=>{
   const h=dialog();h.dialog.loadComment({});const e=Error('current');h.requests[0].reject(e);await flush();
   assert.deepEqual(h.fail,[e]);assert.equal(h.dialog._commentLoadController,null);

@@ -1,6 +1,8 @@
 import {NotificationJournal} from './NotificationJournal';
+import {PlaybackInterruptionTrace} from './PlaybackInterruptionTrace';
 //===BEGIN===
 //@require NotificationJournal
+//@require PlaybackInterruptionTrace
 const PlaybackStartupTrace = (() => {
   const nico = 'tools/typescript-stage1/nico-src/';
   const media = 'tools/typescript-stage1/hls-src/HlsVideoElement.ts';
@@ -18,6 +20,14 @@ const PlaybackStartupTrace = (() => {
     ['metadata', ['映像メタデータの受信', media]],
     ['frame', ['最初の映像フレームの表示', media]],
     ['decoded', ['最初の映像データのデコード', media]],
+    ['progress', ['再生時刻の前進', nico + 'NicoVideoPlayer.ts']],
+    ['hls-library', ['HLSライブラリの準備', media]],
+    ['hls-process', ['HLSプレイヤーでの配信処理', media]],
+    ['hls-decode', ['HLS配信データのデコード', media]],
+    ['hls-buffer', ['再生位置に続くHLS映像データの受信', media]],
+    ['media-buffer', ['再生位置に続く映像データの受信', nico + 'NicoVideoPlayer.ts']],
+    ['advance', ['受信済み区間での再生時刻の前進', nico + 'NicoVideoPlayer.ts']],
+    ['decode', ['映像データの読み取りとデコード', nico + 'NicoVideoPlayer.ts']],
     ['play', ['ブラウザでの再生開始', nico + 'NicoVideoPlayer.ts']]
   ]);
   const next = {
@@ -34,7 +44,7 @@ const PlaybackStartupTrace = (() => {
   function create() {
     const started = Date.now(), key = 'diag-startup-' + started.toString(36) + '-' + (++sequence).toString(36);
     let last = 'open', waiting = 'player', timer, removeMedia, closed = false, reported = false;
-    let pageReceived = false, previousWait;
+    let pageReceived = false, previousWait, stopInterruptions;
     const details = () => ({lastStage:last, nextStage:waiting, elapsedMs:Math.max(0,Date.now()-started)});
     const write = (reason, outcome, recoveryMessage = '最初の映像を確認しました') => {
       const checkpoint = outcome === 'recovered' ? previousWait : details();
@@ -65,19 +75,24 @@ const PlaybackStartupTrace = (() => {
       document.removeEventListener('visibilitychange', onVisible);
       arm();
     };
-    const cancel = () => {
+    const finishStartup = () => {
       closed = true;
       clearTimeout(timer);
       document.removeEventListener('visibilitychange',onVisible);
       removeMedia?.();
       removeMedia = undefined;
     };
+    const cancel = () => {
+      finishStartup();
+      stopInterruptions?.();
+      stopInterruptions = undefined;
+    };
     const mark = stage => {
       if (closed || !stages.has(stage)) return;
       if (stage === 'frame' || stage === 'decoded') {
         // Preserve the failed checkpoint in the journal's recovery entry.
         if (reported) write('startup-wait','recovered');
-        cancel();
+        finishStartup();
         return;
       }
       if (stage === 'watch') {
@@ -97,8 +112,12 @@ const PlaybackStartupTrace = (() => {
       if (stages.has(at)) waiting = at;
       const checkpoint = details();
       write(reason,'failed');
-      cancel();
+      finishStartup();
       return {...checkpoint, phase:'startup', reason};
+    };
+    const failMedia = error => {
+      const failure = PlaybackInterruptionTrace.classifyError(error, waiting);
+      return fail(failure?.reason, failure?.stage);
     };
     const observeMedia = (wrapper, expectPlayback = true) => {
       if (closed || !wrapper) return;
@@ -107,6 +126,8 @@ const PlaybackStartupTrace = (() => {
       if (wrapper.playerMode === 'HLS-JS') waiting = 'manifest';
       const video = wrapper.drawableElement || wrapper;
       if (typeof video.addEventListener !== 'function') return;
+      stopInterruptions?.();
+      stopInterruptions = PlaybackInterruptionTrace.observe(wrapper);
       let frame;
       let canObserveFrame = typeof video.requestVideoFrameCallback === 'function';
       const metadata = () => {
@@ -114,7 +135,7 @@ const PlaybackStartupTrace = (() => {
         mark('metadata');
         if (!expectPlayback && video.paused) {
           if (reported) write('startup-wait', 'recovered', '動画の準備ができました（手動再生待ち）');
-          cancel();
+          finishStartup();
         }
       };
       const decoded = () => {
@@ -136,7 +157,7 @@ const PlaybackStartupTrace = (() => {
       }
     };
     arm();
-    return {mark,fail,cancel,observeMedia};
+    return {mark,fail,failMedia,cancel,observeMedia};
   }
   const reserve = intent => {
     pending.get(intent)?.cancel();

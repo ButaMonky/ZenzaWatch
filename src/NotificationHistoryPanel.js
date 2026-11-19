@@ -84,10 +84,21 @@ const NotificationHistoryPanel = (() => {
                 entry.details?.reason === 'not-found' ? '対象なし・要確認' :
                     entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
     const phaseLabels = new Map([
-        ['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認'], ['startup', '再生開始']
+        ['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認'], ['startup', '再生開始'], ['playback', '再生途中'], ['render', '表示準備']
     ]);
     const explanations = {
         schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+        'comment-apply': 'コメントは取得済みです。受け取ったデータを表示用に変換する処理でエラーが発生しました。',
+        'playback-wait': '再生が始まった後、読み込み待ちが続き、再生時刻の前進を確認できませんでした。',
+        'media-network': '再生中にブラウザが映像データの通信エラーを返しました。',
+        'media-decode': '再生中にブラウザが映像のデコードエラーを返しました。',
+        'hls-library': '映像ソースの設定後、HLSライブラリの読み込みまたは起動に失敗しました。',
+        'hls-manifest': 'HLSプレイヤーが配信リストの取得失敗を報告しました。',
+        'hls-fragment': 'HLSプレイヤーが映像の分割データの取得失敗を報告しました。',
+        'hls-network': 'HLSプレイヤーが通信エラーを報告しました。詳細は特定できていません。',
+        'hls-decode': 'HLSプレイヤーが配信データのデコードエラーを報告しました。',
+        'hls-error': 'HLSプレイヤーが再生を続けられないエラーを報告しました。',
+        'media-format': '再生中にブラウザが映像形式を再生できないと報告しました。',
         'startup-wait': '再生操作の後、進行を待っています。遅延の原因はまだ判別できません。',
         'startup-error': '最初の映像の確認前に、再生処理がエラーを返しました。',
         'play-blocked': 'ブラウザが再生開始を許可しませんでした。',
@@ -129,6 +140,7 @@ const NotificationHistoryPanel = (() => {
         'meta.errorCode', 'data.postKey', 'data.no', 'data.challenge', 'data.nicoruKey', 'data.deleteKey', 'data.nicoruId'
     ]);
     const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+    const commentDisplayFile = 'tools/typescript-stage1/nico-src/CommentPlayer.ts';
     const repairGuide = 'docs/maintenance/REPAIR_GUIDE.md';
     const repairReport = (entry) => {
         const d = entry.details || {};
@@ -137,17 +149,21 @@ const NotificationHistoryPanel = (() => {
         const registeredLabel = typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation);
         let feature = Object.prototype.hasOwnProperty.call(labels, entry.category) ? labels[entry.category] : '通知';
         let location = '修復ガイドの症状別の案内を参照';
-        const startup = d.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined';
-        const lastStage = startup && PlaybackStartupTrace.describe(d.lastStage);
-        const nextStage = startup && PlaybackStartupTrace.describe(d.nextStage);
-        if (startup) {
-            feature = '動画の再生開始';
+        const playbackTrace = (d.phase === 'startup' || d.phase === 'playback') && typeof PlaybackStartupTrace !== 'undefined';
+        const lastStage = playbackTrace && PlaybackStartupTrace.describe(d.lastStage);
+        const nextStage = playbackTrace && PlaybackStartupTrace.describe(d.nextStage);
+        if (playbackTrace) {
+            feature = d.phase === 'playback' ? '動画の再生途中' : '動画の再生開始';
             if (nextStage)
                 location = nextStage.file;
         }
         else if (registeredLabel) {
             feature = registeredLabel + '（' + operation + '）';
             location = modulePath(RequestDiagnostics.moduleFor(operation));
+        }
+        else if (operation === 'comment-display') {
+            feature = 'コメントの表示準備';
+            location = commentDisplayFile;
         }
         else if (operation === 'script-error') {
             feature = 'スクリプトエラー（script-error）';
@@ -164,10 +180,10 @@ const NotificationHistoryPanel = (() => {
         const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
             '段階　' + (phaseLabels.get(String(d.phase)) || unknown),
             '理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
-        if (startup) {
+        if (playbackTrace) {
             lines.push('最後に成功した処理　' + (lastStage ? lastStage.label : unknown), '次に待っていた処理　' + (nextStage ? nextStage.label : unknown));
             if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
-                lines.push('操作からの経過　' + (d.elapsedMs / 1000).toFixed(1) + '秒');
+                lines.push((d.phase === 'playback' ? '待機からの経過　' : '操作からの経過　') + (d.elapsedMs / 1000).toFixed(1) + '秒');
         }
         if (d.outcome === 'recovered')
             lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
@@ -309,7 +325,9 @@ const NotificationHistoryPanel = (() => {
                 activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
                 detailNode.append(activity);
             }
-            if (entry.details?.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined') {
+            if (entry.source === 'comment-display')
+                detailNode.append(element('p', '', '修正箇所の目安　' + commentDisplayFile));
+            if ((entry.details?.phase === 'startup' || entry.details?.phase === 'playback') && typeof PlaybackStartupTrace !== 'undefined') {
                 const last = PlaybackStartupTrace.describe(entry.details?.lastStage);
                 const next = PlaybackStartupTrace.describe(entry.details?.nextStage);
                 if (last && next)

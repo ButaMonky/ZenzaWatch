@@ -174,7 +174,20 @@ const NicoVideoPlayerDialogComments = {
         };
         this._nicoVideoPlayer.closeCommentPlayer();
         this._threadInfo = result.threadInfo;
-        this._nicoVideoPlayer.setComment(result.body, options);
+        try {
+            this._nicoVideoPlayer.setComment(result.body, options);
+        }
+        catch (_) {
+            if (this._requestId !== requestId)
+                return;
+            this._state.isCommentReady = false;
+            this._threadInfo = null;
+            const message = 'コメントは取得済みですが、表示の準備中にエラーが発生しました。';
+            this._recordDiagnostic({ category: 'comment', level: 'error', source: 'comment-display', message,
+                details: { phase: 'render', reason: 'comment-apply', outcome: 'failed' } });
+            this.execCommand('alert', message);
+            return;
+        }
         // 選択中の言語がその動画で使えず、ThreadLoader側でサーバー既定言語に
         // フォールバックして読み込めた場合、設定を書き換えずにいると次に開く
         // 動画でも同じ言語指定で失敗→リトライを繰り返してしまう。

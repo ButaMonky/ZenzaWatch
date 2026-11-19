@@ -1008,8 +1008,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:'NotificationHistoryPanel',
     runtime:'src/NotificationHistoryPanel.js',
     originalSha256:'eb600e75ba3689584fbe26f07ccbe231c16b2827432ec2efc75028bb555e2e14',
-    preamble:["import {NotificationJournal} from './NotificationJournal';"],
-    beginLines:['//@require NotificationJournal'],
+    preamble:["import {NotificationJournal} from './NotificationJournal';", "import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';"],
+    beginLines:['//@require NotificationJournal','//@require RequestDiagnostics'],
     shape:'iife',
     task:'taskNLOG20261023'
   }),

@@ -672,6 +672,36 @@ const StoryboardWorker = (() => {
             await item.setInfo(info);
             return { status: 'ok' };
         };
+        // Clip previews can borrow UI07/seek bar's loaded (or loading) page without
+        // creating a thumbnail view, prefetching neighbours or cloning a whole sheet.
+        const readCachedCell = async ({ videoId, time }) => {
+            for (const view of Object.values(items)) {
+                const model = view.info;
+                if (!model?.isAvailable || model.rawData.watchId !== videoId || !model.cellCount || time > model.duration)
+                    continue;
+                const pos = model.getThumbnailPosition(time * 1000);
+                // In the Worker cached ArrayBuffers have their own structured-clone identities.
+                const src = pos.url;
+                const entry = ImageCacheMap.map.get(src);
+                if (!entry)
+                    continue;
+                const pending = ImageCacheMap.get(src);
+                try {
+                    const image = await pending;
+                    if (!image || image === BLANK_IMG)
+                        continue;
+                    const scale = Math.min(1, 160 / model.cellWidth, 90 / model.cellHeight);
+                    const width = Math.max(1, Math.round(model.cellWidth * scale)), height = Math.max(1, Math.round(model.cellHeight * scale));
+                    const ctx = getCanvas(width, height).getContext('2d');
+                    ctx.drawImage(image, pos.col * model.cellWidth, pos.row * model.cellHeight, model.cellWidth, model.cellHeight, 0, 0, width, height);
+                    return ctx.getImageData(0, 0, width, height);
+                }
+                finally {
+                    ImageCacheMap.release(src, entry);
+                }
+            }
+            return null;
+        };
         const currentTime = ({ id, currentTime }) => {
             const item = items[id];
             if (!item) {
@@ -739,6 +769,8 @@ const StoryboardWorker = (() => {
         };
         self.onmessage = async ({ command, params }) => {
             switch (command) {
+                case 'readCachedCell':
+                    return readCachedCell(params);
                 case 'createThumbnail':
                     return createView(params, 'thumbnail');
                 case 'createBoard':
@@ -897,6 +929,8 @@ const StoryboardWorker = (() => {
     };
     return {
         initWorker,
+        readCachedCell: (videoId, time) => worker ?
+            worker.post({ command: 'readCachedCell', params: { videoId, time } }) : Promise.resolve(null),
         createThumbnail: (args) => createView(args, 'thumbnail'),
         createBoard: (args) => createView(args, 'board')
     };

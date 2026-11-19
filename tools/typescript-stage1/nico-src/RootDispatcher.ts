@@ -22,6 +22,7 @@ declare const VideoSharePanel: {
   open(info: NonNullable<ZenzaRootPlayerState['videoInfo']>, position: number, getCurrentVideo: () => HTMLVideoElement | null,
     context: {config: import('./shared-types/ZenzaConfig').ZenzaConfig; getViewModel: () => unknown;
       getCurrentFileSource: (video: HTMLVideoElement) => string | Blob | undefined;
+      clipSession: number;
       getThumbnail: (host: HTMLElement, seconds: number) => (() => void) | undefined;
       seekCurrentVideo: (video: HTMLVideoElement, seconds: number) => boolean}): void;
   close(): void;
@@ -33,9 +34,11 @@ const RootDispatcher = (() => {
   let playerState: ZenzaRootPlayerState;
   let lifetime = 0;
   let closeShare: (() => void) | undefined;
+  let clipSource: {watchId:string;board:unknown;draw:(host:HTMLElement,time:number)=>()=>void}|undefined;
   class RootDispatcher {
     static initialize(dialog: ZenzaRootPlayerPort) {
       player = dialog;
+      clipSource = undefined;
       lifetime++;
       playerState = ZenzaWatch.state.player;
       config = PlayerConfig.getInstance(config);
@@ -52,11 +55,12 @@ const RootDispatcher = (() => {
         return undefined;
       });
       player.on('open', () => {
-        if (player === dialog) { lifetime++; closeShare?.(); }
+        if (player === dialog) { lifetime++; clipSource=undefined; closeShare?.(); }
       });
       player.on('close', () => {
         if (player !== dialog) { return; }
         lifetime++;
+        clipSource=undefined;
         closeShare?.();
         // Task712: the video dialog is gone, so its *native* PiP must also
         // close. Stopping the comment-PiP session alone does not close it.
@@ -171,6 +175,7 @@ const RootDispatcher = (() => {
             return frame instanceof HTMLVideoElement ? frame : null;
           };
           VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
+            clipSession:session,
             config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
             getCurrentFileSource(video) {
               // HLS wrappers display a different, MediaSource-backed element.
@@ -180,7 +185,12 @@ const RootDispatcher = (() => {
             },
             getThumbnail(host, seconds) {
               if (!currentPlayer() || !info.watchId) { return undefined; }
-              return player._view?.videoControlBar?.storyboard?.createSavedPreview(host, info.watchId, seconds);
+              const board=player._view?.videoControlBar?.storyboard;
+              if (!board) return undefined;
+              if (!clipSource || clipSource.board!==board || clipSource.watchId!==info.watchId) {
+                clipSource={board,watchId:info.watchId,draw:board.createClipPreviewSource(info.watchId)};
+              }
+              return clipSource.draw(host,seconds);
             },
             seekCurrentVideo(video, seconds) {
               const displayed = currentPlayer()?.drawableVideoElement;

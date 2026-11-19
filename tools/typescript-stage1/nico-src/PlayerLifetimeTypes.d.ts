@@ -50,7 +50,7 @@ export type ZenzaPlaylistLoadOwner = Readonly<{
 /** Only the player capabilities used by global command routing. */
 export interface ZenzaRootPlayerPort {
   readonly _view?: {readonly videoControlBar?: {readonly storyboard?: {
-    createSavedPreview(host: HTMLElement, videoId: string, seconds: number): () => void;
+    createClipPreviewSource(videoId: string): (host: HTMLElement, seconds: number) => () => void;
   }}};
   readonly watchId: string | null | undefined;
   readonly currentTime: number;

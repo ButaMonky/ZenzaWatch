@@ -210,7 +210,7 @@ const VideoSharePanel = (() => {
       if (view === 'local' && !mounted.has(view)) {
         mounted.set(view, ShareLocalClip.mount(find('[data-clip-editor]'), {
           title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
-          getThumbnail:playerContext?.getThumbnail, onSelectionChange:showSelection,
+          getThumbnail:playerContext?.getThumbnail, clipSession:playerContext?.clipSession, onSelectionChange:showSelection,
           getCurrentFile(video, signal) {
             const src = playerContext?.getCurrentFileSource?.(video);
             if (!src) return Promise.resolve(null);

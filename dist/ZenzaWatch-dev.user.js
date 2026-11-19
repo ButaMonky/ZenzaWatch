@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.471-task1094
+// @version        2.7.472-task1095
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 00:26Z 4b944ee0
+// build: 2026-11-19 01:28Z dba390dc
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1743,7 +1743,11 @@ const RequestDiagnostics = (() => {
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
 				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
 				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
-				'nicoad-end': '動画の最後のニコニ広告'
+				'nicoad-end': '動画の最後のニコニ広告',
+				'clip-library': 'クリップ変換ライブラリ',
+				'clip-permission': 'クリップ投稿の利用確認', 'clip-license': 'クリップの音声利用確認',
+				'clip-create': 'クリップの作成', 'clip-status': 'クリップの生成状況',
+				'clip-post': 'クリップのX投稿', 'clip-post-status': 'クリップのX投稿状況', 'clip-delete': 'クリップの削除'
 		};
 		const modules = {
 				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'nico-src/CommentReadAdapter.ts',
@@ -1755,7 +1759,11 @@ const RequestDiagnostics = (() => {
 				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
 				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
 				'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
-				'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts'
+				'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
+				'clip-library': 'src/ShareFastClip.js',
+				'clip-permission': 'src/ShareOfficialClip.js', 'clip-license': 'src/ShareOfficialClip.js',
+				'clip-create': 'src/ShareOfficialClip.js', 'clip-status': 'src/ShareOfficialClip.js',
+				'clip-post': 'src/ShareOfficialClip.js', 'clip-post-status': 'src/ShareOfficialClip.js', 'clip-delete': 'src/ShareOfficialClip.js'
 		};
 		const moduleFor = (operation) => modules[operation] || 'nico-src/RequestDiagnostics.ts';
 		const fieldName = (value) => {
@@ -1783,7 +1791,8 @@ const RequestDiagnostics = (() => {
 				(failure.reason === 'http' && [400, 410, 422].includes(Number(failure.statusCode))) ||
 				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
 		const noteSuspect = (operation, key, failure, now) => {
-				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '');
+				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '') +
+						(operation.startsWith('clip-') ? '|' + (failure.missing || '') : '');
 				const seen = suspects.get(group) || new Map();
 				seen.set(key, now);
 				for (const [k, at] of seen) {
@@ -1836,8 +1845,15 @@ const RequestDiagnostics = (() => {
 						const where = missingFromMessage(e.message);
 						return { reason: 'script', errorName: String(e.name), ...(where ? { missing: where } : {}) };
 				}
+				if (e.kind === 'integrity')
+						return { reason: 'integrity' };
+				if (e.kind === 'module-load')
+						return { reason: 'module-load' };
 				if (e.reason === 'session-closed') {
 						return { reason: 'session-closed' };
+				}
+				if (e.kind === 'service') {
+						return { reason: 'service' };
 				}
 				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
 						return { reason: 'timeout', ...fields };
@@ -1903,10 +1919,11 @@ const RequestDiagnostics = (() => {
 										}
 								}
 								const reasonLabels = {
+										integrity: '配布ファイルの照合に失敗しました', 'module-load': '変換ライブラリを読み込めません',
 										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
 										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
 										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です',
-										script: 'プログラムの不具合（スクリプトエラー）'
+										script: 'プログラムの不具合（スクリプトエラー）', service: 'サービスで処理に失敗しました'
 								};
 								const module = moduleFor(operation);
 								if (outcome === 'failed' && suspectReason(failure)) {
@@ -1951,6 +1968,10 @@ const RequestDiagnostics = (() => {
 								return null;
 						}
 						const p = url.pathname;
+						if (url.hostname === 'nvapi.nicovideo.jp' &&
+								/^\/v1\/(?:videos\/[^/]+\/(?:tweet-possibility|license|clips)|clips\/[^/]+(?:\/x-post)?)\/?$/.test(p)) {
+								return null;
+						}
 						if (url.hostname === 'sug.search.nicovideo.jp') {
 								return 'tag-suggest';
 						}
@@ -2056,7 +2077,8 @@ const RequestDiagnostics = (() => {
 				return value;
 		};
 		const setSink = (next) => { sink = next; };
-		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage };
+		const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor };
 })();
   const monkey = async (_product, START_PAGE_QUERY, externalTrial = null) /*** (｀・ω・´)9m ***/ => {
     const {displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged} = externalTrial || {};
@@ -2089,10 +2111,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.471-task1094';
+    var VER = '2.7.472-task1095';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 00:26Z 4b944ee0';
+    var BUILD = '2026-11-19 01:28Z dba390dc';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -29577,6 +29599,33 @@ const StoryboardWorker = (() => {
 						await item.setInfo(info);
 						return { status: 'ok' };
 				};
+				const readCachedCell = async ({ videoId, time }) => {
+						for (const view of Object.values(items)) {
+								const model = view.info;
+								if (!model?.isAvailable || model.rawData.watchId !== videoId || !model.cellCount || time > model.duration)
+										continue;
+								const pos = model.getThumbnailPosition(time * 1000);
+								const src = pos.url;
+								const entry = ImageCacheMap.map.get(src);
+								if (!entry)
+										continue;
+								const pending = ImageCacheMap.get(src);
+								try {
+										const image = await pending;
+										if (!image || image === BLANK_IMG)
+												continue;
+										const scale = Math.min(1, 160 / model.cellWidth, 90 / model.cellHeight);
+										const width = Math.max(1, Math.round(model.cellWidth * scale)), height = Math.max(1, Math.round(model.cellHeight * scale));
+										const ctx = getCanvas(width, height).getContext('2d');
+										ctx.drawImage(image, pos.col * model.cellWidth, pos.row * model.cellHeight, model.cellWidth, model.cellHeight, 0, 0, width, height);
+										return ctx.getImageData(0, 0, width, height);
+								}
+								finally {
+										ImageCacheMap.release(src, entry);
+								}
+						}
+						return null;
+				};
 				const currentTime = ({ id, currentTime }) => {
 						const item = items[id];
 						if (!item) {
@@ -29644,6 +29693,8 @@ const StoryboardWorker = (() => {
 				};
 				self.onmessage = async ({ command, params }) => {
 						switch (command) {
+								case 'readCachedCell':
+										return readCachedCell(params);
 								case 'createThumbnail':
 										return createView(params, 'thumbnail');
 								case 'createBoard':
@@ -29799,6 +29850,8 @@ const StoryboardWorker = (() => {
 		};
 		return {
 				initWorker,
+				readCachedCell: (videoId, time) => worker ?
+						worker.post({ command: 'readCachedCell', params: { videoId, time } }) : Promise.resolve(null),
 				createThumbnail: (args) => createView(args, 'thumbnail'),
 				createBoard: (args) => createView(args, 'board')
 		};
@@ -29997,6 +30050,204 @@ class Storyboard extends Emitter {
 								return result.buffer;
 						})
 				});
+		}
+		createClipPreviewSource(videoId) {
+				const sheets = new Map();
+				const seeds = new Map();
+				const pendingPages = new Map();
+				const sheetKey = (raw, page) => JSON.stringify([raw.watchId, raw.format, raw.storyboard.images[page].url,
+						raw.storyboard.rows, raw.storyboard.columns, raw.storyboard.thumbnail.width, raw.storyboard.thumbnail.height]);
+				let modelGeneration, decodedBytes = 0;
+				const getPage = async (id, format, time) => {
+						const key = id + '_' + format;
+						const read = (sec) => StoryboardCacheDb.getPreview(key, sec).catch(() => null);
+						let seed = seeds.get(key);
+						if (!seed) {
+								seed = { time, raw: read(time) };
+								seeds.set(key, seed);
+						}
+						const raw = await seed.raw;
+						if (raw?.watchId !== id || raw.format !== format)
+								return null;
+						const model = new StoryboardInfoModel(raw);
+						if (!model.isAvailable || !model.cellCount || time > model.duration)
+								return null;
+						const page = model.getThumbnailPosition(time * 1000).page;
+						if (page === model.getThumbnailPosition(seed.time * 1000).page || sheets.has(sheetKey(raw, page)))
+								return raw;
+						const pageKey = key + ':' + page;
+						let pending = pendingPages.get(pageKey);
+						if (!pending) {
+								pending = read(time);
+								pendingPages.set(pageKey, pending);
+								void pending.finally(() => { if (pendingPages.get(pageKey) === pending)
+										pendingPages.delete(pageKey); });
+						}
+						return pending;
+				};
+				const acquireSheet = (doc, raw, model, page, allowUrl) => {
+						const key = sheetKey(raw, page), item = raw.storyboard.images[page];
+						let sheet = sheets.get(key);
+						if (!sheet) {
+								const buffer = Object.prototype.toString.call(item.buffer) === '[object ArrayBuffer]' && item.buffer.byteLength > 0;
+								if (!buffer && (!allowUrl || !/^(?:https?:)?\/\//.test(item.url)))
+										return null;
+								const size = model.pageWidth * model.pageHeight * 4, budget = 32 * 1024 * 1024;
+								if (!(size > 0 && size <= budget))
+										return null;
+								for (const [oldKey, old] of sheets) {
+										if (decodedBytes + size <= budget)
+												break;
+										if (!old.refs && old.ready) {
+												sheets.delete(oldKey);
+												decodedBytes -= old.size;
+										}
+								}
+								if (decodedBytes + size > budget)
+										return null;
+								const image = doc.createElement('img');
+								image.crossOrigin = 'anonymous';
+								const blobUrl = buffer ? URL.createObjectURL(new Blob([item.buffer])) : null;
+								let done;
+								const promise = new Promise(resolve => { done = resolve; });
+								const entry = { image, promise, size, refs: 0, ready: false, cancel: () => settle(false) };
+								const settle = (ok) => {
+										if (entry.ready)
+												return;
+										entry.ready = true;
+										image.onload = null;
+										image.onerror = null;
+										if (blobUrl)
+												URL.revokeObjectURL(blobUrl);
+										if (!ok) {
+												image.removeAttribute('src');
+												if (sheets.get(key) === entry) {
+														sheets.delete(key);
+														decodedBytes -= size;
+												}
+										}
+										done(ok ? image : null);
+								};
+								image.onload = () => settle(true);
+								image.onerror = () => settle(false);
+								sheets.set(key, entry);
+								decodedBytes += size;
+								sheet = entry;
+								image.src = blobUrl || item.url;
+						}
+						sheet.refs++;
+						const entry = sheet;
+						let released = false;
+						return { promise: entry.promise, release() {
+										if (released)
+												return;
+										released = true;
+										entry.refs--;
+										if (!entry.refs && !entry.ready)
+												queueMicrotask(() => { if (!entry.refs && !entry.ready)
+														entry.cancel(); });
+								} };
+				};
+				return (host, time) => {
+						let revision = 0, disposed = false, release;
+						const state = (label, loading = false) => {
+								host.setAttribute('role', 'img');
+								host.setAttribute('aria-label', label);
+								host.setAttribute('aria-busy', String(loading));
+								host.textContent = label;
+						};
+						const draw = async () => {
+								const seq = ++revision;
+								const current = () => !disposed && revision === seq && this.config?.props?.enableStoryboard !== false;
+								release?.();
+								release = undefined;
+								state('画像なし');
+								if (!current() || !videoId || !Number.isFinite(time) || time < 0)
+										return;
+								if (this._watchId && this._watchId !== videoId && this._currentVideoWatchId !== videoId)
+										return;
+								const owns = this._watchId === videoId || this._currentVideoWatchId === videoId;
+								const live = owns && this.model?.isAvailable ? this.model.rawData : null;
+								const id = live && [videoId, this._watchId, this._currentVideoWatchId].includes(live.watchId) ? live.watchId : videoId;
+								const owned = live?.watchId === id ? live : null;
+								if (modelGeneration !== owned) {
+										modelGeneration = owned;
+										seeds.clear();
+										pendingPages.clear();
+								}
+								state('読み込み中', true);
+								const canvas = host.ownerDocument.createElement('canvas');
+								canvas.style.cssText = 'display:block;width:100%;height:100%;object-fit:cover';
+								const ready = () => { state('指定した時刻の場面画像'); host.replaceChildren(canvas); };
+								try {
+										const pixels = await StoryboardWorker.readCachedCell(id, time).catch(() => null);
+										if (!current())
+												return;
+										if (pixels) {
+												canvas.width = pixels.width;
+												canvas.height = pixels.height;
+												canvas.getContext('2d').putImageData(pixels, 0, 0);
+												ready();
+												return;
+										}
+										const paint = async (raw, allowUrl) => {
+												if (raw?.watchId !== id || !current())
+														return false;
+												const model = new StoryboardInfoModel(raw);
+												if (!model.isAvailable || !model.cellCount || time > model.duration)
+														return false;
+												const pos = model.getThumbnailPosition(time * 1000);
+												const lease = acquireSheet(host.ownerDocument, raw, model, pos.page, allowUrl);
+												if (!lease)
+														return false;
+												release = lease.release;
+												const image = await lease.promise;
+												lease.release();
+												if (!image || !current())
+														return false;
+												const scale = Math.min(1, 160 / model.cellWidth, 90 / model.cellHeight);
+												canvas.width = Math.max(1, Math.round(model.cellWidth * scale));
+												canvas.height = Math.max(1, Math.round(model.cellHeight * scale));
+												canvas.getContext('2d').drawImage(image, pos.col * model.cellWidth, pos.row * model.cellHeight, model.cellWidth, model.cellHeight, 0, 0, canvas.width, canvas.height);
+												ready();
+												return true;
+										};
+										if (owned && await paint(owned, false))
+												return;
+										for (const format of owned ? [owned.format] : ['domand', 'dmc']) {
+												if (!current())
+														return;
+												if (await paint(await getPage(id, format, time), false))
+														return;
+										}
+										if (owned && await paint(owned, true))
+												return;
+								}
+								finally {
+										const loading = this._requestId != null && this._loadingWatchId === id && !this.model?.isAvailable;
+										if (current() && !loading && host.getAttribute('aria-busy') === 'true')
+												state('画像なし');
+								}
+						};
+						const update = () => { void draw().catch(() => { }); };
+						const reset = () => { revision++; release?.(); release = undefined; state('画像なし'); };
+						this.on('loading', update);
+						this.on('update', update);
+						this.on('reset', reset);
+						update();
+						return () => {
+								if (disposed)
+										return;
+								disposed = true;
+								revision++;
+								release?.();
+								this.off('loading', update);
+								this.off('update', update);
+								this.off('reset', reset);
+								host.setAttribute('aria-busy', 'false');
+								host.replaceChildren();
+						};
+				};
 		}
 		createSavedPreview(host, videoId, time) {
 				let disposed = false, revision = 0, releaseImage = null;
@@ -30256,6 +30507,7 @@ class Storyboard extends Emitter {
 				this._watchId = watchId;
 				const resuestId = this._requestId = Math.random();
 				this._initializeStoryboard();
+				this.emit('loading', key);
 				const startedAt = performance.now();
 				this.loader.load(this.config.props.videoServerType, videoInfo)
 						.then(async (info) => {
@@ -53568,6 +53820,7 @@ const SavedVideoThumbnail = (() => {
 		return { create };
 })();
 // already required
+// already required
 const NotificationHistoryPanel = (() => {
 		const STYLE_ID = 'zenzaNotificationHistoryStyle';
 		const docks = new WeakMap();
@@ -53625,15 +53878,16 @@ const NotificationHistoryPanel = (() => {
 				}
 				return node;
 		};
-		const featureLabels = {
-				advertising: 'ニコニ広告', 'nicoad-end': '動画の最後のニコニ広告', search: '検索', 'tag-suggest': 'タグ候補', tags: 'タグ',
-				'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー', 'video-info': '動画情報',
-				'video-session': '再生セッション', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-				'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
-				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除', 'script-error': 'スクリプトエラー', 'external-playback': '外部サイトからの再生',
-				'session-state': '再生セッションの維持', storyboard: '場面画像の情報', mylist: 'マイリスト', playlist: 'プレイリスト',
-				like: 'いいね', 'tag-key': 'タグ編集キー', 'nico-api': 'ニコニコAPI'
+		const featureLabel = (entry) => {
+				const operation = String(entry.details?.operation || entry.source);
+				if (operation === 'script-error')
+						return 'スクリプトエラー';
+				if (operation === 'external-playback')
+						return '外部サイトからの再生';
+				return (typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation)) ||
+						labels[entry.category] || '通知';
 		};
+		const modulePath = (module) => module.startsWith('nico-src/') ? 'tools/typescript-stage1/' + module : module;
 		const formatTime = (value) => typeof value === 'number' && Number.isFinite(value) &&
 				Math.abs(value) <= 8640000000000000 ? new Date(value).toLocaleString('ja-JP') : '記録なし（旧版など）';
 		const stateLabel = (entry) => entry.details?.reason === 'spec-change' ? '仕様変更の疑い' :
@@ -53740,10 +53994,10 @@ const NotificationHistoryPanel = (() => {
 						back.addEventListener('click', () => { returnToList(); schedule(); });
 						detailNode.append(back, element('p', 'znh-tag', stateLabel(entry)), element('h3', '', entry.message), element('p', '', description(entry)));
 						const pairs = [
-								['機能', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'],
+								['機能', featureLabel(entry)],
 								['段階', { transport: '通信', response: '応答の確認', session: '処理' }[String(entry.details?.phase)] || '記録なし'],
 								['発生回数', typeof entry.details?.count === 'number' ? entry.details.count + '回' : '1回'],
-								...(entry.details?.module ? [['修正箇所の目安', 'tools/typescript-stage1/' + String(entry.details.module)]] : []),
+								...(entry.details?.module ? [['修正箇所の目安', modulePath(String(entry.details.module))]] : []),
 								...(entry.details?.missing ? [['読めなかった項目', String(entry.details.missing)]] : []),
 								...(entry.details?.errorName ? [['エラーの種類', String(entry.details.errorName)]] : []),
 								...(entry.details?.where ? [['発生箇所', String(entry.details.where)]] : []),
@@ -53873,7 +54127,7 @@ const NotificationHistoryPanel = (() => {
 								const item = element('article', 'znh-entry');
 								item.dataset.level = entry.level;
 								const head = element('div', 'znh-head');
-								head.append(element('span', 'znh-tag', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'), element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP')));
+								head.append(element('span', 'znh-tag', featureLabel(entry)), element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP')));
 								if (entry.videoId) {
 										head.append(element('span', 'znh-date', entry.videoId));
 								}
@@ -62308,11 +62562,48 @@ const PipPageThumbnail = (() => {
 })();
 // already required
 // already required
+// already required
 const ShareOfficialClip = (() => {
 	const base = 'https://nvapi.nicovideo.jp/v1';
 	const pollInterval = 5000;
 	const recent = new Map();
 	const pollLimit = 30 * 60 * 1000;
+	const ignored = {reason:'cancelled'};
+	const schema = missing => ({kind:'schema', missing});
+	const postFailures = {
+		X_TOKEN_INVALID:'X アカウントの連携を公式ページで確認してください。',
+		X_TOO_MANY_REQUESTS:'X の利用上限に達しました。しばらく時間をおいてください。',
+		VIDEO_CLIP_NOT_FOUND:'公式サービスでクリップが見つかりません。'
+	};
+	function responseIssue(operation, data, expired) {
+		if (operation === 'clip-permission') {
+			if (typeof data?.isLogin !== 'boolean') return schema('data.isLogin');
+			if (!data.isLogin || data.isClipTweetAllowedVideo === false || data.isClipTweetAllowed === false) return;
+			if (typeof data.twitterLinkage?.isLinked !== 'boolean') return schema('data.twitterLinkage.isLinked');
+			if (data.twitterLinkage.isLinked && typeof data.isClipTweetAllowed !== 'boolean') return schema('data.isClipTweetAllowed');
+		} else if (operation === 'clip-license' && typeof data?.isUseLicensedMusic !== 'boolean') {
+			return schema('data.isUseLicensedMusic');
+		} else if (operation === 'clip-create') {
+			if (!(typeof data?.clipId === 'string' && data.clipId.trim()) && !(Number.isSafeInteger(data?.clipId) && data.clipId > 0)) return schema('data.clipId');
+		} else if (operation === 'clip-status' || operation === 'clip-post-status') {
+			const posting = operation === 'clip-post-status';
+			if (typeof data?.status !== 'string' || !data.status.trim()) return schema('data.status');
+			if (data.status === 'DONE') {
+				if (!posting) {
+					try { if (new URL(data.clipUri).protocol !== 'https:') return schema('data.clipUri'); }
+					catch (_) { return schema('data.clipUri'); }
+				}
+			} else if (data.status === 'FAILED' || data.status === 'ERROR') {
+				return posting && Object.hasOwn(postFailures, data.failureReason) ? ignored : {kind:'service'};
+			} else {
+				const pending = posting ? ['WAITING','PENDING','PROCESSING','POSTING'] : ['WAITING','GENERATING'];
+				if (!pending.includes(data.status)) {
+					return posting && !expired ? ignored : schema('data.status');
+				}
+				return expired ? {kind:'timeout'} : ignored;
+			}
+		}
+	}
 	function mount(container, {info, startTime, endTime, autoPreview = false, text, officialUrl, onUseLocal}) {
 		const win = container.ownerDocument.defaultView;
 		const duration = Number(info.duration);
@@ -62438,29 +62729,49 @@ const ShareOfficialClip = (() => {
 			} catch (_) { /* An unavailable or old record cannot be resumed. */ }
 			return null;
 		}
-		async function request(path, method = 'GET', fields) {
+		const beginDiagnostic = operation => typeof RequestDiagnostics === 'undefined' ? null :
+			RequestDiagnostics.begin(operation, videoId, 'response', () => !lifetime.signal.aborted);
+		async function request(operation, path, method = 'GET', fields) {
 			const abort = new win.AbortController();
 			const stop = () => abort.abort();
 			if (lifetime.signal.aborted) throw new Error('closed');
 			lifetime.signal.addEventListener('abort', stop, {once:true});
-			const timeout = win.setTimeout(stop, 20000);
+			const ticket = beginDiagnostic(operation);
+			let timedOut = false, diagnostic = {kind:'network'};
+			const timeout = win.setTimeout(() => { timedOut = true; stop(); }, 20000);
 			try {
 				const headers = {'Accept':'application/json', 'X-Frontend-Id':'6', 'X-Frontend-Version':'0'};
 				if (method !== 'GET') headers['X-Request-With'] = win.location.origin;
 				const options = {method, headers, credentials:'include', cache:'no-store', signal:abort.signal};
 				if (fields) options.body = new win.URLSearchParams(fields);
 				const response = await win.fetch(base + path, options);
-				if (response.ok && response.status === 204 && (method === 'DELETE' || path.endsWith('/x-post') && method === 'POST')) {
+				if (abort.signal.aborted) throw new Error('interrupted');
+				if (response.ok && response.status === 204 && (operation === 'clip-delete' || operation === 'clip-post')) {
+					ticket?.success();
 					return;
 				}
-				const envelope = await response.json().catch(() => null);
+				let envelope;
+				try { envelope = await response.json(); }
+				catch (_) { if (response.ok) { diagnostic = schema('json'); throw new Error('invalid response'); } }
+				if (abort.signal.aborted) throw new Error('interrupted');
 				if (!response.ok || !Number.isInteger(envelope?.meta?.status) ||
 						envelope.meta.status < 200 || envelope.meta.status >= 300) {
-					const error = new Error(envelope?.meta?.errorCode || 'request failed');
+					const error = new Error(envelope?.meta?.errorCode === 'USER_LIMIT_EXCEEDED' ? 'USER_LIMIT_EXCEEDED' : 'request failed');
 					error.httpStatus = response.ok ? envelope?.meta?.status : response.status;
+					const statusCode = error.httpStatus;
+					if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) diagnostic = schema('meta.status');
+					else if ([401,403,404,429].includes(statusCode) || error.message === 'USER_LIMIT_EXCEEDED' ||
+							(operation === 'clip-post' && [400,422].includes(statusCode))) diagnostic = ignored;
+					else diagnostic = statusCode === 408 ? {kind:'timeout', statusCode} : {statusCode};
 					throw error;
 				}
+				const issue = responseIssue(operation, envelope.data, Date.now() >= deadline);
+				if (issue?.kind === 'schema') { diagnostic = issue; throw new Error('invalid response'); }
+				if (issue) ticket?.failure(issue); else ticket?.success();
 				return envelope.data;
+			} catch (error) {
+				ticket?.failure(timedOut ? {kind:'timeout'} : diagnostic);
+				throw error;
 			} finally {
 				win.clearTimeout(timeout);
 				lifetime.signal.removeEventListener('abort', stop);
@@ -62468,7 +62779,7 @@ const ShareOfficialClip = (() => {
 		}
 		function permissionMessage(data) {
 			if (!data || typeof data.isLogin !== 'boolean') return 'ニコニコの公式投稿を利用できるか確認できません。';
-			if (!data.isLogin && data.isClipTweetAllowedVideo === false) return 'ニコニコでは、この動画の公式クリップ投稿を利用できません。';
+			if (data.isClipTweetAllowedVideo === false) return 'ニコニコでは、この動画の公式クリップ投稿を利用できません。';
 			if (!data.isLogin) return '公式投稿にはニコニコへのログインとXアカウント連携が必要です。';
 			if (data.twitterLinkage?.isLinked !== true) return '公式投稿には、ニコニコの視聴ページでXアカウントの連携が必要です。';
 			if (data.isClipTweetAllowed !== true) return 'ニコニコでは、この動画またはアカウントの公式クリップ投稿を利用できません。';
@@ -62481,7 +62792,7 @@ const ShareOfficialClip = (() => {
 			}
 			state('checking', 'ニコニコに公式投稿の利用状況を確認しています…');
 			try {
-				const permission = await request(source + '/tweet-possibility');
+				const permission = await request('clip-permission', source + '/tweet-possibility');
 				if (lifetime.signal.aborted) return;
 				const reason = permissionMessage(permission);
 				if (reason) { state('denied', reason); return; }
@@ -62504,7 +62815,7 @@ const ShareOfficialClip = (() => {
 					}
 				} else state('edit', '');
 				let licensed;
-				try { licensed = (await request(source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
+				try { licensed = (await request('clip-license', source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
 				if (lifetime.signal.aborted) return;
 				const note = find('license');
 				note.hidden = licensed === false;
@@ -62520,20 +62831,18 @@ const ShareOfficialClip = (() => {
 			if (task === 'post') state('postUnknown', '投稿結果を確認できません。「状態を再確認」で結果を確認してください。');
 			else state('clipUnknown', '生成状況を確認できません。「状態を再確認」で確認してください。');
 		}
-		const postFailures = {
-			X_TOKEN_INVALID:'X アカウントの連携を公式ページで確認してください。',
-			X_TOO_MANY_REQUESTS:'X の利用上限に達しました。しばらく時間をおいてください。',
-			VIDEO_CLIP_NOT_FOUND:'公式サービスでクリップが見つかりません。'
-		};
 		async function poll() {
 			if (lifetime.signal.aborted) return;
 			const posting = task === 'post';
 			state(posting ? 'posting' : 'generating', posting ? 'X への投稿結果を確認しています…' : 'クリップを生成しています…');
 			try {
-				const result = await request(clipPath() + (posting ? '/x-post' : ''));
+				const result = await request(posting ? 'clip-post-status' : 'clip-status', clipPath() + (posting ? '/x-post' : ''));
 				if (lifetime.signal.aborted) return;
 				if (result?.status === 'DONE') {
-					if (posting) { remember('posted'); state('posted', 'X にクリップをポストしました。'); return; }
+					if (posting) {
+						beginDiagnostic('clip-post')?.success();
+						remember('posted'); state('posted', 'X にクリップをポストしました。'); return;
+					}
 					const uri = new URL(result.clipUri);
 					if (uri.protocol !== 'https:') throw new Error('preview');
 					preview.src = uri.href;
@@ -62542,7 +62851,7 @@ const ShareOfficialClip = (() => {
 					return;
 				}
 				if (result?.status === 'FAILED' || result?.status === 'ERROR') {
-					if (posting) state('postFailed', postFailures[result.failureReason] || 'X への投稿に失敗しました。');
+					if (posting) state('postFailed', Object.hasOwn(postFailures, result.failureReason) ? postFailures[result.failureReason] : 'X への投稿に失敗しました。');
 					else state('clipError', 'クリップの生成に失敗しました。');
 					return;
 				}
@@ -62555,11 +62864,10 @@ const ShareOfficialClip = (() => {
 			if (phase !== 'edit' || !validRange()) return;
 			state('creating', 'クリップの作成をリクエストしています…');
 			try {
-				const result = await request(source + '/clips', 'POST', {
+				const result = await request('clip-create', source + '/clips', 'POST', {
 					startTime:String(Math.round(start.valueAsNumber * 1000)), endTime:String(Math.round(end.valueAsNumber * 1000))
 				});
 				if (lifetime.signal.aborted) return;
-				if (!result?.clipId) throw new Error('missing clip');
 				clipId = result.clipId;
 				remember('clip');
 				task = 'clip';
@@ -62577,7 +62885,7 @@ const ShareOfficialClip = (() => {
 			const body = draft.value;
 			state('posting', 'ニコニコで投稿先アカウントを確認しています…');
 			try {
-				const permission = await request(source + '/tweet-possibility');
+				const permission = await request('clip-permission', source + '/tweet-possibility');
 				if (lifetime.signal.aborted) return;
 				const denied = permissionMessage(permission);
 				if (denied || account !== (permission.twitterLinkage.screenName || '')) {
@@ -62592,7 +62900,7 @@ const ShareOfficialClip = (() => {
 			remember('post');
 			deadline = Date.now() + pollLimit;
 			state('posting', 'X にクリップを送信しています…');
-			try { await request(clipPath() + '/x-post', 'POST', {text:body}); }
+			try { await request('clip-post', clipPath() + '/x-post', 'POST', {text:body}); }
 			catch (error) {
 				if (lifetime.signal.aborted) return;
 				if (error.httpStatus >= 400 && error.httpStatus < 500 && error.httpStatus !== 408 && error.httpStatus !== 409) {
@@ -62628,7 +62936,7 @@ const ShareOfficialClip = (() => {
 			const previous = phase;
 			state('discarding', 'クリップを削除しています…');
 			try {
-				await request(clipPath(), 'DELETE');
+				await request('clip-delete', clipPath(), 'DELETE');
 				if (lifetime.signal.aborted) return;
 				startAnother();
 			} catch (_) { state(previous, '削除結果を確認できません。公式の視聴ページで確認してください。'); }
@@ -62646,6 +62954,23 @@ const ShareOfficialClip = (() => {
 })();
 const ShareClipTimeline = (() => {
 	const previewInterval = 1000 / 15;
+	const sessionFrames = new WeakMap();
+	function framesFor(video, session) {
+		if (session == null) return new Map();
+		const url = video.currentSrc, object = video.srcObject;
+		if (object && typeof WeakRef !== 'function') return new Map();
+		const cached = sessionFrames.get(video);
+		if (cached && cached.session === session && cached.url === url && (cached.object?.deref() || null) === object) return cached.frames;
+		const entry = {session,url,object:object ? new WeakRef(object) : null, frames:new Map()};
+		sessionFrames.set(video,entry);
+		return entry.frames;
+	}
+	function displayFrame(frame) {
+		const canvas = document.createElement('canvas');
+		canvas.width = frame.width; canvas.height = frame.height;
+		canvas.getContext('2d').drawImage(frame,0,0);
+		return canvas;
+	}
 	const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 	const clock = (time, fine = false) => {
 		const value = Math.max(0, Math.round(time * (fine ? 10 : 1)));
@@ -62713,7 +63038,7 @@ const ShareClipTimeline = (() => {
 			} catch (error) { done(error); }
 		});
 	}
-	function mount(container, {startInput, endInput, getSource, getThumbnail, seekSource, getPreviewRenderer,
+	function mount(container, {startInput, endInput, getSource, getThumbnail, seekSource, getPreviewRenderer, clipSession,
 		isLocalSource = video => video.matches('[data-role=source]'), maxLength = Infinity}) {
 		const root = document.createElement('div');
 		root.className = 'zwClipTimeline';
@@ -62730,7 +63055,8 @@ const ShareClipTimeline = (() => {
 		let source, sourceUrl, sourceObject, decoder, thumbVideo, renderer, session, thumbnails, releaseScene;
 		let windowStart = 0, span = 0, duration = 0, time = 0, drag, disposed = false, writing = false;
 		let thumbKey, rendererError, dragTimer, restoring, thumbReport = '';
-		const thumbReleases = new Map(), capturedFrames = new Map();
+		const thumbReleases = new Map();
+		let capturedFrames = new Map();
 		const on = (node, event, fn) => node.addEventListener(event, fn, {signal:listeners.signal});
 		const sameSource = () => source && source === getSource() && source.currentSrc === sourceUrl && source.srcObject === sourceObject;
 		const locked = () => disposed || startInput.disabled || endInput.disabled || !sameSource();
@@ -62920,8 +63246,8 @@ const ShareClipTimeline = (() => {
 						const tile = tileFrom(media);
 						const release = thumbReleases.get(cell);
 						if (release) { release(); thumbReleases.delete(cell); }
-						cell.replaceChildren(tile);
-						capturedFrames.set(sec, tile);
+						cell.replaceChildren(displayFrame(tile));
+						capturedFrames.set(sec,tile);
 						if (capturedFrames.size > 48) capturedFrames.delete(capturedFrames.keys().next().value);
 						failures = 0;
 						updateThumbHint();
@@ -62970,7 +63296,7 @@ const ShareClipTimeline = (() => {
 			if (!decoder) {
 				for (const {cell, sec} of cells) {
 					const tile = capturedFrames.get(sec);
-					if (tile) { cell.replaceChildren(tile); continue; }
+					if (tile) { cell.replaceChildren(displayFrame(tile)); continue; }
 					try { const release = getThumbnail?.(cell, sec); if (typeof release === 'function') thumbReleases.set(cell, release); }
 					catch (_) { cell.textContent = '画像なし'; }
 				}
@@ -63033,10 +63359,11 @@ const ShareClipTimeline = (() => {
 				stopPreview(); forgetRestore(); clearThumbs(); clearScene();
 				unload(decoder); unload(thumbVideo); decoder = thumbVideo = null;
 				renderer?.dispose(); renderer = null;
-				capturedFrames.clear(); thumbReport = ''; thumbKey = null; drag = null;
+				capturedFrames = new Map(); thumbReport = ''; thumbKey = null; drag = null;
 				source = selected; sourceUrl = selected?.currentSrc; sourceObject = selected?.srcObject;
 				if (!available) { duration = 0; return; }
 				if (isLocalSource(source)) { decoder = newDecoder(); thumbVideo = newDecoder(); }
+				else capturedFrames = framesFor(source,clipSession);
 				duration = source.duration;
 				const [a,b] = values();
 				span = Math.min(duration, Math.max(Math.min(120, maxLength), (b-a) || 0));
@@ -63182,11 +63509,12 @@ const ShareClipTimeline = (() => {
 			if (disposed) return;
 			disposed = true;
 			stopPreview(); forgetRestore(); clearThumbs(); clearScene(); thumbObserver.disconnect(); listeners.abort();
-			renderer?.dispose(); capturedFrames.clear(); unload(decoder); unload(thumbVideo); root.remove();
+			renderer?.dispose(); capturedFrames = new Map(); unload(decoder); unload(thumbVideo); root.remove();
 		}};
 	}
 	return {mount};
 })();
+// already required
 const ShareFastClip = (() => {
 	const moduleUrl = 'https://cdn.jsdelivr.net/npm/mediabunny@1.66.1/dist/bundles/mediabunny.min.mjs';
 	const digest = '19062c195ea4d32bc4eefd3a7254ae0e8a901bc0607ac3a0174013e165980498';
@@ -63194,15 +63522,30 @@ const ShareFastClip = (() => {
 	async function load() {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 10000);
+		const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+			RequestDiagnostics.begin('clip-library', 'mediabunny', 'response');
+		let failure = {kind:'network'};
 		let url;
 		try {
 			const response = await fetch(moduleUrl, {credentials:'omit', referrerPolicy:'no-referrer', signal:controller.signal});
-			if (!response.ok) throw Error('変換ライブラリを取得できません。');
+			if (!response.ok) {
+				failure = {status:response.status};
+				throw Error('変換ライブラリを取得できません。');
+			}
 			const bytes = await response.arrayBuffer();
+			failure = {kind:'module-load'};
 			const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-			if (Array.from(hash, n => n.toString(16).padStart(2, '0')).join('') !== digest) throw Error('変換ライブラリを検証できません。');
+			if (Array.from(hash, n => n.toString(16).padStart(2, '0')).join('') !== digest) {
+				failure = {kind:'integrity'};
+				throw Error('変換ライブラリを検証できません。');
+			}
 			url = URL.createObjectURL(new Blob([bytes], {type:'text/javascript'}));
-			return await import(url);
+			const module = await import(url);
+			diagnostic?.success();
+			return module;
+		} catch (error) {
+			diagnostic?.failure(controller.signal.aborted ? {kind:'timeout'} : failure);
+			throw error;
 		} finally {
 			clearTimeout(timeout);
 			if (url) URL.revokeObjectURL(url);
@@ -63269,7 +63612,7 @@ const ShareFastClip = (() => {
 })();
 const ShareLocalClip = {
 	mount(container, {title = '', startTime = 0, getCurrentVideo, seekCurrentVideo, getShareText,
-		createFrameRenderer, getThumbnail, onSelectionChange, getCurrentFile} = {}) {
+		createFrameRenderer, getThumbnail, clipSession, onSelectionChange, getCurrentFile} = {}) {
 		const root = document.createElement('section');
 		root.className = 'zenzaLocalClip';
 		root.innerHTML = `
@@ -63790,7 +64133,7 @@ const ShareLocalClip = {
 		timeline = ShareClipTimeline.mount(find('[data-role=timeline]'), {
 			startInput:start, endInput:end,
 			getSource:() => (source !== localVideo || sourceUrl) && currentSelection() ? source : null,
-			isLocalSource:video => video === localVideo,
+			isLocalSource:video => video === localVideo, clipSession,
 			getThumbnail:(host, seconds) => source !== localVideo && currentSelection() ? getThumbnail?.(host, seconds) : undefined,
 			seekSource:seconds => !job && currentSelection() && seek(seconds),
 			getPreviewRenderer:video => (comments.checked || effects.checked) && createFrameRenderer
@@ -64199,7 +64542,7 @@ const VideoSharePanel = (() => {
 			if (view === 'local' && !mounted.has(view)) {
 				mounted.set(view, ShareLocalClip.mount(find('[data-clip-editor]'), {
 					title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
-					getThumbnail:playerContext?.getThumbnail, onSelectionChange:showSelection,
+					getThumbnail:playerContext?.getThumbnail, clipSession:playerContext?.clipSession, onSelectionChange:showSelection,
 					getCurrentFile(video, signal) {
 						const src = playerContext?.getCurrentFileSource?.(video);
 						if (!src) return Promise.resolve(null);
@@ -64243,9 +64586,11 @@ const RootDispatcher = (() => {
 		let playerState;
 		let lifetime = 0;
 		let closeShare;
+		let clipSource;
 		class RootDispatcher {
 				static initialize(dialog) {
 						player = dialog;
+						clipSource = undefined;
 						lifetime++;
 						playerState = ZenzaWatch.state.player;
 						config = PlayerConfig.getInstance(config);
@@ -64266,6 +64611,7 @@ const RootDispatcher = (() => {
 						player.on('open', () => {
 								if (player === dialog) {
 										lifetime++;
+										clipSource = undefined;
 										closeShare?.();
 								}
 						});
@@ -64274,6 +64620,7 @@ const RootDispatcher = (() => {
 										return;
 								}
 								lifetime++;
+								clipSource = undefined;
 								closeShare?.();
 								const active = document.pictureInPictureElement;
 								const ownVideo = player?._nicoVideoPlayer?._videoPlayer?.videoElement;
@@ -64406,6 +64753,7 @@ const RootDispatcher = (() => {
 												return frame instanceof HTMLVideoElement ? frame : null;
 										};
 										VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
+												clipSession: session,
 												config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
 												getCurrentFileSource(video) {
 														const displayed = currentPlayer()?.drawableVideoElement;
@@ -64417,7 +64765,13 @@ const RootDispatcher = (() => {
 														if (!currentPlayer() || !info.watchId) {
 																return undefined;
 														}
-														return player._view?.videoControlBar?.storyboard?.createSavedPreview(host, info.watchId, seconds);
+														const board = player._view?.videoControlBar?.storyboard;
+														if (!board)
+																return undefined;
+														if (!clipSource || clipSource.board !== board || clipSource.watchId !== info.watchId) {
+																clipSource = { board, watchId: info.watchId, draw: board.createClipPreviewSource(info.watchId) };
+														}
+														return clipSource.draw(host, seconds);
 												},
 												seekCurrentVideo(video, seconds) {
 														const displayed = currentPlayer()?.drawableVideoElement;
@@ -88896,7 +89250,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.471-task1094",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.472-task1095",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

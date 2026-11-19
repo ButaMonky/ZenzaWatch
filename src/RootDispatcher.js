@@ -22,9 +22,11 @@ const RootDispatcher = (() => {
     let playerState;
     let lifetime = 0;
     let closeShare;
+    let clipSource;
     class RootDispatcher {
         static initialize(dialog) {
             player = dialog;
+            clipSource = undefined;
             lifetime++;
             playerState = ZenzaWatch.state.player;
             config = PlayerConfig.getInstance(config);
@@ -45,6 +47,7 @@ const RootDispatcher = (() => {
             player.on('open', () => {
                 if (player === dialog) {
                     lifetime++;
+                    clipSource = undefined;
                     closeShare?.();
                 }
             });
@@ -53,6 +56,7 @@ const RootDispatcher = (() => {
                     return;
                 }
                 lifetime++;
+                clipSource = undefined;
                 closeShare?.();
                 // Task712: the video dialog is gone, so its *native* PiP must also
                 // close. Stopping the comment-PiP session alone does not close it.
@@ -189,6 +193,7 @@ const RootDispatcher = (() => {
                         return frame instanceof HTMLVideoElement ? frame : null;
                     };
                     VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
+                        clipSession: session,
                         config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
                         getCurrentFileSource(video) {
                             // HLS wrappers display a different, MediaSource-backed element.
@@ -201,7 +206,13 @@ const RootDispatcher = (() => {
                             if (!currentPlayer() || !info.watchId) {
                                 return undefined;
                             }
-                            return player._view?.videoControlBar?.storyboard?.createSavedPreview(host, info.watchId, seconds);
+                            const board = player._view?.videoControlBar?.storyboard;
+                            if (!board)
+                                return undefined;
+                            if (!clipSource || clipSource.board !== board || clipSource.watchId !== info.watchId) {
+                                clipSource = { board, watchId: info.watchId, draw: board.createClipPreviewSource(info.watchId) };
+                            }
+                            return clipSource.draw(host, seconds);
                         },
                         seekCurrentVideo(video, seconds) {
                             const displayed = currentPlayer()?.drawableVideoElement;

@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.95-task1091
+// @version     0.5.96-task1095
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -4215,7 +4215,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.95-task1091', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.96-task1095', 'background: #ccf;');
       await config.promise('restore');
       window.addEventListener('click', openPocketLinkInNewTab, true);
       initDom();

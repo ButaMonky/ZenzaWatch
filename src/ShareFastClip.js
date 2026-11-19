@@ -1,4 +1,6 @@
+import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 //===BEGIN===
+//@require RequestDiagnostics
 const ShareFastClip = (() => {
   // Mediabunny 1.66.1, MPL-2.0. https://github.com/Vanilagy/mediabunny/tree/v1.66.1
   const moduleUrl = 'https://cdn.jsdelivr.net/npm/mediabunny@1.66.1/dist/bundles/mediabunny.min.mjs';
@@ -7,15 +9,30 @@ const ShareFastClip = (() => {
   async function load() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
+    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('clip-library', 'mediabunny', 'response');
+    let failure = {kind:'network'};
     let url;
     try {
       const response = await fetch(moduleUrl, {credentials:'omit', referrerPolicy:'no-referrer', signal:controller.signal});
-      if (!response.ok) throw Error('変換ライブラリを取得できません。');
+      if (!response.ok) {
+        failure = {status:response.status};
+        throw Error('変換ライブラリを取得できません。');
+      }
       const bytes = await response.arrayBuffer();
+      failure = {kind:'module-load'};
       const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-      if (Array.from(hash, n => n.toString(16).padStart(2, '0')).join('') !== digest) throw Error('変換ライブラリを検証できません。');
+      if (Array.from(hash, n => n.toString(16).padStart(2, '0')).join('') !== digest) {
+        failure = {kind:'integrity'};
+        throw Error('変換ライブラリを検証できません。');
+      }
       url = URL.createObjectURL(new Blob([bytes], {type:'text/javascript'}));
-      return await import(url);
+      const module = await import(url);
+      diagnostic?.success();
+      return module;
+    } catch (error) {
+      diagnostic?.failure(controller.signal.aborted ? {kind:'timeout'} : failure);
+      throw error;
     } finally {
       clearTimeout(timeout);
       if (url) URL.revokeObjectURL(url);

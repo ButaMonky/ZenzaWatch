@@ -1,10 +1,50 @@
+import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 //===BEGIN===
+//@require RequestDiagnostics
 // The permission, processing and posting decisions belong to NicoNico's clip service.
 const ShareOfficialClip = (() => {
   const base = 'https://nvapi.nicovideo.jp/v1';
   const pollInterval = 5000;
   const recent = new Map();
   const pollLimit = 30 * 60 * 1000;
+  const ignored = {reason:'cancelled'};
+  const schema = missing => ({kind:'schema', missing});
+  const postFailures = {
+    X_TOKEN_INVALID:'X アカウントの連携を公式ページで確認してください。',
+    X_TOO_MANY_REQUESTS:'X の利用上限に達しました。しばらく時間をおいてください。',
+    VIDEO_CLIP_NOT_FOUND:'公式サービスでクリップが見つかりません。'
+  };
+  function responseIssue(operation, data, expired) {
+    if (operation === 'clip-permission') {
+      if (typeof data?.isLogin !== 'boolean') return schema('data.isLogin');
+      if (!data.isLogin || data.isClipTweetAllowedVideo === false || data.isClipTweetAllowed === false) return;
+      if (typeof data.twitterLinkage?.isLinked !== 'boolean') return schema('data.twitterLinkage.isLinked');
+      if (data.twitterLinkage.isLinked && typeof data.isClipTweetAllowed !== 'boolean') return schema('data.isClipTweetAllowed');
+    } else if (operation === 'clip-license' && typeof data?.isUseLicensedMusic !== 'boolean') {
+      return schema('data.isUseLicensedMusic');
+    } else if (operation === 'clip-create') {
+      if (!(typeof data?.clipId === 'string' && data.clipId.trim()) && !(Number.isSafeInteger(data?.clipId) && data.clipId > 0)) return schema('data.clipId');
+    } else if (operation === 'clip-status' || operation === 'clip-post-status') {
+      const posting = operation === 'clip-post-status';
+      if (typeof data?.status !== 'string' || !data.status.trim()) return schema('data.status');
+      if (data.status === 'DONE') {
+        if (!posting) {
+          try { if (new URL(data.clipUri).protocol !== 'https:') return schema('data.clipUri'); }
+          catch (_) { return schema('data.clipUri'); }
+        }
+      } else if (data.status === 'FAILED' || data.status === 'ERROR') {
+        return posting && Object.hasOwn(postFailures, data.failureReason) ? ignored : {kind:'service'};
+      } else {
+        const pending = posting ? ['WAITING','PENDING','PROCESSING','POSTING'] : ['WAITING','GENERATING'];
+        if (!pending.includes(data.status)) {
+          // Nico's X client treats nonterminal states as pending. Preserve polling while it may still finish.
+          return posting && !expired ? ignored : schema('data.status');
+        }
+        // A polling reply that still says "waiting" cannot confirm that a prior failure has cleared.
+        return expired ? {kind:'timeout'} : ignored;
+      }
+    }
+  }
 
   function mount(container, {info, startTime, endTime, autoPreview = false, text, officialUrl, onUseLocal}) {
     const win = container.ownerDocument.defaultView;
@@ -136,29 +176,49 @@ const ShareOfficialClip = (() => {
       } catch (_) { /* An unavailable or old record cannot be resumed. */ }
       return null;
     }
-    async function request(path, method = 'GET', fields) {
+    const beginDiagnostic = operation => typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin(operation, videoId, 'response', () => !lifetime.signal.aborted);
+    async function request(operation, path, method = 'GET', fields) {
       const abort = new win.AbortController();
       const stop = () => abort.abort();
       if (lifetime.signal.aborted) throw new Error('closed');
       lifetime.signal.addEventListener('abort', stop, {once:true});
-      const timeout = win.setTimeout(stop, 20000);
+      const ticket = beginDiagnostic(operation);
+      let timedOut = false, diagnostic = {kind:'network'};
+      const timeout = win.setTimeout(() => { timedOut = true; stop(); }, 20000);
       try {
         const headers = {'Accept':'application/json', 'X-Frontend-Id':'6', 'X-Frontend-Version':'0'};
         if (method !== 'GET') headers['X-Request-With'] = win.location.origin;
         const options = {method, headers, credentials:'include', cache:'no-store', signal:abort.signal};
         if (fields) options.body = new win.URLSearchParams(fields);
         const response = await win.fetch(base + path, options);
-        if (response.ok && response.status === 204 && (method === 'DELETE' || path.endsWith('/x-post') && method === 'POST')) {
+        if (abort.signal.aborted) throw new Error('interrupted');
+        if (response.ok && response.status === 204 && (operation === 'clip-delete' || operation === 'clip-post')) {
+          ticket?.success();
           return;
         }
-        const envelope = await response.json().catch(() => null);
+        let envelope;
+        try { envelope = await response.json(); }
+        catch (_) { if (response.ok) { diagnostic = schema('json'); throw new Error('invalid response'); } }
+        if (abort.signal.aborted) throw new Error('interrupted');
         if (!response.ok || !Number.isInteger(envelope?.meta?.status) ||
             envelope.meta.status < 200 || envelope.meta.status >= 300) {
-          const error = new Error(envelope?.meta?.errorCode || 'request failed');
+          const error = new Error(envelope?.meta?.errorCode === 'USER_LIMIT_EXCEEDED' ? 'USER_LIMIT_EXCEEDED' : 'request failed');
           error.httpStatus = response.ok ? envelope?.meta?.status : response.status;
+          const statusCode = error.httpStatus;
+          if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) diagnostic = schema('meta.status');
+          else if ([401,403,404,429].includes(statusCode) || error.message === 'USER_LIMIT_EXCEEDED' ||
+              (operation === 'clip-post' && [400,422].includes(statusCode))) diagnostic = ignored;
+          else diagnostic = statusCode === 408 ? {kind:'timeout', statusCode} : {statusCode};
           throw error;
         }
+        const issue = responseIssue(operation, envelope.data, Date.now() >= deadline);
+        if (issue?.kind === 'schema') { diagnostic = issue; throw new Error('invalid response'); }
+        if (issue) ticket?.failure(issue); else ticket?.success();
         return envelope.data;
+      } catch (error) {
+        ticket?.failure(timedOut ? {kind:'timeout'} : diagnostic);
+        throw error;
       } finally {
         win.clearTimeout(timeout);
         lifetime.signal.removeEventListener('abort', stop);
@@ -167,7 +227,7 @@ const ShareOfficialClip = (() => {
 
     function permissionMessage(data) {
       if (!data || typeof data.isLogin !== 'boolean') return 'ニコニコの公式投稿を利用できるか確認できません。';
-      if (!data.isLogin && data.isClipTweetAllowedVideo === false) return 'ニコニコでは、この動画の公式クリップ投稿を利用できません。';
+      if (data.isClipTweetAllowedVideo === false) return 'ニコニコでは、この動画の公式クリップ投稿を利用できません。';
       if (!data.isLogin) return '公式投稿にはニコニコへのログインとXアカウント連携が必要です。';
       if (data.twitterLinkage?.isLinked !== true) return '公式投稿には、ニコニコの視聴ページでXアカウントの連携が必要です。';
       if (data.isClipTweetAllowed !== true) return 'ニコニコでは、この動画またはアカウントの公式クリップ投稿を利用できません。';
@@ -180,7 +240,7 @@ const ShareOfficialClip = (() => {
       }
       state('checking', 'ニコニコに公式投稿の利用状況を確認しています…');
       try {
-        const permission = await request(source + '/tweet-possibility');
+        const permission = await request('clip-permission', source + '/tweet-possibility');
         if (lifetime.signal.aborted) return;
         const reason = permissionMessage(permission);
         if (reason) { state('denied', reason); return; }
@@ -205,7 +265,7 @@ const ShareOfficialClip = (() => {
           }
         } else state('edit', '');
         let licensed;
-        try { licensed = (await request(source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
+        try { licensed = (await request('clip-license', source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
         if (lifetime.signal.aborted) return;
         const note = find('license');
         note.hidden = licensed === false;
@@ -221,20 +281,19 @@ const ShareOfficialClip = (() => {
       if (task === 'post') state('postUnknown', '投稿結果を確認できません。「状態を再確認」で結果を確認してください。');
       else state('clipUnknown', '生成状況を確認できません。「状態を再確認」で確認してください。');
     }
-    const postFailures = {
-      X_TOKEN_INVALID:'X アカウントの連携を公式ページで確認してください。',
-      X_TOO_MANY_REQUESTS:'X の利用上限に達しました。しばらく時間をおいてください。',
-      VIDEO_CLIP_NOT_FOUND:'公式サービスでクリップが見つかりません。'
-    };
     async function poll() {
       if (lifetime.signal.aborted) return;
       const posting = task === 'post';
       state(posting ? 'posting' : 'generating', posting ? 'X への投稿結果を確認しています…' : 'クリップを生成しています…');
       try {
-        const result = await request(clipPath() + (posting ? '/x-post' : ''));
+        const result = await request(posting ? 'clip-post-status' : 'clip-status', clipPath() + (posting ? '/x-post' : ''));
         if (lifetime.signal.aborted) return;
         if (result?.status === 'DONE') {
-          if (posting) { remember('posted'); state('posted', 'X にクリップをポストしました。'); return; }
+          if (posting) {
+            // A confirmed publication also resolves a lost POST acknowledgement, without resending the body.
+            beginDiagnostic('clip-post')?.success();
+            remember('posted'); state('posted', 'X にクリップをポストしました。'); return;
+          }
           const uri = new URL(result.clipUri);
           if (uri.protocol !== 'https:') throw new Error('preview');
           preview.src = uri.href;
@@ -243,7 +302,7 @@ const ShareOfficialClip = (() => {
           return;
         }
         if (result?.status === 'FAILED' || result?.status === 'ERROR') {
-          if (posting) state('postFailed', postFailures[result.failureReason] || 'X への投稿に失敗しました。');
+          if (posting) state('postFailed', Object.hasOwn(postFailures, result.failureReason) ? postFailures[result.failureReason] : 'X への投稿に失敗しました。');
           else state('clipError', 'クリップの生成に失敗しました。');
           return;
         }
@@ -256,11 +315,10 @@ const ShareOfficialClip = (() => {
       if (phase !== 'edit' || !validRange()) return;
       state('creating', 'クリップの作成をリクエストしています…');
       try {
-        const result = await request(source + '/clips', 'POST', {
+        const result = await request('clip-create', source + '/clips', 'POST', {
           startTime:String(Math.round(start.valueAsNumber * 1000)), endTime:String(Math.round(end.valueAsNumber * 1000))
         });
         if (lifetime.signal.aborted) return;
-        if (!result?.clipId) throw new Error('missing clip');
         clipId = result.clipId;
         remember('clip');
         task = 'clip';
@@ -278,7 +336,7 @@ const ShareOfficialClip = (() => {
       const body = draft.value;
       state('posting', 'ニコニコで投稿先アカウントを確認しています…');
       try {
-        const permission = await request(source + '/tweet-possibility');
+        const permission = await request('clip-permission', source + '/tweet-possibility');
         if (lifetime.signal.aborted) return;
         const denied = permissionMessage(permission);
         if (denied || account !== (permission.twitterLinkage.screenName || '')) {
@@ -293,7 +351,7 @@ const ShareOfficialClip = (() => {
       remember('post');
       deadline = Date.now() + pollLimit;
       state('posting', 'X にクリップを送信しています…');
-      try { await request(clipPath() + '/x-post', 'POST', {text:body}); }
+      try { await request('clip-post', clipPath() + '/x-post', 'POST', {text:body}); }
       catch (error) {
         if (lifetime.signal.aborted) return;
         if (error.httpStatus >= 400 && error.httpStatus < 500 && error.httpStatus !== 408 && error.httpStatus !== 409) {
@@ -329,7 +387,7 @@ const ShareOfficialClip = (() => {
       const previous = phase;
       state('discarding', 'クリップを削除しています…');
       try {
-        await request(clipPath(), 'DELETE');
+        await request('clip-delete', clipPath(), 'DELETE');
         if (lifetime.signal.aborted) return;
         startAnother();
       } catch (_) { state(previous, '削除結果を確認できません。公式の視聴ページで確認してください。'); }

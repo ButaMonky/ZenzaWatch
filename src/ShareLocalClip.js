@@ -5,7 +5,7 @@ import {ShareFastClip} from './ShareFastClip';
 //@require ShareFastClip
 const ShareLocalClip = {
   mount(container, {title = '', startTime = 0, getCurrentVideo, seekCurrentVideo, getShareText,
-    createFrameRenderer, getThumbnail, onSelectionChange, getCurrentFile} = {}) {
+    createFrameRenderer, getThumbnail, clipSession, onSelectionChange, getCurrentFile} = {}) {
     const root = document.createElement('section');
     root.className = 'zenzaLocalClip';
     root.innerHTML = `
@@ -527,7 +527,7 @@ const ShareLocalClip = {
     timeline = ShareClipTimeline.mount(find('[data-role=timeline]'), {
       startInput:start, endInput:end,
       getSource:() => (source !== localVideo || sourceUrl) && currentSelection() ? source : null,
-      isLocalSource:video => video === localVideo,
+      isLocalSource:video => video === localVideo, clipSession,
       getThumbnail:(host, seconds) => source !== localVideo && currentSelection() ? getThumbnail?.(host, seconds) : undefined,
       seekSource:seconds => !job && currentSelection() && seek(seconds),
       getPreviewRenderer:video => (comments.checked || effects.checked) && createFrameRenderer

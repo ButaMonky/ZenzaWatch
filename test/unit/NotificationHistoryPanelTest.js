@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const {JSDOM} = require('jsdom');
-const {createContext, extract, run} = require('../helpers/extractSource');
+const {createContext, extract, beginSection, run} = require('../helpers/extractSource');
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function setup(records) {
@@ -22,6 +22,7 @@ function setup(records) {
     document: dom.window.document, window: dom.window,
     NotificationJournal: journal
   });
+  run(beginSection('packages/lib/src/infra/RequestDiagnostics.js'), context);
   run('const NotificationHistoryPanel = ' +
     extract('src/NotificationHistoryPanel.js', 'NotificationHistoryPanel', 'var') +
     ';globalThis.__panel=NotificationHistoryPanel;', context);
@@ -32,6 +33,19 @@ function setup(records) {
 }
 
 describe('NotificationHistoryPanel (synthetic DOM)', () => {
+  it('displays the registered operation name and the applicable repository source path', async () => {
+    const records = [{id:'clip', timestamp:1, category:'network', level:'warning', source:'clip-permission',
+      message:'クリップの応答形式を確認できません', details:{module:'src/ShareOfficialClip.js'}}];
+    const h = setup(records);
+    try {
+      await flush();
+      h.root.querySelector('[data-entry-id]').click();
+      const detail = h.root.querySelector('.znh-detail');
+      assert(detail.textContent.includes('クリップ投稿の利用確認'));
+      assert(detail.textContent.includes('src/ShareOfficialClip.js'));
+      assert(!detail.textContent.includes('tools/typescript-stage1/src/'));
+    } finally { h.dom.window.close(); }
+  });
   it('does not invent occurrence metadata for legacy records and offers copy fallback',async()=>{
     const records=[{id:'old',timestamp:1,category:'network',level:'warning',source:'advertising',message:'old',details:{reason:'not-found',statusCode:404}}];
     const h=setup(records);await flush();h.root.querySelector('[data-entry-id]').click();

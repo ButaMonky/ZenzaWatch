@@ -89,6 +89,11 @@ test('legacy build directives are preserved in each runtime',()=>{
       OwnerSupplement:'../infra/RequestDiagnostics',
       initializer:'../packages/lib/src/infra/RequestDiagnostics'
     };
+    if (spec.name === 'NotificationHistoryPanel') {
+      expected.splice(expected.indexOf('//===BEGIN==='), 0,
+        "import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';");
+      expected.splice(expected.indexOf('//@require NotificationJournal') + 1,0,'//@require RequestDiagnostics');
+    }
     if (diagnosticPaths[spec.name]) {
       expected.unshift("import {RequestDiagnostics} from '" + diagnosticPaths[spec.name] + "';");
       if (spec.name === 'initializer') {

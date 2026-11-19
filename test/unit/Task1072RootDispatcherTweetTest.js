@@ -7,8 +7,8 @@ const {createContext, beginSection, run} = require('../helpers/extractSource');
 const setup = (videoInfo, watchId = videoInfo?.watchId, backend = 'native') => {
   const tweets = [];
   const handlers = {};
-  const thumbnails = [];
-  const storyboard = {createSavedPreview(...args) { thumbnails.push(args); return () => {}; }};
+  const thumbnails = [], previewReaders = [];
+  const storyboard = {createClipPreviewSource(id) { previewReaders.push(id); return (host,time) => { thumbnails.push([host,id,time]); return () => {}; }; }};
   class VideoElement {}
   const video = new VideoElement();
   video.currentSrc = "https://example.test/sample.mp4";
@@ -19,13 +19,13 @@ const setup = (videoInfo, watchId = videoInfo?.watchId, backend = 'native') => {
     HTMLVideoElement:VideoElement, Blob,
     ZenzaWatch: {state: {player: {videoInfo}}, api: {}},
     PlayerConfig: {getInstance: () => ({on() {}, props: {}, getValue() {}, setValue() {}})},
-    PipPageThumbnail: {initialize() {}},
+    PipPageThumbnail: {initialize() {},stop(){}},
     VideoSharePanel: {open(info, time, getVideo, context) { tweets.push(info); capture = {getVideo, context}; }, close() {}},
-    document: {},
+    document: {}, CommentPictureInPicture:{stop(){}},
   });
   run(beginSection('src/RootDispatcher.js') + ';globalThis.dispatcher=RootDispatcher;', ctx);
   ctx.dispatcher.initialize({watchId, _view:{videoControlBar:{storyboard}}, _nicoVideoPlayer:{_videoPlayer:{videoElement:video}, drawableVideoElement:displayed, commentViewModel:viewModel}, on: (name, fn) => { handlers[name] = fn; }});
-  return {ctx, thumbnails, tweets, video, displayed, viewModel, handlers, capture:() => capture};
+  return {ctx, thumbnails, previewReaders, tweets, video, displayed, viewModel, handlers, capture:() => capture};
 };
 
 describe('Task1072 RootDispatcher tweet', () => {
@@ -49,9 +49,21 @@ describe('Task1072 RootDispatcher tweet', () => {
     const host = {};
     assert.equal(typeof context.getThumbnail(host, 7), 'function');
     assert.deepEqual(env.thumbnails, [[host, 'sm9', 7]]);
+    env.ctx.dispatcher.execCommand('tweet');
+    env.capture().context.getThumbnail(host,8);
+    assert.deepEqual(env.previewReaders,['sm9']);
     env.handlers.open();
     assert.equal(context.getThumbnail(host, 7), undefined);
-    assert.equal(env.thumbnails.length, 1);
+    assert.equal(env.thumbnails.length, 2);
+    env.ctx.dispatcher.execCommand('tweet');
+    env.capture().context.getThumbnail(host,8);
+    assert.deepEqual(env.previewReaders,['sm9','sm9']);
+    const beforeClose=env.capture().context;
+    env.handlers.close();
+    assert.equal(beforeClose.getThumbnail(host,9),undefined);
+    env.ctx.dispatcher.execCommand('tweet');
+    env.capture().context.getThumbnail(host,9);
+    assert.deepEqual(env.previewReaders,['sm9','sm9','sm9']);
     assert.equal(getVideo(), null);
     assert.equal(context.getCurrentFileSource(env.video), undefined);
     assert.equal(context.getViewModel(), null);

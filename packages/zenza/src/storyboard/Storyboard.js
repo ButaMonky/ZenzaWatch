@@ -217,6 +217,205 @@ class Storyboard extends Emitter {
             })
         });
     }
+    /** One passive source per open clip editor. A missing sheet never starts a video session. */
+    createClipPreviewSource(videoId) {
+        const sheets = new Map();
+        const seeds = new Map();
+        const pendingPages = new Map();
+        const sheetKey = (raw, page) => JSON.stringify([raw.watchId, raw.format, raw.storyboard.images[page].url,
+            raw.storyboard.rows, raw.storyboard.columns, raw.storyboard.thumbnail.width, raw.storyboard.thumbnail.height]);
+        let modelGeneration, decodedBytes = 0;
+        const getPage = async (id, format, time) => {
+            const key = id + '_' + format;
+            const read = (sec) => StoryboardCacheDb.getPreview(key, sec).catch(() => null);
+            let seed = seeds.get(key);
+            if (!seed) {
+                seed = { time, raw: read(time) };
+                seeds.set(key, seed);
+            }
+            const raw = await seed.raw;
+            if (raw?.watchId !== id || raw.format !== format)
+                return null;
+            const model = new StoryboardInfoModel(raw);
+            if (!model.isAvailable || !model.cellCount || time > model.duration)
+                return null;
+            const page = model.getThumbnailPosition(time * 1000).page;
+            if (page === model.getThumbnailPosition(seed.time * 1000).page || sheets.has(sheetKey(raw, page)))
+                return raw;
+            const pageKey = key + ':' + page;
+            let pending = pendingPages.get(pageKey);
+            if (!pending) {
+                pending = read(time);
+                pendingPages.set(pageKey, pending);
+                void pending.finally(() => { if (pendingPages.get(pageKey) === pending)
+                    pendingPages.delete(pageKey); });
+            }
+            return pending;
+        };
+        const acquireSheet = (doc, raw, model, page, allowUrl) => {
+            const key = sheetKey(raw, page), item = raw.storyboard.images[page];
+            let sheet = sheets.get(key);
+            if (!sheet) {
+                const buffer = Object.prototype.toString.call(item.buffer) === '[object ArrayBuffer]' && item.buffer.byteLength > 0;
+                if (!buffer && (!allowUrl || !/^(?:https?:)?\/\//.test(item.url)))
+                    return null;
+                const size = model.pageWidth * model.pageHeight * 4, budget = 32 * 1024 * 1024;
+                if (!(size > 0 && size <= budget))
+                    return null;
+                for (const [oldKey, old] of sheets) {
+                    if (decodedBytes + size <= budget)
+                        break;
+                    if (!old.refs && old.ready) {
+                        sheets.delete(oldKey);
+                        decodedBytes -= old.size;
+                    }
+                }
+                if (decodedBytes + size > budget)
+                    return null;
+                const image = doc.createElement('img');
+                image.crossOrigin = 'anonymous';
+                const blobUrl = buffer ? URL.createObjectURL(new Blob([item.buffer])) : null;
+                let done;
+                const promise = new Promise(resolve => { done = resolve; });
+                const entry = { image, promise, size, refs: 0, ready: false, cancel: () => settle(false) };
+                const settle = (ok) => {
+                    if (entry.ready)
+                        return;
+                    entry.ready = true;
+                    image.onload = null;
+                    image.onerror = null;
+                    if (blobUrl)
+                        URL.revokeObjectURL(blobUrl);
+                    if (!ok) {
+                        image.removeAttribute('src');
+                        if (sheets.get(key) === entry) {
+                            sheets.delete(key);
+                            decodedBytes -= size;
+                        }
+                    }
+                    done(ok ? image : null);
+                };
+                image.onload = () => settle(true);
+                image.onerror = () => settle(false);
+                sheets.set(key, entry);
+                decodedBytes += size;
+                sheet = entry;
+                image.src = blobUrl || item.url;
+            }
+            sheet.refs++;
+            const entry = sheet;
+            let released = false;
+            return { promise: entry.promise, release() {
+                    if (released)
+                        return;
+                    released = true;
+                    entry.refs--;
+                    if (!entry.refs && !entry.ready)
+                        queueMicrotask(() => { if (!entry.refs && !entry.ready)
+                            entry.cancel(); });
+                } };
+        };
+        return (host, time) => {
+            let revision = 0, disposed = false, release;
+            const state = (label, loading = false) => {
+                host.setAttribute('role', 'img');
+                host.setAttribute('aria-label', label);
+                host.setAttribute('aria-busy', String(loading));
+                host.textContent = label;
+            };
+            const draw = async () => {
+                const seq = ++revision;
+                const current = () => !disposed && revision === seq && this.config?.props?.enableStoryboard !== false;
+                release?.();
+                release = undefined;
+                state('画像なし');
+                if (!current() || !videoId || !Number.isFinite(time) || time < 0)
+                    return;
+                if (this._watchId && this._watchId !== videoId && this._currentVideoWatchId !== videoId)
+                    return;
+                const owns = this._watchId === videoId || this._currentVideoWatchId === videoId;
+                const live = owns && this.model?.isAvailable ? this.model.rawData : null;
+                const id = live && [videoId, this._watchId, this._currentVideoWatchId].includes(live.watchId) ? live.watchId : videoId;
+                const owned = live?.watchId === id ? live : null;
+                if (modelGeneration !== owned) {
+                    modelGeneration = owned;
+                    seeds.clear();
+                    pendingPages.clear();
+                }
+                state('読み込み中', true);
+                const canvas = host.ownerDocument.createElement('canvas');
+                canvas.style.cssText = 'display:block;width:100%;height:100%;object-fit:cover';
+                const ready = () => { state('指定した時刻の場面画像'); host.replaceChildren(canvas); };
+                try {
+                    const pixels = await StoryboardWorker.readCachedCell(id, time).catch(() => null);
+                    if (!current())
+                        return;
+                    if (pixels) {
+                        canvas.width = pixels.width;
+                        canvas.height = pixels.height;
+                        canvas.getContext('2d').putImageData(pixels, 0, 0);
+                        ready();
+                        return;
+                    }
+                    const paint = async (raw, allowUrl) => {
+                        if (raw?.watchId !== id || !current())
+                            return false;
+                        const model = new StoryboardInfoModel(raw);
+                        if (!model.isAvailable || !model.cellCount || time > model.duration)
+                            return false;
+                        const pos = model.getThumbnailPosition(time * 1000);
+                        const lease = acquireSheet(host.ownerDocument, raw, model, pos.page, allowUrl);
+                        if (!lease)
+                            return false;
+                        release = lease.release;
+                        const image = await lease.promise;
+                        lease.release();
+                        if (!image || !current())
+                            return false;
+                        const scale = Math.min(1, 160 / model.cellWidth, 90 / model.cellHeight);
+                        canvas.width = Math.max(1, Math.round(model.cellWidth * scale));
+                        canvas.height = Math.max(1, Math.round(model.cellHeight * scale));
+                        canvas.getContext('2d').drawImage(image, pos.col * model.cellWidth, pos.row * model.cellHeight, model.cellWidth, model.cellHeight, 0, 0, canvas.width, canvas.height);
+                        ready();
+                        return true;
+                    };
+                    if (owned && await paint(owned, false))
+                        return;
+                    for (const format of owned ? [owned.format] : ['domand', 'dmc']) {
+                        if (!current())
+                            return;
+                        if (await paint(await getPage(id, format, time), false))
+                            return;
+                    }
+                    if (owned && await paint(owned, true))
+                        return;
+                }
+                finally {
+                    const loading = this._requestId != null && this._loadingWatchId === id && !this.model?.isAvailable;
+                    if (current() && !loading && host.getAttribute('aria-busy') === 'true')
+                        state('画像なし');
+                }
+            };
+            const update = () => { void draw().catch(() => { }); };
+            const reset = () => { revision++; release?.(); release = undefined; state('画像なし'); };
+            this.on('loading', update);
+            this.on('update', update);
+            this.on('reset', reset);
+            update();
+            return () => {
+                if (disposed)
+                    return;
+                disposed = true;
+                revision++;
+                release?.();
+                this.off('loading', update);
+                this.off('update', update);
+                this.off('reset', reset);
+                host.setAttribute('aria-busy', 'false');
+                host.replaceChildren();
+            };
+        };
+    }
     /** Independent passive sprite crop; never moves or seeks the live preview canvas.
      * Historical videos use cached bytes only: opening a library must not start
      * video sessions or fetch every storyboard sheet in the user's history. */
@@ -506,6 +705,7 @@ class Storyboard extends Emitter {
         this._watchId = watchId;
         const resuestId = this._requestId = Math.random();
         this._initializeStoryboard();
+        this.emit('loading', key);
         const startedAt = performance.now();
         this.loader.load(this.config.props.videoServerType, videoInfo)
             .then(async (info) => {

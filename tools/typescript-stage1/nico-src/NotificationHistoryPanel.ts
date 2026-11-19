@@ -1,6 +1,7 @@
 /** Canonical typed source for ZenzaWatch's notification history UI. */
 import type {JournalEntry, JournalCategory} from './NotificationJournal';
 declare const NotificationJournal: typeof import('./NotificationJournal').NotificationJournal;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 interface TabEvents {
   on(event: string, listener: () => void): unknown;
   off(event: string, listener: () => void): unknown;
@@ -72,15 +73,15 @@ const NotificationHistoryPanel = (() => {
     if (content !== undefined) { node.textContent = String(content); }
     return node;
   };
-  const featureLabels: Record<string,string> = {
-    advertising:'ニコニ広告','nicoad-end':'動画の最後のニコニ広告',search:'検索','tag-suggest':'タグ候補',tags:'タグ',
-    'comment-read':'コメント取得','comment-key':'コメント取得キー','video-info':'動画情報',
-    'video-session':'再生セッション',supporters:'広告・ギフトの支援者',gifts:'ギフト',
-    'ad-decoration':'広告装飾',dictionary:'大百科',recommend:'関連動画・シリーズ',owner:'投稿者情報',
-    'comment-post':'コメント投稿',nicoru:'ニコる','comment-delete':'コメント削除','script-error':'スクリプトエラー','external-playback':'外部サイトからの再生',
-    'session-state':'再生セッションの維持',storyboard:'場面画像の情報',mylist:'マイリスト',playlist:'プレイリスト',
-    like:'いいね','tag-key':'タグ編集キー','nico-api':'ニコニコAPI'
+  const featureLabel = (entry: JournalEntry): string => {
+    const operation = String(entry.details?.operation || entry.source);
+    if (operation === 'script-error') return 'スクリプトエラー';
+    if (operation === 'external-playback') return '外部サイトからの再生';
+    return (typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation)) ||
+      labels[entry.category] || '通知';
   };
+  const modulePath = (module: string): string =>
+    module.startsWith('nico-src/') ? 'tools/typescript-stage1/' + module : module;
   const formatTime = (value: unknown): string => typeof value === 'number' && Number.isFinite(value) &&
     Math.abs(value) <= 8640000000000000 ? new Date(value).toLocaleString('ja-JP') : '記録なし（旧版など）';
   const stateLabel = (entry: JournalEntry): string => entry.details?.reason === 'spec-change' ? '仕様変更の疑い' :
@@ -180,11 +181,11 @@ const NotificationHistoryPanel = (() => {
       back.addEventListener('click', () => {returnToList();schedule();});
       detailNode.append(back, element('p','znh-tag',stateLabel(entry)),element('h3','',entry.message),element('p','',description(entry)));
       const pairs: [string,string][] = [
-        ['機能', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'],
+        ['機能', featureLabel(entry)],
         ['段階', ({transport:'通信',response:'応答の確認',session:'処理'} as Record<string,string>)[String(entry.details?.phase)] || '記録なし'],
         ['発生回数', typeof entry.details?.count === 'number' ? entry.details.count+'回' : '1回'],
         // Task1036: 直す場所の手がかり（記録があるときだけ）。
-        ...(entry.details?.module ? [['修正箇所の目安', 'tools/typescript-stage1/' + String(entry.details.module)] as [string,string]] : []),
+        ...(entry.details?.module ? [['修正箇所の目安', modulePath(String(entry.details.module))] as [string,string]] : []),
         ...(entry.details?.missing ? [['読めなかった項目', String(entry.details.missing)] as [string,string]] : []),
         ...(entry.details?.errorName ? [['エラーの種類', String(entry.details.errorName)] as [string,string]] : []),
         ...(entry.details?.where ? [['発生箇所', String(entry.details.where)] as [string,string]] : []),
@@ -279,7 +280,7 @@ const NotificationHistoryPanel = (() => {
         item.dataset.level = entry.level;
         const head = element('div', 'znh-head');
         head.append(
-          element('span', 'znh-tag', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'),
+          element('span', 'znh-tag', featureLabel(entry)),
           element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP'))
         );
         if (entry.videoId) { head.append(element('span', 'znh-date', entry.videoId)); }

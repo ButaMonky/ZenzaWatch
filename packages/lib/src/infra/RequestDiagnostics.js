@@ -10,7 +10,11 @@ const RequestDiagnostics = (() => {
         'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
         dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
         'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
-        'nicoad-end': '動画の最後のニコニ広告'
+        'nicoad-end': '動画の最後のニコニ広告',
+        'clip-library': 'クリップ変換ライブラリ',
+        'clip-permission': 'クリップ投稿の利用確認', 'clip-license': 'クリップの音声利用確認',
+        'clip-create': 'クリップの作成', 'clip-status': 'クリップの生成状況',
+        'clip-post': 'クリップのX投稿', 'clip-post-status': 'クリップのX投稿状況', 'clip-delete': 'クリップの削除'
     };
     /**
      * Task1036: 失敗したときに最初に見るべき TypeScript 正本（tools/typescript-stage1/）。
@@ -26,7 +30,11 @@ const RequestDiagnostics = (() => {
         'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
         dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
         'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
-        'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts'
+        'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
+        'clip-library': 'src/ShareFastClip.js',
+        'clip-permission': 'src/ShareOfficialClip.js', 'clip-license': 'src/ShareOfficialClip.js',
+        'clip-create': 'src/ShareOfficialClip.js', 'clip-status': 'src/ShareOfficialClip.js',
+        'clip-post': 'src/ShareOfficialClip.js', 'clip-post-status': 'src/ShareOfficialClip.js', 'clip-delete': 'src/ShareOfficialClip.js'
     };
     const moduleFor = (operation) => modules[operation] || 'nico-src/RequestDiagnostics.ts';
     /** 項目名として安全な文字だけにする（値は持たない）。 */
@@ -61,7 +69,8 @@ const RequestDiagnostics = (() => {
         (failure.reason === 'http' && [400, 410, 422].includes(Number(failure.statusCode))) ||
         ['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
     const noteSuspect = (operation, key, failure, now) => {
-        const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '');
+        const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '') +
+            (operation.startsWith('clip-') ? '|' + (failure.missing || '') : '');
         const seen = suspects.get(group) || new Map();
         seen.set(key, now);
         for (const [k, at] of seen) {
@@ -119,8 +128,15 @@ const RequestDiagnostics = (() => {
             const where = missingFromMessage(e.message);
             return { reason: 'script', errorName: String(e.name), ...(where ? { missing: where } : {}) };
         }
+        if (e.kind === 'integrity')
+            return { reason: 'integrity' };
+        if (e.kind === 'module-load')
+            return { reason: 'module-load' };
         if (e.reason === 'session-closed') {
             return { reason: 'session-closed' };
+        }
+        if (e.kind === 'service') {
+            return { reason: 'service' };
         }
         if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
             return { reason: 'timeout', ...fields };
@@ -186,10 +202,11 @@ const RequestDiagnostics = (() => {
                     }
                 }
                 const reasonLabels = {
+                    integrity: '配布ファイルの照合に失敗しました', 'module-load': '変換ライブラリを読み込めません',
                     timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
                     schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
                     'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です',
-                    script: 'プログラムの不具合（スクリプトエラー）'
+                    script: 'プログラムの不具合（スクリプトエラー）', service: 'サービスで処理に失敗しました'
                 };
                 const module = moduleFor(operation);
                 if (outcome === 'failed' && suspectReason(failure)) {
@@ -234,6 +251,11 @@ const RequestDiagnostics = (() => {
                 return null;
             }
             const p = url.pathname;
+            // ShareOfficialClip owns transport and response as one ticket per stage/video.
+            if (url.hostname === 'nvapi.nicovideo.jp' &&
+                /^\/v1\/(?:videos\/[^/]+\/(?:tweet-possibility|license|clips)|clips\/[^/]+(?:\/x-post)?)\/?$/.test(p)) {
+                return null;
+            }
             if (url.hostname === 'sug.search.nicovideo.jp') {
                 return 'tag-suggest';
             }
@@ -340,7 +362,8 @@ const RequestDiagnostics = (() => {
         return value;
     };
     const setSink = (next) => { sink = next; };
-    return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage };
+    const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
+    return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor };
 })();
 //===END===
 export {RequestDiagnostics};

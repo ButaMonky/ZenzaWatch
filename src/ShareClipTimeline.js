@@ -1,6 +1,23 @@
 //===BEGIN===
 const ShareClipTimeline = (() => {
   const previewInterval = 1000 / 15;
+  const sessionFrames = new WeakMap();
+  function framesFor(video, session) {
+    if (session == null) return new Map();
+    const url = video.currentSrc, object = video.srcObject;
+    if (object && typeof WeakRef !== 'function') return new Map();
+    const cached = sessionFrames.get(video);
+    if (cached && cached.session === session && cached.url === url && (cached.object?.deref() || null) === object) return cached.frames;
+    const entry = {session,url,object:object ? new WeakRef(object) : null, frames:new Map()};
+    sessionFrames.set(video,entry);
+    return entry.frames;
+  }
+  function displayFrame(frame) {
+    const canvas = document.createElement('canvas');
+    canvas.width = frame.width; canvas.height = frame.height;
+    canvas.getContext('2d').drawImage(frame,0,0);
+    return canvas;
+  }
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const clock = (time, fine = false) => {
     const value = Math.max(0, Math.round(time * (fine ? 10 : 1)));
@@ -71,7 +88,7 @@ const ShareClipTimeline = (() => {
     });
   }
 
-  function mount(container, {startInput, endInput, getSource, getThumbnail, seekSource, getPreviewRenderer,
+  function mount(container, {startInput, endInput, getSource, getThumbnail, seekSource, getPreviewRenderer, clipSession,
     isLocalSource = video => video.matches('[data-role=source]'), maxLength = Infinity}) {
     const root = document.createElement('div');
     root.className = 'zwClipTimeline';
@@ -88,7 +105,8 @@ const ShareClipTimeline = (() => {
     let source, sourceUrl, sourceObject, decoder, thumbVideo, renderer, session, thumbnails, releaseScene;
     let windowStart = 0, span = 0, duration = 0, time = 0, drag, disposed = false, writing = false;
     let thumbKey, rendererError, dragTimer, restoring, thumbReport = '';
-    const thumbReleases = new Map(), capturedFrames = new Map();
+    const thumbReleases = new Map();
+    let capturedFrames = new Map();
     const on = (node, event, fn) => node.addEventListener(event, fn, {signal:listeners.signal});
     const sameSource = () => source && source === getSource() && source.currentSrc === sourceUrl && source.srcObject === sourceObject;
     const locked = () => disposed || startInput.disabled || endInput.disabled || !sameSource();
@@ -280,8 +298,8 @@ const ShareClipTimeline = (() => {
             const tile = tileFrom(media);
             const release = thumbReleases.get(cell);
             if (release) { release(); thumbReleases.delete(cell); }
-            cell.replaceChildren(tile);
-            capturedFrames.set(sec, tile);
+            cell.replaceChildren(displayFrame(tile));
+            capturedFrames.set(sec,tile);
             if (capturedFrames.size > 48) capturedFrames.delete(capturedFrames.keys().next().value);
             failures = 0;
             updateThumbHint();
@@ -330,7 +348,7 @@ const ShareClipTimeline = (() => {
       if (!decoder) {
         for (const {cell, sec} of cells) {
           const tile = capturedFrames.get(sec);
-          if (tile) { cell.replaceChildren(tile); continue; }
+          if (tile) { cell.replaceChildren(displayFrame(tile)); continue; }
           try { const release = getThumbnail?.(cell, sec); if (typeof release === 'function') thumbReleases.set(cell, release); }
           catch (_) { cell.textContent = '画像なし'; }
         }
@@ -393,10 +411,11 @@ const ShareClipTimeline = (() => {
         stopPreview(); forgetRestore(); clearThumbs(); clearScene();
         unload(decoder); unload(thumbVideo); decoder = thumbVideo = null;
         renderer?.dispose(); renderer = null;
-        capturedFrames.clear(); thumbReport = ''; thumbKey = null; drag = null;
+        capturedFrames = new Map(); thumbReport = ''; thumbKey = null; drag = null;
         source = selected; sourceUrl = selected?.currentSrc; sourceObject = selected?.srcObject;
         if (!available) { duration = 0; return; }
         if (isLocalSource(source)) { decoder = newDecoder(); thumbVideo = newDecoder(); }
+        else capturedFrames = framesFor(source,clipSession);
         duration = source.duration;
         const [a,b] = values();
         span = Math.min(duration, Math.max(Math.min(120, maxLength), (b-a) || 0));
@@ -543,7 +562,7 @@ const ShareClipTimeline = (() => {
       if (disposed) return;
       disposed = true;
       stopPreview(); forgetRestore(); clearThumbs(); clearScene(); thumbObserver.disconnect(); listeners.abort();
-      renderer?.dispose(); capturedFrames.clear(); unload(decoder); unload(thumbVideo); root.remove();
+      renderer?.dispose(); capturedFrames = new Map(); unload(decoder); unload(thumbVideo); root.remove();
     }};
   }
   return {mount};

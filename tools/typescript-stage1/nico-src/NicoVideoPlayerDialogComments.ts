@@ -352,7 +352,7 @@ const NicoVideoPlayerDialogComments = {
           details: {operation: 'delete', statusCode: err.statusCode,
             errorCode: err.errorCode, reason: err.reason}
         });
-        console.warn('コメント削除に失敗しました', err);
+        console.warn('コメント削除に失敗しました');
         console.timeEnd('コメント削除');
         if (this._videoInfo === videoInfo && this._nicoVideoPlayer === player) {
           this.execCommand('alert', err.message);

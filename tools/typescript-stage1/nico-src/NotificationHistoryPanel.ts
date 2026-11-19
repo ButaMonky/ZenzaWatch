@@ -125,7 +125,11 @@ const NotificationHistoryPanel = (() => {
     'data.client.watchId','data.client.watchTrackId','data.video','data.video.id','data.video.title',
     'data.video.duration','data.video.count','data.video.thumbnail','data.player','data.genre','data.tags',
     'data.tags.items','data.nicoads','data.isLogin','data.twitterLinkage.isLinked','data.isClipTweetAllowed',
-    'data.isUseLicensedMusic','data.clipId','data.status','data.clipUri','json','response.json'
+    'data.isUseLicensedMusic','data.clipId','data.status','data.clipUri','json','response.json',
+    'data.items','data.totalCount','data.items.essential','data.items.id','data.contentId','meta.totalCount','last_modified',
+    'data.items.content','data.items[].watchId','data.items[].essential.id','data.watchLater.items','data.mylist.items',
+    'data.mylists','data.hasNext','data.watchLater.hasNext','data.mylist.hasNext','data.additionals','storyboard',
+    'meta.errorCode','data.postKey','data.no','data.challenge','data.nicoruKey','data.deleteKey','data.nicoruId'
   ]);
   const validStatus = (value: unknown): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;

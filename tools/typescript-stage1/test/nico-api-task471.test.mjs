@@ -72,6 +72,11 @@ async function compare(label,steps,scenario={}){
       if(label==='mylist items 404')assert.equal(rb.error.code,'NOT_FOUND');
       else assert.equal(rb.error.cause.name,'SyntaxError');
       assert.deepEqual(snapshot(rb),expected,`${label} bounded-reader contract`);
+    }else if(label==='mylist list meta 500'){
+      const expected=snapshot(ra);
+      // Preserve result/status/code for callers while keeping service text out of the UI.
+      expected.error.$message='マイリスト一覧の取得失敗(1)';
+      assert.deepEqual(snapshot(rb),expected,label);
     }else assert.deepEqual(snapshot(rb),snapshot(ra),`${label} step ${i}`);
   }
   await tick(); // fire-and-forget removals (addMylistItem) settle before comparing effects

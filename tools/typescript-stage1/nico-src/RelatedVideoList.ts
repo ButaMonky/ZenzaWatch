@@ -23,7 +23,7 @@ declare const VideoListItem: {
   new (data: Record<string, unknown>): unknown;
   createByVideoInfoModel(info: unknown): {serialize(): Record<string, unknown>};
 };
-declare const RecommendAPILoader: {load(params: {videoId: string}): Promise<{items?: RecommendItem[]}>};
+declare const RecommendAPILoader: {load(params: {videoId: string; isCurrent?: () => boolean}): Promise<{items?: RecommendItem[]}>};
 
 
 class RelatedVideoList extends VideoList {
@@ -48,14 +48,14 @@ class RelatedVideoList extends VideoList {
     videoInfo && relatedVideo.push(VideoListItem.createByVideoInfoModel(videoInfo).serialize());
     // Clear A as soon as B starts; optionally show B itself while loading.
     this.update(relatedVideo, watchId as string);
-    const data = await RecommendAPILoader.load({videoId}).catch(() => ({} as {items?: RecommendItem[]}));
+    const data = await RecommendAPILoader.load({videoId, isCurrent: () => requestId === this._requestGeneration}).catch(() => ({} as {items?: RecommendItem[]}));
     // A network completion must not overwrite the later B request.
     if (requestId !== this._requestGeneration) {
       return;
     }
     const items = data.items || [];
     for (const item of items) {
-      if (item.contentType && item.contentType !== 'video') {
+      if (!item || typeof item.id !== 'string' || !item.id.trim() || (item.contentType && item.contentType !== 'video')) {
         continue;
       }
       const content = item.content;

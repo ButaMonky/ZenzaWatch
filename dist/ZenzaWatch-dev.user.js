@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.475-task1098
+// @version        2.7.476-task1099
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 06:23Z c48fe360
+// build: 2026-11-19 07:11Z 76f1b645
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1741,7 +1741,7 @@ const RequestDiagnostics = (() => {
 				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
 				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
 				'nicoad-end': '動画の最後のニコニ広告',
 				'clip-library': 'クリップ変換ライブラリ',
@@ -1758,7 +1758,7 @@ const RequestDiagnostics = (() => {
 				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
 				'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
 				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
-				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
+				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts', 'owner-videos': 'nico-src/VideoSearch.ts',
 				'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
 				'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
 				'clip-library': 'src/ShareFastClip.js',
@@ -1825,12 +1825,48 @@ const RequestDiagnostics = (() => {
 				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
 		};
 		const knownErrorCodes = new Set(['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-				'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
+				'SEARCH_SCHEMA', 'KEY_EXPIRED', 'INVALID_CHALLENGE_TOKEN', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
 		const isKnownErrorCode = (value) => typeof value === 'string' && knownErrorCodes.has(value);
 		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+		const responseFailure = (response, meta, missing) => {
+				const wire = response?.status;
+				const header = meta;
+				const api = header?.status;
+				const statuses = {
+						...(validStatus(wire) ? { httpStatus: wire } : {}),
+						...(validStatus(api) ? { apiStatus: api } : {})
+				};
+				const rawCode = header?.errorCode;
+				const code = typeof rawCode === 'string' && rawCode ? { errorCode: isKnownErrorCode(rawCode) ? rawCode : 'OTHER' } : {};
+				if ((validStatus(wire) && wire >= 300) || (validStatus(api) && api >= 300))
+						return { ...statuses, ...code };
+				if (code.errorCode)
+						return { ...statuses, ...code, kind: 'service' };
+				if (missing || !validStatus(api) || api < 200) {
+						return { ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: missing || 'meta.status' };
+				}
+				return null;
+		};
+		const readFailure = (response, cause) => {
+				const error = cause;
+				const wire = response?.status;
+				const statuses = validStatus(wire) ? { httpStatus: wire } : {};
+				if (error?.name === 'AbortError')
+						return { name: 'AbortError' };
+				if (validStatus(wire) && wire >= 300)
+						return statuses;
+				if (error?.name === 'TimeoutError' || error?.name === 'timeout' || error?.status === 'timeout') {
+						return { ...statuses, kind: 'timeout' };
+				}
+				if (response && error?.name === 'SyntaxError')
+						return { ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: 'json' };
+				return { ...statuses, kind: 'network' };
+		};
 		const classify = (error) => {
 				const outer = error && typeof error === 'object' ? error : {};
-				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				const ownsStatus = validStatus(outer.httpStatus) || validStatus(outer.apiStatus) ||
+						['schema', 'network', 'timeout'].includes(String(outer.kind)) || outer.name === 'AbortError';
+				const e = !ownsStatus && outer.result && typeof outer.result === 'object' ? outer.result : outer;
 				const httpStatus = e.httpStatus ?? e.statusCode ?? e.status;
 				const apiStatus = validStatus(e.apiStatus) ? e.apiStatus : undefined;
 				const apiRejected = apiStatus !== undefined && apiStatus >= 300 &&
@@ -1849,6 +1885,9 @@ const RequestDiagnostics = (() => {
 				if (e.name === 'AbortError' || e.reason === 'cancelled') {
 						return { reason: 'cancelled' };
 				}
+				if (e.kind === 'network') {
+						return { reason: 'network', ...fields };
+				}
 				if (['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(String(e.name)) &&
 						typeof e.message === 'string' && !/JSON|Unexpected token|Unexpected end/i.test(e.message)) {
 						const where = missingFromMessage(e.message);
@@ -1862,7 +1901,7 @@ const RequestDiagnostics = (() => {
 						return { reason: 'session-closed' };
 				}
 				if (e.kind === 'service') {
-						return { reason: 'service' };
+						return { reason: 'service', ...fields };
 				}
 				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
 						return { reason: 'timeout', ...fields };
@@ -1941,7 +1980,29 @@ const RequestDiagnostics = (() => {
 				}
 				return result;
 		};
-		const begin = (operation, scope, phase, active = () => true) => {
+		const classifyCommentAction = (error) => {
+				const e = error && typeof error === 'object' ? error : {};
+				const result = e.result;
+				if (validStatus(e.httpStatus) || validStatus(e.apiStatus) || e.missing || e.errorCode) {
+						const failure = responseFailure({ status: e.httpStatus }, { status: e.apiStatus, errorCode: e.errorCode }, typeof e.missing === 'string' ? e.missing : undefined);
+						if (failure)
+								return classify(failure);
+				}
+				if (result?.reason === 'no-post-target' || (result?.outcome === 'not-sent' &&
+						['challenge-cancelled', 'challenge-stale-video', 'challenge-busy'].includes(String(result.reason)))) {
+						return { reason: 'cancelled' };
+				}
+				if (result?.reason === 'challenge-timeout' || ['header-timeout', 'body-timeout'].includes(String(result?.kind ?? result?.reason))) {
+						return classify({ kind: 'timeout', httpStatus: e.httpStatus });
+				}
+				if (result?.name === 'AbortError' || result?.name === 'TimeoutError')
+						return classify(result);
+				if (result?.name === 'TypeError' && ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.'].includes(String(result.message))) {
+						return classify({ kind: 'network', httpStatus: e.httpStatus });
+				}
+				return classify(result ?? error);
+		};
+		const begin = (operation, scope, phase, active = () => true, suspectTarget) => {
 				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
 						return noop;
 				}
@@ -1989,7 +2050,7 @@ const RequestDiagnostics = (() => {
 								};
 								const module = moduleFor(operation);
 								if (outcome === 'failed' && suspectReason(failure)) {
-										const distinctTargets = noteSuspect(operation, key, failure, Date.now());
+										const distinctTargets = noteSuspect(operation, suspectTarget === undefined ? key : scopeId(suspectTarget), failure, Date.now());
 										if (distinctTargets) {
 												sink?.({ key: 'diag-spec-' + operation + '-' + failure.reason, operation, phase, outcome: 'failed', ...failure,
 														reason: 'spec-change', module, distinctTargets,
@@ -2008,7 +2069,8 @@ const RequestDiagnostics = (() => {
 				const failure = (error) => {
 						try {
 								const result = operation === 'comment-history-read' ? classifyHistoryRead(error) :
-										operation === 'comment-key' ? classifyCommentKey(error) : classify(error);
+										operation === 'comment-key' ? classifyCommentKey(error) :
+												['comment-post', 'nicoru', 'comment-delete'].includes(operation) ? classifyCommentAction(error) : classify(error);
 								emit('failed', result);
 						}
 						catch (_) { /* untrusted error properties */ }
@@ -2057,8 +2119,11 @@ const RequestDiagnostics = (() => {
 						if (/\/recommend$/.test(p)) {
 								return 'recommend';
 						}
-						if (/\/users\/[^/]+\/videos/.test(p)) {
-								return 'owner';
+						if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v1\/playlist\//.test(p)) {
+								return 'playlist';
+						}
+						if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v3\/users\/[^/]+\/videos\/?$/.test(p)) {
+								return url.searchParams.get('selectContentType') === 'short' ? 'playlist' : 'owner-videos';
 						}
 						if (/\/watch-later(?:\/|$)/.test(p)) {
 								return 'mylist';
@@ -2145,7 +2210,7 @@ const RequestDiagnostics = (() => {
 		};
 		const setSink = (next) => { sink = next; };
 		const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
-		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode };
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode, responseFailure, readFailure };
 })();
   const monkey = async (_product, START_PAGE_QUERY, externalTrial = null) /*** (｀・ω・´)9m ***/ => {
     const {displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged} = externalTrial || {};
@@ -2178,10 +2243,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.475-task1098';
+    var VER = '2.7.476-task1099';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 06:23Z c48fe360';
+    var BUILD = '2026-11-19 07:11Z 76f1b645';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -7947,7 +8012,7 @@ const NotificationJournalPolicy = (() => {
 						'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
 						like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
 						tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
-						recommend: 'related', owner: 'related', dictionary: 'related'
+						recommend: 'related', 'owner-videos': 'related', owner: 'related', dictionary: 'related'
 				};
 				return groups[operation] || entry.category;
 		};
@@ -14361,6 +14426,69 @@ const PlaylistApiLoader = (() => {
 		const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
 		const mayUseSharedCache = (type) => type === 'series' || type === 'user-uploaded';
 		let cacheStorage = null;
+		const entryId = (item) => {
+				const row = item;
+				const id = row?.watchId ?? row?.content?.id;
+				if (typeof id === 'string' && id.trim()) {
+						return id;
+				}
+				if (typeof id === 'number' && Number.isFinite(id)) {
+						return String(id);
+				}
+				return undefined;
+		};
+		const isEntryArray = (items) => Array.isArray(items) && items.every(item => entryId(item) !== undefined);
+		const ensureCurrent = (isCurrent) => {
+				if (isCurrent && !isCurrent()) {
+						throw new Error('プレイリスト取得中止（表示対象が変更されました）');
+				}
+		};
+		const readPage = async (url, options, isCurrent, messages, retry = false) => {
+				for (let attempt = 0;; attempt++) {
+						ensureCurrent(isCurrent);
+						let response;
+						let result;
+						try {
+								response = await netUtil.fetch(url, options);
+								result = await response.json();
+						}
+						catch (cause) {
+								ensureCurrent(isCurrent);
+								const error = cause;
+								const status = response?.status ?? error?.statusCode ?? error?.status;
+								if (retry && !attempt && error?.name !== 'AbortError' && ![401, 403, 404].includes(Number(status)) &&
+										!(response && response.status >= 300 && response.status < 500)) {
+										await new Promise(resolve => setTimeout(resolve, 400));
+										continue;
+								}
+								const wrapped = new Error(messages.request, cause);
+								if (typeof RequestDiagnostics !== 'undefined') {
+										Object.assign(wrapped, RequestDiagnostics.readFailure(response, cause));
+								}
+								throw wrapped;
+						}
+						ensureCurrent(isCurrent);
+						const httpStatus = response.status, apiStatus = result?.meta?.status;
+						const failure = (missing) => {
+								const wrapped = new Error(messages.response, result);
+								if (typeof RequestDiagnostics !== 'undefined') {
+										Object.assign(wrapped, RequestDiagnostics.responseFailure(response, result?.meta, missing));
+								}
+								return wrapped;
+						};
+						if (retry && !attempt && (httpStatus >= 500 || (!(httpStatus >= 300) && Number(apiStatus) >= 500))) {
+								await new Promise(resolve => setTimeout(resolve, 400));
+								continue;
+						}
+						if (httpStatus >= 300 || apiStatus !== 200 || result?.meta?.errorCode) {
+								throw failure('meta.status');
+						}
+						if (!Array.isArray(result?.data?.items)) {
+								throw failure('data.items');
+						}
+						return { data: result.data, items: result.data.items, failure };
+				}
+		};
 		class PlaylistApiLoader {
 				constructor() {
 						if (!cacheStorage) {
@@ -14368,6 +14496,8 @@ const PlaylistApiLoader = (() => {
 						}
 				}
 				async load({ type, id, options, all, maxItems, isCurrent }, { frontendId = 6, frontendVersion = 0 } = {}) {
+						let cacheHit = false;
+						const markCacheHit = () => { cacheHit = true; };
 						const execute = async () => {
 								const { url, cacheKey } = ((type) => {
 										switch (type) {
@@ -14389,31 +14519,34 @@ const PlaylistApiLoader = (() => {
 										throw new Error(`プレイリストの取得失敗(3) ${type}`);
 								}
 								if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
-										return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
+										return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion, markCacheHit);
 								}
 								const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
-								if (cacheData) {
+								ensureCurrent(isCurrent);
+								if (isEntryArray(cacheData)) {
+										markCacheHit();
 										return cacheData;
 								}
-								const result = await netUtil.fetch(url, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include',
-										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}),
-								}).then((r) => r.json())
-										.catch((e) => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e); });
-								if (result.meta.status !== 200 || !result.data.items) {
-										throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
+								const { items: data, failure } = await readPage(url, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include',
+										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+								}, isCurrent, { request: `プレイリストの取得失敗(2) ${type}`, response: `プレイリストの取得失敗(1) ${type}` });
+								ensureCurrent(isCurrent);
+								if (!isEntryArray(data)) {
+										throw failure('data.items[].watchId');
 								}
-								const data = result.data.items;
 								if (mayUseSharedCache(type)) {
-										cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+										try {
+												cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+										}
+										catch (_) { /* Browser storage is optional. */ }
 								}
 								return data;
 						};
 						return typeof RequestDiagnostics === 'undefined' ? execute() :
-								RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !isCurrent || isCurrent());
+								RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !cacheHit && (!isCurrent || isCurrent()));
 				}
-				async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
+				async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion, markCacheHit) {
 						const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
 								Math.min(10000, Math.floor(requestedMax)) : 10000;
 						const first = new URL(initialUrl);
@@ -14422,11 +14555,6 @@ const PlaylistApiLoader = (() => {
 						first.searchParams.set('pageSize', String(pageSize));
 						first.searchParams.set('page', '1');
 						const cacheKey = `playlist; all-v1; ${maxItems}; ${first.href}`;
-						const checkCurrent = () => {
-								if (isCurrent && !isCurrent()) {
-										throw new Error('プレイリスト取得中止（表示対象が変更されました）');
-								}
-						};
 						const expose = (value) => {
 								const result = value.items.slice();
 								Object.defineProperty(result, 'playlistLoadInfo', { value: {
@@ -14434,82 +14562,54 @@ const PlaylistApiLoader = (() => {
 										}, enumerable: false });
 								return result;
 						};
-						checkCurrent();
+						ensureCurrent(isCurrent);
 						const cached = (mayUseSharedCache(type) ?
 								cacheStorage.getItem(cacheKey) : null);
-						if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
+						if (cached?.complete === true && isEntryArray(cached.items) && cached.maxItems === maxItems) {
+								markCacheHit();
 								return expose(cached);
 						}
 						const items = [], seen = new Set();
 						let totalCount = null, limited = false;
 						const maxPages = Math.ceil(10000 / pageSize) + 1;
 						for (let page = 1;; page++) {
-								checkCurrent();
+								ensureCurrent(isCurrent);
 								if (page > maxPages) {
 										throw new Error('プレイリスト取得失敗（ページ数の安全上限）');
 								}
 								const url = new URL(first.href);
 								url.searchParams.set('page', String(page));
-								let result;
-								for (let attempt = 0; attempt < 2; attempt++) {
-										checkCurrent();
-										try {
-												result = await netUtil.fetch(url.href, {
-														headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-														credentials: 'include',
-														...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}), timeout: 15000
-												}).then((r) => r.json());
-										}
-										catch (error) {
-												const status = error?.status ||
-														error?.statusCode;
-												if (attempt || [401, 403, 404].includes(Number(status))) {
-														throw new Error(`プレイリストの取得失敗(2) ${type} (${page}ページ目)`);
-												}
-												checkCurrent();
-												await new Promise(resolve => setTimeout(resolve, 400));
-												continue;
-										}
-										checkCurrent();
-										if (!attempt && Number(result?.meta?.status) >= 500) {
-												await new Promise(resolve => setTimeout(resolve, 400));
-												continue;
-										}
-										break;
+								const { data, items: batch, failure } = await readPage(url.href, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include', timeout: 15000,
+										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+								}, isCurrent, { request: `プレイリストの取得失敗(2) ${type} (${page}ページ目)`,
+										response: `プレイリストの取得失敗(1) ${type} (${page}ページ目)` }, true);
+								if (data.hasNext !== undefined && typeof data.hasNext !== 'boolean') {
+										throw failure('data.hasNext');
 								}
-								checkCurrent();
-								if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
-										throw new Error(`プレイリストの取得失敗(1) ${type} (${page}ページ目)`);
-								}
-								const data = result.data, batch = data.items;
 								const count = data.totalCount;
 								if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
 										totalCount = totalCount === null ? count : Math.max(totalCount, count);
 								}
 								if (!batch.length) {
 										if (data.hasNext === true || (totalCount !== null && (page - 1) * pageSize < totalCount)) {
-												throw new Error(`プレイリストの取得失敗（${page}ページ目が空です）`);
+												throw failure('data.items');
 										}
 										break;
 								}
 								const before = items.length;
 								for (const item of batch) {
-										if (!item || typeof item !== 'object') {
-												throw new Error(`プレイリストの取得失敗（${page}ページ目のデータ形式）`);
+										const key = entryId(item);
+										if (key === undefined) {
+												throw failure('data.items[].watchId');
 										}
-										const value = item;
-										const id = value.watchId ?? value.content?.id;
-										if (typeof id !== 'string' && typeof id !== 'number') {
-												throw new Error(`プレイリストの取得失敗（${page}ページ目の動画ID）`);
-										}
-										const key = String(id);
 										if (!seen.has(key)) {
 												seen.add(key);
 												items.push(item);
 										}
 								}
 								if (items.length === before) {
-										throw new Error('プレイリスト取得失敗（同じページが繰り返されました）');
+										throw failure('data.items');
 								}
 								const more = typeof data.hasNext === 'boolean' ? data.hasNext :
 										totalCount !== null ? page * pageSize < totalCount : batch.length >= pageSize;
@@ -14522,7 +14622,7 @@ const PlaylistApiLoader = (() => {
 										break;
 								}
 						}
-						checkCurrent();
+						ensureCurrent(isCurrent);
 						const value = { items, totalCount, limited, maxItems, complete: true };
 						try {
 								if (mayUseSharedCache(type)) {
@@ -14570,30 +14670,24 @@ const PlaylistApiLoader = (() => {
 										throw new Error('ショート動画の取得中止（表示対象が変更されました）');
 								}
 								const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?selectContentType=short&sortKey=registeredAt&sortOrder=desc&sensitiveContents=mask&pageSize=${pageSize}&page=${page}`;
-								const result = await netUtil.fetch(url, {
-										headers: { 'X-Frontend-Id': 6, 'X-Frontend-Version': 0 },
-										credentials: 'include', timeout: 15000,
+								const { data, items: batch, failure } = await readPage(url, {
+										headers: { 'X-Frontend-Id': 6, 'X-Frontend-Version': 0 }, credentials: 'include', timeout: 15000,
 										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-								}).then(async (r) => {
-										const body = await r.json().catch(() => null);
-										if (!r.ok && !body) {
-												throw new Error(`ショート動画の取得失敗 HTTP ${r.status} (${page}ページ目)`);
-										}
-										return body;
-								});
-								if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
-										const why = result?.meta?.status !== 200 ? `status ${String(result?.meta?.status)}${result?.meta?.errorCode ? ' ' + String(result.meta.errorCode) : ''}` : 'data.items がありません';
-										throw new Error(`ショート動画の取得失敗(1) ${why} (${page}ページ目)`);
-								}
-								const count = Number(result.data.totalCount);
-								if (Number.isSafeInteger(count) && count >= 0) {
+								}, isCurrent, { request: `ショート動画の取得失敗(2) (${page}ページ目)`,
+										response: `ショート動画の取得失敗(1) (${page}ページ目)` });
+								ensureCurrent(isCurrent);
+								const count = data.totalCount;
+								if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
 										total = count;
 								}
-								const batch = result.data.items;
+								const before = out.length;
 								for (const row of batch) {
 										const content = row?.essential;
 										const id = typeof content?.id === 'string' ? content.id : '';
-										if (!id || seen.has(id)) {
+										if (!id.trim()) {
+												throw failure('data.items[].essential.id');
+										}
+										if (seen.has(id)) {
 												continue;
 										}
 										seen.add(id);
@@ -14602,7 +14696,13 @@ const PlaylistApiLoader = (() => {
 												return out;
 										}
 								}
-								if (batch.length < pageSize || (total !== null && out.length >= total)) {
+								if (batch.length && out.length === before) {
+										throw failure('data.items');
+								}
+								if (!batch.length && total !== null && (page - 1) * pageSize < total) {
+										throw failure('data.items');
+								}
+								if (batch.length < pageSize || (total !== null && page * pageSize >= total)) {
 										break;
 								}
 						}
@@ -14680,62 +14780,109 @@ const MylistApiLoader = (() => {
 								throw createMylistError('マイリストトークン取得失敗（認証情報がありません）');
 						}
 				}
+				async _readList(url, kind, frontendId, frontendVersion, isCurrent) {
+						const label = kind === 'watchLater' ? 'あとで見る' : kind === 'mylists' ? 'マイリスト一覧' : 'マイリスト';
+						const ensureCurrent = () => {
+								if (!isCurrent) {
+										return;
+								}
+								let current = false;
+								try {
+										current = isCurrent() === true;
+								}
+								catch (_) { /* A disposed owner is stale. */ }
+								if (!current) {
+										throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+								}
+						};
+						ensureCurrent();
+						let response;
+						let result;
+						try {
+								response = await netUtil.fetch(url, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include',
+										...(typeof RequestDiagnostics !== 'undefined' && isCurrent ? { diagnosticActive: isCurrent } : {})
+								});
+								result = await response.json();
+						}
+						catch (cause) {
+								ensureCurrent();
+								const wrapped = createMylistError(label + 'の取得失敗(2)', { cause, ...(kind === 'mylists' ? { result: cause } : {}) });
+								if (typeof RequestDiagnostics !== 'undefined') {
+										Object.assign(wrapped, RequestDiagnostics.readFailure(response, cause));
+								}
+								throw wrapped;
+						}
+						ensureCurrent();
+						const failure = (missing, code, message = label + 'の取得失敗(1)') => {
+								const wrapped = createMylistError(message, { code: code ?? result?.error?.code, ...(kind === 'mylists' ? { result } : {}) });
+								if (typeof RequestDiagnostics !== 'undefined') {
+										const meta = result?.meta && { status: result.meta.status, errorCode: result.meta.errorCode ?? result?.error?.code };
+										Object.assign(wrapped, RequestDiagnostics.responseFailure(response, meta, missing));
+								}
+								return wrapped;
+						};
+						if (response.status >= 300 || result?.meta?.status !== 200 || result?.meta?.errorCode || result?.error?.code) {
+								throw failure('meta.status');
+						}
+						const page = kind === 'mylists' ? undefined : result.data?.[kind];
+						const items = kind === 'mylists' ? result.data?.mylists : page?.items;
+						if (!Array.isArray(items)) {
+								throw failure(kind === 'mylists' ? 'data.mylists' : 'data.' + kind + '.items');
+						}
+						if (kind === 'mylists' && items.some(group => {
+								const id = group?.id;
+								return !(typeof id === 'string' && id.trim()) && !(typeof id === 'number' && Number.isSafeInteger(id));
+						})) {
+								throw failure('data.mylists');
+						}
+						if (page?.hasNext !== undefined && typeof page.hasNext !== 'boolean') {
+								throw failure('data.' + kind + '.hasNext');
+						}
+						return { items: items, hasNext: page?.hasNext === true, failure };
+				}
 				async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
 						const execute = async () => {
-								const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
 								const url = kind === 'watchLater' ?
-										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
-										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-								const query = new URLSearchParams({ pageSize: 100, page: 1 });
+										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc&' :
+										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}?`;
+								const query = new URLSearchParams({ pageSize: '100', page: '1' });
 								const results = [];
 								const fingerprints = new Set();
-								const ensureCurrent = () => {
-										if (!isCurrent)
-												return;
-										let current = false;
-										try {
-												current = isCurrent() === true;
-										}
-										catch { }
-										if (!current)
-												throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
-								};
-								const maxPages = 100;
-								for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-										ensureCurrent();
-										const delimiter = kind === 'watchLater' ? '&' : '?';
-										const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
-												headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-												credentials: 'include',
-												...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-										}).then((r) => r.json())
-												.catch((e) => {
-												throw createMylistError(label + 'の取得失敗(2)', { cause: e });
-										});
-										ensureCurrent();
-										const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
-										if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
-												throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+								const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+								const field = 'data.' + kind + '.items';
+								for (let page = 1; page <= 100; page++) {
+										query.set('page', String(page));
+										const { items, hasNext, failure } = await this._readList(url + query.toString(), kind, frontendId, frontendVersion, isCurrent);
+										if (items.some(item => !item || typeof item !== 'object')) {
+												throw failure(field);
 										}
 										if (watchId !== undefined) {
-												const found = pageData.items.find(item => item?.watchId === watchId);
+												const found = items.find(item => item.watchId === watchId);
 												if (found) {
-														ensureCurrent();
+														if (!(typeof found.itemId === 'number' && Number.isSafeInteger(found.itemId)) &&
+																!(typeof found.itemId === 'string' && found.itemId.trim())) {
+																throw failure(field);
+														}
 														return [found];
 												}
 										}
-										results.push(...pageData.items);
-										if (!pageData.hasNext)
+										if (hasNext && !items.length) {
+												throw failure(field, 'INVALID_PAGE', label + 'の取得失敗（空ページが連続）');
+										}
+										if (items.length) {
+												const fingerprint = JSON.stringify(items.map(item => [item.itemId, item.watchId]));
+												if (fingerprints.has(fingerprint)) {
+														throw failure(field, 'REPEATED_PAGE', label + 'の取得失敗（ページが重複）');
+												}
+												fingerprints.add(fingerprint);
+										}
+										if (watchId === undefined) {
+												results.push(...items);
+										}
+										if (!hasNext) {
 												return results;
-										if (!pageData.items.length) {
-												throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
 										}
-										const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
-										if (fingerprints.has(fingerprint)) {
-												throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
-										}
-										fingerprints.add(fingerprint);
-										query.set('page', String(pageNumber + 1));
 								}
 								throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
 						};
@@ -14748,22 +14895,13 @@ const MylistApiLoader = (() => {
 				async _getMylistItems(id, frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
 						return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
 				}
-				async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
+				async getMylistList({ frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
 						const execute = async () => {
-								const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-								const result = await netUtil.fetch(url, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
-								if (result.meta.status !== 200 || !result.data.mylists) {
-										throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
-								}
-								const data = result.data.mylists;
-								return data;
+								const result = await this._readList('https://nvapi.nicovideo.jp/v1/users/me/mylists', 'mylists', frontendId, frontendVersion, isCurrent);
+								return result.items;
 						};
 						return typeof RequestDiagnostics === 'undefined' ? execute() :
-								RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => true);
+								RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => !isCurrent || isCurrent());
 				}
 				async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
 						const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);
@@ -15636,24 +15774,50 @@ const UaaLoader = {
 };
 // already required
 const RecommendAPILoader = (() => {
-		const load = ({ videoId, recipe }) => {
-				const execute = async () => {
-						const target = recipe || { id: 'video_playlist_common', videoId };
-						const encoded = textUtil.encodeBase64(JSON.stringify(target));
-						const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
-						return netUtil
-								.fetch(url, { credentials: 'include' })
-								.then((res) => res.json())
-								.then((res) => {
-								if (!res.meta || res.meta.status !== 200) {
-										window.console.warn('load recommend fail', res);
+		const load = async ({ videoId, recipe, isCurrent }) => {
+				const target = recipe || { id: 'video_playlist_common', videoId };
+				const encoded = textUtil.encodeBase64(JSON.stringify(target));
+				const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
+				const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('recommend', JSON.stringify([target.id, target.seriesId, target.videoId]), 'response', isCurrent);
+				let response;
+				let body;
+				let decoded = false;
+				let missing;
+				try {
+						response = await netUtil.fetch(url, { credentials: 'include', ...(ticket ? { diagnosticActive: () => false } : {}) });
+						body = await response.json();
+						decoded = true;
+						if (response.status >= 300 || !body.meta || body.meta.status !== 200 || body.meta.errorCode) {
+								window.console.warn('load recommend fail', body);
+								throw new Error('load recommend fail');
+						}
+						if (target.id === 'video_playlist_common' || target.id === 'video_watch_playlist_series') {
+								const data = body.data;
+								if (!Array.isArray(data?.items)) {
+										missing = 'data.items';
 										throw new Error('load recommend fail');
 								}
-								return res.data;
-						});
-				};
-				return typeof RequestDiagnostics === 'undefined' ? execute() :
-						RequestDiagnostics.observe('recommend', JSON.stringify(recipe || { videoId }), execute, value => !!value && typeof value === 'object', () => true);
+								if (data.items.some(row => !row || typeof row !== 'object' ||
+										((!row.contentType || row.contentType === 'video') && (typeof row.id !== 'string' || !row.id.trim())))) {
+										missing = 'data.items';
+								}
+						}
+						if (ticket && missing) {
+								ticket.failure(RequestDiagnostics.responseFailure(response, body.meta, missing));
+						}
+						else {
+								ticket?.success();
+						}
+						return body.data;
+				}
+				catch (error) {
+						if (ticket) {
+								ticket.failure(decoded ? RequestDiagnostics.responseFailure(response, body?.meta, missing) || error :
+										RequestDiagnostics.readFailure(response, error));
+						}
+						throw error;
+				}
 		};
 		return {
 				load,
@@ -19910,23 +20074,53 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 		NicoSearchApiV2Query.F_RANGE = F_RANGE;
 		NicoSearchApiV2Query.L_RANGE = L_RANGE;
 		class NicoSearchApiV2Version {
+				generation = 0;
 				constructor() {
 						this.date = this.lastUpdate = this._baseDate;
 				}
 				get isLatest() {
 						return (this.date - this._baseDate) > 0;
 				}
-				async update() {
+				async update(isCurrent) {
 						const now = Date.now();
-						if (now - this.lastUpdate <= 1000 * 60 * 5) {
+						if (now - this.lastUpdate.getTime() <= 1000 * 60 * 5) {
 								return this.date;
 						}
 						initializeCrossDomainGate();
-						const res = await gate.fetch(VERSION_URL);
-						const body = await res.json();
-						this.date = new Date(body.last_modified);
-						this.lastUpdate = new Date(res.headers.get('Date') ?? now);
-						return this.date;
+						const generation = ++this.generation;
+						const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+								RequestDiagnostics.begin('search', VERSION_URL, 'response', isCurrent);
+						let response;
+						let decoded = false;
+						let meta;
+						try {
+								response = await gate.fetch(VERSION_URL);
+								const body = await response.json();
+								decoded = true;
+								meta = body?.meta;
+								ensureCurrent(isCurrent);
+								if (response.status >= 300 || (meta && meta.status !== 200)) {
+										throw new Error('snapshot version unavailable');
+								}
+								const date = new Date(typeof body?.last_modified === 'string' ? body.last_modified : NaN);
+								if (!Number.isFinite(date.getTime())) {
+										throw new Error('snapshot version schema failure');
+								}
+								if (generation === this.generation) {
+										this.date = date;
+										const serverTime = Date.parse(response.headers.get('Date') || '');
+										this.lastUpdate = new Date(Number.isFinite(serverTime) ? serverTime : now);
+								}
+								ticket?.success();
+								return date;
+						}
+						catch (error) {
+								if (ticket) {
+										ticket.failure(decoded ? RequestDiagnostics.responseFailure(response, meta, 'last_modified') :
+												RequestDiagnostics.readFailure(response, error));
+								}
+								throw error;
+						}
 				}
 				get _baseDate() {
 						let now = new Date();
@@ -20093,40 +20287,48 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						(item.registeredAt == null || typeof item.registeredAt === 'string') &&
 						(item.count == null || isSearchRecord(item.count)) &&
 						(item.thumbnail == null || isSearchRecord(item.thumbnail));
-				const validateSearchPage = (data) => {
+				const validateSearchPage = (data, mark) => {
 						const page = data;
-						if (!isSearchRecord(data) || !Array.isArray(page.items) ||
-								!Number.isSafeInteger(page.totalCount) || page.totalCount < 0 ||
-								(page.hasNext != null && typeof page.hasNext !== 'boolean') ||
-								page.items.some(item => !validSearchItem(item)) ||
-								(page.additionals != null && (!isSearchRecord(page.additionals) ||
-										(page.additionals.suggestedVideo != null &&
-												!validSearchItem(page.additionals.suggestedVideo))))) {
+						let missing;
+						if (!isSearchRecord(data) || !Array.isArray(page.items)) {
+								missing = 'data.items';
+						}
+						else if (!Number.isSafeInteger(page.totalCount) || page.totalCount < 0) {
+								missing = 'data.totalCount';
+						}
+						else if (page.hasNext != null && typeof page.hasNext !== 'boolean') {
+								missing = 'data.hasNext';
+						}
+						else if (page.items.some(item => !validSearchItem(item))) {
+								missing = 'data.items';
+						}
+						else if (page.additionals != null && (!isSearchRecord(page.additionals) ||
+								(page.additionals.suggestedVideo != null && !validSearchItem(page.additionals.suggestedVideo)))) {
+								missing = 'data.additionals';
+						}
+						if (missing) {
+								mark(missing);
 								throw searchSchemaError();
 						}
 						return data;
 				};
 				const fetchPage = async (query, page, pageSize, isCurrent) => {
-						const execute = async () => {
-								ensureCurrent(isCurrent);
-								const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
-								const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
-								const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
-										credentials: 'include',
-										headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' },
-										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-								});
-								if (Number.isInteger(res?.status) && res.status >= 400) {
+						ensureCurrent(isCurrent);
+						const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
+						const url = `${API_URL}?${qs.toString()}`;
+						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+						return readSearchPage('search', url, () => net.fetch(url, {
+								credentials: 'include', headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' },
+								...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => false } : {})
+						}), (json, res, mark) => {
+								if (res.status >= 300) {
 										throw Object.assign(new Error('nvapi search HTTP failure'), { status: res.status, kind: 'http' });
 								}
-								const json = await res.json();
-								if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-										throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`), { status: json && json.meta && json.meta.status });
+								if (json?.meta?.status !== 200) {
+										throw Object.assign(new Error('nvapi search failed'), { status: json?.meta?.status });
 								}
-								return validateSearchPage(json.data);
-						};
-						return typeof RequestDiagnostics === 'undefined' ? execute() :
-								RequestDiagnostics.observe('search', JSON.stringify([query, page, pageSize]), execute, () => true, () => !isCurrent || isCurrent());
+								return validateSearchPage(json.data, mark);
+						}, isCurrent);
 				};
 				const search = async (word, params = {}, maxLimit = 100, isCurrent) => {
 						ensureCurrent(isCurrent);
@@ -20213,6 +20415,44 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						throw SEARCH_SUPERSEDED;
 				}
 		};
+		const readSearchPage = async (operation, url, request, consume, isCurrent, snapshot = false) => {
+				const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin(operation, url, 'response', isCurrent);
+				let response;
+				let body = null;
+				let decoded = false;
+				let missing;
+				try {
+						response = await request();
+						ensureCurrent(isCurrent);
+						body = (snapshot ? NicoSearchApiV2Loader._jsonParse(await response.text(), () => { missing = 'json'; }) :
+								await response.json());
+						decoded = true;
+						ensureCurrent(isCurrent);
+						const status = body?.meta?.status;
+						if (typeof status === 'number' && status > 200 && status < 300) {
+								missing = 'meta.status';
+						}
+						const result = consume(body, response, field => { missing = field; });
+						if (ticket) {
+								const failure = RequestDiagnostics.responseFailure(response, body?.meta, missing);
+								if (failure) {
+										ticket.failure(failure);
+								}
+								else {
+										ticket.success();
+								}
+						}
+						return result;
+				}
+				catch (error) {
+						if (ticket) {
+								ticket.failure(decoded ? RequestDiagnostics.responseFailure(response, body?.meta, missing) || error :
+										RequestDiagnostics.readFailure(response, error));
+						}
+						throw error;
+				}
+		};
 		class NicoSearchApiV2Loader {
 				static version = new NicoSearchApiV2Version;
 				static cacheStorage;
@@ -20237,101 +20477,71 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						return NicoSearchApiV2Loader.searchBySnapshot(word, params);
 				}
 				static async searchBySnapshot(word, params, isCurrent) {
-						const execute = async () => {
-								ensureCurrent(isCurrent);
-								initializeCrossDomainGate();
-								const query = new NicoSearchApiV2Query(word, params);
-								const url = API_BASE_URL + '?' + query.toString();
-								const version = this.version.isLatest
-										? this.version.date.getTime()
-										: await this.version.update().then(date => date.getTime());
-								ensureCurrent(isCurrent);
-								if (!this.cacheStorage) {
-										this.cacheStorage = new CacheStorage(sessionStorage);
+						ensureCurrent(isCurrent);
+						initializeCrossDomainGate();
+						const query = new NicoSearchApiV2Query(word, params);
+						const url = API_BASE_URL + '?' + query.toString();
+						const version = this.version.isLatest
+								? this.version.date.getTime()
+								: await this.version.update(isCurrent).then(date => date.getTime());
+						ensureCurrent(isCurrent);
+						if (!this.cacheStorage) {
+								this.cacheStorage = new CacheStorage(sessionStorage);
+						}
+						const cacheKey = `search: ${[
+								`words:${query.q}`,
+								`targets:${query.targets.join(',')}`,
+								`sort:${query.sort}`,
+								`filters:${query.stringfiedFilters}`,
+								`offset:${query.offset}`,
+						].join(', ')}`;
+						const cached = this.cacheStorage.getItem(cacheKey);
+						const saved = cached?.data;
+						if (cached?.version === version && saved?.status === 'ok' && Array.isArray(saved.list) &&
+								Number.isSafeInteger(saved.count) && saved.count >= 0 && saved.list.every(item => typeof item?.id === 'string' && !!item.id.trim())) {
+								return saved;
+						}
+						ensureCurrent(isCurrent);
+						const result = await readSearchPage('search', url, () => gate.fetch(url), (json, res, mark) => {
+								const page = res.status >= 300 ? res.status : NicoSearchApiV2Loader.parseSnapshotData(json, mark);
+								if (typeof page !== 'number') {
+										return page;
 								}
-								const cacheKey = `search: ${[
-										`words:${query.q}`,
-										`targets:${query.targets.join(',')}`,
-										`sort:${query.sort}`,
-										`filters:${query.stringfiedFilters}`,
-										`offset:${query.offset}`,
-								].join(', ')}`;
-								const cacheData = this.cacheStorage.getItem(cacheKey);
-								if (cacheData && cacheData.version === version) {
-										return cacheData.data;
-								}
-								ensureCurrent(isCurrent);
-								return gate.fetch(url).then(res => res.text()).then(text => {
-										ensureCurrent(isCurrent);
-										const result = NicoSearchApiV2Loader.parseResult(text);
-										if (typeof result !== 'number' && result.status === 'ok') {
-												let data = Object.assign(result, { word, params });
-												this.cacheStorage.setItem(cacheKey, { data, version }, this.CACHE_EXPIRE_TIME);
-												return Promise.resolve(data);
-										}
-										else {
-												let description;
-												switch (result) {
-														default:
-																description = 'UNKNOWN ERROR';
-																break;
-														case 400:
-																description = 'INVALID QUERY';
-																break;
-														case 500:
-																description = 'INTERNAL SERVER ERROR';
-																break;
-														case 503:
-																description = 'MAINTENANCE';
-																break;
-												}
-												return Promise.reject({
-														status: 'fail',
-														description
-												});
-										}
-								});
-						};
-						return typeof RequestDiagnostics === 'undefined' ? execute() :
-								RequestDiagnostics.observe('search', 'snapshot:' + JSON.stringify([word, params]), execute, () => true, () => !isCurrent || isCurrent());
+								const descriptions = { 400: 'INVALID QUERY', 500: 'INTERNAL SERVER ERROR', 503: 'MAINTENANCE' };
+								throw { status: 'fail', description: descriptions[page] || 'UNKNOWN ERROR' };
+						}, isCurrent, true);
+						const data = Object.assign(result, { word, params });
+						this.cacheStorage.setItem(cacheKey, { data, version }, this.CACHE_EXPIRE_TIME);
+						return data;
 				}
 				static async lookupOwnerIds(watchIds) {
-						let validation = true;
-						const execute = async () => {
-								initializeCrossDomainGate();
-								const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
-								const result = new Map();
-								if (!ids.length) {
-										return result;
-								}
-								const params = [
-										'q=',
-										'targets=title',
-										'fields=contentId,userId,channelId',
-										'_sort=-startTime',
-										'_offset=0',
-										`_limit=${ids.length}`,
-										'_context=ZenzaWatch'
-								];
-								ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
-								const res = await gate.fetch(API_BASE_URL + '?' + params.join('&'));
-								const json = NicoSearchApiV2Loader._jsonParse(await res.text());
-								const status = res.status >= 400 ? res.status : json?.meta?.status;
-								validation = typeof status === 'number' && status >= 400 ? { status } :
-										!!json && json.meta?.status === 200 && Array.isArray(json.data);
-								if (!json || !json.meta || json.meta.status !== 200 || !Array.isArray(json.data)) {
-										return result;
-								}
-								json.data.forEach(item => {
-										result.set(String(item.contentId), {
-												userId: item.userId || null,
-												channelId: item.channelId || null
-										});
-								});
+						initializeCrossDomainGate();
+						const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
+						const result = new Map();
+						if (!ids.length) {
 								return result;
-						};
-						return typeof RequestDiagnostics === 'undefined' ? execute() :
-								RequestDiagnostics.observe('owner', 'lookup:' + JSON.stringify(watchIds), execute, () => validation, () => true);
+						}
+						const params = [
+								'q=',
+								'targets=title',
+								'fields=contentId,userId,channelId',
+								'_sort=-startTime',
+								'_offset=0',
+								`_limit=${ids.length}`,
+								'_context=ZenzaWatch'
+						];
+						ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
+						const url = API_BASE_URL + '?' + params.join('&');
+						return readSearchPage('owner', url, () => gate.fetch(url), (json, res, mark) => {
+								if (res.status >= 300 || json?.meta?.status !== 200) {
+										return result;
+								}
+								const rows = NicoSearchApiV2Loader.snapshotRows(json.data, mark);
+								for (const item of rows || []) {
+										result.set(item.contentId, { userId: item.userId || null, channelId: item.channelId || null });
+								}
+								return result;
+						}, undefined, true);
 				}
 				static async searchMore(word, params, maxLimit = 300, isCurrent) {
 						ensureCurrent(isCurrent);
@@ -20385,27 +20595,50 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						const limit = Math.min(Math.max(1, parseInt(maxLimit, 10) || 300), 5000);
 						const headers = { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' };
 						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+						const missingOwnerPages = [];
 						const fetchUserPage = async (page) => {
-								const execute = async () => {
-										ensureCurrent(isCurrent);
-										const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
-										const res = await net.fetch(url, { credentials: 'include', headers,
-												...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}) });
-										const json = await res.json();
-										ensureCurrent(isCurrent);
-										if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-												throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
+								ensureCurrent(isCurrent);
+								const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
+								return readSearchPage('owner-videos', url, () => net.fetch(url, { credentials: 'include', headers,
+										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => false } : {}) }), (json, res, mark) => {
+										const data = json?.data;
+										if (res.status >= 300 || json?.meta?.status !== 200) {
+												throw new Error(`投稿動画一覧の取得に失敗 (${res.status >= 300 ? res.status : json?.meta?.status ?? res.status})`);
 										}
-										return json.data;
-								};
-								return typeof RequestDiagnostics === 'undefined' ? execute() :
-										RequestDiagnostics.observe('owner', JSON.stringify([params.userId, page]), execute, value => Array.isArray(value.items), () => !isCurrent || isCurrent());
+										if (!Array.isArray(data?.items)) {
+												mark('data.items');
+												throw new Error('投稿動画一覧の形式を読み取れません');
+										}
+										if ((page === 1 || data.totalCount != null) &&
+												(!Number.isSafeInteger(data.totalCount) || data.totalCount < 0)) {
+												mark('data.totalCount');
+												throw new Error('投稿動画一覧の形式を読み取れません');
+										}
+										let damaged = false;
+										const videos = data.items.map(row => row?.essential).filter((video) => {
+												if (video === null) {
+														return false;
+												}
+												if (typeof video?.id === 'string' && video.id.trim()) {
+														return true;
+												}
+												damaged = true;
+												return false;
+										});
+										if (damaged) {
+												mark('data.items.essential');
+												if (!videos.length) {
+														throw new Error('投稿動画一覧の形式を読み取れません');
+												}
+												missingOwnerPages.push(page);
+										}
+										return { totalCount: data.totalCount, videos };
+								}, isCurrent);
 						};
 						const first = await fetchUserPage(1);
 						const total = Math.min(first.totalCount || 0, 5000);
-						let videos = (first.items || []).map(i => i.essential).filter(Boolean);
+						let videos = first.videos;
 						const lastPage = Math.ceil(total / 100);
-						const missingOwnerPages = [];
 						for (let pg = 2; pg <= lastPage; pg += 4) {
 								ensureCurrent(isCurrent);
 								const chunk = [];
@@ -20421,7 +20654,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 										if (!data) {
 												continue;
 										}
-										videos = videos.concat((data.items || []).map(i => i.essential).filter(Boolean));
+										videos = videos.concat(data.videos);
 								}
 						}
 						initializeCrossDomainGate();
@@ -20441,13 +20674,17 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 										'_context=ZenzaWatch'
 								];
 								batch.forEach((id, n) => q.push(`filters[contentId][${n}]=${encodeURIComponent(id)}`));
-								const res = await gate.fetch(API_BASE_URL + '?' + q.join('&'));
-								const json = NicoSearchApiV2Loader._jsonParse(await res.text());
-								ensureCurrent(isCurrent);
-								if (!json || !json.meta || json.meta.status !== 200) {
-										throw Object.assign(new Error('スナップショット検索に失敗しました'), { status: 'fail' });
-								}
-								(json.data || []).forEach(item => matched.add(item.contentId));
+								const url = API_BASE_URL + '?' + q.join('&');
+								await readSearchPage('owner-videos', url, () => gate.fetch(url), (json, res, mark) => {
+										const rows = res.status >= 300 || json?.meta?.status !== 200 ? null :
+												NicoSearchApiV2Loader.snapshotRows(json.data, mark);
+										if (!rows) {
+												throw Object.assign(new Error('スナップショット検索に失敗しました'), { status: 'fail' });
+										}
+										for (const item of rows) {
+												matched.add(item.contentId);
+										}
+								}, isCurrent, true);
 						}
 						const unapplied = [];
 						const warn = (key) => {
@@ -20659,35 +20896,48 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						result.list = result.list.slice(0, maxLimit);
 						return Object.assign(result, { word, params });
 				}
-				static _jsonParse(result) {
+				static _jsonParse(result, onInvalid) {
 						try {
 								return JSON.parse(result);
 						}
 						catch (e) {
+								onInvalid?.();
 								window.console.error('JSON parse error', e);
 								return null;
 						}
 				}
+				static snapshotRows(value, mark) {
+						if (!Array.isArray(value)) {
+								mark?.('data');
+								return null;
+						}
+						if (value.some(row => typeof row?.contentId !== 'string' || !row.contentId.trim())) {
+								mark?.('data.contentId');
+								return null;
+						}
+						return value;
+				}
 				static parseResult(jsonText) {
-						const data = NicoSearchApiV2Loader._jsonParse(jsonText);
-						if (!data || typeof data !== 'object' || !data.meta || typeof data.meta !== 'object') {
+						return this.parseSnapshotData(this._jsonParse(jsonText));
+				}
+				static parseSnapshotData(json, mark) {
+						const data = json;
+						const status = data?.meta?.status;
+						if (status !== 200 || !data) {
+								return typeof status === 'number' ? status : 0;
+						}
+						if (!Number.isSafeInteger(data.meta.totalCount) || data.meta.totalCount < 0) {
+								mark?.('meta.totalCount');
 								return 0;
 						}
-						if (data.meta.status === 200 && !Array.isArray(data.data)) {
+						const rows = this.snapshotRows(data.data, mark);
+						if (!rows) {
 								return 0;
 						}
-						const status = data.meta.status;
-						const result = {
-								status: (status === 200 ? 'ok' : 'fail'),
-								count: data.meta.totalCount,
-								list: []
-						};
-						if (status !== 200) {
-								return status;
-						}
+						const result = { status: 'ok', count: data.meta.totalCount, list: [] };
 						const midThumbnailThreshold = 23608629; // .Mのついた最小ID?
-						data.data.forEach(item => {
-								let description = item.description ? item.description.replace(/<.*?>/g, '') : '';
+						rows.forEach(item => {
+								let description = typeof item.description === 'string' ? item.description.replace(/<.*?>/g, '') : '';
 								const thumbnailUrl = typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '';
 								if (thumbnailUrl.indexOf('.M') >= 0) {
 										item.thumbnailUrl = thumbnailUrl.replace(/\.M$/, '');
@@ -21265,8 +21515,9 @@ const CommentPostWire = (() => {
 						hasBlankCommand: commands.some(command => command === '')
 				};
 		};
-		const unwrapApiEnvelope = (value) => {
+		const unwrapApiEnvelope = (value, response = {}) => {
 				const invalid = () => {
+						response.missing = 'meta.status';
 						throw { kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason: 'invalid-api-meta' };
 				};
 				if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -21281,8 +21532,20 @@ const CommentPostWire = (() => {
 				if (!Number.isInteger(status) || status < 200 || status > 599) {
 						return invalid();
 				}
-				if (status >= 300) {
+				response.apiStatus = status;
+				const code = meta.errorCode;
+				if (typeof code === 'string' && code) {
+						response.errorCode = code;
+				}
+				if (response.apiStatus >= 300 || response.errorCode) {
 						throw meta;
+				}
+				if (code) {
+						response.missing = 'meta.errorCode';
+						throw { kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason: 'invalid-api-error-code' };
+				}
+				if (response.httpStatus !== undefined && (response.httpStatus < 200 || response.httpStatus >= 300)) {
+						throw { httpStatus: response.httpStatus };
 				}
 				return reply.data;
 		};
@@ -21297,7 +21560,7 @@ const CommentPostWire = (() => {
 				if (statusCode == null) {
 						return { action: 'unknown' };
 				}
-				const action = !retrying && (errorCode === 'INVALID_TOKEN' ||
+				const action = !retrying && typeof statusCode === 'number' && statusCode >= 300 && (errorCode === 'INVALID_TOKEN' ||
 						errorCode === 'EXPIRED_TOKEN') ? 'retry-token' : 'rejected';
 				return { action, statusCode, errorCode };
 		};
@@ -21306,7 +21569,28 @@ const CommentPostWire = (() => {
 				const status = Number(value);
 				return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
 		};
-		const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS) => {
+		const readActionJson = async (res, response) => {
+				if (typeof res.status === 'number') {
+						response.httpStatus = res.status;
+				}
+				try {
+						return await res.json();
+				}
+				catch (error) {
+						if (error?.name === 'SyntaxError') {
+								response.missing = 'response.json';
+						}
+						throw error;
+				}
+		};
+		const readActionResponse = async (res, response, allowNoContent = false) => {
+				if (allowNoContent && res.status === 204) {
+						response.httpStatus = res.status;
+						return undefined;
+				}
+				return unwrapApiEnvelope(await readActionJson(res, response), response);
+		};
+		const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS, response) => {
 				const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 				let stage = 'headers';
 				let timer;
@@ -21336,7 +21620,7 @@ const CommentPostWire = (() => {
 						}
 						stage = 'body';
 						try {
-								return await Promise.race([res.json(), deadline]);
+								return await Promise.race([response ? readActionJson(res, response) : res.json(), deadline]);
 						}
 						catch (error) {
 								const httpStatus = safeStatusCode(res && res.status);
@@ -21351,20 +21635,24 @@ const CommentPostWire = (() => {
 						clearTimeout(timer);
 				}
 		};
-		const getPostKey = async (threadId, language = 'ja-jp') => {
+		const getPostKey = async (threadId, language = 'ja-jp', ownedResponse) => {
+				const response = ownedResponse || {};
 				const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
 				const result = await fetchJsonWithin(url, {
+						...(ownedResponse ? { diagnosticActive: () => false } : {}),
 						headers: {
 								'X-Frontend-Id': '6',
 								'X-Frontend-Version': '0',
 								'X-Niconico-Language': language
 						},
 						credentials: 'include'
-				});
-				return unwrapApiEnvelope(result);
+				}, POST_TIMEOUT_MS, response);
+				return unwrapApiEnvelope(result, response);
 		};
-		const postComment = async (url, body) => {
+		const postComment = async (url, body, ownedResponse) => {
+				const response = ownedResponse || {};
 				const result = await fetchJsonWithin(url, {
+						...(ownedResponse ? { diagnosticActive: () => false } : {}),
 						method: 'POST',
 						headers: {
 								'X-Frontend-Id': '6',
@@ -21372,10 +21660,10 @@ const CommentPostWire = (() => {
 								'Content-Type': 'text/plain; charset=UTF-8'
 						},
 						body
-				});
-				return unwrapApiEnvelope(result);
+				}, POST_TIMEOUT_MS, response);
+				return unwrapApiEnvelope(result, response);
 		};
-		return { fetchJsonWithin, parseAcknowledgement, readPostKey, readChallenge, buildPacket, unwrapApiEnvelope, getPostKey, postComment, classifyPostFailure };
+		return { fetchJsonWithin, parseAcknowledgement, readPostKey, readChallenge, buildPacket, unwrapApiEnvelope, readActionResponse, getPostKey, postComment, classifyPostFailure };
 })();
 const CommentReadAdapter = (() => {
 		const FORK_LABEL = {
@@ -23048,21 +23336,27 @@ const { ThreadLoader } = (() => {
 				return pending.finally(() => { challengeBusy = false; });
 		};
 		const commentSchemaError = (reason) => ({ kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason });
-		const observeAction = async (operation, msgInfo, run) => {
-				const info = msgInfo;
-				const scope = String(info?.threadInfo?.threadId ?? info?.videoId ?? '');
+		const observeAction = async (operation, msgInfo, run, target = '', active) => {
+				const scope = String(msgInfo?.threadInfo?.threadId ?? msgInfo?.videoId ?? '');
 				const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-						RequestDiagnostics.begin(operation, scope, 'response');
+						RequestDiagnostics.begin(operation, target ? scope + '|' + target : scope, 'response', active, String(msgInfo?.videoId ?? msgInfo?.threadInfo?.videoId ?? scope));
+				const action = {};
 				try {
-						const value = await run();
+						const value = await run(action);
 						ticket?.success();
 						return value;
 				}
 				catch (error) {
 						const bag = error;
-						ticket?.failure(bag && typeof bag === 'object' && bag.result && typeof bag.result === 'object' ? bag.result : error);
+						ticket?.failure({ result: action.transportFailure ?? bag?.result ?? error, ...action.response });
 						throw error;
 				}
+		};
+		const displayActionCode = (code) => {
+				if (code === 'INVALID_TOKEN' || code === 'EXPIRED_TOKEN' || code === 'INVALID_CHALLENGE_TOKEN') {
+						return code;
+				}
+				return typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.isKnownErrorCode?.(code) ? code : '';
 		};
 		let commentPostDiagnosticSeq = 0;
 		let threadLogSequence = 0;
@@ -23267,7 +23561,7 @@ const { ThreadLoader } = (() => {
 						console.log('getPostKey request');
 						const postKeyLanguage = options.language || 'ja-jp';
 						try {
-								return await CommentPostWire.getPostKey(threadId, postKeyLanguage);
+								return await CommentPostWire.getPostKey(threadId, postKeyLanguage, options.action && (options.action.response = {}));
 						}
 						catch (result) {
 								throw { result, message: `PostKeyの取得失敗 ${threadId}` };
@@ -23275,7 +23569,9 @@ const { ThreadLoader } = (() => {
 				}
 				async _delete(url, body, options = {}) {
 						try {
-								const { meta } = await netUtil.fetch(url, {
+								const response = options.action ? options.action.response = {} : {};
+								const res = await netUtil.fetch(url, {
+										diagnosticActive: options.action ? () => false : undefined,
 										method: 'PUT',
 										headers: {
 												'X-Frontend-Id': FRONT_ID,
@@ -23283,10 +23579,8 @@ const { ThreadLoader } = (() => {
 												'Content-Type': 'text/plain; charset=UTF-8'
 										},
 										body
-								}).then(res => res.json());
-								if (meta.status >= 300) {
-										throw meta;
-								}
+								});
+								await CommentPostWire.readActionResponse(res, response, true);
 						}
 						catch (result) {
 								throw {
@@ -23297,7 +23591,7 @@ const { ThreadLoader } = (() => {
 				}
 				async _post(url, body, options = {}) {
 						try {
-								return await CommentPostWire.postComment(url, body);
+								return await CommentPostWire.postComment(url, body, options.action && (options.action.response = {}));
 						}
 						catch (result) {
 								throw {
@@ -23471,9 +23765,9 @@ const { ThreadLoader } = (() => {
 						return requestChallengeToken(siteKey);
 				}
 				async postChat(msgInfo, text, cmd, vpos, isOriginalVideo) {
-						return observeAction('comment-post', msgInfo, () => this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo));
+						return observeAction('comment-post', msgInfo, action => this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo, action), '', isOriginalVideo);
 				}
-				async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo) {
+				async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo, actionContext = {}) {
 						diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
 						const stillOriginal = () => {
 								try {
@@ -23499,7 +23793,7 @@ const { ThreadLoader } = (() => {
 						let postKeyData;
 						logCommentPostDiagnostic(diagnostic, 'post-key', 'start');
 						try {
-								postKeyData = (await this.getPostKey(threadId, { language: language })) || {};
+								postKeyData = (await this.getPostKey(threadId, { language: language, action: actionContext })) || {};
 						}
 						catch (error) {
 								logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
@@ -23522,6 +23816,9 @@ const { ThreadLoader } = (() => {
 								challengeSiteKeyPresent: challenge.siteKey !== null
 						});
 						if (postKey === null) {
+								if (actionContext.response) {
+										actionContext.response.missing = 'data.postKey';
+								}
 								logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
 										reason: 'post-key-missing',
 										outcome: 'not-sent'
@@ -23530,6 +23827,9 @@ const { ThreadLoader } = (() => {
 						}
 						let challengeToken;
 						if (challenge.required === null) {
+								if (actionContext.response) {
+										actionContext.response.missing = 'data.challenge';
+								}
 								logCommentPostDiagnostic(diagnostic, 'challenge', 'failure', {
 										reason: 'challenge-unavailable', outcome: 'not-sent'
 								});
@@ -23592,9 +23892,12 @@ const { ThreadLoader } = (() => {
 								is184Forced: is184Forced === true
 						});
 						try {
-								const ack = await this._post(url, packet);
+								const ack = await this._post(url, packet, { action: actionContext });
 								const accepted = CommentPostWire.parseAcknowledgement(ack);
 								if (!accepted) {
+										if (actionContext.response) {
+												actionContext.response.missing = 'data.no';
+										}
 										logCommentPostDiagnostic(diagnostic, 'ack', 'failure', {
 												reason: 'ack-incomplete',
 												outcome: 'unknown',
@@ -23648,6 +23951,7 @@ const { ThreadLoader } = (() => {
 										});
 										logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'start', { reason: errorCode });
 										try {
+												delete actionContext.response;
 												await this.load(msgInfo);
 												logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'success', { reason: errorCode });
 										}
@@ -23666,6 +23970,7 @@ const { ThreadLoader } = (() => {
 												outcome: 'rejected',
 												retryScheduled: false
 										});
+										const code = displayActionCode(errorCode);
 										const challengeRejected = errorCode === 'INVALID_CHALLENGE_TOKEN';
 										throw {
 												status: 'fail',
@@ -23676,7 +23981,7 @@ const { ThreadLoader } = (() => {
 												} : {}),
 												message: challengeRejected ?
 														'追加認証が確認できずコメント投稿が拒否されました。公式プレイヤーで投稿してください（INVALID_CHALLENGE_TOKEN・入力内容は保持されます）' :
-														(errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗')
+														(code ? `コメント投稿失敗 ${code}` : 'コメント投稿失敗')
 										};
 								}
 								logCommentPostDiagnostic(diagnostic, 'retry', 'wait', {
@@ -23691,23 +23996,27 @@ const { ThreadLoader } = (() => {
 								return await this._postChat(msgInfo, text, cmd, vpos, true, {
 										...diagnostic,
 										attempt: diagnostic.attempt + 1
-								}, isOriginalVideo);
+								}, isOriginalVideo, actionContext);
 						}
 				}
 				async getDeleteKey(threadId, options = {}) {
 						const url = `https://nvapi.nicovideo.jp/v1/comment/keys/delete?threadId=${threadId}&fork=${options.fork || 'main'}`;
 						console.log('getDeleteKey request');
 						try {
-								const { meta, data } = await netUtil.fetch(url, {
+								const response = options.action ? options.action.response = {} : {};
+								const res = await netUtil.fetch(url, {
+										diagnosticActive: options.action ? () => false : undefined,
 										headers: {
 												'X-Frontend-Id': FRONT_ID,
 												'X-Frontend-Version': FRONT_VER,
 												'X-Niconico-Language': options.language || 'ja-jp'
 										},
 										credentials: 'include'
-								}).then(res => res.json());
-								if (meta.status >= 300) {
-										throw meta;
+								});
+								const data = await CommentPostWire.readActionResponse(res, response);
+								if (typeof data?.deleteKey !== 'string' || !data.deleteKey.trim()) {
+										response.missing = 'data.deleteKey';
+										throw commentSchemaError('missing-action-key');
 								}
 								return data;
 						}
@@ -23716,13 +24025,13 @@ const { ThreadLoader } = (() => {
 						}
 				}
 				async deleteChat(msgInfo, chat) {
-						return observeAction('comment-delete', msgInfo, () => this._deleteChat(msgInfo, chat));
+						return observeAction('comment-delete', msgInfo, action => this._deleteChat(msgInfo, chat, action), `delete/${chat?.fork || 0}/${chat?.no}`);
 				}
-				async _deleteChat(msgInfo, chat) {
+				async _deleteChat(msgInfo, chat, action) {
 						const { videoId, threadId, language } = msgInfo.threadInfo;
 						const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
 						const fork = FORK_LABEL[chat.fork || 0];
-						const { deleteKey } = await this.getDeleteKey(threadId, { language: language, fork });
+						const { deleteKey } = await this.getDeleteKey(threadId, { language: language, fork, action });
 						const packet = JSON.stringify({
 								deleteKey,
 								fork,
@@ -23735,14 +24044,17 @@ const { ThreadLoader } = (() => {
 						});
 						console.log('put packet request');
 						try {
-								await this._delete(url, packet);
+								await this._delete(url, packet, { action });
 								return {
 										status: 'ok',
 										message: 'コメント削除成功'
 								};
 						}
 						catch (error) {
-								const { result: { status: statusCode, errorCode } } = error;
+								const result = error?.result;
+								action.transportFailure = result;
+								const statusCode = result?.status ?? result?.httpStatus;
+								const errorCode = displayActionCode(result?.errorCode);
 								throw {
 										status: 'fail',
 										statusCode,
@@ -23754,16 +24066,20 @@ const { ThreadLoader } = (() => {
 						const url = `https://nvapi.nicovideo.jp/v1/comment/keys/nicoru?threadId=${threadId}`;
 						console.log('getNicoruKey request');
 						try {
-								const { meta, data } = await netUtil.fetch(url, {
+								const response = options.action ? options.action.response = {} : {};
+								const res = await netUtil.fetch(url, {
+										diagnosticActive: options.action ? () => false : undefined,
 										headers: {
 												'X-Frontend-Id': FRONT_ID,
 												'X-Frontend-Version': FRONT_VER,
 												'X-Niconico-Language': options.language || 'ja-jp'
 										},
 										credentials: 'include'
-								}).then(res => res.json());
-								if (meta.status >= 300) {
-										throw meta;
+								});
+								const data = await CommentPostWire.readActionResponse(res, response);
+								if (typeof data?.nicoruKey !== 'string' || !data.nicoruKey.trim()) {
+										response.missing = 'data.nicoruKey';
+										throw commentSchemaError('missing-action-key');
 								}
 								return data;
 						}
@@ -23772,12 +24088,12 @@ const { ThreadLoader } = (() => {
 						}
 				}
 				async nicoru(msgInfo, chat) {
-						return observeAction('nicoru', msgInfo, () => this._nicoru(msgInfo, chat));
+						return observeAction('nicoru', msgInfo, action => this._nicoru(msgInfo, chat, action), `add/${chat?.fork || 0}/${chat?.no}`);
 				}
-				async _nicoru(msgInfo, chat) {
+				async _nicoru(msgInfo, chat, action) {
 						const { videoId, threadId, language } = msgInfo.threadInfo;
 						const url = new URL(`/v1/threads/${threadId}/nicorus`, msgInfo.nvComment.server);
-						const { nicoruKey } = await this.getNicoruKey(threadId, { language: language });
+						const { nicoruKey } = await this.getNicoruKey(threadId, { language: language, action });
 						const packet = JSON.stringify({
 								content: chat.text,
 								fork: FORK_LABEL[chat.fork || 0],
@@ -23787,16 +24103,29 @@ const { ThreadLoader } = (() => {
 						});
 						console.log('post packet request');
 						try {
-								const { nicoruId, nicoruCount } = await this._post(url, packet);
+								const data = await this._post(url, packet, { action });
+								const nicoruId = data?.nicoruId, nicoruCount = data?.nicoruCount;
+								const hasId = typeof nicoruId === 'string' && /^[0-9A-Za-z]+$/.test(nicoruId);
+								const hasCount = (typeof nicoruCount === 'number' || typeof nicoruCount === 'string' && /^[0-9]+$/.test(nicoruCount)) &&
+										Number.isSafeInteger(Number(nicoruCount)) && Number(nicoruCount) >= 0;
+								if (!hasId && !hasCount) {
+										if (action.response) {
+												action.response.missing = 'data.nicoruId';
+										}
+										throw commentSchemaError('missing-nicoru-ack');
+								}
 								return {
 										status: 'ok',
-										id: nicoruId,
-										count: nicoruCount,
+										id: hasId ? nicoruId : undefined,
+										count: hasCount ? nicoruCount : undefined,
 										message: 'ニコれた'
 								};
 						}
 						catch (error) {
-								const { result: { status: statusCode, errorCode } } = error;
+								const result = error?.result;
+								action.transportFailure = result;
+								const statusCode = result?.status ?? result?.httpStatus;
+								const errorCode = displayActionCode(result?.errorCode);
 								throw {
 										status: 'fail',
 										statusCode,
@@ -23805,34 +24134,29 @@ const { ThreadLoader } = (() => {
 						}
 				}
 				async unNicoru(msgInfo, nicoruId) {
-						return observeAction('nicoru', msgInfo, () => this._unNicoru(nicoruId));
+						return observeAction('nicoru', msgInfo, action => this._unNicoru(nicoruId, action), 'cancel/' + nicoruId);
 				}
-				async _unNicoru(nicoruId) {
+				async _unNicoru(nicoruId, action) {
 						if (typeof nicoruId !== 'string' || !/^[0-9A-Za-z]+$/.test(nicoruId)) {
 								throw { status: 'fail', message: 'ニコるを取り消せなかった＞＜（IDが不正）' };
 						}
-						let statusCode = null;
+						const response = action.response = {};
 						try {
 								const res = await fetch('https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId), {
 										method: 'DELETE',
 										headers: { 'x-frontend-id': '6', 'x-frontend-version': '0', 'x-request-with': 'nicovideo' },
 										credentials: 'include'
 								});
-								statusCode = res.status;
-								const body = await res.json().catch(() => null);
-								const status = Number(body?.meta?.status ?? res.status);
-								if (!res.ok || status >= 300) {
-										throw { result: { status, errorCode: body?.meta?.errorCode } };
-								}
+								await CommentPostWire.readActionResponse(res, response, true);
 								return { status: 'ok', message: 'ニコるを取り消した' };
 						}
 						catch (error) {
-								const result = error?.result;
+								action.transportFailure = error;
+								const code = displayActionCode(response.errorCode);
 								throw {
 										status: 'fail',
-										statusCode: result?.status ?? statusCode,
-										result: result || error,
-										message: result?.errorCode ? `ニコるを取り消せなかった＞＜ ${result.errorCode}` : 'ニコるを取り消せなかった＞＜'
+										statusCode: response.apiStatus ?? response.httpStatus,
+										message: code ? `ニコるを取り消せなかった＞＜ ${code}` : 'ニコるを取り消せなかった＞＜'
 								};
 						}
 				}
@@ -32146,14 +32470,28 @@ class Storyboard extends Emitter {
 				this._initializeStoryboard();
 				this.emit('loading', key);
 				const startedAt = performance.now();
+				const active = () => resuestId === this._requestId && this.config.props.enableStoryboard !== false;
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('storyboard', key, 'response', active);
 				this.loader.load(this.config.props.videoServerType, videoInfo)
 						.then(async (info) => {
 						await this.promise('dom-ready');
 						console.log('storyboard loaded: %s %sms%s', watchId, Math.round(performance.now() - startedAt), info && info.fromCache ? ' (cache)' : '');
 						return info;
 				})
-						.then(this._onStoryboardInfoLoad.bind(this, resuestId))
-						.catch(this._onStoryboardInfoLoadFail.bind(this, resuestId));
+						.then((info) => {
+						this._onStoryboardInfoLoad(resuestId, info);
+						if (!active() || info?.fromCache)
+								diagnostic?.failure({ name: 'AbortError' });
+						else if (this.model.isAvailable)
+								diagnostic?.success();
+						else
+								diagnostic?.failure({ kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'storyboard' });
+				})
+						.catch((error) => {
+						diagnostic?.failure(error);
+						this._onStoryboardInfoLoadFail(resuestId, error);
+				});
 		}
 		_onStoryboardInfoLoad(resuestId, rawData) {
 				if (resuestId !== this._requestId || this.config?.props?.enableStoryboard === false) {
@@ -44761,13 +45099,13 @@ class RelatedVideoList extends VideoList {
 				watchId = watchId || videoId;
 				videoInfo && relatedVideo.push(VideoListItem.createByVideoInfoModel(videoInfo).serialize());
 				this.update(relatedVideo, watchId);
-				const data = await RecommendAPILoader.load({ videoId }).catch(() => ({}));
+				const data = await RecommendAPILoader.load({ videoId, isCurrent: () => requestId === this._requestGeneration }).catch(() => ({}));
 				if (requestId !== this._requestGeneration) {
 						return;
 				}
 				const items = data.items || [];
 				for (const item of items) {
-						if (item.contentType && item.contentType !== 'video') {
+						if (!item || typeof item.id !== 'string' || !item.id.trim() || (item.contentType && item.contentType !== 'video')) {
 								continue;
 						}
 						const content = item.content;
@@ -47091,6 +47429,7 @@ const NVApi = {
 						mode: 'cors',
 						credentials: 'include',
 						timeout: 5000,
+						...(params.diagnosticActive ? { diagnosticActive: params.diagnosticActive } : {}),
 						method: params.method || 'GET',
 						headers: {
 								'X-Frontend-Id': NVApi.FRONT_ID,
@@ -47106,11 +47445,13 @@ const NVApi = {
 };
 const LikeApi = {
 		call: async (videoId, method = 'POST') => {
+				const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('like', method + ':' + videoId, 'response');
 				const execute = async () => {
 						const api = 'https://nvapi.nicovideo.jp/v1/users/me/likes/items';
 						const url = `${api}?videoId=${videoId}`;
 						const label = method === 'DELETE' ? 'いいね！の解除' : 'いいね！';
-						const res = await NVApi.call(url, { method });
+						const res = await NVApi.call(url, { method, ...(ticket ? { diagnosticActive: () => false } : {}) });
 						if (!res) {
 								throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK' });
 						}
@@ -47123,14 +47464,27 @@ const LikeApi = {
 						}
 						const meta = ((json && json.meta) || {});
 						const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
-						if (status < 200 || status >= 300) {
-								const detail = [status, meta.errorCode].filter(Boolean).join(' ');
+						if (status < 200 || status >= 300 || meta.errorCode) {
+								const failure = ticket && RequestDiagnostics.responseFailure(res, meta);
+								if (failure)
+										ticket?.failure(failure);
+								const code = meta.errorCode && (typeof RequestDiagnostics !== 'undefined'
+										? (RequestDiagnostics.isKnownErrorCode(meta.errorCode) ? meta.errorCode : 'OTHER')
+										: (meta.errorCode === 'FORBIDDEN' ? 'FORBIDDEN' : 'OTHER'));
+								const detail = [status, code].filter(Boolean).join(' ');
 								throw Object.assign(new Error(`${label}に失敗しました（${detail}）`), { kind: 'API', status, errorCode: meta.errorCode, response: json });
 						}
 						return json || { meta: { status } };
 				};
-				return typeof RequestDiagnostics === 'undefined' ? execute() :
-						RequestDiagnostics.observe('like', method + ':' + videoId, execute, () => true, () => true);
+				try {
+						const result = await execute();
+						ticket?.success();
+						return result;
+				}
+				catch (error) {
+						ticket?.failure(error);
+						throw error;
+				}
 		},
 		like: (videoId) => LikeApi.call(videoId, 'POST'),
 		unlike: (videoId) => LikeApi.call(videoId, 'DELETE')
@@ -54201,7 +54555,11 @@ const NotificationHistoryPanel = (() => {
 				'data.client.watchId', 'data.client.watchTrackId', 'data.video', 'data.video.id', 'data.video.title',
 				'data.video.duration', 'data.video.count', 'data.video.thumbnail', 'data.player', 'data.genre', 'data.tags',
 				'data.tags.items', 'data.nicoads', 'data.isLogin', 'data.twitterLinkage.isLinked', 'data.isClipTweetAllowed',
-				'data.isUseLicensedMusic', 'data.clipId', 'data.status', 'data.clipUri', 'json', 'response.json'
+				'data.isUseLicensedMusic', 'data.clipId', 'data.status', 'data.clipUri', 'json', 'response.json',
+				'data.items', 'data.totalCount', 'data.items.essential', 'data.items.id', 'data.contentId', 'meta.totalCount', 'last_modified',
+				'data.items.content', 'data.items[].watchId', 'data.items[].essential.id', 'data.watchLater.items', 'data.mylist.items',
+				'data.mylists', 'data.hasNext', 'data.watchLater.hasNext', 'data.mylist.hasNext', 'data.additionals', 'storyboard',
+				'meta.errorCode', 'data.postKey', 'data.no', 'data.challenge', 'data.nicoruKey', 'data.deleteKey', 'data.nicoruId'
 		]);
 		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
 		const repairGuide = 'docs/maintenance/REPAIR_GUIDE.md';
@@ -59597,7 +59955,7 @@ const NicoVideoPlayerDialogComments = {
 								details: { operation: 'delete', statusCode: err.statusCode,
 										errorCode: err.errorCode, reason: err.reason }
 						});
-						console.warn('コメント削除に失敗しました', err);
+						console.warn('コメント削除に失敗しました');
 						console.timeEnd('コメント削除');
 						if (this._videoInfo === videoInfo && this._nicoVideoPlayer === player) {
 								this.execCommand('alert', err.message);
@@ -87563,6 +87921,79 @@ const createStoryboardClasses = (util) => {
 						return false;
 				}
 		};
+		class SessionResponseError extends Error {
+				details;
+				constructor(details) {
+						super('配信URLの応答を確認できませんでした');
+						this.details = details;
+						Object.assign(this, details);
+				}
+		}
+		const readSessionResponse = async (response, serverType) => {
+				const httpStatus = response.status;
+				const schemaError = (missing) => new SessionResponseError({
+						kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing, httpStatus
+				});
+				if (httpStatus >= 300) {
+						throw new SessionResponseError({ httpStatus });
+				}
+				let result;
+				try {
+						result = await response.json();
+				}
+				catch (error) {
+						if (error?.name === 'SyntaxError') {
+								throw schemaError('response.json');
+						}
+						throw error;
+				}
+				const rawStatus = result?.meta?.status;
+				if (rawStatus != null || serverType === 'domand') {
+						const apiStatus = typeof rawStatus === 'string' && /^\d{3}$/.test(rawStatus) ? Number(rawStatus) : rawStatus;
+						if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
+								throw schemaError('meta.status');
+						}
+						if (apiStatus >= 300) {
+								throw new SessionResponseError({ httpStatus, apiStatus });
+						}
+				}
+				const isDomand = serverType === 'domand';
+				const value = isDomand ? result?.data?.contentUrl : result?.data?.session?.content_uri;
+				const missing = isDomand ? 'data.contentUrl' : 'data.session.content_uri';
+				if (!validStoryboardUrl(value)) {
+						throw schemaError(missing);
+				}
+				return result;
+		};
+		const readStoryboardManifest = async (url, legacyDmc = false) => {
+				const response = await util.fetch(url, { credentials: 'include' });
+				if (response.status >= 300)
+						throw new SessionResponseError({ httpStatus: response.status });
+				let payload;
+				try {
+						payload = await response.json();
+				}
+				catch (error) {
+						if (error?.name === 'SyntaxError')
+								throw new SessionResponseError({
+										kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: 'response.json', httpStatus: response.status
+								});
+						throw error;
+				}
+				if (!legacyDmc)
+						return payload;
+				const apiStatus = payload?.meta?.status;
+				const httpStatus = response.status;
+				if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
+						throw new SessionResponseError({ kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'meta.status', httpStatus });
+				}
+				if (apiStatus >= 300)
+						throw new SessionResponseError({ httpStatus, apiStatus });
+				if (!storyboardRecord(payload?.data)) {
+						throw new SessionResponseError({ kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'data', httpStatus, apiStatus });
+				}
+				return payload.data;
+		};
 		const validateStoryboardImageList = (images) => {
 				if (!Array.isArray(images) || !images.length ||
 						images.length > MAX_STORYBOARD_PAGES ||
@@ -87744,13 +88175,7 @@ const createStoryboardClasses = (util) => {
 						this._rawData = null;
 				}
 				async load() {
-						try {
-								const result = await util.fetch(this._url, { credentials: 'include' });
-								this._rawData = await result.json();
-						}
-						catch {
-								throw 'storyboard request fail';
-						}
+						this._rawData = await readStoryboardManifest(this._url);
 				}
 				get storyboard() {
 						if (!storyboardRecord(this._rawData) ||
@@ -87797,16 +88222,7 @@ const createStoryboardClasses = (util) => {
 						this._rawData = null;
 				}
 				async load() {
-						const result = await util.fetch(this._url, { credentials: 'include' }).then(res => res.json());
-						if (!storyboardRecord(result) || !storyboardRecord(result.meta) ||
-								!Number.isInteger(result.meta.status) || !storyboardRecord(result.data)) {
-								throw storyboardSchemaError();
-						}
-						if (result.meta.status >= 300) {
-								throw 'storyboard request fail';
-						}
-						this._rawData = result.data;
-						return;
+						this._rawData = await readStoryboardManifest(this._url, true);
 				}
 				get _storyboards() {
 						const { storyboards = [], version = 0 } = this._rawData ?? {};
@@ -87852,6 +88268,10 @@ const createStoryboardClasses = (util) => {
 				}
 		}
 		class StoryboardSession {
+				static readAccessResponse = readSessionResponse;
+				static failureDetails(error) {
+						return error instanceof SessionResponseError ? error.details : undefined;
+				}
 				static create({ serverType, ...params }) {
 						switch (serverType) {
 								case 'domand':
@@ -87877,33 +88297,19 @@ const createStoryboardClasses = (util) => {
 				async _createSession() {
 						const query = new URLSearchParams({ actionTrackId: this._videoInfo.actionTrackId });
 						const url = `https://nvapi.nicovideo.jp/v1/watch/${this._info.videoId}/access-rights/storyboard?${query.toString()}`;
-						try {
-								const result = await util.fetch(url, {
-										method: 'post',
-										headers: {
-												'Content-Type': 'application/json',
-												'X-Frontend-Id': 6,
-												'X-Frontend-Version': '0',
-												'X-Request-With': 'https://www.nicovideo.jp',
-												'X-Access-Right-Key': this._info.accessRightKey,
-										},
-										credentials: 'include',
-								}).then(res => res.json());
-								if (result.meta.status && result.meta.status >= 300) {
-										throw 'api_not_exist';
-								}
-								return this._toSessionInfo(result.data);
-						}
-						catch (err) {
-								if (err?.name === 'AbortError') {
-										throw err;
-								}
-								if (err === 'api_not_exist') {
-										throw 'Domand storyboard api not exist';
-								}
-								console.error('create domand session fail');
-								throw 'create domand session fail';
-						}
+						const response = await util.fetch(url, {
+								method: 'post',
+								headers: {
+										'Content-Type': 'application/json',
+										'X-Frontend-Id': 6,
+										'X-Frontend-Version': '0',
+										'X-Request-With': 'https://www.nicovideo.jp',
+										'X-Access-Right-Key': this._info.accessRightKey,
+								},
+								credentials: 'include',
+						});
+						const result = await readSessionResponse(response, 'domand');
+						return this._toSessionInfo(result.data);
 				}
 				_toSessionInfo({ contentUrl: url }) {
 						return {
@@ -87921,30 +88327,16 @@ const createStoryboardClasses = (util) => {
 				async _createSession() {
 						const url = `${this._url}?_format=json`;
 						const body = this._createRequestString();
-						try {
-								const result = await util.fetch(url, {
-										method: 'POST',
-										credentials: 'include',
-										headers: {
-												'Content-Type': 'application/json'
-										},
-										body
-								}).then(res => res.json());
-								if (result.meta.status && result.meta.status >= 300 || !result.data?.session?.content_uri) {
-										throw 'api_not_exist';
-								}
-								return this._toSessionInfo(result.data);
-						}
-						catch (err) {
-								if (err?.name === 'AbortError') {
-										throw err;
-								}
-								if (err === 'api_not_exist') {
-										throw 'DMC storyboard api not exist';
-								}
-								console.error('create dmc session fail');
-								throw 'create dmc session fail';
-						}
+						const response = await util.fetch(url, {
+								method: 'POST',
+								credentials: 'include',
+								headers: {
+										'Content-Type': 'application/json'
+								},
+								body
+						});
+						const result = await readSessionResponse(response, 'dmc');
+						return this._toSessionInfo(result.data);
 				}
 				_createRequestString() {
 						const info = this._info;
@@ -88081,59 +88473,6 @@ const VideoSessionWorker = (() => {
 										}
 								}
 						}
-				};
-				class SessionResponseError extends Error {
-						details;
-						constructor(details) {
-								super('再生許可の応答を確認できませんでした');
-								this.details = details;
-						}
-				}
-				const readSessionResponse = async (response, serverType) => {
-						const httpStatus = response.status;
-						const schemaError = (missing) => new SessionResponseError({
-								kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing, httpStatus
-						});
-						if (httpStatus >= 300) {
-								throw new SessionResponseError({ httpStatus });
-						}
-						let result;
-						try {
-								result = await response.json();
-						}
-						catch (error) {
-								if (error?.name === 'SyntaxError') {
-										throw schemaError('response.json');
-								}
-								throw error;
-						}
-						const rawStatus = result?.meta?.status;
-						if (rawStatus != null || serverType === 'domand') {
-								const apiStatus = typeof rawStatus === 'string' && /^\d{3}$/.test(rawStatus) ? Number(rawStatus) : rawStatus;
-								if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
-										throw schemaError('meta.status');
-								}
-								if (apiStatus >= 300) {
-										throw new SessionResponseError({ httpStatus, apiStatus });
-								}
-						}
-						const isDomand = serverType === 'domand';
-						const value = isDomand ? result?.data?.contentUrl : result?.data?.session?.content_uri;
-						const missing = isDomand ? 'data.contentUrl' : 'data.session.content_uri';
-						if (typeof value !== 'string' || !/^(?:https?:)?\/\//i.test(value)) {
-								throw schemaError(missing);
-						}
-						let parsed;
-						try {
-								parsed = new URL(value, 'https://www.nicovideo.jp');
-						}
-						catch (_) {
-								throw schemaError(missing);
-						}
-						if (!parsed.hostname || parsed.username || parsed.password) {
-								throw schemaError(missing);
-						}
-						return result;
 				};
 				class DmcPostData {
 						constructor(dmcInfo, videoQuality, { useHLS = true, useSSL = false }) {
@@ -88385,7 +88724,7 @@ const VideoSessionWorker = (() => {
 										},
 										credentials: 'include',
 										body: JSON.stringify(this._buildOutputsMatrix(videos, audioFormat))
-								}).then(res => readSessionResponse(res, 'domand'));
+								}).then(res => StoryboardSession.readAccessResponse(res, 'domand'));
 								this._lastResponse = result.data || {};
 								const { contentUrl, expireTime } = this._lastResponse;
 								this._lastUpdate = Date.now();
@@ -88453,7 +88792,7 @@ const VideoSessionWorker = (() => {
 												timeout: 10000,
 												dataType: 'text',
 												body: postData.toString()
-										}).then(res => readSessionResponse(res, 'dmc'))
+										}).then(res => StoryboardSession.readAccessResponse(res, 'dmc'))
 												.then(json => {
 												const data = json.data || {}, session = data.session || {};
 												const sessionId = session.id;
@@ -88482,7 +88821,7 @@ const VideoSessionWorker = (() => {
 												resolve(this.info);
 										}).catch(err => {
 												console.error('create api fail');
-												if (err instanceof SessionResponseError || ['AbortError', 'timeout', 'TimeoutError'].includes(err?.name)) {
+												if (StoryboardSession.failureDetails(err) || ['AbortError', 'timeout', 'TimeoutError'].includes(err?.name)) {
 														reject(err);
 												}
 												else {
@@ -88621,8 +88960,9 @@ const VideoSessionWorker = (() => {
 								connected = await session.connect();
 						}
 						catch (error) {
-								if (error instanceof SessionResponseError) {
-										return { sessionFailure: error.details };
+								const failure = StoryboardSession.failureDetails(error);
+								if (failure) {
+										return { sessionFailure: failure };
 								}
 								const name = error?.name;
 								if (name === 'AbortError' || name === 'timeout' || name === 'TimeoutError') {
@@ -88704,7 +89044,20 @@ const VideoSessionWorker = (() => {
 								case 'close':
 										return close(params);
 								case 'storyboard':
-										return await storyboard(params);
+										try {
+												return await storyboard(params);
+										}
+										catch (error) {
+												const failure = StoryboardSession.failureDetails(error);
+												if (failure)
+														return { storyboardFailure: failure };
+												if (error?.name === 'AbortError')
+														return { storyboardFailure: { name: 'AbortError' } };
+												if (error?.errorCode === 'STORYBOARD_SCHEMA') {
+														return { storyboardFailure: { kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'storyboard' } };
+												}
+												throw error;
+										}
 								case 'storyboardImages':
 										return await storyboardImages(params);
 						}
@@ -88857,6 +89210,9 @@ const VideoSessionWorker = (() => {
 				}
 				const params = { videoInfo, serverType: type, withImages: false };
 				const result = await worker.post({ command: 'storyboard', params });
+				if (result?.storyboardFailure) {
+						throw Object.assign(new Error('場面画像の応答を確認できませんでした'), result.storyboardFailure);
+				}
 				if (result && result.status === 'ok') {
 						Promise.resolve(StoryboardCacheDb.stats?.()).then(stats => stats?.maxBytes === 0 ? null :
 								worker.post({ command: 'storyboardImages', params: { sbInfo: result, firstPageOnly: true } }))
@@ -89692,7 +90048,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.475-task1098",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.476-task1099",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

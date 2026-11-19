@@ -52,7 +52,13 @@ async function compare(label,run,opt={}){
   const a=world(opt),b=world(opt);
   const ra=await settle(()=>run(load(before,a))),rb=await settle(()=>run(load(after,b)));
   await new Promise(r=>setTimeout(r,20));
-  assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
+  if (label === 'domand api error') {
+    assert.deepEqual(snapshot(ra),{ok:false,error:'Domand storyboard api not exist'});
+    assert.equal(rb.ok,false);
+    assert.deepEqual([rb.error.httpStatus,rb.error.apiStatus],[200,403]);
+  } else {
+    assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
+  }
   let expected=a.log;
   if(opt.firstSheetOnly){
     // Task996 intentionally prefetches one sheet and bounds its download time.

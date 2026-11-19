@@ -138,7 +138,7 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
   });
 
   it('公開してよいパスの決まり: 今の公開用ファイル構成は通り、禁止の種類は通らない', function() {
-    const allowed = ['README.md', 'LICENSE', 'package.json', 'package-lock.json', '.gitignore', 'build.js', 'dist-manifest.json',
+    const allowed = ['test/compat/nico-contract.test.mjs', 'README.md', 'LICENSE', 'package.json', 'package-lock.json', '.gitignore', 'build.js', 'dist-manifest.json',
       'src/_template.js', 'src/_jshintrc', 'src/yomi/YomiPage.js', 'packages/lib/src/nico/ThreadLoader.js',
       'packages/zenza/src/pocket/PocketThumbnail.ts',
       'tools/check-root-test-generated.cjs',
@@ -162,7 +162,7 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
       'packages/external-playback/build-shells.cjs', 'packages/external-playback/bundle.test.cjs',
       'packages/external-playback/generated/settings.js', 'packages/external-playback/src/settings.ts',
       'packages/external-playback/tsconfig.json', 'packages/zenza/src/diagnostics/DiagnosticConsole.ts'];
-    const denied = ['.env', 'src/.env.local', 'capture.har', 'tools/publish_scan.py', 'docs/design-pack/x.md',
+    const denied = ['test/compat/unreviewed.mjs', '.env', 'src/.env.local', 'capture.har', 'tools/publish_scan.py', 'docs/design-pack/x.md',
       'dist/_versions/ZenzaWatch-dev.task081.user.js', '.npmrc', 'test/fixtures/cookies.json', 'id_rsa',
       'notes.txt', 'src/data.bin', 'server.key', 'debug.log',
       'packages/zenza/src/pocket/OtherUnreviewed.ts', 'packages/lib/src/pocket/PocketThumbnail.ts',

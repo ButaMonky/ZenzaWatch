@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
-import {read} from './nico-api-harness.mjs';
+import {read,loadLegacy} from './nico-api-harness.mjs';
 import {ZenzaCommentHistoryCore} from '../../../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 
 const ts=read('tools/typescript-stage1/nico-src/ThreadLoader.ts');
@@ -47,6 +47,7 @@ function subject(method,extra={}){
     console:c.console,window:{console:c.console},URL,ZenzaCommentHistoryCore,
     commentSchemaError:reason=>({kind:'schema',errorCode:'RESPONSE_SCHEMA',reason}),
     FRONT_ID:'6',FRONT_VER:'0',threadLogSequence:0,
+    CommentPostWire:loadLegacy(read('packages/lib/src/nico/CommentPostWire.js'),'CommentPostWire',{}),
     checkAbort:(signal)=>{if(signal?.aborted)throw Object.assign(new Error('synthetic abort'),{name:'AbortError'});},
     readJson:async()=>({meta:{status:200},data:{threads:[],globalComments:[]}}),
     CommentReadAdapter:{threads:(data)=>data},
@@ -107,7 +108,7 @@ test('R2 paired concurrent load timings: unique anonymous labels and language fa
 test('R2 delete/reaction key request inputs are unchanged and console is anonymous',async()=>{
   const captured=[];
   const fetch=async(url,options)=>{captured.push({url,options});
-    return {json:async()=>({meta:{status:200},data:{value:'synthetic'}})};};
+    return {json:async()=>({meta:{status:200},data:{deleteKey:SENTINEL,nicoruKey:SENTINEL}})};};
   const del=subject(sliceMethod('async getDeleteKey(threadId, options = {}) {','async deleteChat(msgInfo, chat) {'),{
     netUtil:{fetch}
   });

@@ -11,6 +11,7 @@ const NVApi = {
             mode: 'cors',
             credentials: 'include',
             timeout: 5000,
+            ...(params.diagnosticActive ? { diagnosticActive: params.diagnosticActive } : {}),
             method: params.method || 'GET',
             headers: {
                 'X-Frontend-Id': NVApi.FRONT_ID,

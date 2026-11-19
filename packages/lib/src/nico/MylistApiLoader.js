@@ -85,66 +85,110 @@ const MylistApiLoader = (() => {
                 throw createMylistError('マイリストトークン取得失敗（認証情報がありません）');
             }
         }
-        // A single deletion must never wait for every page in a huge private list.
-        // The same bounded scanner is used for all-page consumers and targeted lookups.
+        async _readList(url, kind, frontendId, frontendVersion, isCurrent) {
+            const label = kind === 'watchLater' ? 'あとで見る' : kind === 'mylists' ? 'マイリスト一覧' : 'マイリスト';
+            const ensureCurrent = () => {
+                if (!isCurrent) {
+                    return;
+                }
+                let current = false;
+                try {
+                    current = isCurrent() === true;
+                }
+                catch (_) { /* A disposed owner is stale. */ }
+                if (!current) {
+                    throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+                }
+            };
+            ensureCurrent();
+            let response;
+            let result;
+            try {
+                response = await netUtil.fetch(url, {
+                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include',
+                    ...(typeof RequestDiagnostics !== 'undefined' && isCurrent ? { diagnosticActive: isCurrent } : {})
+                });
+                result = await response.json();
+            }
+            catch (cause) {
+                ensureCurrent();
+                const wrapped = createMylistError(label + 'の取得失敗(2)', { cause, ...(kind === 'mylists' ? { result: cause } : {}) });
+                if (typeof RequestDiagnostics !== 'undefined') {
+                    Object.assign(wrapped, RequestDiagnostics.readFailure(response, cause));
+                }
+                throw wrapped;
+            }
+            ensureCurrent();
+            const failure = (missing, code, message = label + 'の取得失敗(1)') => {
+                const wrapped = createMylistError(message, { code: code ?? result?.error?.code, ...(kind === 'mylists' ? { result } : {}) });
+                if (typeof RequestDiagnostics !== 'undefined') {
+                    const meta = result?.meta && { status: result.meta.status, errorCode: result.meta.errorCode ?? result?.error?.code };
+                    Object.assign(wrapped, RequestDiagnostics.responseFailure(response, meta, missing));
+                }
+                return wrapped;
+            };
+            if (response.status >= 300 || result?.meta?.status !== 200 || result?.meta?.errorCode || result?.error?.code) {
+                throw failure('meta.status');
+            }
+            const page = kind === 'mylists' ? undefined : result.data?.[kind];
+            const items = kind === 'mylists' ? result.data?.mylists : page?.items;
+            if (!Array.isArray(items)) {
+                throw failure(kind === 'mylists' ? 'data.mylists' : 'data.' + kind + '.items');
+            }
+            if (kind === 'mylists' && items.some(group => {
+                const id = group?.id;
+                return !(typeof id === 'string' && id.trim()) && !(typeof id === 'number' && Number.isSafeInteger(id));
+            })) {
+                throw failure('data.mylists');
+            }
+            if (page?.hasNext !== undefined && typeof page.hasNext !== 'boolean') {
+                throw failure('data.' + kind + '.hasNext');
+            }
+            return { items: items, hasNext: page?.hasNext === true, failure };
+        }
+        // Stop a single-item lookup as soon as the matching row is available.
         async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
             const execute = async () => {
-                const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
                 const url = kind === 'watchLater' ?
-                    'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
-                    `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-                const query = new URLSearchParams({ pageSize: 100, page: 1 });
+                    'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc&' :
+                    `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}?`;
+                const query = new URLSearchParams({ pageSize: '100', page: '1' });
                 const results = [];
                 const fingerprints = new Set();
-                const ensureCurrent = () => {
-                    if (!isCurrent)
-                        return;
-                    let current = false;
-                    try {
-                        current = isCurrent() === true;
-                    }
-                    catch { }
-                    if (!current)
-                        throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
-                };
-                // Private lists can be large, but broken hasNext must never create an
-                // unbounded loop. 100 pages x 100 rows is the supported safety cap.
-                const maxPages = 100;
-                for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-                    ensureCurrent();
-                    const delimiter = kind === 'watchLater' ? '&' : '?';
-                    const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
-                        headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                        credentials: 'include',
-                        ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-                    }).then((r) => r.json())
-                        .catch((e) => {
-                        throw createMylistError(label + 'の取得失敗(2)', { cause: e });
-                    });
-                    ensureCurrent();
-                    const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
-                    if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
-                        throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+                const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+                const field = 'data.' + kind + '.items';
+                for (let page = 1; page <= 100; page++) {
+                    query.set('page', String(page));
+                    const { items, hasNext, failure } = await this._readList(url + query.toString(), kind, frontendId, frontendVersion, isCurrent);
+                    if (items.some(item => !item || typeof item !== 'object')) {
+                        throw failure(field);
                     }
                     if (watchId !== undefined) {
-                        const found = pageData.items.find(item => item?.watchId === watchId);
+                        const found = items.find(item => item.watchId === watchId);
                         if (found) {
-                            ensureCurrent();
+                            if (!(typeof found.itemId === 'number' && Number.isSafeInteger(found.itemId)) &&
+                                !(typeof found.itemId === 'string' && found.itemId.trim())) {
+                                throw failure(field);
+                            }
                             return [found];
                         }
                     }
-                    results.push(...pageData.items);
-                    if (!pageData.hasNext)
+                    if (hasNext && !items.length) {
+                        throw failure(field, 'INVALID_PAGE', label + 'の取得失敗（空ページが連続）');
+                    }
+                    if (items.length) {
+                        const fingerprint = JSON.stringify(items.map(item => [item.itemId, item.watchId]));
+                        if (fingerprints.has(fingerprint)) {
+                            throw failure(field, 'REPEATED_PAGE', label + 'の取得失敗（ページが重複）');
+                        }
+                        fingerprints.add(fingerprint);
+                    }
+                    if (watchId === undefined) {
+                        results.push(...items);
+                    }
+                    if (!hasNext) {
                         return results;
-                    if (!pageData.items.length) {
-                        throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
                     }
-                    const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
-                    if (fingerprints.has(fingerprint)) {
-                        throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
-                    }
-                    fingerprints.add(fingerprint);
-                    query.set('page', String(pageNumber + 1));
                 }
                 throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
             };
@@ -157,25 +201,14 @@ const MylistApiLoader = (() => {
         async _getMylistItems(id, frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
             return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
         }
-        async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
+        async getMylistList({ frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
             const execute = async () => {
-                const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-                // #238/#261: /users/me/mylists is private; a fixed storage key
-                // would leak the previous account's list after a login change.
-                // nvapi に X-Frontend-Id header が必要
-                const result = await netUtil.fetch(url, {
-                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                    credentials: 'include'
-                }).then((r) => r.json())
-                    .catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
-                if (result.meta.status !== 200 || !result.data.mylists) {
-                    throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
-                }
-                const data = result.data.mylists;
-                return data;
+                // /users/me/mylists must always reflect the currently signed-in viewer.
+                const result = await this._readList('https://nvapi.nicovideo.jp/v1/users/me/mylists', 'mylists', frontendId, frontendVersion, isCurrent);
+                return result.items;
             };
             return typeof RequestDiagnostics === 'undefined' ? execute() :
-                RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => true);
+                RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => !isCurrent || isCurrent());
         }
         async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
             const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);

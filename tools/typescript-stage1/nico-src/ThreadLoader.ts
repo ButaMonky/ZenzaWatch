@@ -6,6 +6,7 @@ declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestD
  * owner deletion and nicoru. Takes over the stalled comment lane (Task487-498);
  * the typed pieces they extracted (CommentPostWire, CommentReadAdapter) are used as-is.
  */
+import type {ActionResponse} from './CommentPostWire';
 import type {NetFetchOptions} from './NicoApiTypes';
 
 declare const CommentPostWire: typeof import('./CommentPostWire').CommentPostWire;
@@ -76,7 +77,12 @@ export interface CommentMsgInfo {
   threadInfo?: ThreadInfo;
   [key: string]: unknown;
 }
+interface CommentAction {
+  response?: ActionResponse;
+  transportFailure?: unknown;
+}
 export interface LoadOptions {
+  action?: CommentAction;
   signal?: AbortSignal;
   /** Set only when the user explicitly requests a reload, not for post-token retries. */
   manualReload?: boolean;
@@ -284,20 +290,26 @@ const {ThreadLoader} = (() => {
    * 通信より前の TypeError で、これまでどこにも記録されなかった。
    */
   const observeAction = async <T>(operation: 'comment-post' | 'nicoru' | 'comment-delete',
-    msgInfo: CommentMsgInfo | null | undefined, run: () => Promise<T>): Promise<T> => {
-    const info = msgInfo as {threadInfo?: {threadId?: unknown}; videoId?: unknown} | null | undefined;
-    const scope = String(info?.threadInfo?.threadId ?? info?.videoId ?? '');
+    msgInfo: CommentMsgInfo | null | undefined, run: (action: CommentAction) => Promise<T>,
+    target = '', active?: () => boolean): Promise<T> => {
+    const scope = String(msgInfo?.threadInfo?.threadId ?? msgInfo?.videoId ?? '');
     const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-      RequestDiagnostics.begin(operation, scope, 'response');
+      RequestDiagnostics.begin(operation, target ? scope + '|' + target : scope, 'response', active,
+        String(msgInfo?.videoId ?? msgInfo?.threadInfo?.videoId ?? scope));
+    const action: CommentAction = {};
     try {
-      const value = await run();
+      const value = await run(action);
       ticket?.success();
       return value;
     } catch (error) {
       const bag = error as {result?: unknown} | null;
-      ticket?.failure(bag && typeof bag === 'object' && bag.result && typeof bag.result === 'object' ? bag.result : error);
+      ticket?.failure({result: action.transportFailure ?? bag?.result ?? error, ...action.response});
       throw error;
     }
+  };
+  const displayActionCode = (code: unknown): string => {
+    if (code === 'INVALID_TOKEN' || code === 'EXPIRED_TOKEN' || code === 'INVALID_CHALLENGE_TOKEN') { return code; }
+    return typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.isKnownErrorCode?.(code) ? code : '';
   };
   // Task498: type-checked external read adapter, loaded before ThreadLoader.
 
@@ -480,7 +492,7 @@ const {ThreadLoader} = (() => {
       const postKeyLanguage = options.language || 'ja-jp';
       try {
         // Task490: TypeScript owns post-key GET request headers and response validation.
-        return await CommentPostWire.getPostKey(threadId, postKeyLanguage);
+        return await CommentPostWire.getPostKey(threadId, postKeyLanguage, options.action && (options.action.response = {}));
       } catch (result) {
         throw { result, message: `PostKeyの取得失敗 ${threadId}` }
       }
@@ -488,7 +500,9 @@ const {ThreadLoader} = (() => {
 
     async _delete(url: string | URL, body: string, options: LoadOptions = {}): Promise<void> {
       try {
-        const { meta } = await netUtil.fetch(url, {
+        const response = options.action ? options.action.response = {} : {};
+        const res = await netUtil.fetch(url, {
+          diagnosticActive: options.action ? () => false : undefined,
           method: 'PUT',
           headers: {
             'X-Frontend-Id': FRONT_ID,
@@ -496,10 +510,8 @@ const {ThreadLoader} = (() => {
             'Content-Type': 'text/plain; charset=UTF-8'
           },
           body
-        }).then(res => res.json() as Promise<Failure>);
-        if (meta.status >= 300) {
-          throw meta
-        }
+        });
+        await CommentPostWire.readActionResponse(res, response, true);
       } catch (result) {
         throw {
           result,
@@ -511,7 +523,7 @@ const {ThreadLoader} = (() => {
     async _post(url: string | URL, body: string, options: LoadOptions = {}): Promise<unknown> {
       try {
         // Task491: the TypeScript client owns the exact POST wire request.
-        return await CommentPostWire.postComment(url, body);
+        return await CommentPostWire.postComment(url, body, options.action && (options.action.response = {}));
       } catch (result) {
         throw {
           result,
@@ -741,12 +753,12 @@ const {ThreadLoader} = (() => {
 
     async postChat(msgInfo: CommentMsgInfo, text: string, cmd?: string | null, vpos?: number | null,
       isOriginalVideo?: () => boolean): Promise<PostResult> {
-      return observeAction('comment-post', msgInfo, () =>
-        this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo));
+      return observeAction('comment-post', msgInfo, action =>
+        this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo, action), '', isOriginalVideo);
     }
 
     async _postChat(msgInfo: CommentMsgInfo, text: string, cmd: string | null | undefined, vpos: number | null | undefined,
-      retrying = false, diagnostic: Diagnostic | null = null, isOriginalVideo?: () => boolean): Promise<PostResult> {
+      retrying = false, diagnostic: Diagnostic | null = null, isOriginalVideo?: () => boolean, actionContext: CommentAction = {}): Promise<PostResult> {
       diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
       const stillOriginal = () => {
         try { return !isOriginalVideo || isOriginalVideo() === true; }
@@ -775,7 +787,7 @@ const {ThreadLoader} = (() => {
       let postKeyData: Failure;
       logCommentPostDiagnostic(diagnostic, 'post-key', 'start');
       try {
-        postKeyData = (await this.getPostKey(threadId as string | number, { language: language as string })) || {};
+        postKeyData = (await this.getPostKey(threadId as string | number, { language: language as string, action: actionContext })) || {};
       } catch (error) {
         logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
           ...getCommentPostFailureDetails(error as Failure),
@@ -799,6 +811,7 @@ const {ThreadLoader} = (() => {
       });
       // Task186 (F12): never POST without a usable post key.
       if (postKey === null) {
+        if (actionContext.response) { actionContext.response.missing = 'data.postKey'; }
         logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
           reason: 'post-key-missing',
           outcome: 'not-sent'
@@ -810,6 +823,7 @@ const {ThreadLoader} = (() => {
       // Only a real, user-completed Turnstile response can be sent as challengeToken.
       let challengeToken: string | undefined;
       if (challenge.required === null) {
+        if (actionContext.response) { actionContext.response.missing = 'data.challenge'; }
         logCommentPostDiagnostic(diagnostic, 'challenge', 'failure', {
           reason: 'challenge-unavailable', outcome: 'not-sent'
         });
@@ -882,7 +896,7 @@ const {ThreadLoader} = (() => {
       // Do not log the raw packet: command strings are user input too. The structured
       // diagnostic above contains only counts/booleans plus public identifiers.
       try {
-        const ack = await this._post(url, packet);
+        const ack = await this._post(url, packet, {action: actionContext});
         // Task186 (F12): Zenza needs the comment number to show the posted comment.
         // An acknowledgement without a numeric `no` is not a confirmed success.
         // (`id` is passed through but not required: its contract is unconfirmed.)
@@ -890,6 +904,7 @@ const {ThreadLoader} = (() => {
         // booleans/arrays/whitespace into successful comment numbers.
         const accepted = CommentPostWire.parseAcknowledgement(ack);
         if (!accepted) {
+          if (actionContext.response) { actionContext.response.missing = 'data.no'; }
           logCommentPostDiagnostic(diagnostic, 'ack', 'failure', {
             reason: 'ack-incomplete',
             outcome: 'unknown',
@@ -946,6 +961,7 @@ const {ThreadLoader} = (() => {
           });
           logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'start', {reason: errorCode});
           try {
+            delete actionContext.response;
             await this.load(msgInfo);
             logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'success', {reason: errorCode});
           } catch (refreshError) {
@@ -962,6 +978,7 @@ const {ThreadLoader} = (() => {
             outcome: 'rejected',
             retryScheduled: false
           });
+          const code = displayActionCode(errorCode);
           const challengeRejected = errorCode === 'INVALID_CHALLENGE_TOKEN';
           throw {
             status: 'fail',
@@ -972,7 +989,7 @@ const {ThreadLoader} = (() => {
             } : {}),
             message: challengeRejected ?
               '追加認証が確認できずコメント投稿が拒否されました。公式プレイヤーで投稿してください（INVALID_CHALLENGE_TOKEN・入力内容は保持されます）' :
-              (errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗')
+              (code ? `コメント投稿失敗 ${code}` : 'コメント投稿失敗')
           };
         }
         logCommentPostDiagnostic(diagnostic, 'retry', 'wait', {
@@ -988,7 +1005,7 @@ const {ThreadLoader} = (() => {
         return await this._postChat(msgInfo, text, cmd, vpos, true, {
           ...diagnostic,
           attempt: diagnostic.attempt + 1
-        }, isOriginalVideo);
+        }, isOriginalVideo, actionContext);
       }
     }
 
@@ -998,27 +1015,32 @@ const {ThreadLoader} = (() => {
       // Task650 (TL-LOG-001): this log was labelled getNicoruKey.
       console.log('getDeleteKey request');
       try {
-        const { meta, data } = await netUtil.fetch(url, {
+        const response: ActionResponse = options.action ? options.action.response = {} : {};
+        const res = await netUtil.fetch(url, {
+          diagnosticActive: options.action ? () => false : undefined,
           headers: {
             'X-Frontend-Id': FRONT_ID,
             'X-Frontend-Version': FRONT_VER,
             'X-Niconico-Language': options.language || 'ja-jp'
           },
           credentials: 'include'
-        }).then(res => res.json() as Promise<Failure>);
-        if (meta.status >= 300) {
-          throw meta
+        });
+        const data = await CommentPostWire.readActionResponse(res, response) as Failure | null;
+        if (typeof data?.deleteKey !== 'string' || !data.deleteKey.trim()) {
+          response.missing = 'data.deleteKey';
+          throw commentSchemaError('missing-action-key');
         }
-        return data
+        return data;
       } catch (result) {
         throw { result, message: `DeleteKeyの取得失敗 ${threadId}` }
       }
     }
 
     async deleteChat(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number}): Promise<{status: 'ok'; message: string}> {
-      return observeAction('comment-delete', msgInfo, () => this._deleteChat(msgInfo, chat));
+      return observeAction('comment-delete', msgInfo, action => this._deleteChat(msgInfo, chat, action),
+        `delete/${chat?.fork || 0}/${chat?.no}`);
     }
-    async _deleteChat(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number}): Promise<{status: 'ok'; message: string}> {
+    async _deleteChat(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number}, action: CommentAction): Promise<{status: 'ok'; message: string}> {
       const {
         videoId,
         threadId,
@@ -1026,7 +1048,7 @@ const {ThreadLoader} = (() => {
       } = msgInfo.threadInfo as ThreadInfo;
       const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
       const fork = FORK_LABEL[chat.fork || 0] as string;
-      const { deleteKey } = await this.getDeleteKey(threadId, { language: language as string, fork });
+      const { deleteKey } = await this.getDeleteKey(threadId, { language: language as string, fork, action });
       const packet = JSON.stringify({
         deleteKey,
         fork,
@@ -1039,13 +1061,16 @@ const {ThreadLoader} = (() => {
       });
       console.log('put packet request');
       try {
-        await this._delete(url, packet);
+        await this._delete(url, packet, {action});
         return {
           status: 'ok',
           message: 'コメント削除成功'
         };
       } catch (error) {
-        const { result: { status: statusCode, errorCode } } = error as Failure;
+        const result = (error as Failure)?.result;
+        action.transportFailure = result;
+        const statusCode = result?.status ?? result?.httpStatus;
+        const errorCode = displayActionCode(result?.errorCode);
         throw {
           status: 'fail',
           statusCode,
@@ -1059,34 +1084,39 @@ const {ThreadLoader} = (() => {
 
       console.log('getNicoruKey request');
       try {
-        const { meta, data } = await netUtil.fetch(url, {
+        const response: ActionResponse = options.action ? options.action.response = {} : {};
+        const res = await netUtil.fetch(url, {
+          diagnosticActive: options.action ? () => false : undefined,
           headers: {
             'X-Frontend-Id': FRONT_ID,
             'X-Frontend-Version': FRONT_VER,
             'X-Niconico-Language': options.language || 'ja-jp'
           },
           credentials: 'include'
-        }).then(res => res.json() as Promise<Failure>);
-        if (meta.status >= 300) {
-          throw meta
+        });
+        const data = await CommentPostWire.readActionResponse(res, response) as Failure | null;
+        if (typeof data?.nicoruKey !== 'string' || !data.nicoruKey.trim()) {
+          response.missing = 'data.nicoruKey';
+          throw commentSchemaError('missing-action-key');
         }
-        return data
+        return data;
       } catch (result) {
         throw { result, message: `NicoruKeyの取得失敗 ${threadId}` }
       }
     }
 
     async nicoru(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number; text: string}): Promise<{status: 'ok'; id: unknown; count: unknown; message: string}> {
-      return observeAction('nicoru', msgInfo, () => this._nicoru(msgInfo, chat));
+      return observeAction('nicoru', msgInfo, action => this._nicoru(msgInfo, chat, action),
+        `add/${chat?.fork || 0}/${chat?.no}`);
     }
-    async _nicoru(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number; text: string}): Promise<{status: 'ok'; id: unknown; count: unknown; message: string}> {
+    async _nicoru(msgInfo: CommentMsgInfo, chat: {fork?: number; no: number; text: string}, action: CommentAction): Promise<{status: 'ok'; id: unknown; count: unknown; message: string}> {
       const {
         videoId,
         threadId,
         language
       } = msgInfo.threadInfo as ThreadInfo;
       const url = new URL(`/v1/threads/${threadId}/nicorus`, msgInfo.nvComment.server);
-      const { nicoruKey } = await this.getNicoruKey(threadId, { language: language as string });
+      const { nicoruKey } = await this.getNicoruKey(threadId, { language: language as string, action });
       const packet = JSON.stringify({
         content: chat.text,
         fork: FORK_LABEL[chat.fork || 0],
@@ -1096,15 +1126,26 @@ const {ThreadLoader} = (() => {
       });
       console.log('post packet request');
       try {
-        const { nicoruId, nicoruCount } = await this._post(url, packet) as Failure;
+        const data = await this._post(url, packet, {action}) as Failure | null;
+        const nicoruId = data?.nicoruId, nicoruCount = data?.nicoruCount;
+        const hasId = typeof nicoruId === 'string' && /^[0-9A-Za-z]+$/.test(nicoruId);
+        const hasCount = (typeof nicoruCount === 'number' || typeof nicoruCount === 'string' && /^[0-9]+$/.test(nicoruCount)) &&
+          Number.isSafeInteger(Number(nicoruCount)) && Number(nicoruCount) >= 0;
+        if (!hasId && !hasCount) {
+          if (action.response) { action.response.missing = 'data.nicoruId'; }
+          throw commentSchemaError('missing-nicoru-ack');
+        }
         return {
           status: 'ok',
-          id: nicoruId,
-          count: nicoruCount,
+          id: hasId ? nicoruId : undefined,
+          count: hasCount ? nicoruCount : undefined,
           message: 'ニコれた'
         };
       } catch (error) {
-        const { result: { status: statusCode, errorCode } } = error as Failure;
+        const result = (error as Failure)?.result;
+        action.transportFailure = result;
+        const statusCode = result?.status ?? result?.httpStatus;
+        const errorCode = displayActionCode(result?.errorCode);
         throw {
           status: 'fail',
           statusCode,
@@ -1117,33 +1158,29 @@ const {ThreadLoader} = (() => {
      * DELETE https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/{nicoruId}（応答 {meta:{status:200},data:[]}）。
      */
     async unNicoru(msgInfo: CommentMsgInfo, nicoruId: string): Promise<{status: 'ok'; message: string}> {
-      return observeAction('nicoru', msgInfo, () => this._unNicoru(nicoruId));
+      return observeAction('nicoru', msgInfo, action => this._unNicoru(nicoruId, action),
+        'cancel/' + nicoruId);
     }
-    async _unNicoru(nicoruId: string): Promise<{status: 'ok'; message: string}> {
+    async _unNicoru(nicoruId: string, action: CommentAction): Promise<{status: 'ok'; message: string}> {
       if (typeof nicoruId !== 'string' || !/^[0-9A-Za-z]+$/.test(nicoruId)) {
         throw {status: 'fail', message: 'ニコるを取り消せなかった＞＜（IDが不正）'};
       }
-      let statusCode: unknown = null;
+      const response: ActionResponse = action.response = {};
       try {
         const res = await fetch('https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId), {
           method: 'DELETE',
           headers: {'x-frontend-id': '6', 'x-frontend-version': '0', 'x-request-with': 'nicovideo'},
           credentials: 'include'
         });
-        statusCode = res.status;
-        const body = await res.json().catch(() => null) as {meta?: {status?: number; errorCode?: string}} | null;
-        const status = Number(body?.meta?.status ?? res.status);
-        if (!res.ok || status >= 300) {
-          throw {result: {status, errorCode: body?.meta?.errorCode}};
-        }
+        await CommentPostWire.readActionResponse(res, response, true);
         return {status: 'ok', message: 'ニコるを取り消した'};
       } catch (error) {
-        const result = (error as {result?: {status?: unknown; errorCode?: unknown}})?.result;
+        action.transportFailure = error;
+        const code = displayActionCode(response.errorCode);
         throw {
           status: 'fail',
-          statusCode: result?.status ?? statusCode,
-          result: result || error,
-          message: result?.errorCode ? `ニコるを取り消せなかった＞＜ ${result.errorCode}` : 'ニコるを取り消せなかった＞＜'
+          statusCode: response.apiStatus ?? response.httpStatus,
+          message: code ? `ニコるを取り消せなかった＞＜ ${code}` : 'ニコるを取り消せなかった＞＜'
         };
       }
     }

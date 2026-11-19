@@ -16,11 +16,13 @@ import {NVApi} from './NVApi';
  */
 const LikeApi = {
     call: async (videoId, method = 'POST') => {
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('like', method + ':' + videoId, 'response');
         const execute = async () => {
             const api = 'https://nvapi.nicovideo.jp/v1/users/me/likes/items';
             const url = `${api}?videoId=${videoId}`;
             const label = method === 'DELETE' ? 'いいね！の解除' : 'いいね！';
-            const res = await NVApi.call(url, { method });
+            const res = await NVApi.call(url, { method, ...(ticket ? { diagnosticActive: () => false } : {}) });
             if (!res) {
                 // NVApi.call は通信失敗時に undefined を返す
                 throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK' });
@@ -35,14 +37,27 @@ const LikeApi = {
             // Any truthy body is probed like the legacy JS (`json.meta`); primitives yield undefined.
             const meta = ((json && json.meta) || {});
             const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
-            if (status < 200 || status >= 300) {
-                const detail = [status, meta.errorCode].filter(Boolean).join(' ');
+            if (status < 200 || status >= 300 || meta.errorCode) {
+                const failure = ticket && RequestDiagnostics.responseFailure(res, meta);
+                if (failure)
+                    ticket?.failure(failure);
+                const code = meta.errorCode && (typeof RequestDiagnostics !== 'undefined'
+                    ? (RequestDiagnostics.isKnownErrorCode(meta.errorCode) ? meta.errorCode : 'OTHER')
+                    : (meta.errorCode === 'FORBIDDEN' ? 'FORBIDDEN' : 'OTHER'));
+                const detail = [status, code].filter(Boolean).join(' ');
                 throw Object.assign(new Error(`${label}に失敗しました（${detail}）`), { kind: 'API', status, errorCode: meta.errorCode, response: json });
             }
             return json || { meta: { status } };
         };
-        return typeof RequestDiagnostics === 'undefined' ? execute() :
-            RequestDiagnostics.observe('like', method + ':' + videoId, execute, () => true, () => true);
+        try {
+            const result = await execute();
+            ticket?.success();
+            return result;
+        }
+        catch (error) {
+            ticket?.failure(error);
+            throw error;
+        }
     },
     like: (videoId) => LikeApi.call(videoId, 'POST'),
     unlike: (videoId) => LikeApi.call(videoId, 'DELETE')

@@ -90,7 +90,26 @@ test('B18 non-secret state/codes and legacy keyed/JSON mask remain intact', () =
 });
 
 // Session lifecycle failures must preserve rejection behavior without logging raw Error data.
-for (const label of ['create domand session fail', 'create dmc session fail', 'delete fail']) {
+for (const serverType of ['domand','dmc']) {
+  test('creating a ' + serverType + ' storyboard session rejects without logging request data', async () => {
+    const calls = [];
+    const capture = (...args) => calls.push(args);
+    const factory = loadLegacy(sessionJs, 'createStoryboardClasses', {
+      URLSearchParams, console: {error:capture, warn:capture, log:capture, debug:capture}
+    });
+    const error = new Error(marker, {cause:{nested:marker}});
+    let requests = 0;
+    const {StoryboardSession} = factory({fetch:async () => { requests++; throw error; }});
+    const videoInfo = {domandInfo:{videoId:'sm9',accessRightKey:marker},
+      dmcStoryboardInfo:{urls:[{url:'https://example.invalid'}],authTypes:{storyboard:'ht2'},videos:['v']}};
+    const session = StoryboardSession.create({serverType, videoInfo});
+    await assert.rejects(session.create(), result => result === error);
+    assert.equal(requests, 1);
+    assert.equal(containsMarker(calls), false);
+  });
+}
+{
+  const label = 'delete fail';
   test('session lifecycle ' + label + ' never logs the raw error', () => {
     const prefix = "console.error('" + label + "'";
     const begin = sessionJs.indexOf(prefix);

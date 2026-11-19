@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/RelatedVideoList.ts",
   "runtime": "packages/zenza/src/Playlist/RelatedVideoList.js",
-  "sourceSha256": "208f8a22fac981c53f226c900ce5538504fde91902dbca8f4358c183c979209f",
-  "runtimeSha256": "96a163be09379660f61a1a64858ce2042ce253fd0c4bc01d900e8c428c98d398"
+  "sourceSha256": "1b59eba516e2c4bec7d37f77207a7853b0def7bfd4171082946b883bbde3b670",
+  "runtimeSha256": "ff73bbd3a0aaa5d2d987dc46e0bf516d676d964952abcb757ee73bcad7682c12"
 }

@@ -174,7 +174,7 @@ interface NvapiEnvelope {
 }
 interface OwnerVideosPage {
   totalCount?: number;
-  items?: Array<{essential?: NvapiSearchItem}>;
+  items?: Array<{essential?: NvapiSearchItem | null}>;
 }
 
 const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
@@ -515,6 +515,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
     NicoSearchApiV2Query.L_RANGE = L_RANGE;
 
     class NicoSearchApiV2Version {
+      generation = 0;
       declare date: Date;
       declare lastUpdate: Date;
       constructor() {
@@ -525,17 +526,39 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         return ((this.date as unknown as number) - (this._baseDate as unknown as number)) > 0;
       }
 
-      async update(): Promise<Date> {
+      async update(isCurrent?: () => boolean): Promise<Date> {
         const now = Date.now();
-        if (now - (this.lastUpdate as unknown as number) <= 1000 * 60 * 5) {
-          return this.date;
-        }
+        if (now - this.lastUpdate.getTime() <= 1000 * 60 * 5) { return this.date; }
         initializeCrossDomainGate();
-        const res =  await gate.fetch(VERSION_URL);
-        const body = await res.json() as {last_modified: string};
-        this.date = new Date(body.last_modified);
-        this.lastUpdate = new Date(res.headers.get('Date') ?? now);
-        return this.date;
+        const generation = ++this.generation;
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+          RequestDiagnostics.begin('search', VERSION_URL, 'response', isCurrent);
+        let response: Response | undefined;
+        let decoded = false;
+        let meta: NvapiEnvelope['meta'];
+        try {
+          response = await gate.fetch(VERSION_URL);
+          const body = await response.json() as {last_modified?: unknown; meta?: NvapiEnvelope['meta']} | null;
+          decoded = true;
+          meta = body?.meta;
+          ensureCurrent(isCurrent);
+          if (response.status >= 300 || (meta && meta.status !== 200)) { throw new Error('snapshot version unavailable'); }
+          const date = new Date(typeof body?.last_modified === 'string' ? body.last_modified : NaN);
+          if (!Number.isFinite(date.getTime())) { throw new Error('snapshot version schema failure'); }
+          if (generation === this.generation) {
+            this.date = date;
+            const serverTime = Date.parse(response.headers.get('Date') || '');
+            this.lastUpdate = new Date(Number.isFinite(serverTime) ? serverTime : now);
+          }
+          ticket?.success();
+          return date;
+        } catch (error) {
+          if (ticket) {
+            ticket.failure(decoded ? RequestDiagnostics.responseFailure(response, meta, 'last_modified') :
+              RequestDiagnostics.readFailure(response, error));
+          }
+          throw error;
+        }
       }
 
       // スナップショット検索は日本時間5時の時点のデータなので、UTCの20時を取る
@@ -753,49 +776,39 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         (item.registeredAt == null || typeof item.registeredAt === 'string') &&
         (item.count == null || isSearchRecord(item.count)) &&
         (item.thumbnail == null || isSearchRecord(item.thumbnail));
-      const validateSearchPage = (data: unknown): NvapiSearchPage => {
+      const validateSearchPage = (data: unknown, mark: (field: string) => void): NvapiSearchPage => {
         const page = data as Record<string, unknown> & {additionals?: Record<string, unknown> | null};
-        if (!isSearchRecord(data) || !Array.isArray(page.items) ||
-            !Number.isSafeInteger(page.totalCount) || (page.totalCount as number) < 0 ||
-            (page.hasNext != null && typeof page.hasNext !== 'boolean') ||
-            page.items.some(item => !validSearchItem(item)) ||
-            (page.additionals != null && (!isSearchRecord(page.additionals) ||
-              (page.additionals.suggestedVideo != null &&
-                !validSearchItem(page.additionals.suggestedVideo))))) {
-          throw searchSchemaError();
+        let missing: string | undefined;
+        if (!isSearchRecord(data) || !Array.isArray(page.items)) { missing = 'data.items'; }
+        else if (!Number.isSafeInteger(page.totalCount) || (page.totalCount as number) < 0) { missing = 'data.totalCount'; }
+        else if (page.hasNext != null && typeof page.hasNext !== 'boolean') { missing = 'data.hasNext'; }
+        else if (page.items.some(item => !validSearchItem(item))) { missing = 'data.items'; }
+        else if (page.additionals != null && (!isSearchRecord(page.additionals) ||
+          (page.additionals.suggestedVideo != null && !validSearchItem(page.additionals.suggestedVideo)))) {
+          missing = 'data.additionals';
         }
+        if (missing) { mark(missing); throw searchSchemaError(); }
         return data as unknown as NvapiSearchPage;
       };
 
       const fetchPage = async (query: NvapiSearchQuery, page: number, pageSize: number,
         isCurrent?: () => boolean): Promise<NvapiSearchPage> => {
-
-        const execute = async () => {
-          ensureCurrent(isCurrent);
-          const qs = new URLSearchParams(Object.assign({}, query, {pageSize, page}) as unknown as Record<string, string>);
-          const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o as RequestInit)};
-          const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
-            credentials: 'include',
-            headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'},
-            ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => !isCurrent || isCurrent()} : {})
-          });
-          // HTTP failure must not be hidden by a misleading JSON meta.status=200.
-          if (Number.isInteger(res?.status) && res.status >= 400) {
-            throw Object.assign(new Error('nvapi search HTTP failure'),
-              {status: res.status, kind: 'http'});
+        ensureCurrent(isCurrent);
+        const qs = new URLSearchParams(Object.assign({}, query, {pageSize, page}) as unknown as Record<string, string>);
+        const url = `${API_URL}?${qs.toString()}`;
+        const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o as RequestInit)};
+        return readSearchPage('search', url, () => net.fetch(url, {
+          credentials: 'include', headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'},
+          ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => false} : {})
+        }), (json, res, mark) => {
+          if (res.status >= 300) {
+            throw Object.assign(new Error('nvapi search HTTP failure'), {status: res.status, kind: 'http'});
           }
-          const json = await res.json() as NvapiEnvelope | null;
-          if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-            throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`),
-              {status: json && json.meta && json.meta.status});
+          if (json?.meta?.status !== 200) {
+            throw Object.assign(new Error('nvapi search failed'), {status: json?.meta?.status});
           }
-          // Task190/Q02 and Task458: verify every page before any result is
-          // displayed. Later malformed pages retain the previous contiguous prefix.
-          return validateSearchPage(json.data);
-
-        };
-        return typeof RequestDiagnostics === 'undefined' ? execute() :
-          RequestDiagnostics.observe('search', JSON.stringify([query, page, pageSize]), execute, () => true, () => !isCurrent || isCurrent());
+          return validateSearchPage(json.data, mark);
+        }, isCurrent);
       };
 
       /**
@@ -898,6 +911,42 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
       if (check && !check()) { throw SEARCH_SUPERSEDED; }
     };
 
+    // The reader owns both the wire response and its decoded envelope. Publish success only
+    // after the consumer accepts the page, including endpoints with a legitimate empty fallback.
+    const readSearchPage = async <T>(operation: 'search' | 'owner' | 'owner-videos', url: string,
+      request: () => Promise<Response>,
+      consume: (body: NvapiEnvelope | null, response: Response, mark: (field: string) => void) => T,
+      isCurrent?: () => boolean, snapshot = false): Promise<T> => {
+      const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+        RequestDiagnostics.begin(operation, url, 'response', isCurrent);
+      let response: Response | undefined;
+      let body: NvapiEnvelope | null = null;
+      let decoded = false;
+      let missing: string | undefined;
+      try {
+        response = await request();
+        ensureCurrent(isCurrent);
+        body = (snapshot ? NicoSearchApiV2Loader._jsonParse(await response.text(), () => { missing = 'json'; }) :
+          await response.json()) as NvapiEnvelope | null;
+        decoded = true;
+        ensureCurrent(isCurrent);
+        const status = body?.meta?.status;
+        if (typeof status === 'number' && status > 200 && status < 300) { missing = 'meta.status'; }
+        const result = consume(body, response, field => { missing = field; });
+        if (ticket) {
+          const failure = RequestDiagnostics.responseFailure(response, body?.meta, missing);
+          if (failure) { ticket.failure(failure); } else { ticket.success(); }
+        }
+        return result;
+      } catch (error) {
+        if (ticket) {
+          ticket.failure(decoded ? RequestDiagnostics.responseFailure(response, body?.meta, missing) || error :
+            RequestDiagnostics.readFailure(response, error));
+        }
+        throw error;
+      }
+    };
+
     class NicoSearchApiV2Loader {
       static version = new NicoSearchApiV2Version;
       static cacheStorage: CacheStorage | undefined;
@@ -927,65 +976,42 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
       static async searchBySnapshot(word: string | VideoSearchParams, params?: VideoSearchParams,
         isCurrent?: () => boolean): Promise<SnapshotSearchResult> {
 
-        const execute = async () => {
-          ensureCurrent(isCurrent);
-          initializeCrossDomainGate();
-          const query = new NicoSearchApiV2Query(word, params);
-          const url = API_BASE_URL + '?' + query.toString();
-          const version = this.version.isLatest
-            ? this.version.date.getTime()
-            : await this.version.update().then(date => date.getTime());
-          ensureCurrent(isCurrent);
+        ensureCurrent(isCurrent);
+        initializeCrossDomainGate();
+        const query = new NicoSearchApiV2Query(word, params);
+        const url = API_BASE_URL + '?' + query.toString();
+        const version = this.version.isLatest
+          ? this.version.date.getTime()
+          : await this.version.update(isCurrent).then(date => date.getTime());
+        ensureCurrent(isCurrent);
 
-          if (!this.cacheStorage) {
-            this.cacheStorage = new CacheStorage(sessionStorage);
-          }
-          const cacheKey = `search: ${[
-            `words:${query.q}`,
-            `targets:${query.targets.join(',')}`,
-            `sort:${query.sort}`,
-            `filters:${query.stringfiedFilters}`,
-            `offset:${query.offset}`,
-          ].join(', ')}`;
-          const cacheData = this.cacheStorage.getItem(cacheKey) as {version?: unknown; data?: SnapshotSearchResult} | null | undefined;
-          if (cacheData && cacheData.version === version) {
-            return cacheData.data as SnapshotSearchResult;
-          }
-
-          ensureCurrent(isCurrent);
-          return gate.fetch(url).then(res => res.text()).then(text => {
-            ensureCurrent(isCurrent);
-            const result = NicoSearchApiV2Loader.parseResult(text);
-            if (typeof result !== 'number' && result.status === 'ok') {
-              let data = Object.assign(result, {word, params});
-              (this.cacheStorage as CacheStorage).setItem(cacheKey, {data, version}, this.CACHE_EXPIRE_TIME);
-              return Promise.resolve(data);
-            } else {
-              let description;
-              switch (result) {
-                default:
-                  description = 'UNKNOWN ERROR';
-                  break;
-                case 400:
-                  description = 'INVALID QUERY';
-                  break;
-                case 500:
-                  description = 'INTERNAL SERVER ERROR';
-                  break;
-                case 503:
-                  description = 'MAINTENANCE';
-                  break;
-              }
-              return Promise.reject({
-                status: 'fail',
-                description
-              });
-            }
-          });
-
-        };
-        return typeof RequestDiagnostics === 'undefined' ? execute() :
-          RequestDiagnostics.observe('search', 'snapshot:' + JSON.stringify([word, params]), execute, () => true, () => !isCurrent || isCurrent());
+        if (!this.cacheStorage) {
+          this.cacheStorage = new CacheStorage(sessionStorage);
+        }
+        const cacheKey = `search: ${[
+          `words:${query.q}`,
+          `targets:${query.targets.join(',')}`,
+          `sort:${query.sort}`,
+          `filters:${query.stringfiedFilters}`,
+          `offset:${query.offset}`,
+        ].join(', ')}`;
+        const cached = this.cacheStorage.getItem(cacheKey) as {version?: unknown; data?: SnapshotSearchResult} | null;
+        const saved = cached?.data;
+        if (cached?.version === version && saved?.status === 'ok' && Array.isArray(saved.list) &&
+            Number.isSafeInteger(saved.count) && saved.count >= 0 && saved.list.every(item =>
+              typeof item?.id === 'string' && !!item.id.trim())) {
+          return saved;
+        }
+        ensureCurrent(isCurrent);
+        const result = await readSearchPage('search', url, () => gate.fetch(url), (json, res, mark) => {
+          const page = res.status >= 300 ? res.status : NicoSearchApiV2Loader.parseSnapshotData(json, mark);
+          if (typeof page !== 'number') { return page; }
+          const descriptions: Record<number, string> = {400: 'INVALID QUERY', 500: 'INTERNAL SERVER ERROR', 503: 'MAINTENANCE'};
+          throw {status: 'fail', description: descriptions[page] || 'UNKNOWN ERROR'};
+        }, isCurrent, true);
+        const data = Object.assign(result, {word, params});
+        this.cacheStorage.setItem(cacheKey, {data, version}, this.CACHE_EXPIRE_TIME);
+        return data;
       }
 
       /**
@@ -1004,43 +1030,31 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
        */
       static async lookupOwnerIds(watchIds: unknown[] | null | undefined): Promise<Map<string, {userId: unknown; channelId: unknown}>> {
 
-        let validation: boolean | {status: number} = true;
-        const execute = async () => {
-          initializeCrossDomainGate();
-          const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
-          const result = new Map<string, {userId: unknown; channelId: unknown}>();
-          if (!ids.length) {
-            return result;
-          }
-          const params = [
-            'q=',
-            'targets=title',
-            'fields=contentId,userId,channelId',
-            '_sort=-startTime',
-            '_offset=0',
-            `_limit=${ids.length}`,
-            '_context=ZenzaWatch'
-          ];
-          ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
-          const res = await gate.fetch(API_BASE_URL + '?' + params.join('&'));
-          const json = NicoSearchApiV2Loader._jsonParse(await res.text()) as {meta?: {status?: unknown}; data?: unknown} | null;
-          const status = res.status >= 400 ? res.status : json?.meta?.status;
-          validation = typeof status === 'number' && status >= 400 ? {status} :
-            !!json && json.meta?.status === 200 && Array.isArray(json.data);
-          if (!json || !json.meta || json.meta.status !== 200 || !Array.isArray(json.data)) {
-            return result;
-          }
-          (json.data as SnapshotItem[]).forEach(item => {
-            result.set(String(item.contentId), {
-              userId: item.userId || null,
-              channelId: item.channelId || null
-            });
-          });
+        initializeCrossDomainGate();
+        const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
+        const result = new Map<string, {userId: unknown; channelId: unknown}>();
+        if (!ids.length) {
           return result;
-
-        };
-        return typeof RequestDiagnostics === 'undefined' ? execute() :
-          RequestDiagnostics.observe('owner', 'lookup:' + JSON.stringify(watchIds), execute, () => validation, () => true);
+        }
+        const params = [
+          'q=',
+          'targets=title',
+          'fields=contentId,userId,channelId',
+          '_sort=-startTime',
+          '_offset=0',
+          `_limit=${ids.length}`,
+          '_context=ZenzaWatch'
+        ];
+        ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
+        const url = API_BASE_URL + '?' + params.join('&');
+        return readSearchPage('owner', url, () => gate.fetch(url), (json, res, mark) => {
+          if (res.status >= 300 || json?.meta?.status !== 200) { return result; }
+          const rows = NicoSearchApiV2Loader.snapshotRows(json.data, mark);
+          for (const item of rows || []) {
+            result.set(item.contentId, {userId: item.userId || null, channelId: item.channelId || null});
+          }
+          return result;
+        }, undefined, true);
       }
 
       /**
@@ -1111,31 +1125,46 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const limit = Math.min(Math.max(1, parseInt(maxLimit as string, 10) || 300), 5000);
         const headers = {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'};
         const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o as RequestInit)};
-        const fetchUserPage = async (page: number): Promise<OwnerVideosPage> => {
+        const missingOwnerPages: number[] = [];
+        const fetchUserPage = async (page: number) => {
 
-          const execute = async () => {
-            ensureCurrent(isCurrent);
-            const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
-            const res = await net.fetch(url, {credentials: 'include', headers,
-              ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => !isCurrent || isCurrent()} : {})});
-            const json = await res.json() as NvapiEnvelope | null;
-            ensureCurrent(isCurrent);
-            if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-              throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
+          ensureCurrent(isCurrent);
+          const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
+          return readSearchPage('owner-videos', url, () => net.fetch(url, {credentials: 'include', headers,
+            ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => false} : {})}), (json, res, mark) => {
+            const data = json?.data as OwnerVideosPage | undefined;
+            if (res.status >= 300 || json?.meta?.status !== 200) {
+              throw new Error(`投稿動画一覧の取得に失敗 (${res.status >= 300 ? res.status : json?.meta?.status ?? res.status})`);
             }
-            return json.data as OwnerVideosPage;
-
-          };
-          return typeof RequestDiagnostics === 'undefined' ? execute() :
-            RequestDiagnostics.observe('owner', JSON.stringify([params.userId, page]), execute,
-   value => Array.isArray(value.items), () => !isCurrent || isCurrent());
+            if (!Array.isArray(data?.items)) {
+              mark('data.items');
+              throw new Error('投稿動画一覧の形式を読み取れません');
+            }
+            if ((page === 1 || data.totalCount != null) &&
+                (!Number.isSafeInteger(data.totalCount) || (data.totalCount as number) < 0)) {
+              mark('data.totalCount');
+              throw new Error('投稿動画一覧の形式を読み取れません');
+            }
+            let damaged = false;
+            const videos = data.items.map(row => row?.essential).filter((video): video is NvapiSearchItem => {
+              if (video === null) { return false; }
+              if (typeof video?.id === 'string' && video.id.trim()) { return true; }
+              damaged = true;
+              return false;
+            });
+            if (damaged) {
+              mark('data.items.essential');
+              if (!videos.length) { throw new Error('投稿動画一覧の形式を読み取れません'); }
+              missingOwnerPages.push(page);
+            }
+            return {totalCount: data.totalCount, videos};
+          }, isCurrent);
         };
         // 1. 投稿動画一覧（1ページ目で総数を知り、残りは4ページずつ並行取得）
         const first = await fetchUserPage(1);
         const total = Math.min(first.totalCount || 0, 5000);
-        let videos = (first.items || []).map(i => i.essential).filter(Boolean) as NvapiSearchItem[];
+        let videos = first.videos;
         const lastPage = Math.ceil(total / 100);
-        const missingOwnerPages: number[] = [];
         for (let pg = 2; pg <= lastPage; pg += 4) {
           ensureCurrent(isCurrent);
           const chunk: number[] = [];
@@ -1151,7 +1180,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
           for (const data of pages) {
             // A failed page must not discard successful later siblings in this batch.
             if (!data) { continue; }
-            videos = videos.concat((data.items || []).map(i => i.essential).filter(Boolean) as NvapiSearchItem[]);
+            videos = videos.concat(data.videos);
           }
         }
         // 2. スナップショットで検索語に一致する動画IDを調べる（100件ずつ）
@@ -1172,13 +1201,13 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
             '_context=ZenzaWatch'
           ];
           batch.forEach((id, n) => q.push(`filters[contentId][${n}]=${encodeURIComponent(id)}`));
-          const res = await gate.fetch(API_BASE_URL + '?' + q.join('&'));
-          const json = NicoSearchApiV2Loader._jsonParse(await res.text()) as {meta?: {status?: unknown}; data?: Array<{contentId?: unknown}>} | null;
-          ensureCurrent(isCurrent);
-          if (!json || !json.meta || json.meta.status !== 200) {
-            throw Object.assign(new Error('スナップショット検索に失敗しました'), {status: 'fail'});
-          }
-          (json.data || []).forEach(item => matched.add(item.contentId));
+          const url = API_BASE_URL + '?' + q.join('&');
+          await readSearchPage('owner-videos', url, () => gate.fetch(url), (json, res, mark) => {
+            const rows = res.status >= 300 || json?.meta?.status !== 200 ? null :
+              NicoSearchApiV2Loader.snapshotRows(json.data, mark);
+            if (!rows) { throw Object.assign(new Error('スナップショット検索に失敗しました'), {status: 'fail'}); }
+            for (const item of rows) { matched.add(item.contentId); }
+          }, isCurrent, true);
         }
         // 3. Apply owner-only conditions locally. Never report unsupported inputs as applied.
         const unapplied: string[] = [];
@@ -1346,37 +1375,43 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         return Object.assign(result, {word, params});
       }
 
-      static _jsonParse(result: string): unknown {
+      static _jsonParse(result: string, onInvalid?: () => void): unknown {
         try {
           return JSON.parse(result);
         } catch (e) {
+          onInvalid?.();
           window.console.error('JSON parse error', e);
           return null;
         }
       }
 
+      static snapshotRows(value: unknown, mark?: (field: string) => void): SnapshotItem[] | null {
+        if (!Array.isArray(value)) { mark?.('data'); return null; }
+        if (value.some(row => typeof row?.contentId !== 'string' || !row.contentId.trim())) {
+          mark?.('data.contentId');
+          return null;
+        }
+        return value as SnapshotItem[];
+      }
+
       static parseResult(jsonText: string): number | SnapshotSearchResult {
-        const data = NicoSearchApiV2Loader._jsonParse(jsonText) as SnapshotResponse | null;
-        // Task647 (VS-PARSE-META-006): a body without `meta` (or a non-object) used to throw
-        // a TypeError; treat it like unparsable JSON ("UNKNOWN ERROR").
-        if (!data || typeof data !== 'object' || !data.meta || typeof data.meta !== 'object') {
+        return this.parseSnapshotData(this._jsonParse(jsonText) as NvapiEnvelope | null);
+      }
+
+      static parseSnapshotData(json: NvapiEnvelope | null, mark?: (field: string) => void): number | SnapshotSearchResult {
+        const data = json as SnapshotResponse | null;
+        const status = data?.meta?.status;
+        if (status !== 200 || !data) { return typeof status === 'number' ? status : 0; }
+        if (!Number.isSafeInteger(data.meta.totalCount) || data.meta.totalCount < 0) {
+          mark?.('meta.totalCount');
           return 0;
         }
-        if (data.meta.status === 200 && !Array.isArray(data.data)) {
-          return 0;
-        }
-        const status = data.meta.status;
-        const result: SnapshotSearchResult = {
-          status: (status === 200 ? 'ok' : 'fail') as 'ok',
-          count: data.meta.totalCount,
-          list: []
-        };
-        if (status !== 200) {
-          return status;
-        }
+        const rows = this.snapshotRows(data.data, mark);
+        if (!rows) { return 0; }
+        const result: SnapshotSearchResult = {status: 'ok', count: data.meta.totalCount, list: []};
         const midThumbnailThreshold = 23608629; // .Mのついた最小ID?
-        data.data.forEach(item => {
-          let description = item.description ? item.description.replace(/<.*?>/g, '') : '';
+        rows.forEach(item => {
+          let description = typeof item.description === 'string' ? item.description.replace(/<.*?>/g, '') : '';
           // Task903 (ISSUE27-MISSING-URL-001, public parity): a snapshot item without
           // thumbnailUrl threw here and failed the whole search page.
           const thumbnailUrl = typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '';

@@ -23,14 +23,14 @@ class RelatedVideoList extends VideoList {
         videoInfo && relatedVideo.push(VideoListItem.createByVideoInfoModel(videoInfo).serialize());
         // Clear A as soon as B starts; optionally show B itself while loading.
         this.update(relatedVideo, watchId);
-        const data = await RecommendAPILoader.load({ videoId }).catch(() => ({}));
+        const data = await RecommendAPILoader.load({ videoId, isCurrent: () => requestId === this._requestGeneration }).catch(() => ({}));
         // A network completion must not overwrite the later B request.
         if (requestId !== this._requestGeneration) {
             return;
         }
         const items = data.items || [];
         for (const item of items) {
-            if (item.contentType && item.contentType !== 'video') {
+            if (!item || typeof item.id !== 'string' || !item.id.trim() || (item.contentType && item.contentType !== 'video')) {
                 continue;
             }
             const content = item.content;

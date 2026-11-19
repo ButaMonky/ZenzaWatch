@@ -11,6 +11,70 @@ const PlaylistApiLoader = (() => {
     // Cache only public series / uploader collections; leave private loads live.
     const mayUseSharedCache = (type) => type === 'series' || type === 'user-uploaded';
     let cacheStorage = null;
+    const entryId = (item) => {
+        const row = item;
+        const id = row?.watchId ?? row?.content?.id;
+        if (typeof id === 'string' && id.trim()) {
+            return id;
+        }
+        if (typeof id === 'number' && Number.isFinite(id)) {
+            return String(id);
+        }
+        return undefined;
+    };
+    const isEntryArray = (items) => Array.isArray(items) && items.every(item => entryId(item) !== undefined);
+    const ensureCurrent = (isCurrent) => {
+        if (isCurrent && !isCurrent()) {
+            throw new Error('プレイリスト取得中止（表示対象が変更されました）');
+        }
+    };
+    // Full collections retry once on transport/JSON/5xx failures; explicit pages and shorts do not.
+    const readPage = async (url, options, isCurrent, messages, retry = false) => {
+        for (let attempt = 0;; attempt++) {
+            ensureCurrent(isCurrent);
+            let response;
+            let result;
+            try {
+                response = await netUtil.fetch(url, options);
+                result = await response.json();
+            }
+            catch (cause) {
+                ensureCurrent(isCurrent);
+                const error = cause;
+                const status = response?.status ?? error?.statusCode ?? error?.status;
+                if (retry && !attempt && error?.name !== 'AbortError' && ![401, 403, 404].includes(Number(status)) &&
+                    !(response && response.status >= 300 && response.status < 500)) {
+                    await new Promise(resolve => setTimeout(resolve, 400));
+                    continue;
+                }
+                const wrapped = new Error(messages.request, cause);
+                if (typeof RequestDiagnostics !== 'undefined') {
+                    Object.assign(wrapped, RequestDiagnostics.readFailure(response, cause));
+                }
+                throw wrapped;
+            }
+            ensureCurrent(isCurrent);
+            const httpStatus = response.status, apiStatus = result?.meta?.status;
+            const failure = (missing) => {
+                const wrapped = new Error(messages.response, result);
+                if (typeof RequestDiagnostics !== 'undefined') {
+                    Object.assign(wrapped, RequestDiagnostics.responseFailure(response, result?.meta, missing));
+                }
+                return wrapped;
+            };
+            if (retry && !attempt && (httpStatus >= 500 || (!(httpStatus >= 300) && Number(apiStatus) >= 500))) {
+                await new Promise(resolve => setTimeout(resolve, 400));
+                continue;
+            }
+            if (httpStatus >= 300 || apiStatus !== 200 || result?.meta?.errorCode) {
+                throw failure('meta.status');
+            }
+            if (!Array.isArray(result?.data?.items)) {
+                throw failure('data.items');
+            }
+            return { data: result.data, items: result.data.items, failure };
+        }
+    };
     class PlaylistApiLoader {
         constructor() {
             if (!cacheStorage) {
@@ -18,6 +82,8 @@ const PlaylistApiLoader = (() => {
             }
         }
         async load({ type, id, options, all, maxItems, isCurrent }, { frontendId = 6, frontendVersion = 0 } = {}) {
+            let cacheHit = false;
+            const markCacheHit = () => { cacheHit = true; };
             const execute = async () => {
                 const { url, cacheKey } = ((type) => {
                     switch (type) {
@@ -39,34 +105,37 @@ const PlaylistApiLoader = (() => {
                     throw new Error(`プレイリストの取得失敗(3) ${type}`);
                 }
                 if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
-                    return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
+                    return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion, markCacheHit);
                 }
                 // nvapi でソートされた結果をもらうのでそのままキャッシュする
                 const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
-                if (cacheData) {
+                ensureCurrent(isCurrent);
+                if (isEntryArray(cacheData)) {
+                    markCacheHit();
                     return cacheData;
                 }
                 // nvapi に X-Frontend-Id header が必要
-                const result = await netUtil.fetch(url, {
-                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                    credentials: 'include',
-                    ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}),
-                }).then((r) => r.json())
-                    .catch((e) => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e); });
-                if (result.meta.status !== 200 || !result.data.items) {
-                    throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
+                const { items: data, failure } = await readPage(url, {
+                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include',
+                    ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+                }, isCurrent, { request: `プレイリストの取得失敗(2) ${type}`, response: `プレイリストの取得失敗(1) ${type}` });
+                ensureCurrent(isCurrent);
+                if (!isEntryArray(data)) {
+                    throw failure('data.items[].watchId');
                 }
-                const data = result.data.items;
                 if (mayUseSharedCache(type)) {
-                    cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+                    try {
+                        cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+                    }
+                    catch (_) { /* Browser storage is optional. */ }
                 }
                 return data;
             };
             return typeof RequestDiagnostics === 'undefined' ? execute() :
-                RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !isCurrent || isCurrent());
+                RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !cacheHit && (!isCurrent || isCurrent()));
         }
         // Task972: one atomic ordered collection, not the first 500-row page.
-        async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
+        async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion, markCacheHit) {
             const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
                 Math.min(10000, Math.floor(requestedMax)) : 10000;
             const first = new URL(initialUrl);
@@ -76,11 +145,6 @@ const PlaylistApiLoader = (() => {
             first.searchParams.set('page', '1');
             // A previous single-page array is never evidence of a complete collection.
             const cacheKey = `playlist; all-v1; ${maxItems}; ${first.href}`;
-            const checkCurrent = () => {
-                if (isCurrent && !isCurrent()) {
-                    throw new Error('プレイリスト取得中止（表示対象が変更されました）');
-                }
-            };
             const expose = (value) => {
                 const result = value.items.slice();
                 Object.defineProperty(result, 'playlistLoadInfo', { value: {
@@ -88,10 +152,11 @@ const PlaylistApiLoader = (() => {
                     }, enumerable: false });
                 return result;
             };
-            checkCurrent();
+            ensureCurrent(isCurrent);
             const cached = (mayUseSharedCache(type) ?
                 cacheStorage.getItem(cacheKey) : null);
-            if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
+            if (cached?.complete === true && isEntryArray(cached.items) && cached.maxItems === maxItems) {
+                markCacheHit();
                 return expose(cached);
             }
             const items = [], seen = new Set();
@@ -99,72 +164,43 @@ const PlaylistApiLoader = (() => {
             // A broken API cannot keep a request alive indefinitely by repeating pages.
             const maxPages = Math.ceil(10000 / pageSize) + 1;
             for (let page = 1;; page++) {
-                checkCurrent();
+                ensureCurrent(isCurrent);
                 if (page > maxPages) {
                     throw new Error('プレイリスト取得失敗（ページ数の安全上限）');
                 }
                 const url = new URL(first.href);
                 url.searchParams.set('page', String(page));
-                let result;
-                for (let attempt = 0; attempt < 2; attempt++) {
-                    checkCurrent();
-                    try {
-                        result = await netUtil.fetch(url.href, {
-                            headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                            credentials: 'include',
-                            ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}), timeout: 15000
-                        }).then((r) => r.json());
-                    }
-                    catch (error) {
-                        const status = error?.status ||
-                            error?.statusCode;
-                        if (attempt || [401, 403, 404].includes(Number(status))) {
-                            throw new Error(`プレイリストの取得失敗(2) ${type} (${page}ページ目)`);
-                        }
-                        checkCurrent();
-                        await new Promise(resolve => setTimeout(resolve, 400));
-                        continue;
-                    }
-                    checkCurrent();
-                    if (!attempt && Number(result?.meta?.status) >= 500) {
-                        await new Promise(resolve => setTimeout(resolve, 400));
-                        continue;
-                    }
-                    break;
+                const { data, items: batch, failure } = await readPage(url.href, {
+                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include', timeout: 15000,
+                    ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+                }, isCurrent, { request: `プレイリストの取得失敗(2) ${type} (${page}ページ目)`,
+                    response: `プレイリストの取得失敗(1) ${type} (${page}ページ目)` }, true);
+                if (data.hasNext !== undefined && typeof data.hasNext !== 'boolean') {
+                    throw failure('data.hasNext');
                 }
-                checkCurrent();
-                if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
-                    throw new Error(`プレイリストの取得失敗(1) ${type} (${page}ページ目)`);
-                }
-                const data = result.data, batch = data.items;
                 const count = data.totalCount;
                 if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
                     totalCount = totalCount === null ? count : Math.max(totalCount, count);
                 }
                 if (!batch.length) {
                     if (data.hasNext === true || (totalCount !== null && (page - 1) * pageSize < totalCount)) {
-                        throw new Error(`プレイリストの取得失敗（${page}ページ目が空です）`);
+                        throw failure('data.items');
                     }
                     break;
                 }
                 const before = items.length;
                 for (const item of batch) {
-                    if (!item || typeof item !== 'object') {
-                        throw new Error(`プレイリストの取得失敗（${page}ページ目のデータ形式）`);
+                    const key = entryId(item);
+                    if (key === undefined) {
+                        throw failure('data.items[].watchId');
                     }
-                    const value = item;
-                    const id = value.watchId ?? value.content?.id;
-                    if (typeof id !== 'string' && typeof id !== 'number') {
-                        throw new Error(`プレイリストの取得失敗（${page}ページ目の動画ID）`);
-                    }
-                    const key = String(id);
                     if (!seen.has(key)) {
                         seen.add(key);
                         items.push(item);
                     }
                 }
                 if (items.length === before) {
-                    throw new Error('プレイリスト取得失敗（同じページが繰り返されました）');
+                    throw failure('data.items');
                 }
                 const more = typeof data.hasNext === 'boolean' ? data.hasNext :
                     totalCount !== null ? page * pageSize < totalCount : batch.length >= pageSize;
@@ -177,7 +213,7 @@ const PlaylistApiLoader = (() => {
                     break;
                 }
             }
-            checkCurrent();
+            ensureCurrent(isCurrent);
             const value = { items, totalCount, limited, maxItems, complete: true };
             // Large collection cache writes are optional; never lose loaded items if
             // browser storage is full, or overwrite the live playlist with a partial page.
@@ -253,31 +289,24 @@ const PlaylistApiLoader = (() => {
                     throw new Error('ショート動画の取得中止（表示対象が変更されました）');
                 }
                 const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?selectContentType=short&sortKey=registeredAt&sortOrder=desc&sensitiveContents=mask&pageSize=${pageSize}&page=${page}`;
-                const result = await netUtil.fetch(url, {
-                    headers: { 'X-Frontend-Id': 6, 'X-Frontend-Version': 0 },
-                    credentials: 'include', timeout: 15000,
+                const { data, items: batch, failure } = await readPage(url, {
+                    headers: { 'X-Frontend-Id': 6, 'X-Frontend-Version': 0 }, credentials: 'include', timeout: 15000,
                     ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-                }).then(async (r) => {
-                    const body = await r.json().catch(() => null);
-                    if (!r.ok && !body) {
-                        throw new Error(`ショート動画の取得失敗 HTTP ${r.status} (${page}ページ目)`);
-                    }
-                    return body;
-                });
-                if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
-                    // 理由（HTTP状態・エラーコード・欠けた項目）を通知とコンソールで分かるようにする
-                    const why = result?.meta?.status !== 200 ? `status ${String(result?.meta?.status)}${result?.meta?.errorCode ? ' ' + String(result.meta.errorCode) : ''}` : 'data.items がありません';
-                    throw new Error(`ショート動画の取得失敗(1) ${why} (${page}ページ目)`);
-                }
-                const count = Number(result.data.totalCount);
-                if (Number.isSafeInteger(count) && count >= 0) {
+                }, isCurrent, { request: `ショート動画の取得失敗(2) (${page}ページ目)`,
+                    response: `ショート動画の取得失敗(1) (${page}ページ目)` });
+                ensureCurrent(isCurrent);
+                const count = data.totalCount;
+                if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
                     total = count;
                 }
-                const batch = result.data.items;
+                const before = out.length;
                 for (const row of batch) {
                     const content = row?.essential;
                     const id = typeof content?.id === 'string' ? content.id : '';
-                    if (!id || seen.has(id)) {
+                    if (!id.trim()) {
+                        throw failure('data.items[].essential.id');
+                    }
+                    if (seen.has(id)) {
                         continue;
                     }
                     seen.add(id);
@@ -286,7 +315,13 @@ const PlaylistApiLoader = (() => {
                         return out;
                     }
                 }
-                if (batch.length < pageSize || (total !== null && out.length >= total)) {
+                if (batch.length && out.length === before) {
+                    throw failure('data.items');
+                }
+                if (!batch.length && total !== null && (page - 1) * pageSize < total) {
+                    throw failure('data.items');
+                }
+                if (batch.length < pageSize || (total !== null && page * pageSize >= total)) {
                     break;
                 }
             }

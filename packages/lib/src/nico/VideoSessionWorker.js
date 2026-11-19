@@ -38,6 +38,82 @@ const createStoryboardClasses = (util) => {
             return false;
         }
     };
+    // workerUtil forwards only the message of a rejected RPC. For an access
+    // response, carry these fixed protocol facts through a structured result.
+    class SessionResponseError extends Error {
+        details;
+        constructor(details) {
+            super('配信URLの応答を確認できませんでした');
+            this.details = details;
+            Object.assign(this, details);
+        }
+    }
+    const readSessionResponse = async (response, serverType) => {
+        const httpStatus = response.status;
+        const schemaError = (missing) => new SessionResponseError({
+            kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing, httpStatus
+        });
+        if (httpStatus >= 300) {
+            throw new SessionResponseError({ httpStatus });
+        }
+        let result;
+        try {
+            result = await response.json();
+        }
+        catch (error) {
+            if (error?.name === 'SyntaxError') {
+                throw schemaError('response.json');
+            }
+            throw error;
+        }
+        // Older DMC replies do not always include meta. Domand requires it.
+        const rawStatus = result?.meta?.status;
+        if (rawStatus != null || serverType === 'domand') {
+            const apiStatus = typeof rawStatus === 'string' && /^\d{3}$/.test(rawStatus) ? Number(rawStatus) : rawStatus;
+            if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
+                throw schemaError('meta.status');
+            }
+            if (apiStatus >= 300) {
+                throw new SessionResponseError({ httpStatus, apiStatus });
+            }
+        }
+        const isDomand = serverType === 'domand';
+        const value = isDomand ? result?.data?.contentUrl : result?.data?.session?.content_uri;
+        const missing = isDomand ? 'data.contentUrl' : 'data.session.content_uri';
+        if (!validStoryboardUrl(value)) {
+            throw schemaError(missing);
+        }
+        return result;
+    };
+    const readStoryboardManifest = async (url, legacyDmc = false) => {
+        const response = await util.fetch(url, { credentials: 'include' });
+        if (response.status >= 300)
+            throw new SessionResponseError({ httpStatus: response.status });
+        let payload;
+        try {
+            payload = await response.json();
+        }
+        catch (error) {
+            if (error?.name === 'SyntaxError')
+                throw new SessionResponseError({
+                    kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: 'response.json', httpStatus: response.status
+                });
+            throw error;
+        }
+        if (!legacyDmc)
+            return payload;
+        const apiStatus = payload?.meta?.status;
+        const httpStatus = response.status;
+        if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
+            throw new SessionResponseError({ kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'meta.status', httpStatus });
+        }
+        if (apiStatus >= 300)
+            throw new SessionResponseError({ httpStatus, apiStatus });
+        if (!storyboardRecord(payload?.data)) {
+            throw new SessionResponseError({ kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'data', httpStatus, apiStatus });
+        }
+        return payload.data;
+    };
     const validateStoryboardImageList = (images) => {
         if (!Array.isArray(images) || !images.length ||
             images.length > MAX_STORYBOARD_PAGES ||
@@ -222,13 +298,7 @@ const createStoryboardClasses = (util) => {
             this._rawData = null;
         }
         async load() {
-            try {
-                const result = await util.fetch(this._url, { credentials: 'include' });
-                this._rawData = await result.json();
-            }
-            catch {
-                throw 'storyboard request fail';
-            }
+            this._rawData = await readStoryboardManifest(this._url);
         }
         get storyboard() {
             // DOMAND often sends paths relative to storyboard.json. Check the raw
@@ -278,16 +348,7 @@ const createStoryboardClasses = (util) => {
             this._rawData = null;
         }
         async load() {
-            const result = await util.fetch(this._url, { credentials: 'include' }).then(res => res.json());
-            if (!storyboardRecord(result) || !storyboardRecord(result.meta) ||
-                !Number.isInteger(result.meta.status) || !storyboardRecord(result.data)) {
-                throw storyboardSchemaError();
-            }
-            if (result.meta.status >= 300) {
-                throw 'storyboard request fail';
-            }
-            this._rawData = result.data;
-            return;
+            this._rawData = await readStoryboardManifest(this._url, true);
         }
         get _storyboards() {
             const { storyboards = [], version = 0 } = this._rawData ?? {};
@@ -333,6 +394,10 @@ const createStoryboardClasses = (util) => {
         }
     }
     class StoryboardSession {
+        static readAccessResponse = readSessionResponse;
+        static failureDetails(error) {
+            return error instanceof SessionResponseError ? error.details : undefined;
+        }
         static create({ serverType, ...params }) {
             switch (serverType) {
                 case 'domand':
@@ -358,33 +423,19 @@ const createStoryboardClasses = (util) => {
         async _createSession() {
             const query = new URLSearchParams({ actionTrackId: this._videoInfo.actionTrackId });
             const url = `https://nvapi.nicovideo.jp/v1/watch/${this._info.videoId}/access-rights/storyboard?${query.toString()}`;
-            try {
-                const result = await util.fetch(url, {
-                    method: 'post',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Frontend-Id': 6,
-                        'X-Frontend-Version': '0',
-                        'X-Request-With': 'https://www.nicovideo.jp',
-                        'X-Access-Right-Key': this._info.accessRightKey,
-                    },
-                    credentials: 'include',
-                }).then(res => res.json());
-                if (result.meta.status && result.meta.status >= 300) {
-                    throw 'api_not_exist';
-                }
-                return this._toSessionInfo(result.data);
-            }
-            catch (err) {
-                if (err?.name === 'AbortError') {
-                    throw err;
-                }
-                if (err === 'api_not_exist') {
-                    throw 'Domand storyboard api not exist';
-                }
-                console.error('create domand session fail');
-                throw 'create domand session fail';
-            }
+            const response = await util.fetch(url, {
+                method: 'post',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frontend-Id': 6,
+                    'X-Frontend-Version': '0',
+                    'X-Request-With': 'https://www.nicovideo.jp',
+                    'X-Access-Right-Key': this._info.accessRightKey,
+                },
+                credentials: 'include',
+            });
+            const result = await readSessionResponse(response, 'domand');
+            return this._toSessionInfo(result.data);
         }
         _toSessionInfo({ contentUrl: url }) {
             return {
@@ -402,30 +453,16 @@ const createStoryboardClasses = (util) => {
         async _createSession() {
             const url = `${this._url}?_format=json`;
             const body = this._createRequestString();
-            try {
-                const result = await util.fetch(url, {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body
-                }).then(res => res.json());
-                if (result.meta.status && result.meta.status >= 300 || !result.data?.session?.content_uri) {
-                    throw 'api_not_exist';
-                }
-                return this._toSessionInfo(result.data);
-            }
-            catch (err) {
-                if (err?.name === 'AbortError') {
-                    throw err;
-                }
-                if (err === 'api_not_exist') {
-                    throw 'DMC storyboard api not exist';
-                }
-                console.error('create dmc session fail');
-                throw 'create dmc session fail';
-            }
+            const response = await util.fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body
+            });
+            const result = await readSessionResponse(response, 'dmc');
+            return this._toSessionInfo(result.data);
         }
         _createRequestString() {
             const info = this._info;
@@ -564,63 +601,6 @@ const VideoSessionWorker = (() => {
                     }
                 }
             }
-        };
-        // workerUtil forwards only the message of a rejected RPC. For an access
-        // response, carry these fixed protocol facts through a structured result.
-        class SessionResponseError extends Error {
-            details;
-            constructor(details) {
-                super('再生許可の応答を確認できませんでした');
-                this.details = details;
-            }
-        }
-        const readSessionResponse = async (response, serverType) => {
-            const httpStatus = response.status;
-            const schemaError = (missing) => new SessionResponseError({
-                kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing, httpStatus
-            });
-            if (httpStatus >= 300) {
-                throw new SessionResponseError({ httpStatus });
-            }
-            let result;
-            try {
-                result = await response.json();
-            }
-            catch (error) {
-                if (error?.name === 'SyntaxError') {
-                    throw schemaError('response.json');
-                }
-                throw error;
-            }
-            // Older DMC replies do not always include meta. Domand requires it.
-            const rawStatus = result?.meta?.status;
-            if (rawStatus != null || serverType === 'domand') {
-                const apiStatus = typeof rawStatus === 'string' && /^\d{3}$/.test(rawStatus) ? Number(rawStatus) : rawStatus;
-                if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
-                    throw schemaError('meta.status');
-                }
-                if (apiStatus >= 300) {
-                    throw new SessionResponseError({ httpStatus, apiStatus });
-                }
-            }
-            const isDomand = serverType === 'domand';
-            const value = isDomand ? result?.data?.contentUrl : result?.data?.session?.content_uri;
-            const missing = isDomand ? 'data.contentUrl' : 'data.session.content_uri';
-            // Preserve the signed string exactly, including protocol-relative CDN URLs.
-            if (typeof value !== 'string' || !/^(?:https?:)?\/\//i.test(value)) {
-                throw schemaError(missing);
-            }
-            let parsed;
-            try {
-                parsed = new URL(value, 'https://www.nicovideo.jp');
-            }
-            catch (_) {
-                throw schemaError(missing);
-            }
-            if (!parsed.hostname || parsed.username || parsed.password) {
-                throw schemaError(missing);
-            }
-            return result;
         };
         class DmcPostData {
             constructor(dmcInfo, videoQuality, { useHLS = true, useSSL = false }) {
@@ -873,7 +853,7 @@ const VideoSessionWorker = (() => {
                     },
                     credentials: 'include',
                     body: JSON.stringify(this._buildOutputsMatrix(videos, audioFormat))
-                }).then(res => readSessionResponse(res, 'domand'));
+                }).then(res => StoryboardSession.readAccessResponse(res, 'domand'));
                 this._lastResponse = result.data || {};
                 const { contentUrl, expireTime } = this._lastResponse;
                 this._lastUpdate = Date.now();
@@ -941,7 +921,7 @@ const VideoSessionWorker = (() => {
                         timeout: 10000,
                         dataType: 'text',
                         body: postData.toString()
-                    }).then(res => readSessionResponse(res, 'dmc'))
+                    }).then(res => StoryboardSession.readAccessResponse(res, 'dmc'))
                         .then(json => {
                         const data = json.data || {}, session = data.session || {};
                         const sessionId = session.id;
@@ -970,7 +950,7 @@ const VideoSessionWorker = (() => {
                         resolve(this.info);
                     }).catch(err => {
                         console.error('create api fail');
-                        if (err instanceof SessionResponseError || ['AbortError', 'timeout', 'TimeoutError'].includes(err?.name)) {
+                        if (StoryboardSession.failureDetails(err) || ['AbortError', 'timeout', 'TimeoutError'].includes(err?.name)) {
                             reject(err);
                         }
                         else {
@@ -1114,8 +1094,9 @@ const VideoSessionWorker = (() => {
                 connected = await session.connect();
             }
             catch (error) {
-                if (error instanceof SessionResponseError) {
-                    return { sessionFailure: error.details };
+                const failure = StoryboardSession.failureDetails(error);
+                if (failure) {
+                    return { sessionFailure: failure };
                 }
                 const name = error?.name;
                 if (name === 'AbortError' || name === 'timeout' || name === 'TimeoutError') {
@@ -1198,7 +1179,20 @@ const VideoSessionWorker = (() => {
                 case 'close':
                     return close(params);
                 case 'storyboard':
-                    return await storyboard(params);
+                    try {
+                        return await storyboard(params);
+                    }
+                    catch (error) {
+                        const failure = StoryboardSession.failureDetails(error);
+                        if (failure)
+                            return { storyboardFailure: failure };
+                        if (error?.name === 'AbortError')
+                            return { storyboardFailure: { name: 'AbortError' } };
+                        if (error?.errorCode === 'STORYBOARD_SCHEMA') {
+                            return { storyboardFailure: { kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'storyboard' } };
+                        }
+                        throw error;
+                    }
                 case 'storyboardImages':
                     return await storyboardImages(params);
             }
@@ -1373,6 +1367,9 @@ const VideoSessionWorker = (() => {
         }
         const params = { videoInfo, serverType: type, withImages: false };
         const result = await worker.post({ command: 'storyboard', params });
+        if (result?.storyboardFailure) {
+            throw Object.assign(new Error('場面画像の応答を確認できませんでした'), result.storyboardFailure);
+        }
         if (result && result.status === 'ok') {
             // Cache the first visible sheet only. Historical/edited points fetch their
             // own required sheet on demand, not every page of a long video.

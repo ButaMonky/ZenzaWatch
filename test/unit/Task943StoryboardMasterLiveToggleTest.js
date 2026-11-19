@@ -44,6 +44,10 @@ function harness({enabled=true,bar=true,externalConfig=null}={}){
    global:{debug:{}},console:{log(){},warn(){}},
    performance:{now:()=>12}
  });
+ const reports=[];
+ ctx.reports=reports;
+ run(beginSection('packages/lib/src/infra/RequestDiagnostics.js') +
+   ';RequestDiagnostics.setSink(e=>reports.push(e));',ctx);
  const S=loadClass('packages/zenza/src/storyboard/Storyboard.js','Storyboard',ctx);
  const board=new S({playerConfig:externalConfig||config,state,container:{},loader});
  const send=()=>{
@@ -55,10 +59,24 @@ function harness({enabled=true,bar=true,externalConfig=null}={}){
  const drain=()=>{while(send()){}};
  const settle=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
  const video=(id='sm101')=>({watchId:id,hasStoryboard:true,duration:120});
- return {board,config:externalConfig||config,values,state,requests,events,send,drain,settle,video,settingsListeners};
+ return {board,reports,config:externalConfig||config,values,state,requests,events,send,drain,settle,video,settingsListeners};
 }
 describe('Task943 storyboard master toggle live behavior',function(){
  this.timeout(15000);
+ it('only a valid current network reply recovers a scene-preview failure',async()=>{
+   const h=harness();
+   const load=id=>{h.board.reset();h.board.load(id,h.video(id));return h.requests.at(-1);};
+   load('sm101').reject({status:503});await h.settle();
+   assert.deepStrictEqual(h.reports.map(e=>e.outcome),['failed']);
+   load('sm101').resolve({ready:true,fromCache:true});await h.settle();
+   const older=load('sm101');
+   const newer=load('sm102');
+   older.reject({status:404});newer.resolve({ready:true});await h.settle();
+   assert.deepStrictEqual(h.reports.map(e=>e.outcome),['failed']);
+   load('sm101').resolve({ready:true});await h.settle();
+   assert.deepStrictEqual(h.reports.map(e=>e.outcome),['failed','recovered']);
+   assert.strictEqual(h.reports[0].key,h.reports[1].key);
+ });
  it('disabling master resets available thumbnails without losing the bar preference',async()=>{
    const h=harness();h.board.load('sm101',h.video());
    h.requests[0].resolve({ready:true});await h.settle();

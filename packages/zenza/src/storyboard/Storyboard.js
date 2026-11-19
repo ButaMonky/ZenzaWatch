@@ -707,14 +707,28 @@ class Storyboard extends Emitter {
         this._initializeStoryboard();
         this.emit('loading', key);
         const startedAt = performance.now();
+        const active = () => resuestId === this._requestId && this.config.props.enableStoryboard !== false;
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('storyboard', key, 'response', active);
         this.loader.load(this.config.props.videoServerType, videoInfo)
             .then(async (info) => {
             await this.promise('dom-ready');
             console.log('storyboard loaded: %s %sms%s', watchId, Math.round(performance.now() - startedAt), info && info.fromCache ? ' (cache)' : '');
             return info;
         })
-            .then(this._onStoryboardInfoLoad.bind(this, resuestId))
-            .catch(this._onStoryboardInfoLoadFail.bind(this, resuestId));
+            .then((info) => {
+            this._onStoryboardInfoLoad(resuestId, info);
+            if (!active() || info?.fromCache)
+                diagnostic?.failure({ name: 'AbortError' });
+            else if (this.model.isAvailable)
+                diagnostic?.success();
+            else
+                diagnostic?.failure({ kind: 'schema', errorCode: 'STORYBOARD_SCHEMA', missing: 'storyboard' });
+        })
+            .catch((error) => {
+            diagnostic?.failure(error);
+            this._onStoryboardInfoLoadFail(resuestId, error);
+        });
     }
     _onStoryboardInfoLoad(resuestId, rawData) {
         if (resuestId !== this._requestId || this.config?.props?.enableStoryboard === false) {

@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/VideoSessionWorker.ts",
   "runtime": "packages/lib/src/nico/VideoSessionWorker.js",
-  "sourceSha256": "c040489cc5f35f7bc4b07c514aea450b201d2a4dba0ff272877e5fa9f7ad6198",
-  "runtimeSha256": "f5e67afa0cf86ad02f671360c6ef3c3ca287fab58514855a02e836cce5f3b93f"
+  "sourceSha256": "40cdc4e487e594120e08ad8f6ee15a4c599d4884632c66a290a6ebaaa7d9c07e",
+  "runtimeSha256": "34460674281bd688aef596f44b62886674c942a06f3aafefca4dfe71d1512385"
 }

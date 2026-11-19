@@ -203,21 +203,27 @@ const { ThreadLoader } = (() => {
      * 呼び出し側の値・エラー・再試行は変えない。2026-11 の不具合（msgInfo.threadInfo が無い）は
      * 通信より前の TypeError で、これまでどこにも記録されなかった。
      */
-    const observeAction = async (operation, msgInfo, run) => {
-        const info = msgInfo;
-        const scope = String(info?.threadInfo?.threadId ?? info?.videoId ?? '');
+    const observeAction = async (operation, msgInfo, run, target = '', active) => {
+        const scope = String(msgInfo?.threadInfo?.threadId ?? msgInfo?.videoId ?? '');
         const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-            RequestDiagnostics.begin(operation, scope, 'response');
+            RequestDiagnostics.begin(operation, target ? scope + '|' + target : scope, 'response', active, String(msgInfo?.videoId ?? msgInfo?.threadInfo?.videoId ?? scope));
+        const action = {};
         try {
-            const value = await run();
+            const value = await run(action);
             ticket?.success();
             return value;
         }
         catch (error) {
             const bag = error;
-            ticket?.failure(bag && typeof bag === 'object' && bag.result && typeof bag.result === 'object' ? bag.result : error);
+            ticket?.failure({ result: action.transportFailure ?? bag?.result ?? error, ...action.response });
             throw error;
         }
+    };
+    const displayActionCode = (code) => {
+        if (code === 'INVALID_TOKEN' || code === 'EXPIRED_TOKEN' || code === 'INVALID_CHALLENGE_TOKEN') {
+            return code;
+        }
+        return typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.isKnownErrorCode?.(code) ? code : '';
     };
     // Task498: type-checked external read adapter, loaded before ThreadLoader.
     // Task478: posting's header/body deadline is implemented in CommentPostWire.
@@ -431,7 +437,7 @@ const { ThreadLoader } = (() => {
             const postKeyLanguage = options.language || 'ja-jp';
             try {
                 // Task490: TypeScript owns post-key GET request headers and response validation.
-                return await CommentPostWire.getPostKey(threadId, postKeyLanguage);
+                return await CommentPostWire.getPostKey(threadId, postKeyLanguage, options.action && (options.action.response = {}));
             }
             catch (result) {
                 throw { result, message: `PostKeyの取得失敗 ${threadId}` };
@@ -439,7 +445,9 @@ const { ThreadLoader } = (() => {
         }
         async _delete(url, body, options = {}) {
             try {
-                const { meta } = await netUtil.fetch(url, {
+                const response = options.action ? options.action.response = {} : {};
+                const res = await netUtil.fetch(url, {
+                    diagnosticActive: options.action ? () => false : undefined,
                     method: 'PUT',
                     headers: {
                         'X-Frontend-Id': FRONT_ID,
@@ -447,10 +455,8 @@ const { ThreadLoader } = (() => {
                         'Content-Type': 'text/plain; charset=UTF-8'
                     },
                     body
-                }).then(res => res.json());
-                if (meta.status >= 300) {
-                    throw meta;
-                }
+                });
+                await CommentPostWire.readActionResponse(res, response, true);
             }
             catch (result) {
                 throw {
@@ -462,7 +468,7 @@ const { ThreadLoader } = (() => {
         async _post(url, body, options = {}) {
             try {
                 // Task491: the TypeScript client owns the exact POST wire request.
-                return await CommentPostWire.postComment(url, body);
+                return await CommentPostWire.postComment(url, body, options.action && (options.action.response = {}));
             }
             catch (result) {
                 throw {
@@ -676,9 +682,9 @@ const { ThreadLoader } = (() => {
             return requestChallengeToken(siteKey);
         }
         async postChat(msgInfo, text, cmd, vpos, isOriginalVideo) {
-            return observeAction('comment-post', msgInfo, () => this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo));
+            return observeAction('comment-post', msgInfo, action => this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo), isOriginalVideo, action), '', isOriginalVideo);
         }
-        async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo) {
+        async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo, actionContext = {}) {
             diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
             const stillOriginal = () => {
                 try {
@@ -705,7 +711,7 @@ const { ThreadLoader } = (() => {
             let postKeyData;
             logCommentPostDiagnostic(diagnostic, 'post-key', 'start');
             try {
-                postKeyData = (await this.getPostKey(threadId, { language: language })) || {};
+                postKeyData = (await this.getPostKey(threadId, { language: language, action: actionContext })) || {};
             }
             catch (error) {
                 logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
@@ -729,6 +735,9 @@ const { ThreadLoader } = (() => {
             });
             // Task186 (F12): never POST without a usable post key.
             if (postKey === null) {
+                if (actionContext.response) {
+                    actionContext.response.missing = 'data.postKey';
+                }
                 logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
                     reason: 'post-key-missing',
                     outcome: 'not-sent'
@@ -739,6 +748,9 @@ const { ThreadLoader } = (() => {
             // Only a real, user-completed Turnstile response can be sent as challengeToken.
             let challengeToken;
             if (challenge.required === null) {
+                if (actionContext.response) {
+                    actionContext.response.missing = 'data.challenge';
+                }
                 logCommentPostDiagnostic(diagnostic, 'challenge', 'failure', {
                     reason: 'challenge-unavailable', outcome: 'not-sent'
                 });
@@ -804,7 +816,7 @@ const { ThreadLoader } = (() => {
             // Do not log the raw packet: command strings are user input too. The structured
             // diagnostic above contains only counts/booleans plus public identifiers.
             try {
-                const ack = await this._post(url, packet);
+                const ack = await this._post(url, packet, { action: actionContext });
                 // Task186 (F12): Zenza needs the comment number to show the posted comment.
                 // An acknowledgement without a numeric `no` is not a confirmed success.
                 // (`id` is passed through but not required: its contract is unconfirmed.)
@@ -812,6 +824,9 @@ const { ThreadLoader } = (() => {
                 // booleans/arrays/whitespace into successful comment numbers.
                 const accepted = CommentPostWire.parseAcknowledgement(ack);
                 if (!accepted) {
+                    if (actionContext.response) {
+                        actionContext.response.missing = 'data.no';
+                    }
                     logCommentPostDiagnostic(diagnostic, 'ack', 'failure', {
                         reason: 'ack-incomplete',
                         outcome: 'unknown',
@@ -869,6 +884,7 @@ const { ThreadLoader } = (() => {
                     });
                     logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'start', { reason: errorCode });
                     try {
+                        delete actionContext.response;
                         await this.load(msgInfo);
                         logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'success', { reason: errorCode });
                     }
@@ -887,6 +903,7 @@ const { ThreadLoader } = (() => {
                         outcome: 'rejected',
                         retryScheduled: false
                     });
+                    const code = displayActionCode(errorCode);
                     const challengeRejected = errorCode === 'INVALID_CHALLENGE_TOKEN';
                     throw {
                         status: 'fail',
@@ -897,7 +914,7 @@ const { ThreadLoader } = (() => {
                         } : {}),
                         message: challengeRejected ?
                             '追加認証が確認できずコメント投稿が拒否されました。公式プレイヤーで投稿してください（INVALID_CHALLENGE_TOKEN・入力内容は保持されます）' :
-                            (errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗')
+                            (code ? `コメント投稿失敗 ${code}` : 'コメント投稿失敗')
                     };
                 }
                 logCommentPostDiagnostic(diagnostic, 'retry', 'wait', {
@@ -912,7 +929,7 @@ const { ThreadLoader } = (() => {
                 return await this._postChat(msgInfo, text, cmd, vpos, true, {
                     ...diagnostic,
                     attempt: diagnostic.attempt + 1
-                }, isOriginalVideo);
+                }, isOriginalVideo, actionContext);
             }
         }
         async getDeleteKey(threadId, options = {}) {
@@ -920,16 +937,20 @@ const { ThreadLoader } = (() => {
             // Task650 (TL-LOG-001): this log was labelled getNicoruKey.
             console.log('getDeleteKey request');
             try {
-                const { meta, data } = await netUtil.fetch(url, {
+                const response = options.action ? options.action.response = {} : {};
+                const res = await netUtil.fetch(url, {
+                    diagnosticActive: options.action ? () => false : undefined,
                     headers: {
                         'X-Frontend-Id': FRONT_ID,
                         'X-Frontend-Version': FRONT_VER,
                         'X-Niconico-Language': options.language || 'ja-jp'
                     },
                     credentials: 'include'
-                }).then(res => res.json());
-                if (meta.status >= 300) {
-                    throw meta;
+                });
+                const data = await CommentPostWire.readActionResponse(res, response);
+                if (typeof data?.deleteKey !== 'string' || !data.deleteKey.trim()) {
+                    response.missing = 'data.deleteKey';
+                    throw commentSchemaError('missing-action-key');
                 }
                 return data;
             }
@@ -938,13 +959,13 @@ const { ThreadLoader } = (() => {
             }
         }
         async deleteChat(msgInfo, chat) {
-            return observeAction('comment-delete', msgInfo, () => this._deleteChat(msgInfo, chat));
+            return observeAction('comment-delete', msgInfo, action => this._deleteChat(msgInfo, chat, action), `delete/${chat?.fork || 0}/${chat?.no}`);
         }
-        async _deleteChat(msgInfo, chat) {
+        async _deleteChat(msgInfo, chat, action) {
             const { videoId, threadId, language } = msgInfo.threadInfo;
             const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
             const fork = FORK_LABEL[chat.fork || 0];
-            const { deleteKey } = await this.getDeleteKey(threadId, { language: language, fork });
+            const { deleteKey } = await this.getDeleteKey(threadId, { language: language, fork, action });
             const packet = JSON.stringify({
                 deleteKey,
                 fork,
@@ -957,14 +978,17 @@ const { ThreadLoader } = (() => {
             });
             console.log('put packet request');
             try {
-                await this._delete(url, packet);
+                await this._delete(url, packet, { action });
                 return {
                     status: 'ok',
                     message: 'コメント削除成功'
                 };
             }
             catch (error) {
-                const { result: { status: statusCode, errorCode } } = error;
+                const result = error?.result;
+                action.transportFailure = result;
+                const statusCode = result?.status ?? result?.httpStatus;
+                const errorCode = displayActionCode(result?.errorCode);
                 throw {
                     status: 'fail',
                     statusCode,
@@ -976,16 +1000,20 @@ const { ThreadLoader } = (() => {
             const url = `https://nvapi.nicovideo.jp/v1/comment/keys/nicoru?threadId=${threadId}`;
             console.log('getNicoruKey request');
             try {
-                const { meta, data } = await netUtil.fetch(url, {
+                const response = options.action ? options.action.response = {} : {};
+                const res = await netUtil.fetch(url, {
+                    diagnosticActive: options.action ? () => false : undefined,
                     headers: {
                         'X-Frontend-Id': FRONT_ID,
                         'X-Frontend-Version': FRONT_VER,
                         'X-Niconico-Language': options.language || 'ja-jp'
                     },
                     credentials: 'include'
-                }).then(res => res.json());
-                if (meta.status >= 300) {
-                    throw meta;
+                });
+                const data = await CommentPostWire.readActionResponse(res, response);
+                if (typeof data?.nicoruKey !== 'string' || !data.nicoruKey.trim()) {
+                    response.missing = 'data.nicoruKey';
+                    throw commentSchemaError('missing-action-key');
                 }
                 return data;
             }
@@ -994,12 +1022,12 @@ const { ThreadLoader } = (() => {
             }
         }
         async nicoru(msgInfo, chat) {
-            return observeAction('nicoru', msgInfo, () => this._nicoru(msgInfo, chat));
+            return observeAction('nicoru', msgInfo, action => this._nicoru(msgInfo, chat, action), `add/${chat?.fork || 0}/${chat?.no}`);
         }
-        async _nicoru(msgInfo, chat) {
+        async _nicoru(msgInfo, chat, action) {
             const { videoId, threadId, language } = msgInfo.threadInfo;
             const url = new URL(`/v1/threads/${threadId}/nicorus`, msgInfo.nvComment.server);
-            const { nicoruKey } = await this.getNicoruKey(threadId, { language: language });
+            const { nicoruKey } = await this.getNicoruKey(threadId, { language: language, action });
             const packet = JSON.stringify({
                 content: chat.text,
                 fork: FORK_LABEL[chat.fork || 0],
@@ -1009,16 +1037,29 @@ const { ThreadLoader } = (() => {
             });
             console.log('post packet request');
             try {
-                const { nicoruId, nicoruCount } = await this._post(url, packet);
+                const data = await this._post(url, packet, { action });
+                const nicoruId = data?.nicoruId, nicoruCount = data?.nicoruCount;
+                const hasId = typeof nicoruId === 'string' && /^[0-9A-Za-z]+$/.test(nicoruId);
+                const hasCount = (typeof nicoruCount === 'number' || typeof nicoruCount === 'string' && /^[0-9]+$/.test(nicoruCount)) &&
+                    Number.isSafeInteger(Number(nicoruCount)) && Number(nicoruCount) >= 0;
+                if (!hasId && !hasCount) {
+                    if (action.response) {
+                        action.response.missing = 'data.nicoruId';
+                    }
+                    throw commentSchemaError('missing-nicoru-ack');
+                }
                 return {
                     status: 'ok',
-                    id: nicoruId,
-                    count: nicoruCount,
+                    id: hasId ? nicoruId : undefined,
+                    count: hasCount ? nicoruCount : undefined,
                     message: 'ニコれた'
                 };
             }
             catch (error) {
-                const { result: { status: statusCode, errorCode } } = error;
+                const result = error?.result;
+                action.transportFailure = result;
+                const statusCode = result?.status ?? result?.httpStatus;
+                const errorCode = displayActionCode(result?.errorCode);
                 throw {
                     status: 'fail',
                     statusCode,
@@ -1031,34 +1072,29 @@ const { ThreadLoader } = (() => {
          * DELETE https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/{nicoruId}（応答 {meta:{status:200},data:[]}）。
          */
         async unNicoru(msgInfo, nicoruId) {
-            return observeAction('nicoru', msgInfo, () => this._unNicoru(nicoruId));
+            return observeAction('nicoru', msgInfo, action => this._unNicoru(nicoruId, action), 'cancel/' + nicoruId);
         }
-        async _unNicoru(nicoruId) {
+        async _unNicoru(nicoruId, action) {
             if (typeof nicoruId !== 'string' || !/^[0-9A-Za-z]+$/.test(nicoruId)) {
                 throw { status: 'fail', message: 'ニコるを取り消せなかった＞＜（IDが不正）' };
             }
-            let statusCode = null;
+            const response = action.response = {};
             try {
                 const res = await fetch('https://nvapi.nicovideo.jp/v1/users/me/nicoru/send/' + encodeURIComponent(nicoruId), {
                     method: 'DELETE',
                     headers: { 'x-frontend-id': '6', 'x-frontend-version': '0', 'x-request-with': 'nicovideo' },
                     credentials: 'include'
                 });
-                statusCode = res.status;
-                const body = await res.json().catch(() => null);
-                const status = Number(body?.meta?.status ?? res.status);
-                if (!res.ok || status >= 300) {
-                    throw { result: { status, errorCode: body?.meta?.errorCode } };
-                }
+                await CommentPostWire.readActionResponse(res, response, true);
                 return { status: 'ok', message: 'ニコるを取り消した' };
             }
             catch (error) {
-                const result = error?.result;
+                action.transportFailure = error;
+                const code = displayActionCode(response.errorCode);
                 throw {
                     status: 'fail',
-                    statusCode: result?.status ?? statusCode,
-                    result: result || error,
-                    message: result?.errorCode ? `ニコるを取り消せなかった＞＜ ${result.errorCode}` : 'ニコるを取り消せなかった＞＜'
+                    statusCode: response.apiStatus ?? response.httpStatus,
+                    message: code ? `ニコるを取り消せなかった＞＜ ${code}` : 'ニコるを取り消せなかった＞＜'
                 };
             }
         }

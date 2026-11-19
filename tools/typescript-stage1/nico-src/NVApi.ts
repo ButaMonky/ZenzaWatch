@@ -11,6 +11,7 @@ declare const netUtil: NetUtilFetcher;
 export interface NVApiCallParams {
   /** HTTP method; defaults to GET. */
   method?: string;
+  diagnosticActive?: () => boolean;
 }
 
 export interface NVApiClient {
@@ -35,6 +36,7 @@ const NVApi: NVApiClient = {
         mode: 'cors',
         credentials: 'include',
         timeout: 5000,
+        ...(params.diagnosticActive ? {diagnosticActive:params.diagnosticActive} : {}),
         method: params.method || 'GET',
         headers: {
           'X-Frontend-Id': NVApi.FRONT_ID,

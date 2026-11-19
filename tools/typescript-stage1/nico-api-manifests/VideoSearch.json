@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/VideoSearch.ts",
   "runtime": "packages/lib/src/nico/VideoSearch.js",
-  "sourceSha256": "d5e48ed8602d24646c8ca3b26c00facf1ff5099e236ef4ae8666a14feae9e86f",
-  "runtimeSha256": "23b646adc78794943635c7873c61403df4346560c6d5eb04c5ef937e7a5b5fee"
+  "sourceSha256": "90f3b733187802d58863d7db014acce79c6672539f476d93401cc93bd4fc691e",
+  "runtimeSha256": "96e259ab1f3e2083b51e3d947f33c74863ab0ad9370b2c0a04802f86bdb4f639"
 }

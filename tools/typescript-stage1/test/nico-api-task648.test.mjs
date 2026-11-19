@@ -28,6 +28,7 @@ function world(opt={}){
     getPostKey:async(id,lang)=>{L('wire.getPostKey',id,lang);if(opt.postKeyFails)throw {status:403,errorCode:'FORBIDDEN'};return opt.postKey===undefined?{postKey:'PK'}:opt.postKey;},
     readPostKey:v=>v&&typeof v.postKey==='string'&&v.postKey.trim()?v.postKey:null,
     readChallenge:challengeWire.readChallenge,
+    readActionResponse:challengeWire.readActionResponse,
     buildPacket:({text,cmd,vpos,postKey,videoId})=>({packet:JSON.stringify({body:text,commands:(cmd||'').split(' ').filter(Boolean),vposMs:vpos*10,postKey,videoId}),commandCount:(cmd||'').split(' ').filter(Boolean).length,hasBlankCommand:false}),
     postComment:async(url,body)=>{L('wire.post',String(url),body);const r=posts.shift();if(r&&r.throw)throw r.throw;return r?r.ack:{no:5,id:'x'};},
     parseAcknowledgement:v=>v&&typeof v.no==='number'?{no:v.no,id:v.id}:null,
@@ -128,6 +129,11 @@ async function compare(label,run,opt={}){
   }
   if (label==='thread key schema') {
     ra.error.result={...ra.error.result,reason:'missing-thread-key',missing:'data.threadKey'};
+  }
+  if (label==='delete rejected') {
+    // Unknown server codes stay out of the user-visible notification.
+    assert.equal(ra.error.message,'コメント削除失敗 NOPE');
+    ra.error.message='コメント削除失敗';
   }
   assert.deepEqual(snapshot(rb),snapshot(ra),label+' result/error');
   // Match position, multiplicity and exact values of all transport/retry events.

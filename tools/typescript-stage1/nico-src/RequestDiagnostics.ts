@@ -2,7 +2,7 @@
 export type DiagnosticOperation = 'video-info' | 'comment-read' | 'comment-history-read' | 'comment-key' |
   'video-session' | 'session-state' | 'storyboard' | 'search' | 'mylist' |
   'playlist' | 'like' | 'tags' | 'nico-api' | 'tag-suggest' | 'tag-key' |
-  'advertising' | 'ad-decoration' | 'supporters' | 'gifts' | 'dictionary' | 'recommend' | 'owner' |
+  'advertising' | 'ad-decoration' | 'supporters' | 'gifts' | 'dictionary' | 'recommend' | 'owner' | 'owner-videos' |
   'comment-post' | 'nicoru' | 'comment-delete' | 'nicoad-end' |
   'clip-permission' | 'clip-license' | 'clip-create' | 'clip-status' | 'clip-post' | 'clip-post-status' | 'clip-delete' | 'clip-library';
 export type DiagnosticPhase = 'transport' | 'response' | 'session';
@@ -40,7 +40,7 @@ const RequestDiagnostics = (() => {
     like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
     'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
     'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-    dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+    dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
     'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
     'nicoad-end': '動画の最後のニコニ広告',
     'clip-library': 'クリップ変換ライブラリ',
@@ -61,7 +61,7 @@ const RequestDiagnostics = (() => {
     like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
     'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
     'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
-    dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
+    dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts', 'owner-videos': 'nico-src/VideoSearch.ts',
     'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
     'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
     'clip-library': 'src/ShareFastClip.js',
@@ -128,13 +128,47 @@ const RequestDiagnostics = (() => {
   };
   type Failure = {reason: string; statusCode?: number; apiStatus?: number; errorCode?: string; missing?: string; errorName?: string};
   const knownErrorCodes = new Set(['WATCH_SCHEMA','WATCH_PAGE_SCHEMA','WATCH_PAGE_META_MISSING','RESPONSE_SCHEMA','STORYBOARD_SCHEMA',
-      'SEARCH_SCHEMA','KEY_EXPIRED','BAD_REQUEST','INVALID_PARAMETER','EXPIRED_TOKEN','INVALID_TOKEN','FORBIDDEN','NOT_FOUND','TOO_MANY_REQUESTS','INTERNAL_SERVER_ERROR','UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
+      'SEARCH_SCHEMA','KEY_EXPIRED','INVALID_CHALLENGE_TOKEN','BAD_REQUEST','INVALID_PARAMETER','EXPIRED_TOKEN','INVALID_TOKEN','FORBIDDEN','NOT_FOUND','TOO_MANY_REQUESTS','INTERNAL_SERVER_ERROR','UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
   const isKnownErrorCode = (value: unknown): value is string => typeof value === 'string' && knownErrorCodes.has(value);
   const validStatus = (value: unknown): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+  // Only project protocol facts. Each caller owns body validation, fallback and retries.
+  const responseFailure = (response: unknown, meta: unknown, missing?: string): {
+    httpStatus?: number; apiStatus?: number; errorCode?: string; kind?: 'schema' | 'service'; missing?: string
+  } | null => {
+    const wire = (response as {status?: unknown} | null)?.status;
+    const header = meta as {status?: unknown; errorCode?: unknown} | null;
+    const api = header?.status;
+    const statuses = {
+      ...(validStatus(wire) ? {httpStatus: wire} : {}),
+      ...(validStatus(api) ? {apiStatus: api} : {})
+    };
+    const rawCode = header?.errorCode;
+    const code = typeof rawCode === 'string' && rawCode ? {errorCode: isKnownErrorCode(rawCode) ? rawCode : 'OTHER'} : {};
+    if ((validStatus(wire) && wire >= 300) || (validStatus(api) && api >= 300)) return {...statuses, ...code};
+    if (code.errorCode) return {...statuses, ...code, kind:'service'};
+    if (missing || !validStatus(api) || api < 200) {
+      return {...statuses, kind:'schema', errorCode:'RESPONSE_SCHEMA', missing: missing || 'meta.status'};
+    }
+    return null;
+  };
+  const readFailure = (response: unknown, cause: unknown) => {
+    const error = cause as {name?: unknown; status?: unknown} | null;
+    const wire = (response as {status?: unknown} | null)?.status;
+    const statuses = validStatus(wire) ? {httpStatus:wire} : {};
+    if (error?.name === 'AbortError') return {name:'AbortError'};
+    if (validStatus(wire) && wire >= 300) return statuses;
+    if (error?.name === 'TimeoutError' || error?.name === 'timeout' || error?.status === 'timeout') {
+      return {...statuses, kind:'timeout'};
+    }
+    if (response && error?.name === 'SyntaxError') return {...statuses, kind:'schema', errorCode:'RESPONSE_SCHEMA', missing:'json'};
+    return {...statuses, kind:'network'};
+  };
   const classify = (error: unknown): Failure => {
     const outer = error && typeof error === 'object' ? error as Record<string, unknown> : {};
-    const e = outer.result && typeof outer.result === 'object' ? outer.result as Record<string, unknown> : outer;
+    const ownsStatus = validStatus(outer.httpStatus) || validStatus(outer.apiStatus) ||
+      ['schema','network','timeout'].includes(String(outer.kind)) || outer.name === 'AbortError';
+    const e = !ownsStatus && outer.result && typeof outer.result === 'object' ? outer.result as Record<string, unknown> : outer;
     const httpStatus = e.httpStatus ?? e.statusCode ?? e.status;
     const apiStatus = validStatus(e.apiStatus) ? e.apiStatus : undefined;
     const apiRejected = apiStatus !== undefined && apiStatus >= 300 &&
@@ -150,6 +184,7 @@ const RequestDiagnostics = (() => {
       (e.kind === 'schema' || /_SCHEMA$/.test(String(e.errorCode)) ? fieldName(e.reasonCode) || fieldName(e.reason) : undefined);
     if (missing) { (fields as Failure).missing = missing; }
     if (e.name === 'AbortError' || e.reason === 'cancelled') { return {reason: 'cancelled'}; }
+    if (e.kind === 'network') { return {reason: 'network', ...fields}; }
     // Task1036: プログラムの不具合（TypeError など）は通信失敗と区別する。今回のコメント不具合は
     // 「Cannot destructure property 'videoId' of 'msgInfo.threadInfo'」で、通信に関係なかった。
     if (['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(String(e.name)) &&
@@ -160,7 +195,7 @@ const RequestDiagnostics = (() => {
     if (e.kind === 'integrity') return {reason:'integrity'};
     if (e.kind === 'module-load') return {reason:'module-load'};
     if (e.reason === 'session-closed') { return {reason: 'session-closed'}; }
-    if (e.kind === 'service') { return {reason: 'service'}; }
+    if (e.kind === 'service') { return {reason: 'service', ...fields}; }
     if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') { return {reason: 'timeout', ...fields}; }
     if (status === 404 || e.reason === 'not found') { return {reason: 'not-found', ...fields}; }
     if (status === 401 || status === 403 || ['forbidden','need payment','premium only','member only'].includes(String(e.reason))) { return {reason: 'permission', ...fields}; }
@@ -218,8 +253,30 @@ const RequestDiagnostics = (() => {
     }
     return result;
   };
+  const classifyCommentAction = (error: unknown): Failure => {
+    const e = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+    const result = e.result as Record<string, unknown> | undefined;
+    // The action reader owns these fields. Its original exception can be a raw API envelope.
+    if (validStatus(e.httpStatus) || validStatus(e.apiStatus) || e.missing || e.errorCode) {
+      const failure = responseFailure({status:e.httpStatus}, {status:e.apiStatus, errorCode:e.errorCode},
+        typeof e.missing === 'string' ? e.missing : undefined);
+      if (failure) return classify(failure);
+    }
+    if (result?.reason === 'no-post-target' || (result?.outcome === 'not-sent' &&
+        ['challenge-cancelled','challenge-stale-video','challenge-busy'].includes(String(result.reason)))) {
+      return {reason:'cancelled'};
+    }
+    if (result?.reason === 'challenge-timeout' || ['header-timeout','body-timeout'].includes(String(result?.kind ?? result?.reason))) {
+      return classify({kind:'timeout', httpStatus:e.httpStatus});
+    }
+    if (result?.name === 'AbortError' || result?.name === 'TimeoutError') return classify(result);
+    if (result?.name === 'TypeError' && ['Failed to fetch','Load failed','NetworkError when attempting to fetch resource.'].includes(String(result.message))) {
+      return classify({kind:'network', httpStatus:e.httpStatus});
+    }
+    return classify(result ?? error);
+  };
   const begin = (operation: DiagnosticOperation, scope: string, phase: DiagnosticPhase,
-    active: () => boolean = () => true): DiagnosticTicket => {
+    active: () => boolean = () => true, suspectTarget?: string): DiagnosticTicket => {
     if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport','response','session'].includes(phase)) { return noop; }
     const started = Date.now();
     const key = 'diag-' + operation + '-' + phase + '-' + scopeId(scope);
@@ -251,7 +308,7 @@ const RequestDiagnostics = (() => {
         };
         const module = moduleFor(operation);
         if (outcome === 'failed' && suspectReason(failure)) {
-          const distinctTargets = noteSuspect(operation, key, failure, Date.now());
+          const distinctTargets = noteSuspect(operation, suspectTarget === undefined ? key : scopeId(suspectTarget), failure, Date.now());
           if (distinctTargets) {
             sink?.({key: 'diag-spec-' + operation + '-' + failure.reason, operation, phase, outcome: 'failed', ...failure,
               reason: 'spec-change', module, distinctTargets,
@@ -269,7 +326,8 @@ const RequestDiagnostics = (() => {
     const failure = (error: unknown): void => {
       try {
         const result = operation === 'comment-history-read' ? classifyHistoryRead(error) :
-          operation === 'comment-key' ? classifyCommentKey(error) : classify(error);
+          operation === 'comment-key' ? classifyCommentKey(error) :
+          ['comment-post','nicoru','comment-delete'].includes(operation) ? classifyCommentAction(error) : classify(error);
         emit('failed', result);
       } catch (_) { /* untrusted error properties */ }
     };
@@ -298,7 +356,10 @@ const RequestDiagnostics = (() => {
         return /\/decoration$/.test(p) ? 'ad-decoration' : 'advertising';
       }
       if (/\/recommend$/.test(p)) { return 'recommend'; }
-      if (/\/users\/[^/]+\/videos/.test(p)) { return 'owner'; }
+      if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v1\/playlist\//.test(p)) { return 'playlist'; }
+      if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v3\/users\/[^/]+\/videos\/?$/.test(p)) {
+        return url.searchParams.get('selectContentType') === 'short' ? 'playlist' : 'owner-videos';
+      }
       if (/\/watch-later(?:\/|$)/.test(p)) { return 'mylist'; }
       if (/\/access-rights\/storyboard\/?$/.test(p)) { return 'storyboard'; }
       if (/\/access-rights\//.test(p)) { return 'video-session'; }
@@ -321,7 +382,7 @@ const RequestDiagnostics = (() => {
   };
   // Observe a caller-owned operation without changing its value, error or retry policy.
   const observe = async <T>(operation: DiagnosticOperation, scope: string,
-    execute: () => Promise<T>, validate: (value: T) => boolean | {status: number} = () => true,
+    execute: () => Promise<T>, validate: (value: T) => boolean | {status?: number; httpStatus?: number; apiStatus?: number; kind?: string; missing?: string; errorCode?: string} = () => true,
     active: () => boolean = () => true): Promise<T> => {
     const ticket = begin(operation, scope, 'response', active);
     let value: T;
@@ -344,6 +405,6 @@ const RequestDiagnostics = (() => {
   const setSink = (next?: (event: DiagnosticEvent) => void): void => { sink = next; };
   const labelFor = (operation: string): string | undefined =>
     Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation as DiagnosticOperation] : undefined;
-  return {begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode};
+  return {begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode, responseFailure, readFailure};
 })();
 export { RequestDiagnostics };

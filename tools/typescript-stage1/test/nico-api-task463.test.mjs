@@ -15,7 +15,13 @@ async function compareSequences(name,makeGlobals,cases){
     const sa=loadLegacy(before,name,a.globals),sb=loadLegacy(after,name,b.globals);
     for(const [i,step] of steps.entries()){
       const ra=await settle(()=>step(sa)),rb=await settle(()=>step(sb));
-      assert.deepEqual(snapshot(rb),snapshot(ra),`${label} step ${i}`);
+      if (name === 'PlaylistApiLoader' && label === 'missing data envelope') {
+        assert.equal(ra.error?.name, 'TypeError');
+        assert.equal(rb.ok, false);
+        assert.equal(rb.error?.message, 'プレイリストの取得失敗(1) series');
+      } else {
+        assert.deepEqual(snapshot(rb),snapshot(ra),`${label} step ${i}`);
+      }
     }
     if(name==='PlaylistApiLoader' && ['mylist sort override','watchlater default','search keyword'].includes(label)){
       const oldLog=snapshot(a.log),newLog=snapshot(b.log);
@@ -99,12 +105,12 @@ test('PlaylistApiLoader: URLs per type, cache keys, headers and failure codes (1
     ['custom frontend headers',[load({type:'series',id:1},{frontendId:70,frontendVersion:2})],ok],
     ['unknown type -> (3)',[load({type:'nope'})],ok],
     ['preloaded cache skips fetch',[load({type:'series',id:'5'})],
-      {...ok,cached:{'playlist; https://nvapi.nicovideo.jp/v1/playlist/series/5':['cached']}}],
+      {...ok,cached:{'playlist; https://nvapi.nicovideo.jp/v1/playlist/series/5':[{watchId:'sm5'}]}}],
     ['meta 404 -> (1)',[load({type:'series',id:1})],{body:{meta:{status:404},data:{items}}}],
     ['items null -> (1)',[load({type:'series',id:1})],{body:{meta:{status:200},data:{items:null}}}],
     ['empty items array is success',[load({type:'series',id:1})],{body:{meta:{status:200},data:{items:[]}}}],
     ['error body cause is forwarded',[load({type:'series',id:1})],{body:{meta:{status:500},data:{},cause:'srv'}}],
-    ['data missing -> TypeError',[load({type:'series',id:1})],{body:{meta:{status:200}}}],
+    ['missing data envelope',[load({type:'series',id:1})],{body:{meta:{status:200}}}],
     ['json fails -> (2)',[load({type:'series',id:1})],{jsonFails:true}],
     ['fetch fails -> (2)',[load({type:'series',id:1})],{fail:true}]
   ]);

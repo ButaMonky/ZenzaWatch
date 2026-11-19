@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.98-task1098
+// @version     0.5.99-task1099
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-19 06:23Z c48fe360
+// build: 2026-11-19 07:11Z 76f1b645
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -3043,7 +3043,7 @@ const RequestDiagnostics = (() => {
 				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
 				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
-				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報',
+				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
 				'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
 				'nicoad-end': '動画の最後のニコニ広告',
 				'clip-library': 'クリップ変換ライブラリ',
@@ -3060,7 +3060,7 @@ const RequestDiagnostics = (() => {
 				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
 				'tag-suggest': 'nico-src/TagSuggestLoader.ts', 'tag-key': 'nico-src/TagEditApi.ts', advertising: 'nico-src/UaaLoader.ts',
 				'ad-decoration': 'nico-src/AdDecorationLoader.ts', supporters: 'nico-src/SupporterCredit.ts', gifts: 'nico-src/SupporterCredit.ts',
-				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts',
+				dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts', 'owner-videos': 'nico-src/VideoSearch.ts',
 				'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
 				'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
 				'clip-library': 'src/ShareFastClip.js',
@@ -3127,12 +3127,48 @@ const RequestDiagnostics = (() => {
 				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
 		};
 		const knownErrorCodes = new Set(['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-				'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
+				'SEARCH_SCHEMA', 'KEY_EXPIRED', 'INVALID_CHALLENGE_TOKEN', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
 		const isKnownErrorCode = (value) => typeof value === 'string' && knownErrorCodes.has(value);
 		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+		const responseFailure = (response, meta, missing) => {
+				const wire = response?.status;
+				const header = meta;
+				const api = header?.status;
+				const statuses = {
+						...(validStatus(wire) ? { httpStatus: wire } : {}),
+						...(validStatus(api) ? { apiStatus: api } : {})
+				};
+				const rawCode = header?.errorCode;
+				const code = typeof rawCode === 'string' && rawCode ? { errorCode: isKnownErrorCode(rawCode) ? rawCode : 'OTHER' } : {};
+				if ((validStatus(wire) && wire >= 300) || (validStatus(api) && api >= 300))
+						return { ...statuses, ...code };
+				if (code.errorCode)
+						return { ...statuses, ...code, kind: 'service' };
+				if (missing || !validStatus(api) || api < 200) {
+						return { ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: missing || 'meta.status' };
+				}
+				return null;
+		};
+		const readFailure = (response, cause) => {
+				const error = cause;
+				const wire = response?.status;
+				const statuses = validStatus(wire) ? { httpStatus: wire } : {};
+				if (error?.name === 'AbortError')
+						return { name: 'AbortError' };
+				if (validStatus(wire) && wire >= 300)
+						return statuses;
+				if (error?.name === 'TimeoutError' || error?.name === 'timeout' || error?.status === 'timeout') {
+						return { ...statuses, kind: 'timeout' };
+				}
+				if (response && error?.name === 'SyntaxError')
+						return { ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: 'json' };
+				return { ...statuses, kind: 'network' };
+		};
 		const classify = (error) => {
 				const outer = error && typeof error === 'object' ? error : {};
-				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				const ownsStatus = validStatus(outer.httpStatus) || validStatus(outer.apiStatus) ||
+						['schema', 'network', 'timeout'].includes(String(outer.kind)) || outer.name === 'AbortError';
+				const e = !ownsStatus && outer.result && typeof outer.result === 'object' ? outer.result : outer;
 				const httpStatus = e.httpStatus ?? e.statusCode ?? e.status;
 				const apiStatus = validStatus(e.apiStatus) ? e.apiStatus : undefined;
 				const apiRejected = apiStatus !== undefined && apiStatus >= 300 &&
@@ -3151,6 +3187,9 @@ const RequestDiagnostics = (() => {
 				if (e.name === 'AbortError' || e.reason === 'cancelled') {
 						return { reason: 'cancelled' };
 				}
+				if (e.kind === 'network') {
+						return { reason: 'network', ...fields };
+				}
 				if (['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError'].includes(String(e.name)) &&
 						typeof e.message === 'string' && !/JSON|Unexpected token|Unexpected end/i.test(e.message)) {
 						const where = missingFromMessage(e.message);
@@ -3164,7 +3203,7 @@ const RequestDiagnostics = (() => {
 						return { reason: 'session-closed' };
 				}
 				if (e.kind === 'service') {
-						return { reason: 'service' };
+						return { reason: 'service', ...fields };
 				}
 				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
 						return { reason: 'timeout', ...fields };
@@ -3243,7 +3282,29 @@ const RequestDiagnostics = (() => {
 				}
 				return result;
 		};
-		const begin = (operation, scope, phase, active = () => true) => {
+		const classifyCommentAction = (error) => {
+				const e = error && typeof error === 'object' ? error : {};
+				const result = e.result;
+				if (validStatus(e.httpStatus) || validStatus(e.apiStatus) || e.missing || e.errorCode) {
+						const failure = responseFailure({ status: e.httpStatus }, { status: e.apiStatus, errorCode: e.errorCode }, typeof e.missing === 'string' ? e.missing : undefined);
+						if (failure)
+								return classify(failure);
+				}
+				if (result?.reason === 'no-post-target' || (result?.outcome === 'not-sent' &&
+						['challenge-cancelled', 'challenge-stale-video', 'challenge-busy'].includes(String(result.reason)))) {
+						return { reason: 'cancelled' };
+				}
+				if (result?.reason === 'challenge-timeout' || ['header-timeout', 'body-timeout'].includes(String(result?.kind ?? result?.reason))) {
+						return classify({ kind: 'timeout', httpStatus: e.httpStatus });
+				}
+				if (result?.name === 'AbortError' || result?.name === 'TimeoutError')
+						return classify(result);
+				if (result?.name === 'TypeError' && ['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.'].includes(String(result.message))) {
+						return classify({ kind: 'network', httpStatus: e.httpStatus });
+				}
+				return classify(result ?? error);
+		};
+		const begin = (operation, scope, phase, active = () => true, suspectTarget) => {
 				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
 						return noop;
 				}
@@ -3291,7 +3352,7 @@ const RequestDiagnostics = (() => {
 								};
 								const module = moduleFor(operation);
 								if (outcome === 'failed' && suspectReason(failure)) {
-										const distinctTargets = noteSuspect(operation, key, failure, Date.now());
+										const distinctTargets = noteSuspect(operation, suspectTarget === undefined ? key : scopeId(suspectTarget), failure, Date.now());
 										if (distinctTargets) {
 												sink?.({ key: 'diag-spec-' + operation + '-' + failure.reason, operation, phase, outcome: 'failed', ...failure,
 														reason: 'spec-change', module, distinctTargets,
@@ -3310,7 +3371,8 @@ const RequestDiagnostics = (() => {
 				const failure = (error) => {
 						try {
 								const result = operation === 'comment-history-read' ? classifyHistoryRead(error) :
-										operation === 'comment-key' ? classifyCommentKey(error) : classify(error);
+										operation === 'comment-key' ? classifyCommentKey(error) :
+												['comment-post', 'nicoru', 'comment-delete'].includes(operation) ? classifyCommentAction(error) : classify(error);
 								emit('failed', result);
 						}
 						catch (_) { /* untrusted error properties */ }
@@ -3359,8 +3421,11 @@ const RequestDiagnostics = (() => {
 						if (/\/recommend$/.test(p)) {
 								return 'recommend';
 						}
-						if (/\/users\/[^/]+\/videos/.test(p)) {
-								return 'owner';
+						if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v1\/playlist\//.test(p)) {
+								return 'playlist';
+						}
+						if (url.hostname === 'nvapi.nicovideo.jp' && /^\/v3\/users\/[^/]+\/videos\/?$/.test(p)) {
+								return url.searchParams.get('selectContentType') === 'short' ? 'playlist' : 'owner-videos';
 						}
 						if (/\/watch-later(?:\/|$)/.test(p)) {
 								return 'mylist';
@@ -3447,7 +3512,7 @@ const RequestDiagnostics = (() => {
 		};
 		const setSink = (next) => { sink = next; };
 		const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
-		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode };
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode, responseFailure, readFailure };
 })();
 const netUtil = {
 		abortableFetch: async (url, params = {}) => {
@@ -5558,62 +5623,109 @@ const MylistApiLoader = (() => {
 								throw createMylistError('マイリストトークン取得失敗（認証情報がありません）');
 						}
 				}
+				async _readList(url, kind, frontendId, frontendVersion, isCurrent) {
+						const label = kind === 'watchLater' ? 'あとで見る' : kind === 'mylists' ? 'マイリスト一覧' : 'マイリスト';
+						const ensureCurrent = () => {
+								if (!isCurrent) {
+										return;
+								}
+								let current = false;
+								try {
+										current = isCurrent() === true;
+								}
+								catch (_) { /* A disposed owner is stale. */ }
+								if (!current) {
+										throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+								}
+						};
+						ensureCurrent();
+						let response;
+						let result;
+						try {
+								response = await netUtil.fetch(url, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion }, credentials: 'include',
+										...(typeof RequestDiagnostics !== 'undefined' && isCurrent ? { diagnosticActive: isCurrent } : {})
+								});
+								result = await response.json();
+						}
+						catch (cause) {
+								ensureCurrent();
+								const wrapped = createMylistError(label + 'の取得失敗(2)', { cause, ...(kind === 'mylists' ? { result: cause } : {}) });
+								if (typeof RequestDiagnostics !== 'undefined') {
+										Object.assign(wrapped, RequestDiagnostics.readFailure(response, cause));
+								}
+								throw wrapped;
+						}
+						ensureCurrent();
+						const failure = (missing, code, message = label + 'の取得失敗(1)') => {
+								const wrapped = createMylistError(message, { code: code ?? result?.error?.code, ...(kind === 'mylists' ? { result } : {}) });
+								if (typeof RequestDiagnostics !== 'undefined') {
+										const meta = result?.meta && { status: result.meta.status, errorCode: result.meta.errorCode ?? result?.error?.code };
+										Object.assign(wrapped, RequestDiagnostics.responseFailure(response, meta, missing));
+								}
+								return wrapped;
+						};
+						if (response.status >= 300 || result?.meta?.status !== 200 || result?.meta?.errorCode || result?.error?.code) {
+								throw failure('meta.status');
+						}
+						const page = kind === 'mylists' ? undefined : result.data?.[kind];
+						const items = kind === 'mylists' ? result.data?.mylists : page?.items;
+						if (!Array.isArray(items)) {
+								throw failure(kind === 'mylists' ? 'data.mylists' : 'data.' + kind + '.items');
+						}
+						if (kind === 'mylists' && items.some(group => {
+								const id = group?.id;
+								return !(typeof id === 'string' && id.trim()) && !(typeof id === 'number' && Number.isSafeInteger(id));
+						})) {
+								throw failure('data.mylists');
+						}
+						if (page?.hasNext !== undefined && typeof page.hasNext !== 'boolean') {
+								throw failure('data.' + kind + '.hasNext');
+						}
+						return { items: items, hasNext: page?.hasNext === true, failure };
+				}
 				async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
 						const execute = async () => {
-								const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
 								const url = kind === 'watchLater' ?
-										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
-										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-								const query = new URLSearchParams({ pageSize: 100, page: 1 });
+										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc&' :
+										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}?`;
+								const query = new URLSearchParams({ pageSize: '100', page: '1' });
 								const results = [];
 								const fingerprints = new Set();
-								const ensureCurrent = () => {
-										if (!isCurrent)
-												return;
-										let current = false;
-										try {
-												current = isCurrent() === true;
-										}
-										catch { }
-										if (!current)
-												throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
-								};
-								const maxPages = 100;
-								for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-										ensureCurrent();
-										const delimiter = kind === 'watchLater' ? '&' : '?';
-										const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
-												headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-												credentials: 'include',
-												...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
-										}).then((r) => r.json())
-												.catch((e) => {
-												throw createMylistError(label + 'の取得失敗(2)', { cause: e });
-										});
-										ensureCurrent();
-										const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
-										if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
-												throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+								const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+								const field = 'data.' + kind + '.items';
+								for (let page = 1; page <= 100; page++) {
+										query.set('page', String(page));
+										const { items, hasNext, failure } = await this._readList(url + query.toString(), kind, frontendId, frontendVersion, isCurrent);
+										if (items.some(item => !item || typeof item !== 'object')) {
+												throw failure(field);
 										}
 										if (watchId !== undefined) {
-												const found = pageData.items.find(item => item?.watchId === watchId);
+												const found = items.find(item => item.watchId === watchId);
 												if (found) {
-														ensureCurrent();
+														if (!(typeof found.itemId === 'number' && Number.isSafeInteger(found.itemId)) &&
+																!(typeof found.itemId === 'string' && found.itemId.trim())) {
+																throw failure(field);
+														}
 														return [found];
 												}
 										}
-										results.push(...pageData.items);
-										if (!pageData.hasNext)
+										if (hasNext && !items.length) {
+												throw failure(field, 'INVALID_PAGE', label + 'の取得失敗（空ページが連続）');
+										}
+										if (items.length) {
+												const fingerprint = JSON.stringify(items.map(item => [item.itemId, item.watchId]));
+												if (fingerprints.has(fingerprint)) {
+														throw failure(field, 'REPEATED_PAGE', label + 'の取得失敗（ページが重複）');
+												}
+												fingerprints.add(fingerprint);
+										}
+										if (watchId === undefined) {
+												results.push(...items);
+										}
+										if (!hasNext) {
 												return results;
-										if (!pageData.items.length) {
-												throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
 										}
-										const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
-										if (fingerprints.has(fingerprint)) {
-												throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
-										}
-										fingerprints.add(fingerprint);
-										query.set('page', String(pageNumber + 1));
 								}
 								throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
 						};
@@ -5626,22 +5738,13 @@ const MylistApiLoader = (() => {
 				async _getMylistItems(id, frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
 						return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
 				}
-				async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
+				async getMylistList({ frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
 						const execute = async () => {
-								const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-								const result = await netUtil.fetch(url, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
-								if (result.meta.status !== 200 || !result.data.mylists) {
-										throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
-								}
-								const data = result.data.mylists;
-								return data;
+								const result = await this._readList('https://nvapi.nicovideo.jp/v1/users/me/mylists', 'mylists', frontendId, frontendVersion, isCurrent);
+								return result.items;
 						};
 						return typeof RequestDiagnostics === 'undefined' ? execute() :
-								RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => true);
+								RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => !isCurrent || isCurrent());
 				}
 				async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
 						const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);
@@ -7526,7 +7629,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.98-task1098', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.99-task1099', 'background: #ccf;');
       await config.promise('restore');
       window.addEventListener('click', openPocketLinkInNewTab, true);
       initDom();

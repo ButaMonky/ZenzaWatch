@@ -135,7 +135,7 @@ const NotificationJournalPolicy = (() => {
             'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
             like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
             tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
-            recommend: 'related', owner: 'related', dictionary: 'related'
+            recommend: 'related', 'owner-videos': 'related', owner: 'related', dictionary: 'related'
         };
         return groups[operation] || entry.category;
     };

@@ -15,6 +15,12 @@ export interface PostWireFailure extends Error {
   httpStatus?: number;
 }
 
+export interface ActionResponse {
+  httpStatus?: number;
+  apiStatus?: number;
+  errorCode?: string;
+  missing?: string;
+}
 export interface AcceptedPostAcknowledgement {
   no: number;
   /** The server's optional id is not required for confirming a comment number. */
@@ -108,8 +114,9 @@ const CommentPostWire = (() => {
   // Task488: the comment and post-key endpoints both return {meta,data}.
   // Treat server JSON as unknown and fail closed when meta is malformed.
   // Preserve the original API error object so errorCode and status remain usable.
-  const unwrapApiEnvelope = (value: unknown): unknown => {
+  const unwrapApiEnvelope = (value: unknown, response: ActionResponse = {}): unknown => {
     const invalid = (): never => {
+      response.missing = 'meta.status';
       throw {kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason: 'invalid-api-meta'};
     };
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -124,7 +131,18 @@ const CommentPostWire = (() => {
     if (!Number.isInteger(status) || (status as number) < 200 || (status as number) > 599) {
       return invalid();
     }
-    if ((status as number) >= 300) { throw meta; }
+    response.apiStatus = status as number;
+    const code = (meta as Record<string, unknown>).errorCode;
+    if (typeof code === 'string' && code) { response.errorCode = code; }
+    if (response.apiStatus >= 300 || response.errorCode) { throw meta; }
+    if (code) {
+      response.missing = 'meta.errorCode';
+      throw {kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason: 'invalid-api-error-code'};
+    }
+    if (response.httpStatus !== undefined && (response.httpStatus < 200 || response.httpStatus >= 300)) {
+      // The HTTP failure conflicts with the success-shaped body. Never replay an ambiguous write.
+      throw {httpStatus: response.httpStatus};
+    }
     return reply.data;
   };
   // Task492: pure decision on the server rejection; unknown POST outcome is
@@ -140,7 +158,7 @@ const CommentPostWire = (() => {
     const statusCode = result.status;
     const errorCode = result.errorCode;
     if (statusCode == null) { return {action: 'unknown'}; }
-    const action = !retrying && (errorCode === 'INVALID_TOKEN' ||
+    const action = !retrying && typeof statusCode === 'number' && statusCode >= 300 && (errorCode === 'INVALID_TOKEN' ||
       errorCode === 'EXPIRED_TOKEN') ? 'retry-token' : 'rejected';
     return {action, statusCode, errorCode};
   };
@@ -149,8 +167,23 @@ const CommentPostWire = (() => {
     const status = Number(value);
     return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
   };
+  const readActionJson = async (res: Response, response: ActionResponse): Promise<unknown> => {
+    if (typeof res.status === 'number') { response.httpStatus = res.status; }
+    try { return await res.json(); }
+    catch (error) {
+      if ((error as Error)?.name === 'SyntaxError') { response.missing = 'response.json'; }
+      throw error;
+    }
+  };
+  const readActionResponse = async (res: Response, response: ActionResponse, allowNoContent = false): Promise<unknown> => {
+    if (allowNoContent && res.status === 204) {
+      response.httpStatus = res.status;
+      return undefined;
+    }
+    return unwrapApiEnvelope(await readActionJson(res, response), response);
+  };
   const fetchJsonWithin = async (
-    url: string | URL, options: NetFetchOptions, timeoutMs: number = POST_TIMEOUT_MS
+    url: string | URL, options: NetFetchOptions, timeoutMs: number = POST_TIMEOUT_MS, response?: ActionResponse
   ): Promise<unknown> => {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     let stage: 'headers' | 'body' = 'headers';
@@ -179,7 +212,7 @@ const CommentPostWire = (() => {
       }
       stage = 'body';
       try {
-        return await Promise.race([res.json() as Promise<unknown>, deadline]);
+        return await Promise.race([response ? readActionJson(res, response) : res.json() as Promise<unknown>, deadline]);
       } catch (error: unknown) {
         // Preserve the HTTP status only as diagnostic metadata, never as a retry signal.
         const httpStatus = safeStatusCode(res && res.status);
@@ -194,21 +227,25 @@ const CommentPostWire = (() => {
     }
   };
   // Task490: typed nvapi post-key GET; do not resolve or synthesize challenges here.
-  const getPostKey = async (threadId: string | number, language = 'ja-jp'): Promise<unknown> => {
+  const getPostKey = async (threadId: string | number, language = 'ja-jp', ownedResponse?: ActionResponse): Promise<unknown> => {
+    const response = ownedResponse || {};
     const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
     const result = await fetchJsonWithin(url, {
+      ...(ownedResponse ? {diagnosticActive: () => false} : {}),
       headers: {
         'X-Frontend-Id': '6',
         'X-Frontend-Version': '0',
         'X-Niconico-Language': language
       },
       credentials: 'include'
-    });
-    return unwrapApiEnvelope(result);
+    }, POST_TIMEOUT_MS, response);
+    return unwrapApiEnvelope(result, response);
   };
   // Task491: typed nvComment POST request; transport never retries by itself.
-  const postComment = async (url: string | URL, body: string): Promise<unknown> => {
+  const postComment = async (url: string | URL, body: string, ownedResponse?: ActionResponse): Promise<unknown> => {
+    const response = ownedResponse || {};
     const result = await fetchJsonWithin(url, {
+      ...(ownedResponse ? {diagnosticActive: () => false} : {}),
       method: 'POST',
       headers: {
         'X-Frontend-Id': '6',
@@ -216,9 +253,9 @@ const CommentPostWire = (() => {
         'Content-Type': 'text/plain; charset=UTF-8'
       },
       body
-    });
-    return unwrapApiEnvelope(result);
+    }, POST_TIMEOUT_MS, response);
+    return unwrapApiEnvelope(result, response);
   };
-  return {fetchJsonWithin, parseAcknowledgement, readPostKey, readChallenge, buildPacket, unwrapApiEnvelope, getPostKey, postComment, classifyPostFailure};
+  return {fetchJsonWithin, parseAcknowledgement, readPostKey, readChallenge, buildPacket, unwrapApiEnvelope, readActionResponse, getPostKey, postComment, classifyPostFailure};
 })();
 export {CommentPostWire};

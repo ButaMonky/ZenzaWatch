@@ -78,8 +78,9 @@ const CommentPostWire = (() => {
     // Task488: the comment and post-key endpoints both return {meta,data}.
     // Treat server JSON as unknown and fail closed when meta is malformed.
     // Preserve the original API error object so errorCode and status remain usable.
-    const unwrapApiEnvelope = (value) => {
+    const unwrapApiEnvelope = (value, response = {}) => {
         const invalid = () => {
+            response.missing = 'meta.status';
             throw { kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason: 'invalid-api-meta' };
         };
         if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -94,8 +95,21 @@ const CommentPostWire = (() => {
         if (!Number.isInteger(status) || status < 200 || status > 599) {
             return invalid();
         }
-        if (status >= 300) {
+        response.apiStatus = status;
+        const code = meta.errorCode;
+        if (typeof code === 'string' && code) {
+            response.errorCode = code;
+        }
+        if (response.apiStatus >= 300 || response.errorCode) {
             throw meta;
+        }
+        if (code) {
+            response.missing = 'meta.errorCode';
+            throw { kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason: 'invalid-api-error-code' };
+        }
+        if (response.httpStatus !== undefined && (response.httpStatus < 200 || response.httpStatus >= 300)) {
+            // The HTTP failure conflicts with the success-shaped body. Never replay an ambiguous write.
+            throw { httpStatus: response.httpStatus };
         }
         return reply.data;
     };
@@ -112,7 +126,7 @@ const CommentPostWire = (() => {
         if (statusCode == null) {
             return { action: 'unknown' };
         }
-        const action = !retrying && (errorCode === 'INVALID_TOKEN' ||
+        const action = !retrying && typeof statusCode === 'number' && statusCode >= 300 && (errorCode === 'INVALID_TOKEN' ||
             errorCode === 'EXPIRED_TOKEN') ? 'retry-token' : 'rejected';
         return { action, statusCode, errorCode };
     };
@@ -121,7 +135,28 @@ const CommentPostWire = (() => {
         const status = Number(value);
         return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
     };
-    const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS) => {
+    const readActionJson = async (res, response) => {
+        if (typeof res.status === 'number') {
+            response.httpStatus = res.status;
+        }
+        try {
+            return await res.json();
+        }
+        catch (error) {
+            if (error?.name === 'SyntaxError') {
+                response.missing = 'response.json';
+            }
+            throw error;
+        }
+    };
+    const readActionResponse = async (res, response, allowNoContent = false) => {
+        if (allowNoContent && res.status === 204) {
+            response.httpStatus = res.status;
+            return undefined;
+        }
+        return unwrapApiEnvelope(await readActionJson(res, response), response);
+    };
+    const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS, response) => {
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         let stage = 'headers';
         let timer;
@@ -151,7 +186,7 @@ const CommentPostWire = (() => {
             }
             stage = 'body';
             try {
-                return await Promise.race([res.json(), deadline]);
+                return await Promise.race([response ? readActionJson(res, response) : res.json(), deadline]);
             }
             catch (error) {
                 // Preserve the HTTP status only as diagnostic metadata, never as a retry signal.
@@ -168,21 +203,25 @@ const CommentPostWire = (() => {
         }
     };
     // Task490: typed nvapi post-key GET; do not resolve or synthesize challenges here.
-    const getPostKey = async (threadId, language = 'ja-jp') => {
+    const getPostKey = async (threadId, language = 'ja-jp', ownedResponse) => {
+        const response = ownedResponse || {};
         const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
         const result = await fetchJsonWithin(url, {
+            ...(ownedResponse ? { diagnosticActive: () => false } : {}),
             headers: {
                 'X-Frontend-Id': '6',
                 'X-Frontend-Version': '0',
                 'X-Niconico-Language': language
             },
             credentials: 'include'
-        });
-        return unwrapApiEnvelope(result);
+        }, POST_TIMEOUT_MS, response);
+        return unwrapApiEnvelope(result, response);
     };
     // Task491: typed nvComment POST request; transport never retries by itself.
-    const postComment = async (url, body) => {
+    const postComment = async (url, body, ownedResponse) => {
+        const response = ownedResponse || {};
         const result = await fetchJsonWithin(url, {
+            ...(ownedResponse ? { diagnosticActive: () => false } : {}),
             method: 'POST',
             headers: {
                 'X-Frontend-Id': '6',
@@ -190,10 +229,10 @@ const CommentPostWire = (() => {
                 'Content-Type': 'text/plain; charset=UTF-8'
             },
             body
-        });
-        return unwrapApiEnvelope(result);
+        }, POST_TIMEOUT_MS, response);
+        return unwrapApiEnvelope(result, response);
     };
-    return { fetchJsonWithin, parseAcknowledgement, readPostKey, readChallenge, buildPacket, unwrapApiEnvelope, getPostKey, postComment, classifyPostFailure };
+    return { fetchJsonWithin, parseAcknowledgement, readPostKey, readChallenge, buildPacket, unwrapApiEnvelope, readActionResponse, getPostKey, postComment, classifyPostFailure };
 })();
 //===END===
 export {CommentPostWire};

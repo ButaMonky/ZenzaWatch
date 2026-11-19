@@ -265,6 +265,9 @@ const Config = (() => {
     'officialLaunch.side': 'left',
     'officialLaunch.continueTime': true,
     'officialLaunch.restoreOnFailure': true,
+    'shareClip.previewQuality': 'low',
+    'shareClip.sceneQuality': 'low',
+    'shareClip.exportQuality': 'source',
     overrideGinza: false,     // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
     // Task1077: 「公式の視聴ページでZenzaWatchを優先」の下の設定（nico-src/initializer.ts の createOfficialPlaybackGuard）
     'overrideGinza.officialPlayer': 'manual', // manual: 開いた時に止め、公式の再生ボタンを押した時だけ再生 / block: 押しても再生しない

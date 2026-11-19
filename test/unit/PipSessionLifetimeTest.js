@@ -16,6 +16,34 @@ function setup({pendingPlay=false,metadata=true,pendingRequest=false}={}){
  return {s,c,pip,original,pipWindow,document,play,request,timers,removeVideo(){video=null;},timeout(){for(const fn of [...timers.values()])fn();},get counts(){return {ended,requests,exits,trackStops,tickerStops};}};
 }
 describe('PiP session start/stop lifetime',()=>{
+ it('anchors comments to the current media time after stalls, seek, pause and source changes', () => {
+   const {s, original} = setup();
+   s._bindVideo(original);
+   const at = ms => s._getSmoothTime(original, ms);
+   assert.strictEqual(at(0), 1);
+   // An unchanged accurate clock must not drift forward in a hidden or stalled tab.
+   assert.strictEqual(at(500), 1);
+   original.currentTime = 1.1;
+   assert.strictEqual(at(600), 1.1);
+   original.currentTime = 1.2;
+   assert.strictEqual(at(700), 1.2);
+   assert.ok(Math.abs(at(740) - 1.24) < 0.001, 'interpolates measured coarse ticks');
+   original.fire('waiting');
+   assert.strictEqual(at(1500), 1.2);
+   original.fire('playing');
+   original.currentTime = 1.14;
+   original.fire('seeked');
+   assert.strictEqual(at(1520), 1.14);
+   original.paused = true;
+   assert.strictEqual(at(1800), 1.14);
+   original.paused = false;
+   original.playbackRate = 2;
+   assert.strictEqual(at(2000), 1.14);
+   const next = target({paused:false, currentTime:0, readyState:3});
+   s._bindVideo(next);
+   assert.strictEqual(original.count('waiting') + original.count('playing'), 0);
+   assert.strictEqual(s._getSmoothTime(next, 2400), 0);
+ });
  it('cancels a pending play without waiting for its promise',async()=>{const h=setup({pendingPlay:true});let settled=false;const p=h.s.start().then(()=>settled=true);await flush();h.s.stop();await flush();assert(settled);assert.strictEqual(h.counts.requests,0);assert.strictEqual(h.pip.srcObject,null);h.play.resolve();await p;assert.strictEqual(h.counts.ended,1);});
  it('does not request PiP after stopping during metadata wait',async()=>{const h=setup({metadata:false});const p=h.s.start();await flush();h.s.stop();h.pip.fire('loadedmetadata');await p;assert.strictEqual(h.counts.requests,0);assert.strictEqual(h.pip.count('loadedmetadata'),0);assert.strictEqual(h.timers.size,0);});
  it('closes only its own window when a stopped request resolves late',async()=>{const h=setup({pendingRequest:true});const p=h.s.start();await flush();h.s.stop();h.document.pictureInPictureElement=h.pip;h.request.resolve(h.pipWindow);await p;await flush();assert.strictEqual(h.counts.exits,1);assert.strictEqual(h.pipWindow.count('resize'),0);assert.strictEqual(h.counts.trackStops,1);});

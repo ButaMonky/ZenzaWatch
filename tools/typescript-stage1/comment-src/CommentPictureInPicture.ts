@@ -175,7 +175,7 @@ const CommentPictureInPicture = (() => {
 
     _getFont(chat) {
       const props = this.config.props;
-      const weight = chat.fontCommand ? 400 : (props.baseFontBolder ? (props.cssFontWeight || 'bold') : 'normal');
+      const weight = props.baseFontBolder ? (props.cssFontWeight || 'bold') : 'normal';
       const baseFont = (props.baseFontFamily || '').replace(/[;{}*/]/g, '');
       const family = COMMAND_FONT[chat.fontCommand] || (baseFont ? `${baseFont}, ${DEFAULT_FONT}` : DEFAULT_FONT);
       return `${weight} ${chat.fontSizePixel}px ${family}`;
@@ -240,7 +240,8 @@ const CommentPictureInPicture = (() => {
         .filter(Boolean);
       const key = groups.map(g => (g.members || []).length).join(',');
       const snapshot = this.snapshot;
-      if (snapshot.viewModel === viewModel && snapshot.key === key) {
+      if (snapshot.viewModel === viewModel && snapshot.key === key &&
+          groups.every((group, i) => snapshot.members[i] === group.members)) {
         return snapshot;
       }
       const list = groups.flatMap(g => g.members || []);
@@ -254,7 +255,7 @@ const CommentPictureInPicture = (() => {
       for (const chat of this.bitmaps.keys()) {
         ids.has(chat) || this.bitmaps.delete(chat);
       }
-      Object.assign(snapshot, {viewModel, key, list, maxSpan, updatedAt: now});
+      Object.assign(snapshot, {viewModel, key, members: groups.map(g => g.members), list, maxSpan, updatedAt: now});
       return snapshot;
     }
 
@@ -270,7 +271,12 @@ const CommentPictureInPicture = (() => {
       for (let i = lo; i < list.length; i++) {
         const chat = list[i];
         if (chat.beginLeftTiming > sec + 1.5) { break; }
-        if (chat.beginLeftTiming > sec + 0.2) { chat.isInvisible || upcoming.push(chat); continue; }
+        // The CSS player schedules scrolling comments one second ahead: a wide frame
+        // can already show them before their 4:3 beginLeftTiming.
+        if (chat.beginLeftTiming > sec + (chat.isFixed ? 0 : 1)) {
+          chat.isInvisible || upcoming.push(chat);
+          continue;
+        }
         if (chat.isInvisible) { continue; }
         if (chat.isFixed) {
           sec >= chat.beginLeftTiming && sec <= chat.endRightTiming && chat.isInViewBySecond(sec) && fixed.push(chat);
@@ -287,7 +293,7 @@ const CommentPictureInPicture = (() => {
         return;
       }
       this.frame = (this.frame || 0) + 1;
-      const scale = Math.round(height / SCREEN.HEIGHT * 100) / 100;
+      const scale = height / SCREEN.HEIGHT;
       const offsetX = (width - SCREEN.WIDTH * scale) / 2;
       const offsetY = (height - SCREEN.HEIGHT * scale) / 2;
       const props = this.config.props;
@@ -306,12 +312,13 @@ const CommentPictureInPicture = (() => {
           continue;
         }
         const h = bitmap.layerHeight;
+        const layoutHeight = chat.height ?? h;
         const fontSize = chat.fontSizePixel;
         const isHtml5 = chat.commentVer === 'html5';
         let x, y;
         if (chat.isFixed) {
           x = (SCREEN.WIDTH - bitmap.layerWidth) / 2;
-          const isEdge = isHtml5 ? h >= SCREEN.HEIGHT - fontSize / 2 : h >= SCREEN.HEIGHT * 0.7;
+          const isEdge = isHtml5 ? layoutHeight >= SCREEN.HEIGHT - fontSize / 2 : layoutHeight >= SCREEN.HEIGHT * 0.7;
           if (isEdge) {
             y = chat.type === NicoChat.TYPE.BOTTOM ? SCREEN.HEIGHT - h : 0;
           } else {
@@ -321,8 +328,8 @@ const CommentPictureInPicture = (() => {
           x = getNakaXpos(chat, sec, bitmap.layerWidth);
           if (x === null) { continue; }
           const isAlignMiddle = isHtml5 ?
-            (h >= SCREEN.HEIGHT - fontSize / 2 || chat.isOverflow) :
-            (h >= SCREEN.HEIGHT - fontSize / 2 && h < SCREEN.HEIGHT + fontSize);
+            (layoutHeight >= SCREEN.HEIGHT - fontSize / 2 || chat.isOverflow) :
+            (layoutHeight >= SCREEN.HEIGHT - fontSize / 2 && layoutHeight < SCREEN.HEIGHT + fontSize);
           y = isAlignMiddle ? (SCREEN.HEIGHT - h) / 2 : chat.ypos;
         }
         const dx = offsetX + x * scale - bitmap.margin;
@@ -387,6 +394,8 @@ const CommentPictureInPicture = (() => {
       this._onVideoPlay = this._onVideoPlay.bind(this);
       this._onVideoPause = this._onVideoPause.bind(this);
       this._onVideoSeeked = this._onVideoSeeked.bind(this);
+      this._onWaiting = () => { this._waiting = true; this._clock = null; };
+      this._onPlaying = () => { this._waiting = false; this._clock = null; };
       this._onResize = this._onResize.bind(this);
       this.draw = this.draw.bind(this);
       this._rafAt = 0;
@@ -416,12 +425,19 @@ const CommentPictureInPicture = (() => {
         this.video.removeEventListener('play', this._onVideoPlay);
         this.video.removeEventListener('pause', this._onVideoPause);
         this.video.removeEventListener('seeked', this._onVideoSeeked);
+        this.video.removeEventListener('waiting', this._onWaiting);
+        this.video.removeEventListener('playing', this._onPlaying);
       }
       this.video = video;
+      this._clock = null;
+      this._waiting = false;
+      this.lastKey = '';
       if (video) {
         video.addEventListener('play', this._onVideoPlay);
         video.addEventListener('pause', this._onVideoPause);
         video.addEventListener('seeked', this._onVideoSeeked);
+        video.addEventListener('waiting', this._onWaiting);
+        video.addEventListener('playing', this._onPlaying);
       }
     }
 
@@ -436,9 +452,11 @@ const CommentPictureInPicture = (() => {
     _onVideoPause() { this.pipVideo && !this.pipVideo.paused && this._syncPip('pause'); }
     _onVideoSeeked() {
       // 一時停止中にシークした時は、小窓の絵を更新するため一瞬だけ再生する
+      this._clock = null;
+      this._waiting = false;
+      this.lastKey = '';
       const video = this.video, pip = this.pipVideo;
       if (!video || !pip || !video.paused) { return; }
-      this.lastKey = '';
       this.draw();
       this._syncPip('play');
       setTimeout(() => this.video && this.video.paused && this._syncPip('pause'), 150);
@@ -469,34 +487,22 @@ const CommentPictureInPicture = (() => {
     /** 再生中は currentTime を経過時間で補間する（currentTime の更新が粗いブラウザでも滑らかに流す） */
     _getSmoothTime(video, now) {
       const raw = video ? video.currentTime : 0;
-      if (!video || video.paused || video.seeking || video.readyState < 3 || !isFinite(raw)) {
+      if (!video || video.paused || video.seeking || this._waiting || video.readyState < 3 || !Number.isFinite(raw)) {
         this._clock = null;
         return raw;
       }
       const rate = video.playbackRate || 1;
-      const c = this._clock;
-      if (!c) {
-        this._clock = {raw, base: raw, at: now, last: raw};
+      const previous = this._clock;
+      if (!previous || rate !== previous.rate || raw !== previous.raw) {
+        // Trust each fresh media timestamp, including short backwards seeks. Interpolate
+        // only if observed ticks suggest the browser actually rounds its media clock.
+        const step = previous && rate === previous.rate ? raw - previous.raw : 0;
+        const elapsed = previous ? (now - previous.at) / 1000 * rate : 0;
+        const quantum = step >= 0.04 && step <= 0.125 && Math.abs(step - elapsed) < 0.025 ? step : 0;
+        this._clock = {raw, rate, at: now, quantum};
         return raw;
       }
-      let predicted = c.base + (now - c.at) / 1000 * rate;
-      if (raw !== c.raw) {
-        const diff = raw - predicted;
-        if (Math.abs(diff) > 0.3) {
-          // シーク・詰まりなどで大きくずれた時はそのまま合わせる
-          this._clock = {raw, base: raw, at: now, last: raw};
-          return raw;
-        }
-        // 少しずつ本来の時刻に寄せる（急に戻ったり跳んだりしない）
-        predicted += diff * 0.2;
-        c.raw = raw; c.base = predicted; c.at = now;
-      } else if (predicted - raw > 0.3) {
-        // currentTime が止まったまま（読み込み待ちなど）なら先へ進めすぎない
-        predicted = raw + 0.3;
-      }
-      const sec = Math.max(c.last, predicted);
-      c.last = sec;
-      return sec;
+      return raw + Math.min(previous.quantum, (now - previous.at) / 1000 * rate);
     }
 
     _resizeCanvas(video) {

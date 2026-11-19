@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/RequestDiagnostics.ts",
   "runtime": "packages/lib/src/infra/RequestDiagnostics.js",
-  "sourceSha256": "b1d3f2499aad0a12f231a8f279912298c72464c7e79e31b62affe89d0b0f1a9f",
-  "runtimeSha256": "cabd5f5e876aa3cc47d6e5b1139294eda345c914d69738ee5c7d4b7a511e62df"
+  "sourceSha256": "9fd6a415998d61ab530f0a2a5cfa09e4d67de8d9d22f705aebd4d95d6008a48b",
+  "runtimeSha256": "cb0d7ccd98d8c63e66c9e4d84acd2f19ded7699d90222d6589f0628b651f96f9"
 }

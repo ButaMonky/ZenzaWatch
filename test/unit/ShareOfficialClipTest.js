@@ -18,7 +18,9 @@ describe('official NicoNico clip sharing', () => {
     page.window.fetch = async (url, options) => {
       calls.push({path: new URL(url).pathname, options});
       const data = await reply(calls[calls.length - 1]);
-      if (data?.httpStatus) return {ok:false, status:data.httpStatus, json:async () => ({meta:{status:data.httpStatus}})};
+      if (data?.httpStatus) return {ok:false, status:data.httpStatus,
+        headers:{get:key => key === 'Retry-After' ? data.retryAfter : null},
+        json:async () => ({meta:{status:data.httpStatus,errorCode:data.errorCode}})};
       return {ok:true, status:200, json:async () => ({meta:{status:200}, data})};
     };
     const module = page.window.eval(beginSection('src/ShareOfficialClip.js') + '\nShareOfficialClip');
@@ -30,6 +32,68 @@ describe('official NicoNico clip sharing', () => {
   }
   const find = name => root.querySelector('[name="' + name + '"]');
   afterEach(() => { cleanup?.(); page?.window.close(); });
+  it('joins an in-flight creation after closing and reuses the same millisecond range', async () => {
+    let acknowledge;
+    const settings = {autoPreview:true,startTime:6.00011,endTime:9.00014};
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return allowed;
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) return new Promise(resolve => { acknowledge = resolve; });
+      return {status:'DONE',clipUri:'https://media.example/clip.mp4'};
+    }, undefined, settings);
+    await flush();
+    assert.strictEqual(find('clipStart').value,'6');
+    assert.strictEqual(find('clipEnd').value,'9');
+    assert.strictEqual(root.querySelector('[role=status]').dataset.busy,'true');
+    const posted = calls.find(r => r.path.endsWith('/clips'));
+    assert.strictEqual(posted.options.body.get('endTime'),'9000');
+    cleanup(); settings.startTime=6.00023; reopen(); await flush();
+    assert.strictEqual(posted.options.signal.aborted,false);
+    acknowledge({clipId:'retained'}); await flush();
+    assert.strictEqual(root.querySelector('video').hidden,false);
+    assert.strictEqual(root.querySelector('[role=status]').dataset.busy,'false');
+    assert.strictEqual(calls.filter(r => r.options.method === 'POST').length,1);
+    assert.strictEqual(calls.filter(r => r.path.endsWith('/retained')).length,1);
+  });
+  it('honors a quota reply even when a delayed license check completes after the first click', async () => {
+    let license, attempts=0;
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return allowed;
+      if (path.endsWith('/license')) return new Promise(resolve => { license = resolve; });
+      if (path.endsWith('/clips')) { attempts++; return {httpStatus:429,retryAfter:'45'}; }
+    }, undefined, {autoPreview:true});
+    await flush(); find('create').click(); await flush();
+    assert.match(root.querySelector('[role=status]').textContent,/あと4[45]秒/);
+    assert.strictEqual(find('create').disabled,true);
+    license({isUseLicensedMusic:false}); await flush();
+    cleanup(); reopen(); await flush(); license({isUseLicensedMusic:false}); await flush();
+    assert.match(root.querySelector('[role=status]').textContent,/再試行/);
+    assert.strictEqual(attempts,1);
+  });
+  it('does not automatically repeat a creation with an unknown outcome on reopen', async () => {
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return allowed;
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) throw Error('connection interrupted');
+    }, undefined, {autoPreview:true});
+    await flush(); cleanup(); reopen(); await flush();
+    assert.match(root.querySelector('[role=status]').textContent,/前回の作成/);
+    assert.strictEqual(find('create').disabled,false);
+    assert.strictEqual(calls.filter(r => r.options.method === 'POST').length,1);
+  });
+  it('offers to make a new clip when the previously saved preview has expired', async () => {
+    let expired=false;
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return allowed;
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) return {clipId:'expires'};
+      return expired ? {httpStatus:404} : {status:'DONE',clipUri:'https://media.example/clip.mp4'};
+    }, undefined, {autoPreview:true});
+    await flush(); cleanup(); expired=true; reopen(); await flush();
+    assert.match(root.querySelector('[role=status]').textContent,/利用できなく/);
+    assert.strictEqual(find('create').disabled,false);
+    assert.strictEqual(calls.filter(r => r.options.method === 'POST').length,1);
+  });
   it('waits for permission and disables creation for an unlinked or disallowed account', async () => {
     mount(() => ({...allowed, isClipTweetAllowed:false}));
     await flush();

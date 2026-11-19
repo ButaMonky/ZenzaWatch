@@ -1,6 +1,8 @@
 import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
+import {ShareHlsClipSource} from './ShareHlsClipSource';
 //===BEGIN===
 //@require RequestDiagnostics
+//@require ShareHlsClipSource
 const ShareFastClip = (() => {
   // Mediabunny 1.66.1, MPL-2.0. https://github.com/Vanilagy/mediabunny/tree/v1.66.1
   const moduleUrl = 'https://cdn.jsdelivr.net/npm/mediabunny@1.66.1/dist/bundles/mediabunny.min.mjs';
@@ -38,13 +40,37 @@ const ShareFastClip = (() => {
       if (url) URL.revokeObjectURL(url);
     }
   }
-  async function convert({blob, from, to, signal, onProgress, drawFrame}) {
-    if (!(blob instanceof Blob) || !Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to <= from) throw Error('元ファイルまたは指定範囲が無効です。');
-    signal?.throwIfAborted();
+  function getLibrary() {
     if (!library) library = load().catch(error => { library = null; throw error; });
-    const media = await library;
+    return library;
+  }
+  async function makeThumbnails(hls, times, signal) {
+    if (!times.length || !times.every(t => Number.isFinite(t) && t >= 0)) return [];
+    signal.throwIfAborted();
+    const media = await getLibrary();
+    const input = await ShareHlsClipSource.create(media, {...hls,videoOnly:true}, Math.min(...times), Math.max(...times) + 0.0001, signal);
+    try {
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return [];
+      const height = Math.max(1,Math.min(await track.getDisplayHeight(),hls.height || 90));
+      const sink = new media.CanvasSink(track,{height});
+      const tiles = [];
+      for await (const frame of sink.canvasesAtTimestamps(times)) {
+        signal.throwIfAborted();
+        tiles.push(frame?.canvas || null);
+      }
+      return tiles;
+    } finally { input.dispose(); }
+  }
+  async function convert({blob, hls, from, to, signal, onProgress, onStage, drawFrame, comments = false, maxHeight}) {
+    if ((!hls && !(blob instanceof Blob)) || !Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to <= from) throw Error('元ファイルまたは指定範囲が無効です。');
     signal?.throwIfAborted();
-    const input = new media.Input({source:new media.BlobSource(blob), formats:[media.MP4, media.QTFF, media.MATROSKA, media.WEBM]});
+    onStage?.('library');
+    const media = await getLibrary();
+    signal?.throwIfAborted();
+    onStage?.('source');
+    const input = hls ? await ShareHlsClipSource.create(media, hls, from, to, signal) :
+      new media.Input({source:new media.BlobSource(blob), formats:[media.MP4, media.QTFF, media.MATROSKA, media.WEBM]});
     let conversion, cancellation;
     const cancel = () => {
       if (conversion && !cancellation) cancellation = conversion.cancel().catch(() => {});
@@ -57,9 +83,12 @@ const ShareFastClip = (() => {
       const target = new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { parts.push(new Blob([chunk])); }}));
       const output = new media.Output({format:new media.Mp4OutputFormat({fastStart:'fragmented'}), target});
       const videoOptions = {codec:'avc'};
+      if (maxHeight && !drawFrame && await video.getDisplayHeight() > maxHeight) videoOptions.height = maxHeight;
       if (drawFrame) {
         const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
-        const scale = Math.min(1, 1920 / Math.max(w,h), 1080 / Math.min(w,h));
+        // The overlay moves independently of the number of distinct source pictures.
+        if (comments && (await video.computePacketStats(32)).averagePacketRate < 29.9) videoOptions.frameRate = 30;
+        const scale = Math.min(1, (maxHeight || h)/h, 1920 / Math.max(w,h), 1080 / Math.min(w,h));
         const width = Math.max(2, 2 * Math.round(w * scale / 2));
         const height = Math.max(2, 2 * Math.round(h * scale / 2));
         const image = document.createElement('canvas'), frame = document.createElement('canvas');
@@ -82,6 +111,7 @@ const ShareFastClip = (() => {
       signal?.throwIfAborted();
       signal?.addEventListener('abort', cancel, {once:true});
       conversion.onProgress = onProgress;
+      onStage?.('encoding');
       await conversion.execute();
       signal?.throwIfAborted();
       const result = new Blob(parts, {type:'video/mp4'});
@@ -95,7 +125,7 @@ const ShareFastClip = (() => {
       input.dispose();
     }
   }
-  return {convert};
+  return {convert, makeThumbnails, acceptsHls:url => ShareHlsClipSource.accepts(url)};
 })();
 //===END===
 export {ShareFastClip};

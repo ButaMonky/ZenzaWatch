@@ -16,6 +16,7 @@ const RequestDiagnostics = (() => {
         'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
         'nicoad-end': '動画の最後のニコニ広告',
         'clip-library': 'クリップ変換ライブラリ',
+        'clip-playlist': 'クリップ区間の配信一覧', 'clip-segment': 'クリップ区間の映像・音声データ',
         'clip-permission': 'クリップ投稿の利用確認', 'clip-license': 'クリップの音声利用確認',
         'clip-create': 'クリップの作成', 'clip-status': 'クリップの生成状況',
         'clip-post': 'クリップのX投稿', 'clip-post-status': 'クリップのX投稿状況', 'clip-delete': 'クリップの削除'
@@ -41,6 +42,7 @@ const RequestDiagnostics = (() => {
         'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
         'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
         'clip-library': 'src/ShareFastClip.js',
+        'clip-playlist': 'src/ShareHlsClipSource.js', 'clip-segment': 'src/ShareHlsClipSource.js',
         'clip-permission': 'src/ShareOfficialClip.js', 'clip-license': 'src/ShareOfficialClip.js',
         'clip-create': 'src/ShareOfficialClip.js', 'clip-status': 'src/ShareOfficialClip.js',
         'clip-post': 'src/ShareOfficialClip.js', 'clip-post-status': 'src/ShareOfficialClip.js', 'clip-delete': 'src/ShareOfficialClip.js'

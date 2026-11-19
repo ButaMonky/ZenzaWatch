@@ -1136,10 +1136,13 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
    * canvas へ動画（または動画を描いた canvas）を、フィルター・反転・周辺減光つきで描く。
    * target: 'clip' は書き出し時の選択。他の出力先はそれぞれの設定を見る。
    */
-  const drawVideo = (ctx?: Loose, source?: Loose, dx?: Loose, dy?: Loose, w?: Loose, h?: Loose, {target = 'commentPip'} = {}) => {
+  const getCanvasStyle = (target: string) => {
     const use = isCanvasTarget(target);
-    const filter = use && !bypass ? buildFilter() : 'none';
-    const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
+    return {filter: use && !bypass ? buildFilter() : 'none', flipH: use && !!prop('flipH'),
+      flipV: use && !!prop('flipV'), alpha: use ? vignetteAlpha() : 0};
+  };
+  const drawCanvas = (ctx: Loose, source: Loose, dx: number, dy: number, w: number, h: number,
+    {filter, flipH, flipV, alpha}: ReturnType<typeof getCanvasStyle>) => {
     ctx.save();
     ctx.beginPath();ctx.rect(dx,dy,w,h);ctx.clip();
     if (filter !== 'none') {
@@ -1153,7 +1156,6 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
       ctx.drawImage(source, dx, dy, w, h);
     }
     ctx.restore();
-    const alpha = use ? vignetteAlpha() : 0;
     if (alpha > 0) {
       const cx = dx + w / 2, cy = dy + h / 2;
       const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, Math.hypot(w, h) / 2);
@@ -1164,6 +1166,34 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
       ctx.fillRect(dx, dy, w, h);
       ctx.restore();
     }
+  };
+  const drawVideo = (ctx?: Loose, source?: Loose, dx?: Loose, dy?: Loose, w?: Loose, h?: Loose, {target = 'commentPip'} = {}) =>
+    drawCanvas(ctx, source, dx, dy, w, h, getCanvasStyle(target));
+
+  // The player's SVG is rewritten when switching presets or auto-levels. A clip owns
+  // its filter definition for the lifetime of the encoder, even after a video switch.
+  let clipFilterSerial = 0;
+  const captureClipStyle = () => {
+    const style = getCanvasStyle('clip');
+    let root: SVGSVGElement | null = null;
+    if (style.filter.includes(`url(#${SVG_ID})`)) {
+      const definition = document.getElementById(SVG_ID);
+      if (!definition) throw Error('クリップ用の画面エフェクトを取得できません。');
+      const clone = definition.cloneNode(true) as SVGFilterElement;
+      clone.id = `${SVG_ID}-clip-${++clipFilterSerial}`;
+      root = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      root.setAttribute('width', '0');
+      root.setAttribute('height', '0');
+      root.setAttribute('aria-hidden', 'true');
+      root.style.position = 'absolute';
+      root.append(clone);
+      (document.body || document.documentElement).append(root);
+      style.filter = style.filter.replace(`url(#${SVG_ID})`, `url(#${clone.id})`);
+    }
+    return {filter:style.filter,
+      draw:(ctx: Loose, image: Loose, x: number, y: number, w: number, h: number) =>
+        drawCanvas(ctx, image, x, y, w, h, style),
+      dispose:() => {root?.remove(); root = null;}};
   };
 
   /** スクリーンショット用: 加工済みの新しい canvas を返す（加工が無ければそのまま返す） */
@@ -1412,6 +1442,7 @@ const createScreenFilterLowPowerRenderer = ({getVideo, onStatus = () => {}, doc 
     normalize,
     execCommand,
     drawVideo,
+    captureClipStyle,
     processCanvas,
     isEnabled,
     isStandard,

@@ -1,6 +1,8 @@
+import {ShareHlsPreview} from './ShareHlsPreview';
 //===BEGIN===
+//@require ShareHlsPreview
 const ShareClipTimeline = (() => {
-  const previewInterval = 1000 / 15;
+  const previewInterval = 1000 / 30;
   const sessionFrames = new WeakMap();
   function framesFor(video, session) {
     if (session == null) return new Map();
@@ -12,10 +14,11 @@ const ShareClipTimeline = (() => {
     sessionFrames.set(video,entry);
     return entry.frames;
   }
-  function displayFrame(frame) {
+  function displayFrame(frame, maxHeight = Infinity) {
     const canvas = document.createElement('canvas');
-    canvas.width = frame.width; canvas.height = frame.height;
-    canvas.getContext('2d').drawImage(frame,0,0);
+    const scale = Math.min(1, maxHeight/frame.height);
+    canvas.width = Math.max(1,Math.round(frame.width*scale)); canvas.height = Math.max(1,Math.round(frame.height*scale));
+    canvas.getContext('2d').drawImage(frame,0,0,canvas.width,canvas.height);
     return canvas;
   }
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -30,6 +33,7 @@ const ShareClipTimeline = (() => {
     .zwClipTimeline .zwClipScreen {position:relative;background:#0c1015;aspect-ratio:16/9;width:100%;max-height:38vh;overflow:hidden;border-radius:5px}
     .zwClipScreen>canvas,.zwClipScreen>.zwClipScene {display:block;width:100%;height:100%;object-fit:contain}
     .zwClipScreen>.zwClipScene {position:absolute!important;inset:0;background:#0c1015}
+    .zwClipScene>canvas {display:block;width:100%;height:100%;object-fit:contain!important}
     .zwClipScreen .zwClipMessage {position:absolute;inset:0;display:grid;place-items:center;padding:12px;text-align:center;background:#10161ce8}
     .zwClipTimeline [hidden] {display:none!important}
     .zwClipTimeline .zwClipReadout,.zwClipTimeline .zwClipTools {display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
@@ -60,7 +64,6 @@ const ShareClipTimeline = (() => {
     <div class="zwClipTools" aria-label="タイムラインの表示範囲"><button type="button" data-clip="prev" aria-label="前の範囲">←</button><button type="button" data-clip="next" aria-label="次の範囲">→</button>
     <button type="button" data-clip="zoomIn">拡大</button><button type="button" data-clip="zoomOut">縮小</button><button type="button" data-clip="all">全体</button></div>`;
 
-  // A seek requested through the HLS adapter may begin after a debounce.
   function waitForFrame(video, time, signal, request, timeoutMs = 6000) {
     return new Promise((resolve, reject) => {
       const done = error => {
@@ -88,7 +91,8 @@ const ShareClipTimeline = (() => {
     });
   }
 
-  function mount(container, {startInput, endInput, getSource, getThumbnail, seekSource, getPreviewRenderer, clipSession,
+  function mount(container, {startInput, endInput, getSource, getThumbnail, getHlsSource, getDetailedFrames, getStoryboardInterval,
+    getPreviewRenderer, getPreviewHeight, getSceneHeight, clipSession,
     isLocalSource = video => video.matches('[data-role=source]'), maxLength = Infinity}) {
     const root = document.createElement('div');
     root.className = 'zwClipTimeline';
@@ -103,10 +107,11 @@ const ShareClipTimeline = (() => {
     const timeDisplay = find('.zwClipTime'), lengthDisplay = find('.zwClipLength');
     const listeners = new AbortController();
     let source, sourceUrl, sourceObject, decoder, thumbVideo, renderer, session, thumbnails, releaseScene;
-    let windowStart = 0, span = 0, duration = 0, time = 0, drag, disposed = false, writing = false;
-    let thumbKey, rendererError, dragTimer, restoring, thumbReport = '';
+    let windowStart = 0, span = 0, initialSpan = 0, duration = 0, time = 0, drag, disposed = false, writing = false;
+    let thumbKey, rendererError, dragTimer, thumbReport = '';
     const thumbReleases = new Map();
     let capturedFrames = new Map();
+    let detailRequest, detailTimer;
     const on = (node, event, fn) => node.addEventListener(event, fn, {signal:listeners.signal});
     const sameSource = () => source && source === getSource() && source.currentSrc === sourceUrl && source.srcObject === sourceObject;
     const locked = () => disposed || startInput.disabled || endInput.disabled || !sameSource();
@@ -136,58 +141,65 @@ const ShareClipTimeline = (() => {
     const draw = media => {
       if (media.seeking || media.readyState < 2 || !media.videoWidth) return false;
       // The recorder has its own full-resolution canvas. Only scale the interactive preview.
-      const scale = Math.min(1, 480 / Math.max(media.videoWidth, media.videoHeight),
-        270 / Math.min(media.videoWidth, media.videoHeight));
+      const maxHeight = Number(getPreviewHeight?.(source)) || 270;
+      const scale = Math.min(1, maxHeight * 16/9 / Math.max(media.videoWidth, media.videoHeight),
+        maxHeight / Math.min(media.videoWidth, media.videoHeight));
       const width = Math.max(1, Math.round(media.videoWidth * scale)), height = Math.max(1, Math.round(media.videoHeight * scale));
       if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
       const ctx = canvas.getContext('2d');
       if (!ctx) throw Error('映像プレビューを利用できません。');
       if (rendererError) throw rendererError;
       if (renderer) {
-        if (renderer.draw(ctx, width, height) !== true) throw Error('選択したレイヤーを描画できません。');
+        const drawn = renderer.drawFrame ? renderer.drawFrame(ctx, width, height, media, media.currentTime) : renderer.draw(ctx, width, height);
+        if (drawn !== true) throw Error('選択したレイヤーを描画できません。');
       } else { ctx.drawImage(media, 0, 0, width, height); }
       clearScene(); showMessage('');
       setTime(media.currentTime);
       return true;
     };
-    const seek = (media, seconds) => {
-      if (media === source && seekSource) return seekSource(seconds);
-      media.currentTime = seconds;
-      return true;
+    const previewUrl = () => {
+      const url = source && !source.mediaKeys && getHlsSource?.(source);
+      return url && ShareHlsPreview.accepts(url) ? url : null;
     };
-    function forgetRestore() {
-      if (!restoring) return;
-      restoring.controller.abort();
-      clearTimeout(restoring.timer);
-      restoring = null;
+    function fileForPreview() {
+      if (!source || source.mediaKeys) return null;
+      if (source.srcObject) return source.srcObject instanceof Blob ? source.srcObject : null;
+      if (!source.currentSrc) return null;
+      const url = new URL(source.currentSrc,location.href);
+      if (url.protocol === 'blob:' && url.origin === location.origin) return url;
+      if (url.protocol === 'https:' && /\.(mp4|m4v|webm|mov)$/i.test(url.pathname) &&
+          (url.origin === location.origin || source.crossOrigin)) return url;
+      return null;
     }
-    function stopPreview({forRecording = false} = {}) {
+    async function attachFile(media, file, signal) {
+      if (!file) throw Error('この動画では場面画像と時刻で区間を選べます。');
+      if (file instanceof Blob) {
+        const objectUrl = URL.createObjectURL(file);
+        signal.addEventListener('abort',() => URL.revokeObjectURL(objectUrl),{once:true});
+        media.src = objectUrl;
+        return;
+      }
+      if (file.protocol === 'blob:') {
+        // A MediaSource URL belongs to its original element. Only actual file
+        // blobs respond to a byte-range fetch and can safely be opened twice.
+        const response = await fetch(file.href,{headers:{Range:'bytes=0-0'},signal});
+        await response.body?.cancel();
+        if (!response.ok) throw Error('元ファイルの確認再生を利用できません。');
+      }
+      signal.throwIfAborted();
+      if (source.crossOrigin !== null) media.crossOrigin = source.crossOrigin;
+      media.src = file.href;
+    }
+    function stopPreview() {
       clearTimeout(dragTimer); dragTimer = null;
       clearScene();
       const active = session;
-      let snapshot;
       session = null;
       if (active) {
         active.controller.abort();
-        clearTimeout(active.frameTimer);
-        const media = active.media;
-        if (media === decoder) media.pause();
-        if (active.restore && sameSource()) {
-          snapshot = active.restore;
-          media.pause();
-          if (!forRecording) {
-            const {time:position,paused,loop,rate} = snapshot;
-            media.loop = loop; media.playbackRate = rate;
-            forgetRestore();
-            // The HLS adapter can defer the seek while the raw element still shows the preview time.
-            const controller = new AbortController();
-            restoring = {snapshot,controller,timer:setTimeout(forgetRestore,6500)};
-            const settled = () => { if (!media.seeking && Math.abs(media.currentTime-position) < 0.12) forgetRestore(); };
-            media.addEventListener('seeked', settled, {signal:controller.signal});
-            if (seek(media,position) !== false && !paused) media.play().catch(() => {});
-            settled();
-          }
-        }
+        cancelAnimationFrame(active.frameRequest);
+        if (active.media === decoder) decoder.pause();
+        else unload(active.media);
       }
       if (active?.collecting) {
         const focused = document.activeElement === thumbButton;
@@ -196,64 +208,71 @@ const ShareClipTimeline = (() => {
       }
       action('play').setAttribute('aria-pressed', 'false');
       action('play').textContent = '区間を再生';
-      if (forRecording && sameSource()) {
-        snapshot ||= restoring?.snapshot;
-        forgetRestore();
-        if (snapshot) snapshot.video.pause();
-        return snapshot || null;
-      }
       return null;
     }
-    function beginSession(media) {
-      const prior = stopPreview({forRecording:true});
+    function beginSession() {
+      stopPreview();
+      const media = decoder || document.createElement('video');
+      media.playsInline = true;
+      media.muted = true;
       const active = session = {media, controller:new AbortController()};
-      if (media === source) {
-        active.restore = prior || {video:media, time:media.currentTime, paused:media.paused, loop:media.loop, rate:media.playbackRate};
-        media.pause();
-        media.loop = false;
-        const signal = active.controller.signal;
-        media.addEventListener('emptied', () => { active.restore = null; stopPreview(); }, {signal});
-        media.getRootNode().addEventListener('ended', event => {
-          if (event.target === media && sameSource()) { event.stopImmediatePropagation(); stopPreview(); }
-        }, {capture:true,signal});
-      }
+      media.addEventListener('error', () => {
+        if (session !== active) return;
+        stopPreview();
+        showMessage('この場面を読み込めませんでした。タイムラインで区間を選べます。');
+      }, {signal:active.controller.signal});
       return active;
+    }
+    async function prepare(active, position) {
+      const {media,controller} = active;
+      if (media !== decoder) {
+        const url = previewUrl();
+        if (url) await ShareHlsPreview.attach(media,url,position,controller.signal,
+          active.collecting ? getSceneHeight?.(source) : getPreviewHeight?.(source));
+        else await attachFile(media,fileForPreview(),controller.signal);
+      }
+      await waitForFrame(media,null,controller.signal,undefined,15000);
+      await waitForFrame(media,position,controller.signal,() => { media.currentTime = position; });
     }
     async function preview(seconds, play = false) {
       if (locked()) { stopPreview(); return; }
-      const media = decoder || source;
       const position = clamp(seconds, 0, duration);
-      const active = beginSession(media), controller = active.controller;
+      const active = beginSession(), media = active.media;
       try {
         if (play) {
           action('play').setAttribute('aria-pressed','true');
           action('play').textContent = '確認再生を停止';
           media.playbackRate = 1;
         }
-        await waitForFrame(media, null, controller.signal);
-        await waitForFrame(media, position, controller.signal, () => seek(media, position));
+        await prepare(active, position);
         if (session !== active) return;
         if (!draw(media)) throw Error('選択した場面を読み込めませんでした。');
         if (!play) { stopPreview(); return; }
-        if (media === decoder) media.muted = false;
+        media.volume = source.volume;
+        media.muted = source.muted;
         let drawnTime = media.currentTime;
-        let nextPaint = performance.now() + previewInterval;
+        let lastPaint = performance.now();
         await media.play();
-        const step = () => {
+        const step = now => {
           if (session !== active) return;
           const secondsLeft = endInput.valueAsNumber - media.currentTime;
           if (locked() || secondsLeft <= 0 || media.ended || media.paused) { stopPreview(); return; }
           try {
-            if (performance.now() >= nextPaint) {
+            const elapsed = now - lastPaint;
+            if (elapsed >= previewInterval) {
               if (media.currentTime !== drawnTime && draw(media)) drawnTime = media.currentTime;
-              nextPaint = performance.now() + previewInterval;
+              lastPaint = now - elapsed % previewInterval;
             }
-            active.frameTimer = setTimeout(step, Math.max(4, Math.min(secondsLeft*1000, nextPaint-performance.now())));
+            active.frameRequest = requestAnimationFrame(step);
           } catch (error) { stopPreview(); showMessage(error.message); }
         };
-        step();
+        active.frameRequest = requestAnimationFrame(step);
       } catch (error) {
-        if (session === active) { stopPreview(); showMessage(error.message || '選択した場面を表示できません。'); }
+        if (session === active) {
+          stopPreview();
+          showMessage(error.name === 'NotAllowedError' ? '「区間を再生」を押すと、この場面から再生します。' :
+            error.message || '選択した場面を表示できません。');
+        }
       }
     }
     const thumbHint = find('.zwClipThumbHint');
@@ -262,45 +281,86 @@ const ShareClipTimeline = (() => {
     function updateThumbHint() {
       const cells = [...frames.children];
       const missing = cells.filter(cell => !hasFrame(cell) && cell.getAttribute('aria-busy') !== 'true' && cell.textContent !== '読み込み中');
-      const collecting = !!session?.collecting;
-      const canRead = !decoder && !source?.mediaKeys && !locked();
+      const collecting = !!session?.collecting || !!detailRequest;
+      const canRead = !decoder && !locked() && !!(previewUrl() || fileForPreview());
       thumbHint.hidden = !cells.length || (!collecting && !missing.length && !thumbReport);
       thumbButton.hidden = !collecting && (!missing.length || !canRead);
       thumbButton.textContent = collecting ? '取得を中止' : '動画からサムネイルを読み込む';
       thumbStatus.textContent = collecting ? '場面を取得中（' + cells.filter(hasFrame).length + ' / ' + cells.length + '枚）' :
-        thumbReport || (canRead ? '場面一覧にない画像を読み込む間、元の動画を一時停止します。' :
-          '場面一覧を取得できません。つまみを動かして選んだ位置の映像を確認できます。');
+        thumbReport || (canRead ? '場面一覧にない画像を低画質で取得できます。' :
+          '場面画像がない位置も、開始・終了時刻で指定できます。');
     }
     function tileFrom(media) {
       const tile = document.createElement('canvas');
-      const scale = Math.min(144/media.videoWidth, 96/media.videoHeight);
+      const maxHeight = Number(getSceneHeight?.(source)) || 90;
+      const scale = Math.min(1, maxHeight * 16/9 / media.videoWidth, maxHeight / media.videoHeight);
       tile.width = Math.max(1, Math.round(media.videoWidth*scale));
       tile.height = Math.max(1, Math.round(media.videoHeight*scale));
       tile.getContext('2d').drawImage(media, 0, 0, tile.width, tile.height);
       return tile;
     }
+    function rememberFrame(cell, sec, tile) {
+      const release = thumbReleases.get(cell);
+      if (release) { release(); thumbReleases.delete(cell); }
+      cell.replaceChildren(displayFrame(tile,90));
+      capturedFrames.set(sec,tile);
+      // Full-size crops may be several MiB. Keep the strip itself inexpensive
+      // and bound decoded pixels as well as the number of reusable frames.
+      let bytes = 0;
+      for (const frame of capturedFrames.values()) bytes += frame.width * frame.height * 4;
+      for (const [time,frame] of capturedFrames) {
+        if (capturedFrames.size <= 48 && bytes <= 32*1024*1024) break;
+        bytes -= frame.width * frame.height * 4;
+        capturedFrames.delete(time);
+      }
+    }
+    function cancelDetails() {
+      clearTimeout(detailTimer); detailTimer = null;
+      detailRequest?.abort(); detailRequest = null;
+    }
+    async function readDetails(cells) {
+      if (!getDetailedFrames || !cells.length || locked() || !previewUrl()) return false;
+      const controller = detailRequest = new AbortController();
+      updateThumbHint();
+      try {
+        const times = cells.map(cell => Number(cell.dataset.seconds));
+        const tiles = await getDetailedFrames(source,times,controller.signal);
+        if (controller.signal.aborted || locked() || tiles?.length !== cells.length) return false;
+        for (const [index,tile] of tiles.entries()) {
+          if (tile?.width && tile.height) rememberFrame(cells[index],times[index],tile);
+        }
+        return cells.every(hasFrame);
+      } catch (_) { return false; }
+      finally { if (detailRequest === controller) { detailRequest = null; updateThumbHint(); } }
+    }
     async function collectFrames() {
-      if (session?.collecting) { thumbReport = '取得を中止しました。'; stopPreview(); return; }
-      if (locked() || decoder || source.mediaKeys) return;
-      const active = beginSession(source), media = source;
+      if (detailRequest || session?.collecting) {
+        thumbReport = '取得を中止しました。'; cancelDetails(); stopPreview(); updateThumbHint(); return;
+      }
+      if (locked() || decoder || !(previewUrl() || fileForPreview())) return;
+      clearTimeout(detailTimer);
+      thumbReport = '';
+      const visible = thumbnails;
+      const missing = [...frames.children].filter(cell => !hasFrame(cell));
+      if (getDetailedFrames && await readDetails(missing)) return;
+      if (visible !== thumbnails || locked() || thumbReport === '取得を中止しました。') return;
+      const active = beginSession(), media = active.media;
       active.collecting = true;
       thumbReport = '';
       updateThumbHint();
       let failures = 0;
       try {
+        const firstMissing = [...frames.children].find(cell => !hasFrame(cell));
+        if (!firstMissing) return;
+        await prepare(active, Number(firstMissing.dataset.seconds));
         for (const cell of frames.children) {
           if (session !== active || !sameSource()) return;
           if (hasFrame(cell)) continue;
           const sec = Number(cell.dataset.seconds);
           try {
-            await waitForFrame(media, sec, active.controller.signal, () => seek(media,sec), 15000);
+            await waitForFrame(media, sec, active.controller.signal, () => { media.currentTime = sec; }, 15000);
             if (session !== active || !sameSource()) return;
-            const tile = tileFrom(media);
-            const release = thumbReleases.get(cell);
-            if (release) { release(); thumbReleases.delete(cell); }
-            cell.replaceChildren(displayFrame(tile));
-            capturedFrames.set(sec,tile);
-            if (capturedFrames.size > 48) capturedFrames.delete(capturedFrames.keys().next().value);
+            rememberFrame(cell,sec,tileFrom(media));
             failures = 0;
             updateThumbHint();
           } catch (error) {
@@ -312,12 +372,15 @@ const ShareClipTimeline = (() => {
           thumbReport = ready === frames.children.length ? ready + '枚の場面を読み込みました。' :
             '一部の場面を読み込めませんでした。取得済みの画像はそのまま使えます。';
         }
+      } catch (_) {
+        if (session === active) thumbReport = '場面画像を取得できませんでした。開始・終了時刻で区間を選べます。';
       } finally { if (session === active) stopPreview(); }
     }
     on(thumbButton,'click',collectFrames);
     const thumbObserver = new MutationObserver(updateThumbHint);
     thumbObserver.observe(frames,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-busy']});
     function clearThumbs() {
+      cancelDetails();
       thumbnails?.abort(); thumbnails = null;
       for (const release of thumbReleases.values()) release();
       thumbReleases.clear();
@@ -348,9 +411,16 @@ const ShareClipTimeline = (() => {
       if (!decoder) {
         for (const {cell, sec} of cells) {
           const tile = capturedFrames.get(sec);
-          if (tile) { cell.replaceChildren(displayFrame(tile)); continue; }
+          if (tile) { cell.replaceChildren(displayFrame(tile,90)); continue; }
           try { const release = getThumbnail?.(cell, sec); if (typeof release === 'function') thumbReleases.set(cell, release); }
           catch (_) { cell.textContent = '画像なし'; }
+        }
+        const uncached = cells.filter(({sec}) => !capturedFrames.has(sec));
+        const interval = Number(getStoryboardInterval?.()) || 2;
+        if (getDetailedFrames && uncached.length && span < initialSpan && span/cells.length < interval) {
+          detailTimer = setTimeout(() => {
+            if (!controller.signal.aborted) void readDetails(uncached.map(item => item.cell));
+          },250);
         }
         return;
       }
@@ -388,7 +458,9 @@ const ShareClipTimeline = (() => {
         handle.setAttribute('aria-valuenow', String(value));
         handle.setAttribute('aria-valuetext', clock(value,true));
       });
-      action('play').disabled = disabled || !valid;
+      const canPlay = !!(decoder || previewUrl() || fileForPreview());
+      action('play').disabled = disabled || !valid || !canPlay;
+      action('play').title = canPlay ? '選んだ区間をプレビューで再生' : 'この配信では場面画像と時刻で区間を選べます';
       action('prev').disabled = disabled || windowStart <= 0;
       action('next').disabled = disabled || windowStart + span >= duration - 0.001;
       action('zoomIn').disabled = disabled || span <= Math.min(1,duration);
@@ -408,7 +480,7 @@ const ShareClipTimeline = (() => {
       const changed = (available && duration === 0) || source !== selected || sourceUrl !== selected?.currentSrc || sourceObject !== selected?.srcObject;
       root.hidden = !available;
       if (changed || !available) {
-        stopPreview(); forgetRestore(); clearThumbs(); clearScene();
+        stopPreview(); clearThumbs(); clearScene();
         unload(decoder); unload(thumbVideo); decoder = thumbVideo = null;
         renderer?.dispose(); renderer = null;
         capturedFrames = new Map(); thumbReport = ''; thumbKey = null; drag = null;
@@ -418,7 +490,7 @@ const ShareClipTimeline = (() => {
         else capturedFrames = framesFor(source,clipSession);
         duration = source.duration;
         const [a,b] = values();
-        span = Math.min(duration, Math.max(Math.min(120, maxLength), (b-a) || 0));
+        initialSpan = span = Math.min(duration, Math.max(Math.min(120, maxLength), (b-a) || 0));
         windowStart = clamp((a||0) - span/4, 0, duration-span);
         setTime(clamp(Number.isFinite(a) ? a : 0,0,duration));
         rebuildRenderer = true;
@@ -434,18 +506,31 @@ const ShareClipTimeline = (() => {
           try { renderer = getPreviewRenderer?.(decoder || source) || null; }
           catch (error) { rendererError = error; throw error; }
           if (!locked()) {
-            if (decoder || !changed) preview(time);
-            else if (!draw(source)) showMessage('開始または終了を選ぶと、その場面を表示します。');
+            if (decoder) preview(time);
+            else if (!changed || !draw(source)) showSelection(time);
           }
         } catch (error) { showMessage(error.message); }
       }
       render();
     }
+    // Numeric range controls use milliseconds. Round inside each legal interval:
+    // a media duration such as 120.1237 must never become an end time of 120.124.
+    const lastMillisecond = limit => {
+      const ms = Math.round(limit * 1000);
+      return ms/1000 > limit ? ms-1 : ms;
+    };
+    const snap = (value, min, max) => {
+      const last = lastMillisecond(max);
+      const roundedMin = Math.round(min * 1000);
+      const first = roundedMin/1000 < min ? roundedMin+1 : roundedMin;
+      if (first > last) return clamp(value,min,max);
+      return clamp(Math.round(value * 1000),first,last)/1000;
+    };
     function write(a,b) {
       writing = true;
       try {
-        const changed = [[startInput,a],[endInput,b]].filter(([input,value]) => Math.abs(input.valueAsNumber-value) > 0.00001);
-        for (const [input,value] of changed) input.value = Number(value.toFixed(3));
+        const changed = [[startInput,a],[endInput,b]].filter(([input,value]) => input.valueAsNumber !== value);
+        for (const [input,value] of changed) input.value = value;
         for (const [input] of changed) input.dispatchEvent(new Event('input',{bubbles:true}));
       } finally { writing = false; }
       render();
@@ -454,20 +539,47 @@ const ShareClipTimeline = (() => {
     function moveEdge(edge, value) {
       const [a,b] = values();
       if (edge === 'start') {
-        const start = clamp(value, Math.max(0,b-maxLength), Math.max(0,b-gap()));
+        const start = snap(value, Math.max(0,b-maxLength), Math.max(0,b-gap()));
         write(start,b); return start;
       }
-      const end = clamp(value, Math.min(duration,a+gap()), Math.min(duration,a+maxLength));
+      const end = snap(value, Math.min(duration,a+gap()), Math.min(duration,a+maxLength));
       write(a,end); return end;
     }
     function moveBlock(value, length) {
-      const start = clamp(value, 0, duration-length);
-      write(start, start+length);
-      return start;
+      const last = lastMillisecond(duration);
+      if (!last) { write(0,duration); return 0; }
+      const width = clamp(Math.round(length*1000),1,Math.min(last,lastMillisecond(maxLength)));
+      const start = clamp(Math.round(value*1000),0,last-width);
+      write(start/1000,(start+width)/1000);
+      return start/1000;
     }
     function at(event) {
       const box = rail.getBoundingClientRect();
       return windowStart + clamp((event.clientX-box.left)/box.width,0,1)*span;
+    }
+    // The live player is shared with normal viewing. Editing uses storyboard
+    // images. Playback and thumbnail collection use a separate decoder.
+    function showSelection(seconds, moving = false) {
+      if (locked()) return;
+      setTime(seconds);
+      if (decoder) { preview(seconds); return; }
+      clearScene();
+      scene.hidden = false;
+      showMessage('');
+      const nearest = [...frames.children].filter(cell => cell.querySelector('canvas')).sort((a,b) =>
+        Math.abs(Number(a.dataset.seconds)-seconds) - Math.abs(Number(b.dataset.seconds)-seconds))[0];
+      if (nearest && Math.abs(Number(nearest.dataset.seconds)-seconds) <= span/8 &&
+        (moving || capturedFrames.has(Number(nearest.dataset.seconds)))) {
+        scene.append(displayFrame(capturedFrames.get(Number(nearest.dataset.seconds)) || nearest.querySelector('canvas')));
+        return;
+      }
+      scene.textContent = previewUrl() || fileForPreview() ? '「区間を再生」で映像を確認できます。' : '開始・終了時刻で区間を選べます。';
+      if (!moving) {
+        try {
+          const release = getThumbnail?.(scene,seconds);
+          if (typeof release === 'function') releaseScene = release;
+        } catch (_) { /* The range remains editable even without a storyboard. */ }
+      }
     }
     function updateDrag(event) {
       if (!drag || event.pointerId !== drag.id) return;
@@ -478,18 +590,7 @@ const ShareClipTimeline = (() => {
       if (!dragTimer) dragTimer = setTimeout(() => {
         dragTimer = null;
         if (!drag || locked()) return;
-        const t = drag.time;
-        if (decoder) { preview(t); return; }
-        // Passive storyboard while dragging. Only the released handle seeks the live player.
-        if (getThumbnail && !renderer && !rendererError) {
-          clearScene(); scene.hidden = false;
-          scene.textContent = '指を離すとこの場面を表示します';
-          try {
-            const release = getThumbnail(scene,t);
-            if (typeof release === 'function') releaseScene = release;
-          } catch (_) { scene.textContent = '指を離すとこの場面を表示します'; }
-          showMessage('');
-        }
+        showSelection(drag.time,true);
       },100);
     }
     on(rail,'pointerdown',event => {
@@ -509,11 +610,12 @@ const ShareClipTimeline = (() => {
     on(rail,'pointermove',updateDrag);
     const endDrag = event => {
       if (!drag || event.pointerId !== drag.id) return;
+      if (event.type === 'pointerup') updateDrag(event);
       const selected = drag.time;
       drag = null;
       if (rail.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId);
       clearTimeout(dragTimer); dragTimer = null;
-      if (event.type !== 'pointercancel' && Number.isFinite(selected)) preview(selected); else stopPreview();
+      if (event.type !== 'pointercancel' && Number.isFinite(selected)) showSelection(selected); else stopPreview();
     };
     on(rail,'pointerup', endDrag); on(rail,'pointercancel',endDrag);
     for (const handle of handles) on(handle,'keydown',event => {
@@ -525,14 +627,11 @@ const ShareClipTimeline = (() => {
         PageDown:v-5,PageUp:v+5,Home:0,End:duration};
       if (!Object.hasOwn(keys,event.key)) return;
       event.preventDefault(); event.stopPropagation();
+      stopPreview();
       const next = moveEdge(edge,keys[event.key]);
       if (next < windowStart || next > windowStart+span) viewport(next-span/2,span);
       setTime(next);
-      if (decoder) preview(next);
-      else {
-        clearTimeout(dragTimer);
-        dragTimer = setTimeout(() => preview(next),180);
-      }
+      showSelection(next);
     });
     for (const input of [startInput,endInput]) {
       on(input,'input',() => {
@@ -540,8 +639,9 @@ const ShareClipTimeline = (() => {
         stopPreview();
         const value = input.valueAsNumber;
         if (value < windowStart || value > windowStart+span) viewport(value-span/2,span); else render();
+        setTime(value);
       });
-      on(input,'change',() => { if (!writing && Number.isFinite(input.valueAsNumber)) preview(input.valueAsNumber); });
+      on(input,'change',() => { if (!writing && Number.isFinite(input.valueAsNumber)) showSelection(input.valueAsNumber); });
     }
     on(action('play'),'click',() => {
       if (action('play').getAttribute('aria-pressed') === 'true') stopPreview();
@@ -558,10 +658,27 @@ const ShareClipTimeline = (() => {
     on(action('all'),'click',() => viewport(0,duration));
     on(document,'visibilitychange',() => { if (document.hidden) stopPreview(); });
     refresh();
-    return {refresh, stopPreview, dispose() {
+    function qualityChanged(kind) {
+      if (disposed || !source) return;
+      if (kind === 'preview') {
+        if (!session?.collecting) stopPreview();
+        showSelection(time);
+      } else if (kind === 'scene') {
+        if (session?.collecting) stopPreview();
+        clearThumbs();
+        capturedFrames.clear(); thumbKey = null;
+        if (!locked()) render();
+      }
+    }
+    function startPreview() {
+      if (session || document.hidden || locked() || action('play').disabled || source.readyState < 2) return false;
+      void preview(startInput.valueAsNumber,true);
+      return true;
+    }
+    return {refresh, stopPreview, startPreview, qualityChanged, dispose() {
       if (disposed) return;
       disposed = true;
-      stopPreview(); forgetRestore(); clearThumbs(); clearScene(); thumbObserver.disconnect(); listeners.abort();
+      stopPreview(); clearThumbs(); clearScene(); thumbObserver.disconnect(); listeners.abort();
       renderer?.dispose(); capturedFrames = new Map(); unload(decoder); unload(thumbVideo); root.remove();
     }};
   }

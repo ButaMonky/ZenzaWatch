@@ -1,9 +1,11 @@
+import {PopupMessage} from '../packages/lib/src/ui/PopupMessage';
 import {ShareOfficialClip} from './ShareOfficialClip';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {ShareClipRenderer} from './ShareClipRenderer';
 import {ShareLocalClip} from './ShareLocalClip';
 import {SharePlaybackFile} from './SharePlaybackFile';
 //===BEGIN===
+//@require PopupMessage
 //@require ShareOfficialClip
 //@require ShareLocalClip
 //@require SharePlaybackFile
@@ -11,18 +13,13 @@ import {SharePlaybackFile} from './SharePlaybackFile';
 const VideoSharePanel = (() => {
   let activeClose;
   const css = `
-.zenzaShare {color-scheme:dark;color:#f2f5f8;background:#1d2229;border:1px solid #526175;
-  border-radius:12px;width:min(35rem,94vw);max-width:94vw;max-height:88vh;box-sizing:border-box;
-  margin:auto;padding:0;text-align:left;overflow:auto;font:14px/1.5 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
-.zenzaShare {width:min(33rem,calc(100vw - 24px));max-height:calc(100dvh - 24px);margin:auto 12px auto auto;
-  background:#1b2027;scrollbar-width:thin;overscroll-behavior:contain}
-.zenzaShare::backdrop {background:#090c104d}
-.zenzaShare .shareProvider {border-top:1px solid #465365;padding-top:.65rem;margin-top:.9rem}
+.zenzaShare {color-scheme:dark;box-sizing:border-box;width:min(64rem,calc(100vw - 24px));max-width:none;
+  max-height:none;margin:auto;padding:0;color:#f2f5f8;background:#1b2027;border:1px solid #526175;
+  border-radius:12px;text-align:left;overflow:visible;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
+.zenzaShare::backdrop {background:#090c1066}
 .zenzaShare summary {cursor:pointer}
 .zenzaShare .shareProvider p {color:#c1ccd7}
 .zenzaShare [data-action=back] {margin-bottom:.5rem}
-@media(max-width:600px) {.zenzaShare {width:calc(100vw - 12px);max-width:none;max-height:calc(100dvh - 12px);margin:auto}}
-
 .zenzaShare * {box-sizing:border-box}
 .zenzaShare header,.zenzaShare > section {padding:14px 18px}
 .zenzaShare header {display:flex;align-items:center;justify-content:space-between;padding-bottom:4px}
@@ -47,6 +44,74 @@ const VideoSharePanel = (() => {
 .zenzaShare [hidden] {display:none!important}
 .zenzaShare .shareTime {margin-bottom:10px}
 .zenzaShare .shareStatus {min-height:1.5em;margin:6px 0 0;color:#afdfff}
+.zenzaShare header {gap:12px;padding-block:9px 3px}
+.zenzaShare header h2,.zenzaShare header button {flex:none}
+.zenzaShare header .shareTitle {min-width:0;margin:0 auto 0 0;padding:0;color:#b9c6d5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zenzaShare .clipPages {display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.zenzaShare .clipPages button {font-size:.9em;line-height:1.25;padding:5px 9px;background:transparent;border-color:transparent}
+.zenzaShare .clipPages button[aria-pressed=true] {color:#d7edff;background:#344658;border-color:#6683a0}
+.zenzaShare .clipWorkspace {display:grid;grid-template-columns:minmax(0,1.7fr) minmax(15rem,1fr);align-items:start;gap:18px}
+.zenzaShare [data-editor-pane] {min-width:0}
+.zenzaShare .clipWorkspace [data-role=quality] {display:grid;gap:9px}
+.zenzaShare [data-role=quality] label {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.zenzaShare [data-role=timeline] {min-width:0}
+.zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(54px,calc(100dvh - 425px),420px)}
+.zenzaShare .clipFooter {border-top:1px solid #465365;margin-top:8px;padding-top:8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
+.zenzaShare .clipFooter .clipActions,.zenzaShare .clipFooter p {margin:0}
+.zenzaShare [role=status][data-busy=true]::before {content:"";display:inline-block;vertical-align:-.1em;width:.8em;height:.8em;margin-right:.45em;border:2px solid #647382;border-top-color:#b8deff;border-radius:50%;animation:zwShareSpin .85s linear infinite}
+.zenzaShare [data-role=clipProgress] {font-size:.85em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.zenzaShare [data-role=clipProgress] progress {width:4em;height:.5em;vertical-align:middle;accent-color:#83caff}
+@keyframes zwShareSpin {to {transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce) {.zenzaShare [role=status][data-busy=true]::before {animation:none}}
+.zenzaShare [role=status] {overflow-wrap:anywhere}
+.zenzaShare [data-role=result] {grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:6px 18px}
+.zenzaShare [data-role=result] video {grid-row:span 2;max-height:clamp(80px,calc(100dvh - 240px),420px)}
+.zenzaShare [data-page=result] [data-role=timeline],.zenzaShare .zenzaLocalClip:not([data-page=result]) [data-role=result] {display:none}
+.zenzaShare .clipSourceName {max-width:100%}
+.zenzaShare #zenzaShareLink {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
+.zenzaShare #zenzaShareLink > :not(details) {grid-column:1}
+.zenzaShare #zenzaShareLink > details {grid-column:2;grid-row:1/span 5}
+.zenzaShare textarea {resize:none;min-height:0}
+.zenzaShare [data-official-editor] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;align-items:start}
+.zenzaShare [data-official-editor]>:not([name=editor]) {grid-column:1;margin:0}
+.zenzaShare [data-official-editor]>[name=editor] {grid-column:2;grid-row:1/span 6}
+.zenzaShare [name=composer] video {max-height:clamp(58px,calc(100dvh - 355px),240px)}
+@media(max-width:559px) {
+  .zenzaShare {width:calc(100vw - 12px)}
+  .zenzaShare .clipWorkspace,.zenzaShare [data-role=result],.zenzaShare #zenzaShareLink,.zenzaShare [data-official-editor] {display:block}
+  .zenzaShare .clipWorkspace [data-role=timeline] {margin-bottom:6px}
+  .zenzaShare .zenzaLocalClip:not([data-page=range]) [data-role=timeline] {display:none}
+  .zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(50px,calc(100dvh - 430px),340px)}
+  .zenzaShare #zenzaShareLink:has(details[open]) > :not(details,.shareStatus) {display:none}
+  .zenzaShare [data-official-editor]:has([name=composer]:not([hidden])) > :is(p:not([role=status]),.shareRow:first-of-type) {display:none}
+  .zenzaShare [name=composer] video {max-height:clamp(56px,calc(100dvh - 425px),240px)}
+}
+@media(min-width:560px) and (max-height:470px) {
+  .zenzaShare[open] {display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .zenzaShare > header {grid-column:1}
+  .zenzaShare > nav {grid-column:2;align-self:center;border:none}
+  .zenzaShare > section {grid-column:1/-1}
+  .zenzaShare .zenzaLocalClip[data-page=sources] .clipWorkspace {display:block}
+  .zenzaShare .zenzaLocalClip[data-page=sources] [data-role=timeline] {display:none}
+}
+@media(max-height:550px),(max-width:500px) {
+  .zenzaShare {font-size:13px}
+  .zenzaShare > section,.zenzaShare header {padding:6px 10px}
+  .zenzaShare nav {padding:0 8px}
+  .zenzaShare .clipPages {margin-bottom:5px;gap:1px}
+  .zenzaShare .clipPages button {padding:4px 6px}
+  .zenzaShare .zwClipTimeline :is(.zwClipReadout,.zwClipTools,.zwClipRailWrap) {margin:3px 0}
+  .zenzaShare .zwClipTimeline .zwClipRail {height:32px}
+  .zenzaShare .clipFooter {margin-top:4px;padding-top:4px}
+  .zenzaShare .clipRange,.zenzaShare .clipLayers,.zenzaShare .clipActions {margin:4px 0}
+  .zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:clamp(64px,calc(100dvh - 365px),210px)}
+  .zenzaShare .zenzaLocalClip[data-page=result] .clipFooter .clipActions {display:none}
+}
+@media(min-width:560px) and (max-height:470px) {
+  .zenzaShare .zenzaLocalClip[data-page=result] [data-role=result] {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:38dvh}
+}
+
 `;
   function open(info, position, getCurrentVideo, playerContext) {
     if (!info || !/^(?:[a-z]{2})?\d+$/i.test(info.watchId)) { return; }
@@ -56,8 +121,7 @@ const VideoSharePanel = (() => {
     dialog.setAttribute('aria-labelledby', 'zenzaShareHeading');
     dialog.innerHTML = `
 <style></style>
-<header><h2 id="zenzaShareHeading">動画を共有</h2><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
-<p class="shareTitle"></p>
+<header><h2 id="zenzaShareHeading">動画を共有</h2><p class="shareTitle"></p><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
 <nav aria-label="共有方法">
 <button type="button" data-view="local" aria-controls="zenzaShareLocal">ビデオクリップ</button>
 <button type="button" data-view="link" aria-controls="zenzaShareLink">リンク・埋め込み</button>
@@ -80,13 +144,13 @@ const VideoSharePanel = (() => {
 <p class="shareStatus" role="status"></p></section>
 <section id="zenzaShareLocal" hidden><div data-clip-editor></div>
 <div class="shareProvider"><button type="button" data-action="official">ニコニコでX用プレビューを作成</button>
-<p>ニコニコが元動画から3〜30秒の映像を作ります。端末での録画や添付を省き、映像を確認してから投稿できます。</p>
+<p>ニコニコが元動画から3〜30秒の映像を作成します。確認してからXに投稿できます。</p>
 <p data-provider-range hidden></p><p data-provider-layers hidden>ここで選んだコメント・画面エフェクトは、端末で作成するファイルに反映されます。</p>
 </div></section>
 <section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><div data-official-editor></div></section>`;
     const find = selector => dialog.querySelector(selector);
     find('style').textContent = css;
-    find('.shareTitle').textContent = info.title || info.watchId;
+    find('.shareTitle').title = find('.shareTitle').textContent = info.title || info.watchId;
     const time = find('[name=start]');
     const useTime = find('[name=includeTime]');
     const message = find('#zenzaShareLink textarea');
@@ -179,7 +243,26 @@ const VideoSharePanel = (() => {
         'ニコニコでの投稿には3秒以上の範囲を指定してください。';
       find('[data-provider-layers]').hidden = !next.comments && !next.effects;
     }
+    // Hold the original playback position while the clip editor has focus.
+    let resumeVideo;
+    function holdPlayback() {
+      const video = getCurrentVideo?.();
+      if (!video || video.paused || video.ended || resumeVideo) return;
+      const src = video.currentSrc, object = video.srcObject;
+      video.pause();
+      resumeVideo = () => {
+        if (getCurrentVideo?.() === video && video.currentSrc === src && video.srcObject === object && video.paused && !video.ended) {
+          video.play().catch(() => {});
+        }
+      };
+    }
+    function releasePlayback() {
+      resumeVideo?.();
+      resumeVideo = null;
+    }
     function select(view) {
+      if (view === 'link') releasePlayback();
+      else holdPlayback();
       if (view !== 'local') { mounted.get('local')?.stopPreview?.(); }
       if (view !== 'official' && mounted.has('official')) {
         mounted.get('official')();
@@ -197,6 +280,7 @@ const VideoSharePanel = (() => {
           info, startTime:start, endTime:end, autoPreview:true, text:() => message.value, officialUrl:official.href,
           onUseLocal(range) {
             select('local');
+            sections.local.querySelector('[data-editor-page=range]')?.click();
             const valid = mounted.get('local')?.setRange?.(range);
             const create = sections.local.querySelector('[data-action=create]');
             if (valid && create && !create.disabled) {
@@ -209,8 +293,12 @@ const VideoSharePanel = (() => {
       }
       if (view === 'local' && !mounted.has(view)) {
         mounted.set(view, ShareLocalClip.mount(find('[data-clip-editor]'), {
+          qualityConfig:playerContext?.config,
+          onBackgroundFinish:message => PopupMessage.notify(message),
           title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
           getThumbnail:playerContext?.getThumbnail, clipSession:playerContext?.clipSession, onSelectionChange:showSelection,
+          getCurrentHlsSource:playerContext?.getCurrentHlsSource, getFragmentCache:playerContext?.getFragmentCache,
+          getStoryboardInterval:playerContext?.getStoryboardInterval,
           getCurrentFile(video, signal) {
             const src = playerContext?.getCurrentFileSource?.(video);
             if (!src) return Promise.resolve(null);
@@ -222,6 +310,9 @@ const VideoSharePanel = (() => {
           getShareText: () => [message.value, link.value].filter(Boolean).join('\n')
         }));
       }
+      const providerSlot = sections.local.querySelector('[data-provider-slot]');
+      if (providerSlot && provider.parentNode !== providerSlot) providerSlot.append(provider);
+      if (view === 'local') mounted.get('local')?.startPreview?.();
       dialog.scrollTop = 0;
     }
     prepare.onclick = () => { select('official'); find('[data-action=back]').focus(); };
@@ -232,6 +323,7 @@ const VideoSharePanel = (() => {
       if (activeClose !== close) { return; }
       activeClose = null;
       for (const cleanup of mounted.values()) { if (typeof cleanup === 'function') { cleanup(); } }
+      releasePlayback();
       if (dialog.open) { dialog.close(); }
       dialog.remove();
       if (previousFocus?.isConnected) { previousFocus.focus({preventScroll:true}); }

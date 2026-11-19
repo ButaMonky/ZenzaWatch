@@ -195,6 +195,19 @@ const RootDispatcher = (() => {
                     VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
                         clipSession: session,
                         config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
+                        getStoryboardInterval() {
+                            const model = currentPlayer() && player._view?.videoControlBar?.storyboard?.model;
+                            return model?.isAvailable ? model.cellIntervalMs / 1000 : undefined;
+                        },
+                        getFragmentCache(video) {
+                            return getCurrentVideo() === video ? currentPlayer()?.drawableVideoElement?.clipFragmentCache : undefined;
+                        },
+                        getCurrentHlsSource(video) {
+                            if (getCurrentVideo() !== video || video.mediaKeys)
+                                return undefined;
+                            const displayed = currentPlayer()?.drawableVideoElement;
+                            return displayed?.src;
+                        },
                         getCurrentFileSource(video) {
                             // HLS wrappers display a different, MediaSource-backed element.
                             const displayed = currentPlayer()?.drawableVideoElement;

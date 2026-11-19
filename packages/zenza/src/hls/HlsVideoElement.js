@@ -109,6 +109,27 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
             // hls.config.fLoader にはクラスのインスタンスではなく定義を渡す
             // loaderはexportされていないため、Hls.DefaultConfig.loader経由で継承する
             // @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#loader
+            // hls.js may transfer the original buffer to its worker. Retain a bounded
+            // compressed copy of recently played CMAF fragments for this stream only.
+            const fragments = new Map();
+            let cachedBytes = 0;
+            const byteLimit = 12 * 1024 * 1024;
+            const fragmentCache = {
+                get: (url) => fragments.get(url),
+                put(url, bytes) {
+                    if (!bytes?.byteLength || bytes.byteLength > byteLimit || fragments.has(url) ||
+                        !/\.cmf[va](?:[?#]|$)/i.test(url))
+                        return;
+                    const blob = new Blob([bytes]);
+                    fragments.set(url, blob);
+                    cachedBytes += blob.size;
+                    while (cachedBytes > byteLimit) {
+                        const first = fragments.keys().next().value;
+                        cachedBytes -= fragments.get(first).size;
+                        fragments.delete(first);
+                    }
+                }
+            };
             let lastFragLoadingTime = 0;
             let BLOCK_INTERVAL = 3000;
             class FragmentLoader extends (prefetchActive && Prefetch ? Prefetch.wrapLoader(Hls.DefaultConfig.loader) : Hls.DefaultConfig.loader) {
@@ -132,6 +153,13 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                         return super.load(context, config, callbacks);
                     }
                     if (/\.cmf(a|v)/.test(context.url)) {
+                        const done = callbacks.onSuccess;
+                        if (!context.rangeStart && !context.rangeEnd)
+                            callbacks = { ...callbacks, onSuccess(resp, ...args) {
+                                    if (resp?.data instanceof ArrayBuffer)
+                                        fragmentCache.put(context.url, resp.data);
+                                    return done(resp, ...args);
+                                } };
                         return super.load(context, config, callbacks);
                     }
                     const frag = context.frag;
@@ -246,6 +274,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
             }
             FragmentLoaderClass = FragmentLoader;
             FragmentLoaderClass.frag2hash = frag2hash;
+            FragmentLoaderClass.clipFragmentCache = fragmentCache;
             FragmentLoaderClass.hasCache = hasCache;
             FragmentLoaderClass.preloadFragment = preloadFragment;
             return FragmentLoaderClass;
@@ -433,6 +462,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
             get shadow() {
                 return this._shadow;
             }
+            get clipFragmentCache() { return this._fragmentLoader?.clipFragmentCache; }
             get drawableElement() {
                 // 使用例
                 // ctx.drawImage(video.drawableElement || video, 0, 0);

@@ -1,11 +1,15 @@
+import {ShareClipClipboard} from './ShareClipClipboard';
 import {ShareClipTimeline} from './ShareClipTimeline';
+import {ShareClipJobs} from './ShareClipJobs';
 import {ShareFastClip} from './ShareFastClip';
 //===BEGIN===
+//@require ShareClipClipboard
 //@require ShareClipTimeline
 //@require ShareFastClip
+//@require ShareClipJobs
 const ShareLocalClip = {
   mount(container, {title = '', startTime = 0, getCurrentVideo, seekCurrentVideo, getShareText,
-    createFrameRenderer, getThumbnail, clipSession, onSelectionChange, getCurrentFile} = {}) {
+    createFrameRenderer, getThumbnail, clipSession, onSelectionChange, getCurrentFile, getCurrentHlsSource, getFragmentCache, getStoryboardInterval, qualityConfig, onBackgroundFinish} = {}) {
     const root = document.createElement('section');
     root.className = 'zenzaLocalClip';
     root.innerHTML = `
@@ -26,7 +30,15 @@ const ShareLocalClip = {
         .zenzaLocalClip .clipHint {color:#bac6d5;font-size:.9em}
       </style>
       <video data-role="source" playsinline hidden aria-label="元ファイル"></video>
-      <div data-role="timeline"></div>
+      <div class="clipPages" role="group" aria-label="クリップの編集項目">
+        <button type="button" data-editor-page="range" aria-pressed="true">区間</button>
+        <button type="button" data-editor-page="quality" aria-pressed="false">画質</button>
+        <button type="button" data-editor-page="sources" aria-pressed="false">その他の作成方法</button>
+        <button type="button" data-editor-page="result" aria-pressed="false" hidden>完成した動画</button>
+      </div>
+      <div class="clipWorkspace">
+        <div data-role="timeline"></div>
+        <div data-editor-pane="range">
       <div class="clipRange" role="group" aria-label="秒数を直接指定">
         <label>開始 <input type="number" name="start" min="0" step="any" disabled> 秒</label>
         <label>終了 <input type="number" name="end" min="0" step="any" disabled> 秒</label>
@@ -37,22 +49,36 @@ const ShareLocalClip = {
         <label><input type="checkbox" name="effects"> 画面エフェクト</label>
       </div>
       <p class="clipHint" data-role="layerHint"></p>
-      <div class="clipActions"><button type="button" data-action="create" disabled>クリップを作成</button>
-      <button type="button" data-action="cancel" hidden>キャンセル</button></div>
-      <p class="clipHint">元ファイルを直接処理できない場合は、このタブで区間を再生して最大フルHD・30fpsで書き出します。</p>
-      <p role="status" aria-live="polite"></p>
-      <div data-role="result" hidden>
-        <video data-role="preview" controls playsinline preload="metadata" aria-label="作成したクリップ"></video>
-        <div class="clipActions"><a class="shareAction" download>動画を保存</a>
-        <a class="shareAction" data-action="post-x" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く</a>
-        <button type="button" data-action="share" hidden>アプリで共有</button></div>
-        <p class="clipHint">「動画を保存」で保存したファイルを、Xの投稿画面に添付してください。</p>
-      </div>
+        </div>
+        <div data-editor-pane="quality" hidden><div class="clipRange" data-role="quality"></div>
+      <p class="clipHint">プレビューと場面画像は初期設定で最も軽い配信を使います。保存する動画は再生中の画質が初期値です。選んだ解像度は上限で、元の映像より大きく拡大しません。</p></div>
+        <div data-editor-pane="sources" hidden>
+          <p class="clipHint">通常は区間を指定して「クリップを作成」を押します。書き出し中は共有画面を閉じて別の動画を再生でき、完成した動画は共有画面で保存できます。</p>
+          <div data-provider-slot></div>
       <details data-role="fileOptions"><summary>動画ファイルを使う</summary><div class="clipSources">
         <label class="shareAction clipFile">ファイルを選ぶ<input type="file" accept="video/*,.mp4,.webm,.mov,.m4v" aria-label="動画ファイルを選ぶ"></label>
         <span class="clipSourceName" data-role="sourceName"></span>
         <button type="button" data-action="current" hidden>再生中の動画に戻る</button>
-      </div></details>`;
+      </div></details>
+          <p class="clipHint">直接書き出せない動画は「再生しながら作成」で録画できます。録画中はこのタブを表示してください。</p>
+        </div>
+      <div data-role="result" hidden>
+        <video data-role="preview" controls playsinline preload="metadata" aria-label="作成したクリップ"></video>
+        <div class="clipActions"><button type="button" data-action="share" hidden>動画を共有…</button>
+        <button type="button" data-action="copy-for-x" hidden>X用に動画をコピー</button>
+        <a class="shareAction" data-action="post-x" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く</a>
+        <a class="shareAction" download>動画を保存</a></div>
+        <p class="clipHint" data-role="attachHint"></p>
+      </div>
+      </div>
+      <footer class="clipFooter">
+      <div class="clipActions"><button type="button" data-action="create" disabled>クリップを作成</button>
+      <button type="button" data-action="record" hidden>再生しながら作成</button>
+      <button type="button" data-action="cancel" hidden>キャンセル</button></div>
+        <p role="status" aria-live="polite"></p>
+        <span data-role="clipProgress" hidden><progress aria-label="クリップの書き出し進捗" max="100"></progress> <span aria-hidden="true"></span></span>
+      </footer>`;
+    root.dataset.page = 'range';
     container.append(root);
     const find = selector => root.querySelector(selector);
     const fileInput = find('[type=file]');
@@ -67,12 +93,17 @@ const ShareLocalClip = {
     const start = find('[name=start]');
     const end = find('[name=end]');
     const create = find('[data-action=create]');
+    const recordFallback = find('[data-action=record]');
     const cancel = find('[data-action=cancel]');
     const result = find('[data-role=result]');
     const download = find('a[download]');
     const postX = find('[data-action=post-x]');
     const share = find('[data-action=share]');
+    const copyForX = find('[data-action=copy-for-x]');
+    const attachHint = find('[data-role=attachHint]');
     const status = find('[role=status]');
+    const progress = find('[data-role=clipProgress]');
+    const progressBar = progress.querySelector('progress');
     const recorderTypes = [
       'video/mp4;codecs=avc1.42001e,mp4a.40.2',
       'video/mp4;codecs=avc1,mp4a.40.2',
@@ -84,8 +115,50 @@ const ShareLocalClip = {
     let source = localVideo;
     let selectedSrc, selectedObject;
     let sourceUrl, outputUrl, outputFile, job, timeline;
+    const quality = {};
+    for (const [kind, label, initial] of [['preview','プレビュー','low'], ['scene','場面画像','low'], ['export','保存する動画','source']]) {
+      const field = document.createElement('label'), select = document.createElement('select');
+      const key = 'shareClip.' + kind + 'Quality';
+      const choices = [['low','通信量優先'],['source','再生中の画質'], ...[144,240,360,480,720,1080].map(n => [String(n),n+'p'])];
+      for (const [value, text] of choices) select.add(new Option(text,value));
+      select.name = kind + 'Quality';
+      select.value = qualityConfig?.getValue(key) ?? initial;
+      if (!select.value) select.value = initial;
+      select.onchange = () => {
+        qualityConfig?.setValue(key,select.value);
+        if (kind !== 'export') timeline?.qualityChanged?.(kind);
+      };
+      quality[kind] = select;
+      field.append(label + ' ',select);
+      find('[data-role=quality]').append(field);
+    }
+    function qualityHeight(kind, video) {
+      const value = quality[kind].value;
+      return value === 'source' ? video.videoHeight : value === 'low' ? 0 : Number(value);
+    }
+    const pageButtons = root.querySelectorAll('[data-editor-page]');
+    let awaitingPreview = false;
+    function selectEditorPage(page) {
+      root.dataset.page = page;
+      if (page === 'result') {
+        awaitingPreview = false;
+        timeline?.stopPreview();
+      } else if (!preview.paused) preview.pause();
+      for (const button of pageButtons) button.setAttribute('aria-pressed', String(button.dataset.editorPage === page));
+      for (const pane of root.querySelectorAll('[data-editor-pane]')) pane.hidden = pane.dataset.editorPane !== page;
+    }
+    for (const button of pageButtons) button.onclick = () => selectEditorPage(button.dataset.editorPage);
+    const resultButton = find('[data-editor-page=result]');
+    const resultObserver = new MutationObserver(() => {
+      resultButton.hidden = result.hidden;
+      if (!result.hidden) selectEditorPage('result');
+      else if (root.dataset.page === 'result') selectEditorPage('range');
+    });
+    resultObserver.observe(result, {attributes:true, attributeFilter:['hidden']});
     const editorEvents = new AbortController();
     let pickedSource = false;
+    const owner = Symbol();
+    let outputText, fallbackRange, displayedTask, observedState;
 
     function currentSelection() {
       return source === localVideo || (getCurrentVideo() === source && source.currentSrc === selectedSrc && source.srcObject === selectedObject);
@@ -104,24 +177,29 @@ const ShareLocalClip = {
     }
     function refresh(layersChanged = false) {
       const ready = (source !== localVideo || !!sourceUrl) && !source.error && Number.isFinite(source.duration) && source.duration > 0 && source.videoWidth > 0;
-      fileInput.disabled = current.disabled = !!job;
+      const busy = !!job || ShareClipJobs.busy;
+      fileInput.disabled = current.disabled = busy;
+      for (const select of Object.values(quality)) select.disabled = busy;
       const local = source === localVideo;
       current.setAttribute('aria-pressed', String(!local));
       find('[data-role=sourceName]').textContent = local && sourceUrl ? fileInput.files[0]?.name || '' : '';
-      const canExport = available || local && !!sourceUrl || !local && !!getCurrentFile;
-      comments.disabled = effects.disabled = !ready || !!job || !canExport || typeof createFrameRenderer !== 'function';
+      const canExport = available || local && !!sourceUrl || !local && (!!getCurrentFile || !!getCurrentHlsSource);
+      comments.disabled = effects.disabled = !ready || busy || !canExport || typeof createFrameRenderer !== 'function';
       commentsLabel.textContent = local && sourceUrl ? '視聴中の' + (title ? '「' + title + '」' : '動画') + 'のコメントを重ねる' : 'コメント';
       layerHint.textContent = local && sourceUrl
         ? 'コメントは元ファイルの0秒を視聴中の動画の0秒に合わせて表示します。画面エフェクトにはZenzaWatchの現在の設定を使います。'
         : typeof createFrameRenderer !== 'function' ? 'このプレイヤーでは画面合成を利用できません。' : '';
       layerHint.hidden = !layerHint.textContent;
-      start.disabled = end.disabled = !ready || !!job;
-      create.disabled = !canExport || !ready || !!job || !!rangeError();
+      start.disabled = end.disabled = !ready || busy;
+      create.textContent = !local && !getCurrentFile && !getCurrentHlsSource ? '再生しながら作成' : 'クリップを作成';
+      create.disabled = !canExport || !ready || busy || !!rangeError();
       find('[data-role=lengthHint]').hidden = !(ready && end.valueAsNumber - start.valueAsNumber > 140);
-      cancel.hidden = !job;
+      cancel.hidden = !busy;
+      status.dataset.busy = String(busy);
+      if (!ShareClipJobs.busy) progress.hidden = true;
       timeline?.refresh(layersChanged);
       onSelectionChange?.({start:start.valueAsNumber, end:end.valueAsNumber, isCurrent:!local && currentSelection(), isFile:local && !!sourceUrl,
-        comments:comments.checked, effects:effects.checked, recording:!!job});
+        comments:comments.checked, effects:effects.checked, recording:busy});
     }
     function unload(video) {
       video.pause();
@@ -129,13 +207,14 @@ const ShareLocalClip = {
       video.load();
     }
     function clearResult() {
+      recordFallback.hidden = true;
       result.hidden = true;
       share.hidden = true;
       download.removeAttribute('href');
       postX.removeAttribute('href');
       unload(preview);
       if (outputUrl) URL.revokeObjectURL(outputUrl);
-      outputUrl = outputFile = null;
+      outputUrl = outputFile = outputText = null;
     }
     function finish(message, restorePlayback = true) {
       const active = job;
@@ -149,7 +228,7 @@ const ShareLocalClip = {
         active.sourceStream?.getTracks().forEach(track => track.stop());
         try { active.renderer?.dispose?.(); }
         catch (_) { message += ' 画面合成の終了処理に失敗しました。'; }
-        if (!active.fast && !active.replaced && currentSelection()) {
+        if (!active.replaced && currentSelection()) {
           source.pause();
           if (restorePlayback && active.restore) {
             source.loop = active.restore.loop;
@@ -173,7 +252,6 @@ const ShareLocalClip = {
       const failed = timingMismatch => {
         if (job !== active) return;
         clearResult();
-        if (active.fast) return useRecorder(active, from, to);
         if (mp4 && !active.webm && currentSelection() && !document.hidden && types.some(type => type.startsWith('video/webm'))) {
           finish('', false);
           startRecording(from, to, true, active.restore);
@@ -184,28 +262,49 @@ const ShareLocalClip = {
       };
       preview.addEventListener('error', failed, options);
       preview.addEventListener('loadedmetadata', () => {
-        if (!currentSelection() || (active.sameSource && !active.sameSource())) {
+        if (!currentSelection()) {
           clearResult();
           return finish('再生中の動画が変わったため中断しました。');
         }
         if (!preview.videoWidth) return failed();
-        const tolerance = active.fast ? 0.15 : Math.min(0.6, Math.max(0.35, (to - from) * 0.005));
+        const tolerance = Math.min(0.6, Math.max(0.35, (to - from) * 0.005));
         if (Number.isFinite(preview.duration) && Math.abs(preview.duration - (to - from)) > tolerance) return failed(true);
         download.href = outputUrl;
         download.download = outputFile.name;
         updatePostLink();
         result.hidden = false;
-        share.hidden = !navigator.canShare?.({files:[outputFile]});
-        finish(active.fast ? '元ファイルからMP4を作成しました。保存した動画をXの投稿に添付できます。'
-          : mp4 ? 'MP4を作成しました。プレビューで確認し、保存した動画をXの投稿に添付できます。'
+        showAttachmentOptions();
+        finish(mp4 ? 'MP4を作成しました。プレビューを確認して、動画を共有できます。'
           : 'WebMを作成しました。Xで添付できない場合はH.264/AACのMP4へ変換してください。');
       }, options);
       active.clock = setTimeout(failed, 10000);
       preview.src = outputUrl;
     }
+    function showAttachmentOptions() {
+      share.hidden = !navigator.canShare?.({files:[outputFile]});
+      copyForX.hidden = !ShareClipClipboard.supported();
+      attachHint.textContent = [share.hidden ? '' : '「動画を共有…」でXを選べます（端末の共有先にある場合）。',
+        copyForX.hidden ? '' : 'PCでは動画をコピーし、Xの投稿画面で「Zenzaの動画をクリップボードから読み込む」を押します。',
+        share.hidden && copyForX.hidden ? '「動画を保存」で保存し、Xの投稿画面のメディアボタンから添付できます。' : ''
+      ].filter(Boolean).join(' ');
+    }
+    copyForX.onclick = async () => {
+      const file = outputFile;
+      if (!file) return;
+      copyForX.disabled = true;
+      try {
+        await ShareClipClipboard.copy(file);
+        if (file === outputFile) {
+          status.textContent = '「' + file.name + '」をコピーしました。Xの投稿画面で読み込んでください。';
+          postX.focus({preventScroll:true});
+        }
+      } catch (_) {
+        if (file === outputFile) status.textContent = '動画をコピーできませんでした。ブラウザーの許可を確認するか、「動画を共有…」または「動画を保存」を利用してください。';
+      } finally { copyForX.disabled = false; }
+    };
     function updatePostLink() {
-      const intent = new URL('https://twitter.com/intent/tweet');
-      const text = source === localVideo ? fileInput.files[0]?.name.replace(/\.[^.]+$/, '') : getShareText?.() || title;
+      const intent = new URL('https://x.com/intent/tweet');
+      const text = outputText ?? (source === localVideo ? fileInput.files[0]?.name.replace(/\.[^.]+$/, '') : getShareText?.() || title);
       if (text) intent.searchParams.set('text', text);
       postX.href = intent.href;
     }
@@ -222,7 +321,8 @@ const ShareLocalClip = {
         const sourceStream = active.sourceStream = (source.captureStream || source.mozCaptureStream).call(source);
         const canvas = document.createElement('canvas');
         const {videoWidth:w, videoHeight:h} = source;
-        const scale = Math.min(1, 1920 / Math.max(w, h), 1080 / Math.min(w, h));
+        const heightCap = quality.export.value === 'source' ? h : qualityHeight('export',source) || 144;
+        const scale = Math.min(1, heightCap/h, 1920 / Math.max(w, h), 1080 / Math.min(w, h));
         canvas.width = Math.max(2, 2 * Math.floor(w * scale / 2));
         canvas.height = Math.max(2, 2 * Math.floor(h * scale / 2));
         const ctx = canvas.getContext('2d', {alpha:false, willReadFrequently:true});
@@ -464,51 +564,93 @@ const ShareLocalClip = {
         finish('再生中の動画が変わったため中断しました。');
       }
     }
-    function useRecorder(active, from, to) {
-      if (job !== active) return;
-      if (!currentSelection() || source.mediaKeys) return finish('元の動画が切り替わったか保護されているため中断しました。');
-      finish('', false);
-      startRecording(from, to, false, undefined, true);
+    function showTask(task) {
+      if (observedState !== task.state) refresh();
+      observedState = task.state;
+      const taskTitle = task.name || 'クリップ';
+      status.title = taskTitle;
+      const titleChars = Array.from(taskTitle);
+      const label = '「' + (titleChars.length > 32 ? titleChars.slice(0,32).join('') + '…' : taskTitle) + '」';
+      if (task.state === 'running') {
+        const stages = {library:'変換ライブラリを準備中', source:'元動画の区間を確認中',
+          encoding:'映像と音声を書き出し中', checking:'完成したMP4を確認中'};
+        const message = (task.owner === owner ? '' : label + ' · ') + stages[task.stage];
+        if (status.textContent !== message) status.textContent = message;
+        progress.hidden = task.percent === null;
+        if (task.percent !== null) {
+          progressBar.value = task.percent;
+          progress.lastElementChild.textContent = task.percent + '%';
+        }
+        return;
+      }
+      if (task.state === 'ready') {
+        if (displayedTask === task && outputFile === task.file) return;
+        clearResult();
+        displayedTask = task;
+        outputFile = task.file;
+        outputText = task.shareText;
+        outputUrl = URL.createObjectURL(outputFile);
+        preview.src = download.href = outputUrl;
+        download.download = outputFile.name;
+        updatePostLink();
+        result.hidden = false;
+        showAttachmentOptions();
+        status.textContent = label + (task.hls ? ' の選択区間からMP4' : ' の元ファイルからMP4') + 'を作成しました。';
+        return;
+      }
+      if (task.state === 'cancelled') {
+        status.textContent = '作成をキャンセルしました。';
+        return;
+      }
+      status.textContent = label + ' を直接書き出せませんでした。' + (task.reason || '');
+      if (task.owner !== owner || !fallbackRange) return;
+      if (!currentSelection() || source.mediaKeys) {
+        status.textContent = '元の動画が切り替わったため、元ファイルを確認できませんでした。';
+        return;
+      }
+      if (source === localVideo && !document.hidden) {
+        startRecording(task.from, task.to, false, undefined, true);
+      } else recordFallback.hidden = !available;
     }
-    async function createClip(from, to) {
-      const local = source === localVideo;
-      if (!local && !getCurrentFile) return startRecording(from, to, false);
+    function createClip(from, to) {
       if (!currentSelection() || source.mediaKeys) return finish('元の動画を確認できません。もう一度動画を選んでください。');
+      const local = source === localVideo;
+      const url = !local && getCurrentHlsSource?.(source);
+      const hls = url && ShareFastClip.acceptsHls(url) ? {url,height:qualityHeight('export',source),cache:getFragmentCache?.(source)} : null;
+      if (!local && !getCurrentFile && !hls) return startRecording(from, to, false);
       timeline.stopPreview();
       clearResult();
-      const active = job = {fast:true, events:new AbortController()};
-      const signal = active.events.signal;
       const selected = source;
-      const file = local ? fileInput.files[0] : null;
-      const sameSource = active.sameSource = () => job === active && selected === source && currentSelection() &&
-        !selected.mediaKeys && (!local || file === fileInput.files[0]);
-      selected.addEventListener('emptied', () => finish('元の動画が切り替わったため中断しました。'), {signal});
-      selected.addEventListener('encrypted', () => finish('保護された動画は書き出せません。'), {signal});
-      refresh();
-      status.textContent = '元ファイルを確認しています。';
+      const file = local && fileInput.files[0];
+      const name = (local ? file?.name.replace(/\.[^.]+$/, '') : title) || 'clip';
+      const shareText = local ? name : getShareText?.() || name;
+      let renderer;
       try {
-        const blob = local ? file : await getCurrentFile(selected, signal);
-        if (!sameSource()) { if (job === active) finish('元の動画が切り替わったため中断しました。'); return; }
-        if (!(blob instanceof Blob)) return useRecorder(active, from, to);
-        let drawFrame;
         if (comments.checked || effects.checked) {
-          active.renderer = createFrameRenderer({video:selected, comments:comments.checked, effects:effects.checked});
-          if (typeof active.renderer?.drawFrame !== 'function') return useRecorder(active, from, to);
-          drawFrame = active.renderer.drawFrame.bind(active.renderer);
+          renderer = createFrameRenderer({video:selected, comments:comments.checked, effects:effects.checked, from, to});
+          if (typeof renderer?.drawFrame !== 'function') throw Error('選択した合成を利用できません。');
         }
-        status.textContent = '元ファイルから直接書き出しています。';
-        const clip = await ShareFastClip.convert({blob, from, to, signal, drawFrame, onProgress(fraction) {
-          if (job === active) status.textContent = '元ファイルから直接書き出しています · ' + Math.round(fraction * 100) + '%';
-        }});
-        if (sameSource()) present(active, clip, from, to);
-        else if (job === active) finish('元の動画が切り替わったため中断しました。');
-      } catch (_) {
-        if (sameSource()) useRecorder(active, from, to);
-        else if (job === active) finish('元の動画が切り替わったため中断しました。');
+        fallbackRange = {from,to};
+        const maxHeight = quality.export.value === 'source' ? undefined : qualityHeight('export',source) || (hls ? undefined : 144);
+        ShareClipJobs.start({name,shareText,from,to,hls,renderer,maxHeight,comments:comments.checked,owner,onBackgroundFinish,
+          getBlob:local ? () => file : async signal => {
+            const blob = await getCurrentFile(selected, signal);
+            if (getCurrentVideo?.() !== selected) throw Error('元の動画が切り替わったため、元ファイルを確認できませんでした。');
+            return blob;
+          }});
+      } catch (error) {
+        renderer?.dispose?.();
+        if (local) return startRecording(from,to,false,undefined,true);
+        status.textContent = error.message;
+        recordFallback.hidden = !available;
       }
     }
+    recordFallback.onclick = () => {
+      if (!job && !rangeError() && currentSelection() && !source.mediaKeys) startRecording(start.valueAsNumber, end.valueAsNumber, false);
+    };
     create.onclick = () => { if (!create.disabled) createClip(start.valueAsNumber, end.valueAsNumber); };
     cancel.onclick = () => {
+      if (ShareClipJobs.busy) { ShareClipJobs.cancel(); return; }
       finish('作成をキャンセルしました。');
       clearResult();
     };
@@ -516,18 +658,25 @@ const ShareLocalClip = {
       const file = outputFile;
       try {
         const files = [file];
-        const text = source !== localVideo && getShareText?.();
+        const text = outputText ?? (source !== localVideo && getShareText?.());
         const withText = {files, text};
         await navigator.share(text && navigator.canShare(withText) ? withText : {files});
       }
       catch (error) {
-        if (error.name !== 'AbortError' && file === outputFile) status.textContent = '共有できませんでした。「動画を保存」から保存してください。';
+        if (error.name !== 'AbortError' && file === outputFile) status.textContent = '共有できませんでした。完成画面で別の添付方法を選べます。';
       }
     };
     timeline = ShareClipTimeline.mount(find('[data-role=timeline]'), {
       startInput:start, endInput:end,
       getSource:() => (source !== localVideo || sourceUrl) && currentSelection() ? source : null,
       isLocalSource:video => video === localVideo, clipSession,
+      getHlsSource:video => getCurrentHlsSource?.(video), getStoryboardInterval,
+      getPreviewHeight:video => qualityHeight('preview',video),
+      getSceneHeight:video => qualityHeight('scene',video),
+      getDetailedFrames(video,times,signal) {
+        const url = getCurrentHlsSource?.(video);
+        return url && ShareFastClip.acceptsHls(url) ? ShareFastClip.makeThumbnails({url,height:qualityHeight('scene',video),cache:getFragmentCache?.(video)},times,signal) : [];
+      },
       getThumbnail:(host, seconds) => source !== localVideo && currentSelection() ? getThumbnail?.(host, seconds) : undefined,
       seekSource:seconds => !job && currentSelection() && seek(seconds),
       getPreviewRenderer:video => (comments.checked || effects.checked) && createFrameRenderer
@@ -537,13 +686,19 @@ const ShareLocalClip = {
     if (candidate instanceof HTMLVideoElement) {
       selectCurrent(true);
       if (!pickedSource) candidate.addEventListener('loadeddata', () => {
-        if (!pickedSource && getCurrentVideo?.() === candidate) selectCurrent(true);
+        if (!pickedSource && getCurrentVideo?.() === candidate) {
+          selectCurrent(true);
+          if (awaitingPreview && !ShareClipJobs.busy && !job) timeline?.startPreview?.();
+        }
       }, {once:true, signal:editorEvents.signal});
     }
     if (!candidate && getCurrentVideo) status.textContent = '映像の読み込み後に「再生中の動画」を押すか、動画ファイルを選んでください。';
     find('[data-role=fileOptions]').open = source === localVideo;
     refresh();
+    const unsubscribe = ShareClipJobs.subscribe(showTask);
     const cleanup = () => {
+      resultObserver.disconnect();
+      unsubscribe();
       onSelectionChange = undefined;
       editorEvents.abort();
       timeline.dispose();
@@ -557,13 +712,20 @@ const ShareLocalClip = {
       root.remove();
     };
     cleanup.setRange = ({start:from, end:to}) => {
-      if (job || !Number.isFinite(from) || !Number.isFinite(to)) return false;
+      if (job || ShareClipJobs.busy || !Number.isFinite(from) || !Number.isFinite(to)) return false;
       start.value = from;
       end.value = to;
       end.dispatchEvent(new Event('input', {bubbles:true}));
       return !rangeError();
     };
+    cleanup.startPreview = () => {
+      if (root.dataset.page === 'result' || !result.hidden) return;
+      if (job || ShareClipJobs.busy) return;
+      if (!pickedSource && candidate instanceof HTMLVideoElement) { awaitingPreview = true; return; }
+      timeline?.startPreview?.();
+    };
     cleanup.stopPreview = () => {
+      awaitingPreview = false;
       timeline?.stopPreview();
       if (!preview.paused) preview.pause();
     };

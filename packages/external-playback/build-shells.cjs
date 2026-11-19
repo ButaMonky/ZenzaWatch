@@ -1,4 +1,7 @@
 'use strict';
+const {readFileSync} = require('node:fs');
+const path = require('node:path');
+const mountXClipAttachment = require('./x-clip-attachment.cjs');
 const {startOrdinaryRuntime} = require('./ordinary-startup.cjs');
 module.exports=function buildShells({base,legacyBlog,header,runtime,externalModules,launcher,transport,network,closeRuntime,host,display,panelObserver,preferenceNames}) {
  const shared=`
@@ -39,8 +42,12 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
  ${display}
  const displaySettings=createDisplaySettings(window,gm,${JSON.stringify([...preferenceNames])});
  `;
+ const clipClipboard=readFileSync(path.join(__dirname,'../../src/ShareClipClipboard.js'),'utf8').split('//===BEGIN===')[1].split('//===END===')[0];
  const mainHeader=base.slice(0,base.indexOf('// ==/UserScript==')+'// ==/UserScript=='.length)
-  .replace(/\/\/ @grant\s+none/, `// @grant          GM_addElement
+  .replace(/\/\/ @grant\s+none/, `// @match          https://x.com/intent/post*
+// @match          https://x.com/intent/tweet*
+// @match          https://x.com/compose/post*
+// @grant          GM_addElement
 // @grant          GM_getResourceText
 // @resource       zenzaLodash https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @grant          GM_getValue
@@ -57,6 +64,11 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js`);
  const main=mainHeader+'\n'+(/^\/\/ build: .*$/m.exec(base)?.[0]||'// build: external-playback')+`
 (() => {
+ if (location.hostname==='x.com') {
+   ${clipClipboard}
+   (${mountXClipAttachment.toString()})(ShareClipClipboard);
+   return;
+ }
  ${externalModules}
  ${shared}
  ${launcher}

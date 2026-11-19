@@ -6,6 +6,7 @@ const ShareOfficialClip = (() => {
   const base = 'https://nvapi.nicovideo.jp/v1';
   const pollInterval = 5000;
   const recent = new Map();
+  const pendingCreations = new Map();
   const pollLimit = 30 * 60 * 1000;
   const ignored = {reason:'cancelled'};
   const schema = missing => ({kind:'schema', missing});
@@ -59,6 +60,8 @@ const ShareOfficialClip = (() => {
     let deadline;
     let account;
     let recordKey;
+    let createRequested = false;
+    let retryAt = 0, retryTimer;
 
     container.innerHTML = `
 <p>ニコニコが元動画から3〜30秒のクリップを作成します。プレビューを確認して、連携したXアカウントに投稿できます。</p>
@@ -94,10 +97,13 @@ const ShareOfficialClip = (() => {
     const discard = find('discard');
     const again = find('again');
     const useLocal = find('useLocal');
-    const limit = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
+    // The service uses integer milliseconds. Both HTML step validation and draft
+    // matching must use the very same range we send to the server.
+    const limit = Number.isFinite(duration) && duration > 0 ? Math.floor(duration * 1000) / 1000 : Infinity;
+    const seconds = value => Math.round(value * 1000) / 1000;
     const hasEnd = Number.isFinite(endTime);
-    const initialStart = Math.max(0, Math.min(Number(startTime) || 0, hasEnd ? limit : Math.max(0, limit - 3)));
-    const initialEnd = Math.max(0, Math.min(limit, hasEnd ? endTime : initialStart + 10));
+    const initialStart = seconds(Math.max(0, Math.min(Number(startTime) || 0, hasEnd ? limit : Math.max(0, limit - 3))));
+    const initialEnd = seconds(Math.max(0, Math.min(limit, hasEnd ? endTime : initialStart + 10)));
     start.value = String(initialStart);
     end.value = String(initialEnd);
     if (Number.isFinite(limit)) start.max = end.max = String(limit);
@@ -127,7 +133,7 @@ const ShareOfficialClip = (() => {
       start.disabled = end.disabled = !['edit','denied','checking'].includes(phase);
       find('composer').hidden = !clipId;
       create.hidden = !!clipId;
-      create.disabled = !edit || !validRange();
+      create.disabled = !edit || Date.now() < retryAt || !validRange();
       post.disabled = phase !== 'preview' || !draft.value.trim();
       draft.disabled = ['posting', 'posted', 'postUnknown'].includes(phase);
       again.hidden = phase !== 'posted';
@@ -137,6 +143,9 @@ const ShareOfficialClip = (() => {
     function state(value, message) {
       if (lifetime.signal.aborted) return;
       phase = value;
+      const busy = ['checking','creating','generating','posting','discarding'].includes(phase);
+      status.dataset.busy = String(busy);
+      container.querySelector('[name=editor]').setAttribute('aria-busy', String(busy));
       status.textContent = message;
       update();
     }
@@ -176,13 +185,41 @@ const ShareOfficialClip = (() => {
       } catch (_) { /* An unavailable or old record cannot be resumed. */ }
       return null;
     }
+    function setCreateNotice(value) {
+      const key = recordKey + ':creation';
+      if (value) recent.set(key, value); else recent.delete(key);
+      try {
+        if (value) win.sessionStorage.setItem(key, value); else win.sessionStorage.removeItem(key);
+      } catch (_) { /* An open page still retains its latest state. */ }
+    }
+    function createNotice() {
+      const key = recordKey + ':creation';
+      let value = recent.get(key);
+      try { value ||= win.sessionStorage.getItem(key); } catch (_) { /* storage unavailable */ }
+      if (!value) return '';
+      if (value === 'unconfirmed') return '前回の作成リクエストが受理されたか確認できません。公式ページで状態を確認してから、必要な場合にもう一度作成してください。';
+      if (value === 'limited') return '前回、ニコニコが短時間の作成リクエストを制限しました。時間をおいてから再度作成するか、「この範囲を端末で作成」を選べます。';
+      const secondsLeft = Math.ceil((Number(value) - Date.now()) / 1000);
+      if (secondsLeft > 0) {
+        retryAt = Number(value);
+        win.clearTimeout(retryTimer);
+        retryTimer = win.setTimeout(() => {
+          if (phase === 'edit' && !lifetime.signal.aborted) state('edit', createNotice() || 'もう一度作成を試せます。');
+        }, Math.min(retryAt - Date.now() + 1, 2147483647));
+        return 'ニコニコからの再試行の目安はあと' + secondsLeft + '秒です。「この範囲を端末で作成」も選べます。';
+      }
+      setCreateNotice('');
+      return '';
+    }
     const beginDiagnostic = operation => typeof RequestDiagnostics === 'undefined' ? null :
       RequestDiagnostics.begin(operation, videoId, 'response', () => !lifetime.signal.aborted);
     async function request(operation, path, method = 'GET', fields) {
       const abort = new win.AbortController();
       const stop = () => abort.abort();
       if (lifetime.signal.aborted) throw new Error('closed');
-      lifetime.signal.addEventListener('abort', stop, {once:true});
+      // Closing the panel cannot revoke a submitted POST. Retain its response
+      // long enough to obtain the server ID and resume with a GET on reopen.
+      if (operation !== 'clip-create') lifetime.signal.addEventListener('abort', stop, {once:true});
       const ticket = beginDiagnostic(operation);
       let timedOut = false, diagnostic = {kind:'network'};
       const timeout = win.setTimeout(() => { timedOut = true; stop(); }, 20000);
@@ -205,6 +242,11 @@ const ShareOfficialClip = (() => {
             envelope.meta.status < 200 || envelope.meta.status >= 300) {
           const error = new Error(envelope?.meta?.errorCode === 'USER_LIMIT_EXCEEDED' ? 'USER_LIMIT_EXCEEDED' : 'request failed');
           error.httpStatus = response.ok ? envelope?.meta?.status : response.status;
+          if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') {
+            const wait = response.headers?.get?.('Retry-After');
+            const retry = /^\d+$/.test(wait || '') ? Date.now() + Number(wait) * 1000 : Date.parse(wait);
+            if (Number.isFinite(retry) && retry > Date.now()) error.retrySeconds = Math.ceil((retry - Date.now()) / 1000);
+          }
           const statusCode = error.httpStatus;
           if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) diagnostic = schema('meta.status');
           else if ([401,403,404,429].includes(statusCode) || error.message === 'USER_LIMIT_EXCEEDED' ||
@@ -248,14 +290,20 @@ const ShareOfficialClip = (() => {
         find('account').textContent = account ? '投稿先　@' + account : '連携した X アカウントに投稿';
         find('editor').hidden = false;
         recordKey = 'zenzaWatch:officialClip:' + videoId + ':' + account;
+        if (pendingCreations.has(recordKey)) {
+          state('creating', '先ほどの作成リクエストの結果を確認しています…');
+          await pendingCreations.get(recordKey).catch(() => {});
+          if (lifetime.signal.aborted) return;
+        }
         const previous = saved();
         // An unconfirmed publication must always resume its result check. A newly
         // selected range otherwise starts a fresh draft, even if an old preview exists.
-        const sameRange = previous && Number(previous.start) === initialStart && Number(previous.end) === initialEnd;
+        const sameRange = previous && seconds(Number(previous.start)) === initialStart && seconds(Number(previous.end)) === initialEnd;
         if (previous && (!hasEnd || sameRange || previous.kind === 'post')) {
+          createRequested = true;
           clipId = previous.id;
-          start.value = previous.start;
-          end.value = previous.end;
+          start.value = String(seconds(Number(previous.start)));
+          end.value = String(seconds(Number(previous.end)));
           draft.value = previous.text;
           if (previous.kind === 'posted') state('posted', 'X にクリップをポストしました。');
           else {
@@ -263,7 +311,7 @@ const ShareOfficialClip = (() => {
             deadline = Date.now() + pollLimit;
             void poll();
           }
-        } else state('edit', '');
+        } else state('edit', createNotice());
         let licensed;
         try { licensed = (await request('clip-license', source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
         if (lifetime.signal.aborted) return;
@@ -271,7 +319,7 @@ const ShareOfficialClip = (() => {
         note.hidden = licensed === false;
         note.textContent = licensed === true ? '権利楽曲利用の可能性があるため、クリップは映像のみになります。' :
           '音声の利用可否は、作成したクリップのプレビューで確認してください。';
-        if (autoPreview && licensed === false && phase === 'edit' && validRange()) create.click();
+        if (autoPreview && !createRequested && !createNotice() && licensed === false && phase === 'edit' && validRange()) create.click();
       } catch (_) {
         state('denied', 'ニコニコの公式投稿を利用できるか確認できません。');
       }
@@ -309,23 +357,41 @@ const ShareOfficialClip = (() => {
         if (!result?.status || (!posting && !['WAITING', 'GENERATING'].includes(result.status)) ||
             Date.now() >= deadline) { uncertain(); return; }
         timer = win.setTimeout(poll, pollInterval);
-      } catch (_) { uncertain(); }
+      } catch (error) {
+        if (!lifetime.signal.aborted && !posting && [404,410].includes(error.httpStatus)) {
+          startAnother();
+          state('edit', '前回のプレビューはニコニコで利用できなくなりました。区間を確認して新しく作成できます。');
+        } else uncertain();
+      }
     }
     create.onclick = async () => {
-      if (phase !== 'edit' || !validRange()) return;
+      if (phase !== 'edit' || !validRange() || pendingCreations.has(recordKey)) return;
+      createRequested = true;
       state('creating', 'クリップの作成をリクエストしています…');
-      try {
-        const result = await request('clip-create', source + '/clips', 'POST', {
-          startTime:String(Math.round(start.valueAsNumber * 1000)), endTime:String(Math.round(end.valueAsNumber * 1000))
-        });
-        if (lifetime.signal.aborted) return;
+      setCreateNotice('unconfirmed');
+      const creation = request('clip-create', source + '/clips', 'POST', {
+        startTime:String(Math.round(start.valueAsNumber * 1000)), endTime:String(Math.round(end.valueAsNumber * 1000))
+      }).then(result => {
         clipId = result.clipId;
         remember('clip');
+        setCreateNotice('');
+      }).catch(error => {
+        if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') {
+          setCreateNotice(error.retrySeconds ? String(Date.now() + error.retrySeconds * 1000) : 'limited');
+        } else if (error.httpStatus >= 400 && error.httpStatus < 500 && ![408,409].includes(error.httpStatus)) {
+          setCreateNotice('');
+        }
+        throw error;
+      }).finally(() => pendingCreations.delete(recordKey));
+      pendingCreations.set(recordKey, creation);
+      try {
+        await creation;
+        if (lifetime.signal.aborted) return;
         task = 'clip';
         deadline = Date.now() + pollLimit;
         await poll();
       } catch (error) {
-        if (error.message === 'USER_LIMIT_EXCEEDED') state('edit', '作成回数の上限に達しました。しばらく時間をおいてください。');
+        if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') state('edit', createNotice());
         else if (error.httpStatus === 401 || error.httpStatus === 403) {
           state('denied', 'ニコニコで公式クリップを作成できません。ログイン、X連携、動画の共有設定を確認してください。');
         } else state('createUnknown', 'ニコニコでのクリップ作成結果を確認できません。');
@@ -396,6 +462,7 @@ const ShareOfficialClip = (() => {
     return () => {
       lifetime.abort();
       win.clearTimeout(timer);
+      win.clearTimeout(retryTimer);
       if (!preview.paused) preview.pause();
       preview.removeAttribute('src');
       if (preview.currentSrc) preview.load();

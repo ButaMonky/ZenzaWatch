@@ -14,6 +14,30 @@ function harness(extra = {}) {
 }
 
 describe('NotificationJournal source-only, no network', () => {
+  it('records and groups player script errors without storing arbitrary exception messages', async () => {
+    const journal = harness();
+    const handlers = new Map();
+    const ctx = createContext({NotificationJournal: journal, RequestDiagnostics: {},
+      addEventListener(type, handler) { handlers.set(type, handler); }});
+    const file = 'src/initializer.js';
+    for (const name of ['ZENZA_SOURCE', 'scriptErrorWhere', 'installScriptErrorJournal']) {
+      run('const ' + name + ' = ' + extract(file, name, 'var') + ';', ctx);
+    }
+    run('let scriptErrorInstalled = false; installScriptErrorJournal();', ctx);
+    const emit = script => handlers.get('error')({filename: script, error: {
+      name: 'TypeError', message: 'private fixture text',
+      stack: 'TypeError\n    at Module.read (' + script + ':15:3)'
+    }});
+    emit('site.js');
+    assert.equal((await journal.list()).length, 0);
+    emit('ZenzaWatchMain.js');
+    emit('ZenzaWatchMain.js');
+    const entries = await journal.list();
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].source, 'script-error');
+    assert.equal(entries[0].details.count, 2);
+    assert(!JSON.stringify(entries).includes('private fixture text'));
+  });
   it('captures occurrence build and separates first/last failure from recovery time', () => {
     let now=1800000000000;const journal=harness({Date:class extends Date {static now(){return now;}}});
     journal.configureBuild('2.7.370-task994','2026-11-10 12:00Z abc1234');
@@ -46,6 +70,18 @@ describe('NotificationJournal source-only, no network', () => {
     unsubscribe();
     journal.record({message: 'other'});
     assert.strictEqual(updates, 1);
+  });
+
+  it('retains only numeric HTTP and API status values in the protocol range', () => {
+    const journal = harness();
+    for (const value of ['401', 'PRIVATE_STATUS', true, {status: 401}, 99, 600, 401.5, NaN]) {
+      const entry = journal.record({message: 'fixture', details: {statusCode: value, apiStatus: value}});
+      assert(!('apiStatus' in entry.details));
+      assert(!('statusCode' in entry.details));
+    }
+    const entry = journal.record({message: 'fixture', details: {statusCode: 100, apiStatus: 599}});
+    assert.equal(entry.details.statusCode, 100);
+    assert.equal(entry.details.apiStatus, 599);
   });
 
   it('never persists arbitrary payload, raw response, comment text, or credential fields', async () => {

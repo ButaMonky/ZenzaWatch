@@ -80,9 +80,10 @@ const { initialize } = (() => {
                 const message = String(error?.message ?? error ?? '').slice(0, 300);
                 const where = scriptErrorWhere(stack).replace(/[^A-Za-z0-9_.$@<>-]/g, '').slice(0, 100);
                 const missing = RequestDiagnostics?.missingFromMessage?.(message);
-                NotificationJournal.recordDiagnostic('script-error-' + name + '-' + (where || message.slice(0, 40)), {
+                const locationKey = (where || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 90);
+                NotificationJournal.recordDiagnostic('diag-script-' + name.toLowerCase() + '-' + locationKey, {
                     category: 'system', source: 'script-error', level: 'error',
-                    message: 'ZenzaWatch のスクリプトエラー: ' + name + ': ' + message,
+                    message: 'ZenzaWatch のスクリプトエラー（' + name + '）',
                     details: { operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name,
                         ...(where ? { where } : {}), ...(missing ? { missing } : {}) }
                 });
@@ -641,7 +642,7 @@ const { initialize } = (() => {
         }
         if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
             NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
-            RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
+            const recordRequestDiagnostic = (event) => NotificationJournal.recordDiagnostic(event.key, {
                 category: 'network', source: event.operation, message: event.message,
                 level: event.outcome === 'recovered' ? 'success' :
                     ['spec-change', 'script'].includes(event.reason) ? 'error' :
@@ -649,13 +650,15 @@ const { initialize } = (() => {
                 details: { operation: event.operation, phase: event.phase, outcome: event.outcome,
                     reason: event.reason, elapsedMs: event.elapsedMs,
                     ...(event.statusCode === undefined ? {} : { statusCode: event.statusCode }),
+                    ...(event.apiStatus === undefined ? {} : { apiStatus: event.apiStatus }),
                     ...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }),
                     // Task1036: 直す場所がすぐ分かるように（値・URL・本文は含めない）。
                     ...(event.missing === undefined ? {} : { missing: event.missing }),
                     ...(event.errorName === undefined ? {} : { errorName: event.errorName }),
                     ...(event.module === undefined ? {} : { module: event.module }),
                     ...(event.distinctTargets === undefined ? {} : { distinctTargets: event.distinctTargets }) }
-            }));
+            });
+            RequestDiagnostics.setSink(recordRequestDiagnostic);
         }
         if (typeof NotificationJournal !== 'undefined') {
             installScriptErrorJournal();

@@ -16,6 +16,7 @@ declare const NicoVideoPlayerDialog: typeof import('./NicoVideoPlayerDialog').Ni
 declare const ThreadLoader: typeof import('./ThreadLoader').ThreadLoader;
 declare const WatchInfoCacheDb: typeof import('./WatchInfoCacheDb').WatchInfoCacheDb;
 declare const ZenzaCommentHistoryCore: Loose;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 declare const global: import('./shared-types/ZenzaGlobal').ZenzaGlobal;
 declare const util: import('./shared-types/ZenzaUtil').ZenzaUtil;
 
@@ -26,7 +27,11 @@ const NicoVideoPlayerDialogComments = {
     if (!this._nicoVideoPlayer) { return null; }
     try {
       return this._commentHistory = ZenzaCommentHistoryCore.createHistoryFeature({
-        dialog: this, config: this._playerConfig, window
+        dialog: this, config: this._playerConfig, window,
+        beginRead: (videoId: string, active: () => boolean) =>
+          RequestDiagnostics.begin('comment-history-read', videoId, 'response', active),
+        beginKey: (videoId: string, active: () => boolean) =>
+          RequestDiagnostics.begin('comment-key', videoId, 'response', active)
       });
     } catch (error) {
       console.warn('Comment history initialization failed', {code: (error as Loose)?.code || 'INIT'});

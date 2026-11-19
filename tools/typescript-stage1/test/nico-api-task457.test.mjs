@@ -75,6 +75,7 @@ test('legacy build directives are preserved in each runtime',()=>{
     const diagnosticPaths = {
       netUtil:'./RequestDiagnostics', VideoInfoLoader:'../infra/RequestDiagnostics',
       ThreadLoader:'../infra/RequestDiagnostics', VideoSessionWorker:'../infra/RequestDiagnostics',
+      NicoVideoPlayerDialogComments:'../packages/lib/src/infra/RequestDiagnostics',
       TagEditApi:'../infra/RequestDiagnostics',
       TagSuggestLoader:'../infra/RequestDiagnostics',
       AdDecorationLoader:'../infra/RequestDiagnostics',
@@ -116,6 +117,11 @@ test('legacy build directives are preserved in each runtime',()=>{
     if (spec.name === 'Storyboard') {
       expected.splice(expected.indexOf("import {StoryboardInfoLoader} from '../../../lib/src/nico/StoryboardInfoLoader';") + 1, 0,
         "import {StoryboardCacheDb} from '../../../lib/src/nico/StoryboardCacheDb';");
+    }
+    if (spec.name === 'ThreadLoader') {
+      expected.splice(expected.indexOf('//===BEGIN==='), 0,
+        "import {ZenzaCommentHistoryCore} from '../../../comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';");
+      expected.splice(expected.indexOf('//@require CommentReadAdapter') + 1,0,'//@require ZenzaCommentHistoryCore');
     }
     if (spec.name === 'VideoInfo') {
       // P12 adds the single canonical automatic-resume policy dependency.

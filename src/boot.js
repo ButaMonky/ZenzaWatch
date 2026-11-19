@@ -29,9 +29,15 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
     await AntiPrototypeJs();
     if (window.ZenzaLib) {
       window.ZenzaJQuery = window.ZenzaLib.$;
+      // Runs in the injected page before the notification journal is necessarily available.
+      const reportStartupFailure = () => {
+        if (location.host === 'www.nicovideo.jp') {
+          console.warn('[ZenzaWatch] 起動診断：プレイヤー本体の初期化に失敗しました。');
+        }
+      };
       const blob = new Blob([
         // Task1059: 名前を付けて、ZenzaWatch 自身のエラーを見分けられるようにする（以前は UUID の名前だった）。
-        `(${monkey})('${PRODUCT}', '${encodeURIComponent(START_PAGE_QUERY)}');\n//# sourceURL=ZenzaWatchMain.js`
+        `(${monkey})(${JSON.stringify(PRODUCT)}, ${JSON.stringify(encodeURIComponent(START_PAGE_QUERY))}).catch(error => { (${reportStartupFailure})(); throw error; });\n//# sourceURL=ZenzaWatchMain.js`
       ], {type: 'text/javascript'});
       const src = URL.createObjectURL(blob);
       const handler = () => {
@@ -44,7 +50,10 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
         if (window.ZenzaWatch) { return; }
         Promise.resolve()
           .then(() => monkey(PRODUCT, encodeURIComponent(START_PAGE_QUERY)))
-          .catch(err => console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err));
+          .catch(err => {
+            if (host === 'www.nicovideo.jp') { reportStartupFailure(); }
+            else { console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err); }
+          });
       };
       const script = Object.assign(document.createElement('script'), {
         id: `${PRODUCT}Loader`,

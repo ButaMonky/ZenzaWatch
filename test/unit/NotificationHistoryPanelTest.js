@@ -33,6 +33,94 @@ function setup(records) {
 }
 
 describe('NotificationHistoryPanel (synthetic DOM)', () => {
+  it('copies only the selected problem using registered labels, field names and repair paths', async () => {
+    const records = [{id:'sm912345', timestamp:1, category:'network', level:'warning', source:'comment-read',
+      version:'2.7.473-task1096', message:'生のエラー文 https://private.invalid/?key=secretValue',
+      videoId:'sm912345', build:'untrustedBuild', activity:{kind:'comment-post', text:'投稿した本文', videoTitle:'個人の動画名'},
+      details:{phase:'response', reason:'schema', missing:'data.threads', outcome:'failed',
+        statusCode:503, errorCode:'RESPONSE_SCHEMA', module:'privateFolder/owned.ts', where:'secretFunction',
+        requestId:'privateRequest', threadId:98765432}},
+      {id:'peer', timestamp:1, category:'player', level:'error', message:'別の問題', source:'storyboard', details:{}}];
+    const h = setup(records);
+    try {
+      let copied;
+      Object.defineProperty(h.dom.window.navigator, 'clipboard', {value:{writeText:async value => { copied=value; }}});
+      await flush();
+      h.root.querySelector('[data-entry-id="sm912345"]').click();
+      const detail = h.root.querySelector('.znh-detail');
+      const button = detail.querySelector('[data-history-action="copy"]');
+      assert(button.textContent.includes('修復レポート'));
+      button.click();
+      await flush();
+      for (const expected of ['2.7.473-task1096','コメント取得','comment-read','応答の確認','schema','RESPONSE_SCHEMA',
+        'data.threads','503','packages/comment-history/src/core.mjs','docs/maintenance/REPAIR_GUIDE.md']) {
+        assert(copied.includes(expected), expected);
+      }
+      for (const privateText of ['生のエラー文','https:','secretValue','sm912345','untrustedBuild','投稿した本文','個人の動画名',
+        'privateFolder','secretFunction','privateRequest','98765432','別の問題','storyboard']) {
+        assert(!copied.includes(privateText), privateText);
+      }
+      assert(detail.querySelector('[role="status"]').textContent.includes('コピーしました'));
+    } finally { h.dom.window.close(); }
+  });
+
+  it('copies the history operation and fixed key rejection code without the actual key', async () => {
+    const h = setup([{id:'history', timestamp:1, category:'network', level:'warning', source:'comment-history-read',
+      details:{phase:'response', reason:'permission', statusCode:400, errorCode:'INVALID_TOKEN', threadKey:'private-value'}}]);
+    try {
+      await flush();
+      h.root.querySelector('[data-entry-id]').click();
+      h.root.querySelector('[data-history-action="copy"]').click();
+      await flush();
+      const text = h.root.querySelector('textarea').value;
+      for (const expected of ['コメント増量','INVALID_TOKEN','400','permission']) assert(text.includes(expected),expected);
+      assert(!text.includes('private-value'));
+    } finally { h.dom.window.close(); }
+  });
+
+  it('identifies the failed key or playback field in the copied report', async () => {
+    for (const [source, field, label] of [
+      ['comment-key','data.threadKey','コメント取得キー'],
+      ['video-session','data.contentUrl','配信URL'],
+      ['video-session','response.json','配信URL'],
+      ['video-session','data.session.content_uri','配信URL']
+    ]) {
+      const h = setup([{id:'issue', timestamp:1, category:'network', level:'warning', source,
+        details:{phase:'response', reason:'schema', missing:field, errorCode:'RESPONSE_SCHEMA',
+          contentUrl:'https://secret.invalid/signed', threadKey:'private-value'}}]);
+      try {
+        await flush();
+        h.root.querySelector('[data-entry-id]').click();
+        h.root.querySelector('[data-history-action="copy"]').click();
+        await flush();
+        const report = h.root.querySelector('textarea').value;
+        for (const expected of [source,field,label]) assert(report.includes(expected),expected);
+        assert(!/secret.invalid|private-value/.test(report));
+      } finally { h.dom.window.close(); }
+    }
+  });
+
+  it('offers a selectable safe report after clipboard rejection for incomplete or unrecognized records', async () => {
+    const h = setup([{id:'legacy', level:'error', category:'system', version:'2.7.473-secretValue',
+      source:'privateSource', message:'privateMessage', details:{phase:'privatePhase', operation:'constructor',
+        reason:'privateReason', missing:'privateIdentifier', module:'privateFolder/file.js', errorCode:'privateCode',
+        apiStatus:'privateStatus', statusCode:600}}]);
+    try {
+      Object.defineProperty(h.dom.window.navigator, 'clipboard', {value:{writeText:async () => { throw new Error('denied'); }}});
+      await flush();
+      h.root.querySelector('[data-entry-id]').click();
+      const detail = h.root.querySelector('.znh-detail');
+      detail.querySelector('[data-history-action="copy"]').click();
+      await flush();
+      const text = detail.querySelector('textarea');
+      assert(text.readOnly && text.selectionEnd === text.value.length);
+      assert(text.value.includes('docs/maintenance/REPAIR_GUIDE.md'));
+      assert(text.value.includes('記録なし'));
+      assert(!/private|secretValue|constructor|Invalid Date|HTTP状態|API状態/.test(text.value));
+      assert(detail.querySelector('[role="status"]').textContent.includes('選択'));
+    } finally { h.dom.window.close(); }
+  });
+
   it('displays the registered operation name and the applicable repository source path', async () => {
     const records = [{id:'clip', timestamp:1, category:'network', level:'warning', source:'clip-permission',
       message:'クリップの応答形式を確認できません', details:{module:'src/ShareOfficialClip.js'}}];

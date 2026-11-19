@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {NICO_API_BY_NAME} from '../scripts/nico-api-registry.mjs';
 import {emitNico,read,loadLegacy,snapshot,settle} from './nico-api-harness.mjs';
+import {ZenzaCommentHistoryCore} from '../../../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 
 emitNico();
 const spec=NICO_API_BY_NAME.ThreadLoader;
@@ -40,7 +41,7 @@ function world(opt={}){
     threadKey:d=>{if(!d||typeof d.threadKey!=='string')throw {kind:'schema',errorCode:'RESPONSE_SCHEMA'};return {...d};},
     threads:(d,m)=>{if(!d||!Array.isArray(d.threads))throw {kind:'schema',errorCode:'RESPONSE_SCHEMA',reason:'threads'};return d;}
   };
-  const globals={netUtil,CommentPostWire,CommentReadAdapter,
+  const globals={netUtil,CommentPostWire,CommentReadAdapter,ZenzaCommentHistoryCore,
     logSafe:{redact:v=>v&&typeof v==='object'?{...v,redacted:true}:{value:typeof v}},
     PopupMessage:{alert:m=>L('alert',m)},
     sleep:async ms=>{L('sleep',ms);},
@@ -120,6 +121,14 @@ async function compare(label,run,opt={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(before,'ThreadLoader',a.globals),B=loadLegacy(after,'ThreadLoader',b.globals);
   const ra=await settle(()=>run(A)),rb=await settle(()=>run(B));
+  // Task1097 adds the shared missing-field location to the two schema errors.
+  if (label==='schema stops' || label==='bad meta') {
+    const missing=label==='bad meta'?'meta.status':'data.threads';
+    ra.error.result={...ra.error.result,missing,reason:label==='bad meta'?'invalid-api-meta':'invalid-thread-envelope'};
+  }
+  if (label==='thread key schema') {
+    ra.error.result={...ra.error.result,reason:'missing-thread-key',missing:'data.threadKey'};
+  }
   assert.deepEqual(snapshot(rb),snapshot(ra),label+' result/error');
   // Match position, multiplicity and exact values of all transport/retry events.
   // The known legacy logger is projected onto R3's restrictive allowlist only.

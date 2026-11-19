@@ -1,4 +1,4 @@
-import {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} from './core.mjs';
+import {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,buildNvThreadKeyUrl,readNvThreadKeyEnvelope,COMMENT_ORIGIN} from './core.mjs';
 
 export function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
 /** Abort both real fetches and the await even when an injected transport ignores signals. */
@@ -41,7 +41,12 @@ function retryAfter(header){
   const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
 }
 /** Internal bounded JSON transport. URL/init are constructed only by allowlisted wrappers below. */
-async function requestJson(url,init,options={}){
+function readApiResponse(data,details){
+  if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:details.httpStatus});
+  if(data?.meta?.status!==200 || data.meta.errorCode)throw new HistoryError('API_ERROR',details);
+  return data;
+}
+async function requestJson(url,init,options={},readResponse=readApiResponse){
   const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
   integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
   try{
@@ -51,19 +56,21 @@ async function requestJson(url,init,options={}){
       let data;try{data=JSON.parse(text);}catch{}
       const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
       const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
+      if(options.includeApiStatus)details.apiStatus=data?.meta?.status;
       if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
       if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
       if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
       if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
-      if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
-      if(data.meta?.status!==200||raw)throw new HistoryError('API_ERROR',details);
-      return data;
+      if(data===undefined)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
+      return readResponse(data,details);
     },{signal,timeoutMs});
   }catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
 }
 export async function requestThreads(context,options={}){
   const {url,init}=buildThreadRequest(context,options);
-  return validateThreads(await requestJson(url,init,options),context,options.targets??context.targets);
+  return requestJson(url,init,options,(data,details)=>validateThreads(data,context,options.targets??context.targets,{
+    apiError:()=>new HistoryError('API_ERROR',details)
+  }));
 }
 const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
 function checkedVideoId(id){
@@ -78,10 +85,11 @@ export async function requestWatchContext(videoId,options={}){
 export async function requestThreadKey(context,options={}){
   if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
   const id=checkedVideoId(context.videoId);
-  const data=await requestJson(`https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${id}`,
+  const data=await requestJson(buildNvThreadKeyUrl(id),
     {method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
-      credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},options);
-  return withThreadKey(context,data?.data?.threadKey);
+      credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},{...options,includeApiStatus:true},
+    (body,details)=>readNvThreadKeyEnvelope(body,{details,apiError:()=>new HistoryError('API_ERROR',details)}));
+  return withThreadKey(context,data.threadKey);
 }
 const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
   'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',

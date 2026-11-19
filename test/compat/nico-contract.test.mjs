@@ -105,7 +105,8 @@ const sentinels=[
     /access-rights\/storyboard/],
   ['video search','packages/lib/src/nico/VideoSearch.js',
     /\/v2\/search\/video/],
-  ['player seek dispatch','src/NicoVideoPlayerDialog.js',
+  // Task1060: コマンドの処理は NicoVideoPlayerDialogCommands.js へ分割した（内容は変更なし）。
+  ['player seek dispatch','src/NicoVideoPlayerDialogCommands.js',
     /case\s+['"]seekBy['"]\s*:/],
   ['seekbar hit-testing','src/VideoControlBar.js',
     /_onSeekBarMouseDown/]

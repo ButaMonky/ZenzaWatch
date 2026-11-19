@@ -890,7 +890,12 @@ class NicoVideoPlayerDialog extends Emitter {
       pending.dispose();
     }
     if (!session) {
-      session = await VideoSessionWorker.create({videoInfo, videoQuality, serverType, useHLS});
+      try {
+        session = await VideoSessionWorker.create({videoInfo, videoQuality, serverType, useHLS, diagnosticActive: () => !isStale()});
+      } catch (error) {
+        if (!isStale()) { this._onVideoSessionFail(serverType, error); }
+        return;
+      }
       if (isStale()) {
         Promise.resolve(session.close()).catch(() => {});
         return;

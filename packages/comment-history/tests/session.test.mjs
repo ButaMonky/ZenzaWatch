@@ -2,7 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {HistorySession} from '../src/session.mjs';
 import {RequestCoordinator} from '../src/coordinator.mjs';
 import {normalizeWatch,withThreadKey,HistoryError} from '../src/core.mjs';
-import {watch,body,comment,KEY} from './fixtures.mjs';
+import {requestThreadKey} from '../src/transport.mjs';
+import {watch,body,comment,KEY,response} from './fixtures.mjs';
 const ctx=()=>normalizeWatch(watch(),'sm1');
 const page=(cs,count=999)=>[{...body(cs).data.threads[0],commentCount:count}];
 const START=1700000100;
@@ -28,6 +29,22 @@ test('expired key refresh retries exactly the same page without mutating origina
  },refreshKey:async context=>withThreadKey(context,'NEW_SECRET')});
  const r=await s.run({startWhen:START});assert.equal(r.pages,1);assert.equal(r.network.attempts,3);assert.equal(r.network.keyRefreshes,1);
  assert.deepEqual(seen,[{key:KEY,when:START},{key:'NEW_SECRET',when:START}]);assert.equal(c.threadKey,KEY);assert(!JSON.stringify(r).includes('NEW_SECRET'));
+});
+test('transient key GET failure retries within the shared budget and recovers before resuming the same page',async()=>{
+ const tickets=[],when=[];let keyGets=0;
+ const s=make({settings:{maxRetries:1,maxRequests:4},beginKey:()=>({
+  failure:error=>tickets.push(error.code),success:()=>tickets.push('success')
+ }),fetchPage:async(c,options)=>{
+  when.push(options.when);
+  if(c.threadKey===KEY)throw new HistoryError('TOKEN_EXPIRED');
+  assert.equal(c.threadKey,'PRIVATE_NEW');return page([]);
+ },refreshKey:(context,options)=>requestThreadKey(context,{...options,fetchImpl:async()=>{
+  keyGets++;
+  return keyGets===1?response({},503):response({meta:{status:200},data:{threadKey:'PRIVATE_NEW'}});
+ }})});
+ const r=await s.run({startWhen:START});
+ assert.equal(r.reason,'empty_page');assert.equal(r.network.attempts,4);assert.equal(r.network.keyRefreshes,1);
+ assert.deepEqual(tickets,['HTTP_ERROR','success']);assert.deepEqual(when,[START,START]);
 });
 test('perpetually invalid key is stopped by refresh limit',async()=>{
  const s=make({fetchPage:async()=>{throw new HistoryError('TOKEN_INVALID');},refreshKey:async c=>withThreadKey(c,'NEW_SECRET')});

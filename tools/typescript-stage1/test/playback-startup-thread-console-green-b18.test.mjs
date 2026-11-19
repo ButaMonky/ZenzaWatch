@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {read} from './nico-api-harness.mjs';
+import * as ZenzaCommentHistoryCore from '../../../packages/comment-history/src/core.mjs';
 
 const ts=read('tools/typescript-stage1/nico-src/ThreadLoader.ts');
 const js=read('packages/lib/src/nico/ThreadLoader.js');
@@ -33,7 +34,7 @@ function harness(code,{readJson=async()=>({meta:{status:200},data:{threadKey:KEY
     console:{log:(...args)=>calls.push(args)},
     FRONT_ID:1, FRONT_VER:'SYNTH_B18',
     readJson,checkAbort,
-    CommentReadAdapter:{threadKey:(data)=>({threadKey:data.threadKey})},
+    ZenzaCommentHistoryCore,
     CommentPostWire:{getPostKey}
   });
   subject._threadKeys={};

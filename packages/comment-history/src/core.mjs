@@ -5,6 +5,8 @@ export class HistoryError extends Error {
     super(code); this.name='HistoryError'; this.code=code;
     // Only machine codes and scalar metadata. Never preserve raw server text or fetch errors.
     for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
+    if (Number.isInteger(details.apiStatus) && details.apiStatus>=100 && details.apiStatus<=599) this.apiStatus=details.apiStatus;
+    if (['meta.status','data.threads','data.threadKey'].includes(details.missing)) this.missing=details.missing;
   }
 }
 export function fail(code) { throw new HistoryError(code); }
@@ -48,6 +50,52 @@ export function checkedTargets(context, targets=context.targets) {
   if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
   return selected;
 }
+/** Callers own request credentials, headers, lifecycle and cache. */
+export function buildNvThreadKeyUrl(videoId) {
+  const url=new URL('https://nvapi.nicovideo.jp/v1/comment/keys/thread');
+  url.searchParams.set('videoId',videoId);
+  return url.href;
+}
+export function readNvThreadKeyEnvelope(body,{
+  acceptsStatus=status=>status===200, details={},
+  schemaError=missing=>new HistoryError(missing==='data.threadKey'?'MISSING_KEY':'RESPONSE_SCHEMA',{...details,missing}),
+  apiError=()=>new HistoryError('API_ERROR')
+}={}) {
+  const status=body?.meta?.status;
+  if (!Number.isInteger(status) || status<200) throw schemaError('meta.status');
+  if (!acceptsStatus(status) || body.meta.errorCode) throw apiError(body.meta);
+  if (typeof body.data?.threadKey!=='string' || !body.data.threadKey.trim()) throw schemaError('data.threadKey');
+  return body.data;
+}
+
+/** Shared POST /v1/threads wire format. Callers validate their own watch context. */
+export function buildNvThreadReadRequest(server,{params,threadKey,additionals},{history=false}={}) {
+  const url=new URL('/v1/threads',server);
+  const headers={
+    'X-Frontend-Id':'6',
+    'X-Frontend-Version':'0',
+    'Content-Type':history ? 'text/plain;charset=UTF-8' : 'text/plain; charset=UTF-8'
+  };
+  if (history) {
+    url.searchParams.set('pc','1');
+    headers['X-Client-Os-Type']='others';
+  }
+  return {url,init:{method:'POST',headers,body:JSON.stringify({additionals,params,threadKey})}};
+}
+
+/** Only the common envelope is validated here. Player counts and history rows have different contracts. */
+export function readNvThreadEnvelope(body,{
+  acceptsMeta=meta=>meta.status===200 && !meta.errorCode,
+  schemaError=missing=>new HistoryError('RESPONSE_SCHEMA',{missing}),
+  apiError=()=>new HistoryError('API_ERROR')
+}={}) {
+  const status=body?.meta?.status;
+  if (!Number.isInteger(status) || status<200) throw schemaError('meta.status');
+  if (!acceptsMeta(body.meta)) throw apiError(body.meta);
+  if (!Array.isArray(body.data?.threads)) throw schemaError('data.threads');
+  return body.data;
+}
+
 export function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
   if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
   if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
@@ -55,10 +103,10 @@ export function buildThreadRequest(context,{targets=context.targets,when,resFrom
   // Seconds, not milliseconds. 9999999999 is a client validation bound, not an API limit.
   if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
   if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
-  return {url:`${COMMENT_ORIGIN}/v1/threads?pc=1`,init:{method:'POST',
-    headers:{'Content-Type':'text/plain;charset=UTF-8','X-Frontend-Id':'6','X-Frontend-Version':'0','X-Client-Os-Type':'others'},
-    mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
-    body:JSON.stringify({params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals})}};
+  const {url,init}=buildNvThreadReadRequest(context.server,{
+    params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals
+  },{history:true});
+  return {url:url.href,init:{...init,mode:'cors',credentials:'omit',cache:'no-store',redirect:'error'}};
 }
 const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
 function copyComment(c) {
@@ -78,11 +126,11 @@ function normalizeComment(c) {
   if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
   const out=copyComment(c);out.id=String(c.id);return out;
 }
-export function validateThreads(body, context, targets=context.targets) {
-  if(body?.meta?.status!==200 || body?.meta?.errorCode) fail('API_ERROR');
-  if(!Array.isArray(body?.data?.threads)) fail('RESPONSE_SCHEMA');
+export function validateThreads(body, context, targets=context.targets, errors) {
+  const data=readNvThreadEnvelope(body,errors);
   const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
-  const result=body.data.threads.map(th=>{
+  const result=data.threads.map(th=>{
+    if (!th || typeof th!=='object') fail('RESPONSE_SCHEMA');
     const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
     if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
     if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);

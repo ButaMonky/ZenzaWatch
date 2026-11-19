@@ -50,7 +50,7 @@ export interface VideoSessionHandle {
 export interface VideoSessionWorkerClient {
   createStoryboardClasses: typeof createStoryboardClasses;
   initWorker(): CrossMessageWorker | undefined;
-  create(params: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean; prefetch?: boolean}): Promise<VideoSessionHandle>;
+  create(params: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean; prefetch?: boolean; diagnosticActive?: () => boolean}): Promise<VideoSessionHandle>;
   storyboard(params: {type: string; info: VideoInfoLike}): Promise<any>;
 }
 
@@ -623,6 +623,45 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
       }
     };
 
+    // workerUtil forwards only the message of a rejected RPC. For an access
+    // response, carry these fixed protocol facts through a structured result.
+    class SessionResponseError extends Error {
+      constructor(public readonly details: {
+        httpStatus?: number; apiStatus?: number; kind?: 'schema'; errorCode?: 'RESPONSE_SCHEMA'; missing?: string;
+      }) { super('再生許可の応答を確認できませんでした'); }
+    }
+
+    const readSessionResponse = async (response: Response, serverType: 'domand' | 'dmc'): Promise<Loose> => {
+      const httpStatus = response.status;
+      const schemaError = (missing: string) => new SessionResponseError({
+        kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing, httpStatus
+      });
+      if (httpStatus >= 300) { throw new SessionResponseError({httpStatus}); }
+      let result: Loose;
+      try { result = await response.json() as Loose; }
+      catch (error) {
+        if ((error as Error)?.name === 'SyntaxError') { throw schemaError('response.json'); }
+        throw error;
+      }
+      // Older DMC replies do not always include meta. Domand requires it.
+      const rawStatus = result?.meta?.status;
+      if (rawStatus != null || serverType === 'domand') {
+        const apiStatus = typeof rawStatus === 'string' && /^\d{3}$/.test(rawStatus) ? Number(rawStatus) : rawStatus;
+        if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) { throw schemaError('meta.status'); }
+        if (apiStatus >= 300) { throw new SessionResponseError({httpStatus, apiStatus}); }
+      }
+      const isDomand = serverType === 'domand';
+      const value = isDomand ? result?.data?.contentUrl : result?.data?.session?.content_uri;
+      const missing = isDomand ? 'data.contentUrl' : 'data.session.content_uri';
+      // Preserve the signed string exactly, including protocol-relative CDN URLs.
+      if (typeof value !== 'string' || !/^(?:https?:)?\/\//i.test(value)) { throw schemaError(missing); }
+      let parsed: URL;
+      try { parsed = new URL(value, 'https://www.nicovideo.jp'); }
+      catch (_) { throw schemaError(missing); }
+      if (!parsed.hostname || parsed.username || parsed.password) { throw schemaError(missing); }
+      return result;
+    };
+
     class DmcPostData {
       declare _dmcInfo: Loose;
       declare _videoQuality: string;
@@ -941,10 +980,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
           },
           credentials: 'include',
           body: JSON.stringify(this._buildOutputsMatrix(videos, audioFormat))
-        }).then(res => res.json() as Promise<Loose>);
-        if (result.meta.status == null || result.meta.status >= 300) {
-          throw new Error('cannot create domand session', result as ErrorOptions)
-        }
+        }).then(res => readSessionResponse(res, 'domand'));
 
         this._lastResponse = result.data || {};
         const {
@@ -1032,7 +1068,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
             timeout: 10000,
             dataType: 'text',
             body: postData.toString()
-          }).then(res => res.json() as Promise<Loose>)
+          }).then(res => readSessionResponse(res, 'dmc'))
             .then(json => {
               const data = json.data || {}, session = data.session || {};
               const sessionId = session.id;
@@ -1067,7 +1103,11 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
               resolve(this.info);
             }).catch(err => {
               console.error('create api fail');
-              reject(err.message || err);
+              if (err instanceof SessionResponseError || ['AbortError', 'timeout', 'TimeoutError'].includes(err?.name)) {
+                reject(err);
+              } else {
+                reject(err.message || err);
+              }
             });
         });
       }
@@ -1216,7 +1256,14 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     const connect = async ({sessionId}: Loose = {}): Promise<Loose> => {
       const session = findSession(sessionId);
       if (!session) throw new Error('session mismatch');
-      const connected = await session.connect();
+      let connected: Loose;
+      try { connected = await session.connect(); }
+      catch (error) {
+        if (error instanceof SessionResponseError) { return {sessionFailure: error.details}; }
+        const name = (error as Error)?.name;
+        if (name === 'AbortError' || name === 'timeout' || name === 'TimeoutError') { return {sessionFailure: {name}}; }
+        throw error;
+      }
       if (findSession(sessionId) !== session) throw new Error('session superseded');
       return connected;
     };
@@ -1302,7 +1349,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
   let worker: CrossMessageWorker | undefined;
   let diagnosticGeneration = 0;
   const observeSession = async <T>(scope: string, active: () => boolean, operation: () => Promise<T>): Promise<T> => {
-    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+    const diagnostic = typeof RequestDiagnostics === 'undefined' || !active() ? null :
       RequestDiagnostics.begin('video-session', scope, 'session', active);
     try {
       const result = await operation();
@@ -1325,13 +1372,12 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     });
     return undefined;
   };
-  const create = async ({videoInfo, videoQuality, serverType, useHLS, prefetch = false}: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean; prefetch?: boolean}): Promise<VideoSessionHandle> => {
+  const create = async ({videoInfo, videoQuality, serverType, useHLS, prefetch = false, diagnosticActive = () => true}: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean; prefetch?: boolean; diagnosticActive?: () => boolean}): Promise<VideoSessionHandle> => {
     // Background sessions must not invalidate the foreground watch diagnostic owner.
     let generation = prefetch ? diagnosticGeneration : ++diagnosticGeneration;
     let closed = false;
     let promoted = false;
-    const active = () => !closed && (prefetch && !promoted || generation === diagnosticGeneration);
-    await initWorker();
+    const active = () => !closed && (!prefetch || promoted) && generation === diagnosticGeneration && diagnosticActive();
     const params = {
       videoInfo: videoInfo.toJSON(),
       videoQuality,
@@ -1340,14 +1386,22 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
       ...(prefetch ? {prefetch: true} : {})
     };
     const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
-    const result = await observeSession(scope + '-create', active,
-      () => (worker as CrossMessageWorker).post({command: 'create', params}));
+    const result = await observeSession(scope + '-create', active, async () => {
+      await initWorker();
+      return (worker as CrossMessageWorker).post({command: 'create', params});
+    });
     const sessionId = result.sessionId;
     return Object.assign(result, {
       connect: () => observeSession(scope + '-connect', active,
-        () => (worker as CrossMessageWorker).post({command: 'connect', params: {sessionId}})),
+        async () => {
+          const connected = await (worker as CrossMessageWorker).post({command: 'connect', params: {sessionId}});
+          if (connected?.sessionFailure) {
+            throw Object.assign(new Error('再生許可の応答を確認できませんでした'), connected.sessionFailure);
+          }
+          return connected;
+        }),
       getState: () => {
-        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+        const diagnostic = typeof RequestDiagnostics === 'undefined' || !active() ? null :
           RequestDiagnostics.begin('session-state', scope, 'session', active);
         return (worker as CrossMessageWorker).post({command: 'getState', params: {sessionId}}).then(state => {
           if (state?.isAbnormallyClosed) { diagnostic?.failure({reason: 'session-closed'}); }

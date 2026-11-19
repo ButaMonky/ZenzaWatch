@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.473-task1096
+// @version        2.7.475-task1098
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 02:31Z 4bde0a64
+// build: 2026-11-19 06:23Z c48fe360
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1735,8 +1735,8 @@ return (async function (window) {
   // Share one observer between the serialized player and the session client.
 const RequestDiagnostics = (() => {
 		const labels = {
-				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
-				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
+				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-history-read': 'コメント増量（過去のコメントを追加取得）', 'comment-key': 'コメント取得キーの更新',
+				'video-session': '再生セッション（映像の配信URL取得）', 'session-state': '再生セッションの維持',
 				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
 				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
@@ -1750,8 +1750,9 @@ const RequestDiagnostics = (() => {
 				'clip-post': 'クリップのX投稿', 'clip-post-status': 'クリップのX投稿状況', 'clip-delete': 'クリップの削除'
 		};
 		const modules = {
-				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'nico-src/CommentReadAdapter.ts',
-				'comment-key': 'nico-src/ThreadLoader.ts', 'video-session': 'nico-src/VideoSessionWorker.ts',
+				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'packages/comment-history/src/core.mjs',
+				'comment-history-read': 'packages/comment-history/src/core.mjs',
+				'comment-key': 'packages/comment-history/src/core.mjs', 'video-session': 'nico-src/VideoSessionWorker.ts',
 				'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
 				search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
 				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
@@ -1789,10 +1790,11 @@ const RequestDiagnostics = (() => {
 		const suspectReported = new Map();
 		const suspectReason = (failure) => failure.reason === 'schema' ||
 				(failure.reason === 'http' && [400, 410, 422].includes(Number(failure.statusCode))) ||
+				(failure.reason === 'service' && [400, 410, 422].includes(Number(failure.apiStatus))) ||
 				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
 		const noteSuspect = (operation, key, failure, now) => {
-				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '') +
-						(operation.startsWith('clip-') ? '|' + (failure.missing || '') : '');
+				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || (failure.reason === 'service' ? failure.apiStatus : undefined) || failure.statusCode || '') +
+						(operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ? '|' + (failure.missing || '') : '');
 				const seen = suspects.get(group) || new Map();
 				seen.set(key, now);
 				for (const [k, at] of seen) {
@@ -1822,15 +1824,22 @@ const RequestDiagnostics = (() => {
 				}
 				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
 		};
+		const knownErrorCodes = new Set(['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
+				'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
+		const isKnownErrorCode = (value) => typeof value === 'string' && knownErrorCodes.has(value);
+		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
 		const classify = (error) => {
 				const outer = error && typeof error === 'object' ? error : {};
 				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
-				const status = e.statusCode ?? e.status ?? e.httpStatus;
-				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-						'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND'];
+				const httpStatus = e.httpStatus ?? e.statusCode ?? e.status;
+				const apiStatus = validStatus(e.apiStatus) ? e.apiStatus : undefined;
+				const apiRejected = apiStatus !== undefined && apiStatus >= 300 &&
+						!(validStatus(httpStatus) && httpStatus >= 300);
+				const status = apiRejected ? apiStatus : httpStatus;
 				const fields = {
-						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
-						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
+						...(validStatus(httpStatus) ? { statusCode: httpStatus } : {}),
+						...(apiStatus !== undefined ? { apiStatus } : {}),
+						...(typeof e.errorCode === 'string' ? { errorCode: isKnownErrorCode(e.errorCode) ? e.errorCode : 'OTHER' } : {})
 				};
 				const missing = fieldName(e.missing) ||
 						(e.kind === 'schema' || /_SCHEMA$/.test(String(e.errorCode)) ? fieldName(e.reasonCode) || fieldName(e.reason) : undefined);
@@ -1864,6 +1873,9 @@ const RequestDiagnostics = (() => {
 				if (status === 401 || status === 403 || ['forbidden', 'need payment', 'premium only', 'member only'].includes(String(e.reason))) {
 						return { reason: 'permission', ...fields };
 				}
+				if (apiRejected) {
+						return { reason: 'service', ...fields };
+				}
 				if (e.reason === 'not supported') {
 						return { reason: 'unavailable', ...fields };
 				}
@@ -1877,7 +1889,57 @@ const RequestDiagnostics = (() => {
 				if (fields.statusCode) {
 						return { reason: 'http', ...fields };
 				}
+				if (apiStatus !== undefined && fields.errorCode) {
+						return { reason: 'service', ...fields };
+				}
 				return { reason: 'network' };
+		};
+		const classifyHistoryRead = (error, key = false) => {
+				const e = error && typeof error === 'object' ? error : {};
+				const code = e.code;
+				const statuses = { httpStatus: e.httpStatus, apiStatus: key ? e.apiStatus : undefined };
+				if (['RESPONSE_SCHEMA', 'COMMENT_SCHEMA', 'TARGET_SCHEMA', 'TARGET_NOT_ALLOWED', 'MISSING_TARGET', 'INVALID_JSON'].includes(String(code)) ||
+						(key && code === 'MISSING_KEY')) {
+						const missing = e.missing === 'meta.status' || e.missing === (key ? 'data.threadKey' : 'data.threads') ? e.missing : undefined;
+						return classify({ ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', ...(missing ? { missing } : {}) });
+				}
+				if (code === 'TIMEOUT') {
+						return { reason: 'timeout' };
+				}
+				if (code === 'NETWORK_ERROR') {
+						return { reason: 'network' };
+				}
+				if (code === 'TOKEN_INVALID' || code === 'TOKEN_EXPIRED') {
+						return { ...classify({ ...statuses, errorCode: code === 'TOKEN_INVALID' ? 'INVALID_TOKEN' : 'EXPIRED_TOKEN' }), reason: 'permission' };
+				}
+				if (['HTTP_ERROR', 'API_ERROR', 'RATE_LIMITED'].includes(String(code))) {
+						const result = classify({ ...statuses, errorCode: e.apiCode });
+						if (result.reason === 'network' || result.reason === 'http' && Number(result.statusCode) < 400) {
+								result.reason = 'service';
+						}
+						return result;
+				}
+				return { reason: 'cancelled' };
+		};
+		const classifyCommentKey = (error) => {
+				const outer = error && typeof error === 'object' ? error : {};
+				if (outer.code !== undefined && (outer.name === 'HistoryError' || outer.code === 'TIMEOUT' || outer.code === 'CANCELLED')) {
+						return classifyHistoryRead(outer, true);
+				}
+				const statuses = { httpStatus: outer.httpStatus ?? outer.status, apiStatus: outer.apiStatus };
+				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				if (e.kind === 'schema' || e.name === 'SyntaxError') {
+						const missing = e.missing === 'data.threadKey' || e.missing === 'meta.status' ? e.missing : undefined;
+						return classify({ ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', ...(missing ? { missing } : {}) });
+				}
+				const result = classify({ ...statuses, errorCode: e.errorCode, name: e.name });
+				if (e.errorCode === 'EXPIRED_TOKEN' || e.errorCode === 'INVALID_TOKEN') {
+						result.reason = 'permission';
+				}
+				else if (e.errorCode && (result.reason === 'network' || result.reason === 'http' && Number(result.statusCode) < 400)) {
+						result.reason = 'service';
+				}
+				return result;
 		};
 		const begin = (operation, scope, phase, active = () => true) => {
 				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
@@ -1945,7 +2007,9 @@ const RequestDiagnostics = (() => {
 				};
 				const failure = (error) => {
 						try {
-								emit('failed', classify(error));
+								const result = operation === 'comment-history-read' ? classifyHistoryRead(error) :
+										operation === 'comment-key' ? classifyCommentKey(error) : classify(error);
+								emit('failed', result);
 						}
 						catch (_) { /* untrusted error properties */ }
 				};
@@ -1999,6 +2063,12 @@ const RequestDiagnostics = (() => {
 						if (/\/watch-later(?:\/|$)/.test(p)) {
 								return 'mylist';
 						}
+						if (/\/access-rights\/storyboard\/?$/.test(p)) {
+								return 'storyboard';
+						}
+						if (/\/access-rights\//.test(p)) {
+								return 'video-session';
+						}
 						if (/\/watch\//.test(p)) {
 								return 'video-info';
 						}
@@ -2007,9 +2077,6 @@ const RequestDiagnostics = (() => {
 						}
 						if (/\/threads(?:\/|$)/.test(p)) {
 								return 'comment-read';
-						}
-						if (/\/access-rights\//.test(p)) {
-								return 'video-session';
 						}
 						if (/storyboard/.test(p)) {
 								return 'storyboard';
@@ -2078,7 +2145,7 @@ const RequestDiagnostics = (() => {
 		};
 		const setSink = (next) => { sink = next; };
 		const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
-		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor };
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode };
 })();
   const monkey = async (_product, START_PAGE_QUERY, externalTrial = null) /*** (｀・ω・´)9m ***/ => {
     const {displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged} = externalTrial || {};
@@ -2111,10 +2178,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.473-task1096';
+    var VER = '2.7.475-task1098';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 02:31Z 4bde0a64';
+    var BUILD = '2026-11-19 06:23Z c48fe360';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3324,6 +3391,8 @@ class HistoryError extends Error {
 	constructor(code, details={}) {
 		super(code); this.name='HistoryError'; this.code=code;
 		for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
+		if (Number.isInteger(details.apiStatus) && details.apiStatus>=100 && details.apiStatus<=599) this.apiStatus=details.apiStatus;
+		if (['meta.status','data.threads','data.threadKey'].includes(details.missing)) this.missing=details.missing;
 	}
 }
 function fail(code) { throw new HistoryError(code); }
@@ -3367,16 +3436,56 @@ function checkedTargets(context, targets=context.targets) {
 	if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
 	return selected;
 }
+function buildNvThreadKeyUrl(videoId) {
+	const url=new URL('https://nvapi.nicovideo.jp/v1/comment/keys/thread');
+	url.searchParams.set('videoId',videoId);
+	return url.href;
+}
+function readNvThreadKeyEnvelope(body,{
+	acceptsStatus=status=>status===200, details={},
+	schemaError=missing=>new HistoryError(missing==='data.threadKey'?'MISSING_KEY':'RESPONSE_SCHEMA',{...details,missing}),
+	apiError=()=>new HistoryError('API_ERROR')
+}={}) {
+	const status=body?.meta?.status;
+	if (!Number.isInteger(status) || status<200) throw schemaError('meta.status');
+	if (!acceptsStatus(status) || body.meta.errorCode) throw apiError(body.meta);
+	if (typeof body.data?.threadKey!=='string' || !body.data.threadKey.trim()) throw schemaError('data.threadKey');
+	return body.data;
+}
+function buildNvThreadReadRequest(server,{params,threadKey,additionals},{history=false}={}) {
+	const url=new URL('/v1/threads',server);
+	const headers={
+		'X-Frontend-Id':'6',
+		'X-Frontend-Version':'0',
+		'Content-Type':history ? 'text/plain;charset=UTF-8' : 'text/plain; charset=UTF-8'
+	};
+	if (history) {
+		url.searchParams.set('pc','1');
+		headers['X-Client-Os-Type']='others';
+	}
+	return {url,init:{method:'POST',headers,body:JSON.stringify({additionals,params,threadKey})}};
+}
+function readNvThreadEnvelope(body,{
+	acceptsMeta=meta=>meta.status===200 && !meta.errorCode,
+	schemaError=missing=>new HistoryError('RESPONSE_SCHEMA',{missing}),
+	apiError=()=>new HistoryError('API_ERROR')
+}={}) {
+	const status=body?.meta?.status;
+	if (!Number.isInteger(status) || status<200) throw schemaError('meta.status');
+	if (!acceptsMeta(body.meta)) throw apiError(body.meta);
+	if (!Array.isArray(body.data?.threads)) throw schemaError('data.threads');
+	return body.data;
+}
 function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
 	if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
 	if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
 	const selected=checkedTargets(context,targets), additionals={};
 	if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
 	if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
-	return {url:`${COMMENT_ORIGIN}/v1/threads?pc=1`,init:{method:'POST',
-		headers:{'Content-Type':'text/plain;charset=UTF-8','X-Frontend-Id':'6','X-Frontend-Version':'0','X-Client-Os-Type':'others'},
-		mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
-		body:JSON.stringify({params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals})}};
+	const {url,init}=buildNvThreadReadRequest(context.server,{
+		params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals
+	},{history:true});
+	return {url:url.href,init:{...init,mode:'cors',credentials:'omit',cache:'no-store',redirect:'error'}};
 }
 const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
 function copyComment(c) {
@@ -3396,11 +3505,11 @@ function normalizeComment(c) {
 	if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
 	const out=copyComment(c);out.id=String(c.id);return out;
 }
-function validateThreads(body, context, targets=context.targets) {
-	if(body?.meta?.status!==200 || body?.meta?.errorCode) fail('API_ERROR');
-	if(!Array.isArray(body?.data?.threads)) fail('RESPONSE_SCHEMA');
+function validateThreads(body, context, targets=context.targets, errors) {
+	const data=readNvThreadEnvelope(body,errors);
 	const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
-	const result=body.data.threads.map(th=>{
+	const result=data.threads.map(th=>{
+		if (!th || typeof th!=='object') fail('RESPONSE_SCHEMA');
 		const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
 		if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
 		if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);
@@ -3461,7 +3570,7 @@ function withThreadKey(context,key){
 	Object.defineProperty(next,'threadKey',{value:key,enumerable:false});
 	return Object.freeze(next);
 }
-return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
+return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildNvThreadKeyUrl,readNvThreadKeyEnvelope,buildNvThreadReadRequest,readNvThreadEnvelope,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
 })();
 modules[1] = (() => {
 const {HistoryError,integerOption,fail} = modules[0];
@@ -3679,7 +3788,7 @@ function createBrowserHistoryPreferences({window:win=globalThis.window,config,st
 return Object.freeze({HISTORY_PRESETS,APPLIED_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
 })();
 modules[4] = (() => {
-const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} = modules[0];
+const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,buildNvThreadKeyUrl,readNvThreadKeyEnvelope,COMMENT_ORIGIN} = modules[0];
 function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
 async function withDeadline(work,{signal,timeoutMs=10000,timeoutCode='TIMEOUT'}={}){
 	integerOption(timeoutMs,1,300000);if(!['TIMEOUT','TIME_LIMIT'].includes(timeoutCode))throw new HistoryError('OPTION');assertNotCancelled(signal);
@@ -3719,7 +3828,12 @@ function retryAfter(header){
 	if(/^\d+(?:\.\d+)?$/.test(header)){const ms=Number(header)*1000;return Number.isSafeInteger(Math.ceil(ms))?Math.ceil(ms):undefined;}
 	const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
 }
-async function requestJson(url,init,options={}){
+function readApiResponse(data,details){
+	if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:details.httpStatus});
+	if(data?.meta?.status!==200 || data.meta.errorCode)throw new HistoryError('API_ERROR',details);
+	return data;
+}
+async function requestJson(url,init,options={},readResponse=readApiResponse){
 	const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
 	integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
 	try{
@@ -3729,19 +3843,21 @@ async function requestJson(url,init,options={}){
 			let data;try{data=JSON.parse(text);}catch{}
 			const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
 			const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
+			if(options.includeApiStatus)details.apiStatus=data?.meta?.status;
 			if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
 			if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
 			if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
 			if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
-			if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
-			if(data.meta?.status!==200||raw)throw new HistoryError('API_ERROR',details);
-			return data;
+			if(data===undefined)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
+			return readResponse(data,details);
 		},{signal,timeoutMs});
 	}catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
 }
 async function requestThreads(context,options={}){
 	const {url,init}=buildThreadRequest(context,options);
-	return validateThreads(await requestJson(url,init,options),context,options.targets??context.targets);
+	return requestJson(url,init,options,(data,details)=>validateThreads(data,context,options.targets??context.targets,{
+		apiError:()=>new HistoryError('API_ERROR',details)
+	}));
 }
 const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
 function checkedVideoId(id){
@@ -3756,10 +3872,11 @@ async function requestWatchContext(videoId,options={}){
 async function requestThreadKey(context,options={}){
 	if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
 	const id=checkedVideoId(context.videoId);
-	const data=await requestJson(`https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${id}`,
+	const data=await requestJson(buildNvThreadKeyUrl(id),
 		{method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
-			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},options);
-	return withThreadKey(context,data?.data?.threadKey);
+			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},{...options,includeApiStatus:true},
+		(body,details)=>readNvThreadKeyEnvelope(body,{details,apiError:()=>new HistoryError('API_ERROR',details)}));
+	return withThreadKey(context,data.threadKey);
 }
 const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
 	'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',
@@ -3959,14 +4076,15 @@ const {LayeredCommentStore} = modules[6];
 const resumeIdentity=c=>JSON.stringify([c.videoId,c.language,c.server,c.targets.map(t=>[String(t.id),t.fork]).sort()]);
 const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limit','retry_limit','cancelled','network_error','timeout','rate_limited','key_refresh_limit','token_invalid','token_expired','api_error','http_error']);
 class HistorySession {
-	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;
+	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;#beginRead;#beginKey;
 	#controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
-	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey}={}){
+	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey,beginRead,beginKey}={}){
 		this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
 		this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
 		if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
 		this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
 		this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
+		this.#beginRead=beginRead;this.#beginKey=beginKey;
 		this.#store=new LayeredCommentStore(context);
 		this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
 			settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
@@ -3990,18 +4108,38 @@ class HistorySession {
 		}catch{throw new HistoryError('CONTEXT_CHANGED');}
 		return withThreadKey(previous,next.threadKey);
 	}
+	async #observeAttempt(begin,{signal},work){
+		const sessionSignal=this.#controller.signal;
+		const ticket=begin?.(this.#context.videoId,()=>!sessionSignal.aborted);
+		const onAbort=()=>ticket?.failure({code:sessionSignal.aborted?'CANCELLED':'TIMEOUT'});
+		if(ticket)signal.addEventListener('abort',onAbort,{once:true});
+		try{
+			const result=await work();
+			assertNotCancelled(signal);
+			ticket?.success();
+			return result;
+		}catch(error){
+			ticket?.failure(error);
+			throw error;
+		}finally{
+			if(ticket)signal.removeEventListener('abort',onAbort);
+		}
+	}
 	async #page(request,onRetry){
 		const signal=this.#controller.signal;
 		while(true){
 			assertNotCancelled(signal);
 			try{
-				return await this.#coordinator.execute(async ({signal,timeoutMs})=>{
-					const data=await this.#fetchPage(this.#context,{...request,signal,timeoutMs});assertNotCancelled(signal);
-					return validateThreads({meta:{status:200},data:{threads:data}},this.#context,request.targets);
-				},{signal,kind:'comment',onRetry});
+				return await this.#coordinator.execute(options=>this.#observeAttempt(this.#beginRead,options,async()=>{
+					const threads=await this.#fetchPage(this.#context,{...request,...options});
+					return validateThreads({meta:{status:200},data:{threads}},this.#context,request.targets);
+				}),{signal,kind:'comment',onRetry});
 			}catch(e){
 				if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
-				const next=await this.#coordinator.refresh(async options=>this.#verifyRefreshed(await this.#refreshKey(this.#context,options)),{signal,onRetry});
+				const next=await this.#coordinator.refresh(options=>this.#observeAttempt(this.#beginKey,options,async()=>{
+					const context=await this.#refreshKey(this.#context,options);
+					return this.#verifyRefreshed(context);
+				}),{signal,onRetry});
 				assertNotCancelled(signal);this.#context=next;
 			}
 		}
@@ -4348,6 +4486,7 @@ modules[10] = (() => {
 const {SETTINGS_SCHEMA} = modules[1];
 const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[3];
 const {CommentHistoryController} = modules[9];
+const {HistorySession} = modules[7];
 const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
 const CSS=`
 .commentHistorySwitch .controlButtonInner{display:inline-block;width:26px;height:26px;vertical-align:middle}
@@ -4508,10 +4647,11 @@ class CommentHistoryPanel {
 	toggle(){this.isOpen?this.close(true):this.open();}
 	dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
 }
-function createHistoryFeature({dialog,config,window:win=globalThis.window}){
+function createHistoryFeature({dialog,config,window:win=globalThis.window,beginRead,beginKey}){
 	const preferences=createBrowserHistoryPreferences({window:win,config});
 	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
 	const controller=new CommentHistoryController({preferences,acquire,displayLimit:()=>preferences.get().settings.maxAdditionalComments,
+		createSession:(context,options)=>new HistorySession(context,{...options,beginRead,beginKey}),
 		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
 		clearRender:options=>dialog._nicoVideoPlayer?.clearCommentHistory(options),
 		notify:text=>dialog.execCommand('notify',text)});
@@ -7686,7 +7826,7 @@ const NotificationJournalPolicy = (() => {
 		const levels = new Set(['info', 'success', 'warning', 'error']);
 		const categories = new Set(['general', 'comment', 'like', 'network', 'player', 'system']);
 		const safeKeys = new Set([
-				'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode',
+				'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode', 'apiStatus',
 				'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
 				'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs',
 				'module', 'missing', 'where', 'distinctTargets'
@@ -7725,6 +7865,12 @@ const NotificationJournalPolicy = (() => {
 				const fields = data;
 				for (const key of safeKeys) {
 						const value = fields[key];
+						if (key === 'apiStatus' || key === 'statusCode') {
+								if (typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599) {
+										result[key] = value;
+								}
+								continue;
+						}
 						if (typeof value === 'boolean') {
 								result[key] = value;
 						}
@@ -7797,7 +7943,7 @@ const NotificationJournalPolicy = (() => {
 						advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
 						'nicoad-end': 'nicoadEnd',
 						'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
-						'comment-read': 'comment', 'comment-key': 'comment',
+						'comment-read': 'comment', 'comment-history-read': 'comment', 'comment-key': 'comment',
 						'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
 						like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
 						tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
@@ -21290,6 +21436,1447 @@ const CommentReadAdapter = (() => {
 		};
 		return Object.freeze({ threadKey, threads });
 })();
+const ZenzaCommentHistoryCore = (() => {
+'use strict';
+const modules = [];
+modules[0] = (() => {
+const COMMENT_ORIGIN = 'https://public.nvcomment.nicovideo.jp';
+class HistoryError extends Error {
+	constructor(code, details={}) {
+		super(code); this.name='HistoryError'; this.code=code;
+		for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
+		if (Number.isInteger(details.apiStatus) && details.apiStatus>=100 && details.apiStatus<=599) this.apiStatus=details.apiStatus;
+		if (['meta.status','data.threads','data.threadKey'].includes(details.missing)) this.missing=details.missing;
+	}
+}
+function fail(code) { throw new HistoryError(code); }
+function integerOption(value,min,max) {
+	if (!Number.isSafeInteger(value) || value<min || value>max) fail('OPTION');
+	return value;
+}
+function threadId(value) {
+	if (typeof value==='number' && !Number.isSafeInteger(value)) fail('TARGET_SCHEMA');
+	if (!/^[0-9]+$/.test(String(value))) fail('TARGET_SCHEMA');
+	return String(value);
+}
+function targetKey(t) {return `${t.id}:${t.fork}`;}
+function normalizeWatch(input, expectedVideoId) {
+	if(input?.meta?.status!==undefined && input.meta.status!==200)fail('WATCH_SCHEMA');
+	if (typeof expectedVideoId!=='string' || !/^(?:(?:sm|so|nm))?\d+$/.test(expectedVideoId)) fail('OPTION');
+	const candidates=[input?.data?.response?.$watchV4?.data,input?.data?.response,
+		input?.response?.$watchV4?.data,input?.response,input?.$watchV4?.data,input?.data,input];
+	const w=candidates.find(x=>x?.video?.id && x?.comment?.nvComment);
+	if (!w) fail('WATCH_SCHEMA');
+	if (w.video.id!==expectedVideoId) fail('VIDEO_MISMATCH');
+	const nv=w.comment.nvComment;
+	if (nv.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof nv.threadKey!=='string' || !nv.threadKey) fail('MISSING_KEY');
+	const p=nv.params;
+	if (!p || !Array.isArray(p.targets) || !p.targets.length || typeof p.language!=='string' || !/^[a-z]{2}-[a-z]{2}$/i.test(p.language)) fail('WATCH_SCHEMA');
+	const targets=p.targets.map(t=>{
+		if (!['main','owner','easy'].includes(t.fork)) fail('TARGET_SCHEMA');
+		return Object.freeze({id:threadId(t.id),fork:t.fork});
+	});
+	if (new Set(targets.map(targetKey)).size!==targets.length) fail('TARGET_SCHEMA');
+	const ctx={videoId:expectedVideoId,server:COMMENT_ORIGIN,language:p.language,targets:Object.freeze(targets)};
+	Object.defineProperty(ctx,'threadKey',{value:nv.threadKey,enumerable:false});
+	return Object.freeze(ctx);
+}
+function checkedTargets(context, targets=context.targets) {
+	if (!Array.isArray(targets) || !targets.length) fail('OPTION');
+	const allowed=new Set(context.targets.map(targetKey));
+	const selected=targets.map(t=>({id:threadId(t.id),fork:t.fork}));
+	if (selected.some(t=>!allowed.has(targetKey(t)))) fail('TARGET_NOT_ALLOWED');
+	if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
+	return selected;
+}
+function buildNvThreadKeyUrl(videoId) {
+	const url=new URL('https://nvapi.nicovideo.jp/v1/comment/keys/thread');
+	url.searchParams.set('videoId',videoId);
+	return url.href;
+}
+function readNvThreadKeyEnvelope(body,{
+	acceptsStatus=status=>status===200, details={},
+	schemaError=missing=>new HistoryError(missing==='data.threadKey'?'MISSING_KEY':'RESPONSE_SCHEMA',{...details,missing}),
+	apiError=()=>new HistoryError('API_ERROR')
+}={}) {
+	const status=body?.meta?.status;
+	if (!Number.isInteger(status) || status<200) throw schemaError('meta.status');
+	if (!acceptsStatus(status) || body.meta.errorCode) throw apiError(body.meta);
+	if (typeof body.data?.threadKey!=='string' || !body.data.threadKey.trim()) throw schemaError('data.threadKey');
+	return body.data;
+}
+function buildNvThreadReadRequest(server,{params,threadKey,additionals},{history=false}={}) {
+	const url=new URL('/v1/threads',server);
+	const headers={
+		'X-Frontend-Id':'6',
+		'X-Frontend-Version':'0',
+		'Content-Type':history ? 'text/plain;charset=UTF-8' : 'text/plain; charset=UTF-8'
+	};
+	if (history) {
+		url.searchParams.set('pc','1');
+		headers['X-Client-Os-Type']='others';
+	}
+	return {url,init:{method:'POST',headers,body:JSON.stringify({additionals,params,threadKey})}};
+}
+function readNvThreadEnvelope(body,{
+	acceptsMeta=meta=>meta.status===200 && !meta.errorCode,
+	schemaError=missing=>new HistoryError('RESPONSE_SCHEMA',{missing}),
+	apiError=()=>new HistoryError('API_ERROR')
+}={}) {
+	const status=body?.meta?.status;
+	if (!Number.isInteger(status) || status<200) throw schemaError('meta.status');
+	if (!acceptsMeta(body.meta)) throw apiError(body.meta);
+	if (!Array.isArray(body.data?.threads)) throw schemaError('data.threads');
+	return body.data;
+}
+function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
+	if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
+	const selected=checkedTargets(context,targets), additionals={};
+	if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
+	if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
+	const {url,init}=buildNvThreadReadRequest(context.server,{
+		params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals
+	},{history:true});
+	return {url:url.href,init:{...init,mode:'cors',credentials:'omit',cache:'no-store',redirect:'error'}};
+}
+const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
+function copyComment(c) {
+	const out={};for(const k of FIELDS) if(Object.hasOwn(c,k))out[k]=k==='commands'?[...c.commands]:c[k];
+	return out;
+}
+function normalizeComment(c) {
+	const idOk=typeof c?.id==='string' && c.id.length>0 || Number.isSafeInteger(c?.id) && c.id>=0;
+	if(!c || !idOk || !Number.isSafeInteger(c.no) || c.no<0 || !Number.isFinite(c.vposMs) ||
+		typeof c.body!=='string' || typeof c.userId!=='string' || !Array.isArray(c.commands) || c.commands.some(x=>typeof x!=='string') ||
+		typeof c.postedAt!=='string' || !/^\d{4}-\d\d-\d\dT/.test(c.postedAt) || !Number.isFinite(Date.parse(c.postedAt)) || Date.parse(c.postedAt)<0) fail('COMMENT_SCHEMA');
+	for(const k of ['isPremium','isMyPost'])if(Object.hasOwn(c,k)&&typeof c[k]!=='boolean')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'score')&&!Number.isFinite(c.score))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruCount')&&(!Number.isSafeInteger(c.nicoruCount)||c.nicoruCount<0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'source')&&typeof c.source!=='string')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruId')&&c.nicoruId!==null&&typeof c.nicoruId!=='string'&&!(Number.isSafeInteger(c.nicoruId)&&c.nicoruId>=0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
+	const out=copyComment(c);out.id=String(c.id);return out;
+}
+function validateThreads(body, context, targets=context.targets, errors) {
+	const data=readNvThreadEnvelope(body,errors);
+	const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
+	const result=data.threads.map(th=>{
+		if (!th || typeof th!=='object') fail('RESPONSE_SCHEMA');
+		const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
+		if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
+		if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);
+		if(!Array.isArray(th.comments) || !Number.isSafeInteger(th.commentCount) || th.commentCount<0)fail('RESPONSE_SCHEMA');
+		return {id,fork,commentCount:th.commentCount,comments:th.comments.map(normalizeComment)};
+	});
+	if(seen.size!==expected.size)fail('MISSING_TARGET');
+	return result;
+}
+class CommentStore {
+	#context; #items=new Map(); #threads=new Map();
+	constructor(context){this.#context=context;}
+	get size(){return this.#items.size;}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	add(threads,allowance=Infinity) {
+		if(allowance!==Infinity)integerOption(allowance,0,50000);
+		if(threads.length)checkedTargets(this.#context,threads);
+		const ids=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const key=this.#key(t,c),existing=this.#items.get(key)?.comment.id??ids.get(key);
+			if(existing!==undefined && existing!==c.id)fail('IDENTITY_CONFLICT');
+			ids.set(key,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=targetKey(t);this.#threads.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const key=this.#key(t,c);
+				if(this.#items.has(key)){duplicates++;continue;}
+				if(added>=allowance){limited=true;continue;}
+				this.#items.set(key,{thread:tk,comment:copyComment(c)});added++;
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	snapshot(){
+		const out=new Map([...this.#threads].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const {thread,comment} of this.#items.values())out.get(thread).comments.push(copyComment(comment));
+		return [...out.values()];
+	}
+}
+function summarizeThreads(threads){
+	return threads.map(t=>{
+		let oldest=Infinity,newest=-Infinity,minNo=Infinity,maxNo=-Infinity,prevDate=-Infinity,prevNo=-Infinity,prevVpos=-Infinity;
+		let ascendingPostedAt=true,ascendingNo=true,ascendingVpos=true;
+		for(const c of t.comments){const sec=Date.parse(c.postedAt)/1000;oldest=Math.min(oldest,sec);newest=Math.max(newest,sec);
+			minNo=Math.min(minNo,c.no);maxNo=Math.max(maxNo,c.no);ascendingPostedAt&&=sec>=prevDate;ascendingNo&&=c.no>=prevNo;ascendingVpos&&=c.vposMs>=prevVpos;
+			prevDate=sec;prevNo=c.no;prevVpos=c.vposMs;}
+		return {id:t.id,fork:t.fork,commentCountField:t.commentCount,returnedCount:t.comments.length,
+			oldestUnixSeconds:oldest===Infinity?null:Math.floor(oldest),newestUnixSeconds:newest===-Infinity?null:Math.floor(newest),
+			minNo:minNo===Infinity?null:minNo,maxNo:maxNo===-Infinity?null:maxNo,ascendingPostedAt,ascendingNo,ascendingVpos};
+	});
+}
+function withThreadKey(context,key){
+	if(context.server!==COMMENT_ORIGIN)fail('SERVER_NOT_ALLOWED');
+	if(typeof key!=='string'||!key)fail('MISSING_KEY');
+	const next={videoId:context.videoId,server:context.server,language:context.language,targets:context.targets};
+	Object.defineProperty(next,'threadKey',{value:key,enumerable:false});
+	return Object.freeze(next);
+}
+return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildNvThreadKeyUrl,readNvThreadKeyEnvelope,buildNvThreadReadRequest,readNvThreadEnvelope,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
+})();
+modules[1] = (() => {
+const {HistoryError,integerOption,fail} = modules[0];
+const SETTINGS_SCHEMA=Object.freeze([
+	{name:'maxAdditionalComments',label:'追加コメント上限',type:'integer',default:5000,min:1,max:20000},
+	{name:'maxPages',label:'履歴ページ上限',type:'integer',default:100,min:1,max:100},
+	{name:'maxRequests',label:'総リクエスト上限（再試行・キー更新を含む）',type:'integer',default:150,min:1,max:200},
+	{name:'minIntervalMs',label:'通信の最小間隔（ミリ秒）',type:'integer',default:1500,min:1500,max:60000},
+	{name:'requestTimeoutMs',label:'通信タイムアウト（ミリ秒）',type:'integer',default:10000,min:1000,max:30000},
+	{name:'maxElapsedMs',label:'取得全体の時間上限（ミリ秒）',type:'integer',default:300000,min:1000,max:300000},
+	{name:'maxRetries',label:'一操作ごとの再試行上限',type:'integer',default:2,min:0,max:3},
+	{name:'maxKeyRefreshes',label:'キー更新の総上限',type:'integer',default:1,min:0,max:2},
+	{name:'includeEasy',label:'かんたんコメントも追加取得',type:'boolean',default:false},
+].map(d=>Object.freeze({...d,key:`commentHistory.${d.name}`})));
+const DEFAULT_SETTINGS=Object.freeze(Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.name,d.default])));
+function normalizeSettings(input={}){
+	if(!input || typeof input!=='object' || Array.isArray(input))fail('OPTION');
+	const names=new Set(SETTINGS_SCHEMA.map(d=>d.name));
+	if(Object.keys(input).some(k=>!names.has(k)))fail('OPTION');
+	const values={...DEFAULT_SETTINGS,...input};
+	for(const d of SETTINGS_SCHEMA){
+		if(d.type==='boolean'){if(typeof values[d.name]!=='boolean')fail('OPTION');}
+		else integerOption(values[d.name],d.min,d.max);
+	}
+	return values;
+}
+class SettingsStore {
+	#read;#write;
+	constructor({read,write}){
+		if(typeof read!=='function'||typeof write!=='function')fail('OPTION');
+		this.#read=read;this.#write=write;
+	}
+	get(){
+		const saved=this.#read();
+		if(saved===null||saved===undefined)return normalizeSettings();
+		if(saved.schema!=='nico-comment-history-settings'||saved.version!==1)throw new HistoryError('SETTINGS_VERSION');
+		if(!saved.values||typeof saved.values!=='object'||Array.isArray(saved.values))fail('OPTION');
+		return normalizeSettings(saved.values);
+	}
+	patch(changes){
+		if(!changes||typeof changes!=='object'||Array.isArray(changes))fail('OPTION');
+		const values=normalizeSettings({...this.get(),...changes});
+		this.#write({schema:'nico-comment-history-settings',version:1,values:{...values}});
+		return values;
+	}
+}
+return Object.freeze({SETTINGS_SCHEMA,DEFAULT_SETTINGS,normalizeSettings,SettingsStore});
+})();
+modules[2] = (() => {
+const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,buildNvThreadKeyUrl,readNvThreadKeyEnvelope,COMMENT_ORIGIN} = modules[0];
+function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
+async function withDeadline(work,{signal,timeoutMs=10000,timeoutCode='TIMEOUT'}={}){
+	integerOption(timeoutMs,1,300000);if(!['TIMEOUT','TIME_LIMIT'].includes(timeoutCode))throw new HistoryError('OPTION');assertNotCancelled(signal);
+	const controller=new AbortController();let timeout=false, rejectAbort;
+	const onParent=()=>controller.abort();const onAbort=()=>rejectAbort(new HistoryError(timeout?timeoutCode:'CANCELLED'));
+	const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+	controller.signal.addEventListener('abort',onAbort,{once:true});signal?.addEventListener('abort',onParent,{once:true});
+	const timer=setTimeout(()=>{timeout=true;controller.abort();},timeoutMs);
+	try{return await Promise.race([Promise.resolve().then(()=>{assertNotCancelled(controller.signal);return work(controller.signal);}),aborted]);}
+	finally{clearTimeout(timer);signal?.removeEventListener('abort',onParent);controller.signal.removeEventListener('abort',onAbort);}
+}
+function abortableDelay(ms,signal){
+	integerOption(ms,0,300000);
+	return new Promise((resolve,reject)=>{
+		if(signal?.aborted){reject(new HistoryError('CANCELLED'));return;}
+		const finish=()=>{signal?.removeEventListener('abort',cancel);resolve();};
+		const timer=setTimeout(finish,ms);
+		function cancel(){clearTimeout(timer);signal?.removeEventListener('abort',cancel);reject(new HistoryError('CANCELLED'));}
+		signal?.addEventListener('abort',cancel,{once:true});
+	});
+}
+async function readBoundedText(response,maxBytes,signal){
+	if(!response.body)return '';
+	const reader=response.body.getReader(),parts=[];let size=0,finished=false;
+	const onAbort=()=>{void reader.cancel().catch(()=>{});};
+	signal?.addEventListener('abort',onAbort,{once:true});
+	try{
+		while(true){assertNotCancelled(signal);const {done,value}=await reader.read();if(done){finished=true;break;}
+			size+=value.byteLength;if(size>maxBytes)throw new HistoryError('RESPONSE_TOO_LARGE');parts.push(value);}
+		const data=new Uint8Array(size);let offset=0;for(const part of parts){data.set(part,offset);offset+=part.byteLength;}
+		return new TextDecoder('utf-8',{fatal:true}).decode(data);
+	}finally{signal?.removeEventListener('abort',onAbort);if(!finished){try{await reader.cancel();}catch{}}reader.releaseLock();}
+}
+const API_CODES=new Set(['TOO_MANY_REQUESTS','EXPIRED_TOKEN','INVALID_TOKEN','INVALID_PARAMETER','NOT_FOUND','FORBIDDEN']);
+function retryAfter(header){
+	if(!header)return undefined;
+	if(/^\d+(?:\.\d+)?$/.test(header)){const ms=Number(header)*1000;return Number.isSafeInteger(Math.ceil(ms))?Math.ceil(ms):undefined;}
+	const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
+}
+function readApiResponse(data,details){
+	if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:details.httpStatus});
+	if(data?.meta?.status!==200 || data.meta.errorCode)throw new HistoryError('API_ERROR',details);
+	return data;
+}
+async function requestJson(url,init,options={},readResponse=readApiResponse){
+	const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
+	integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
+	try{
+		return await withDeadline(async innerSignal=>{
+			const response=await fetchImpl(url,{...init,signal:innerSignal});assertNotCancelled(innerSignal);
+			const text=await readBoundedText(response,maxBytes,innerSignal);assertNotCancelled(innerSignal);
+			let data;try{data=JSON.parse(text);}catch{}
+			const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
+			const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
+			if(options.includeApiStatus)details.apiStatus=data?.meta?.status;
+			if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
+			if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
+			if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
+			if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
+			if(data===undefined)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
+			return readResponse(data,details);
+		},{signal,timeoutMs});
+	}catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
+}
+async function requestThreads(context,options={}){
+	const {url,init}=buildThreadRequest(context,options);
+	return requestJson(url,init,options,(data,details)=>validateThreads(data,context,options.targets??context.targets,{
+		apiError:()=>new HistoryError('API_ERROR',details)
+	}));
+}
+const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
+function checkedVideoId(id){
+	if(typeof id!=='string'||!/^(?:(?:sm|so|nm))?\d+$/.test(id))throw new HistoryError('OPTION');return id;
+}
+async function requestWatchContext(videoId,options={}){
+	const id=checkedVideoId(videoId);
+	const data=await requestJson(`https://www.nicovideo.jp/watch/${id}?responseType=json`,
+		{method:'GET',credentials:'include',cache:'no-store',redirect:'error'},options);
+	return normalizeWatch(data,id);
+}
+async function requestThreadKey(context,options={}){
+	if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
+	const id=checkedVideoId(context.videoId);
+	const data=await requestJson(buildNvThreadKeyUrl(id),
+		{method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
+			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},{...options,includeApiStatus:true},
+		(body,details)=>readNvThreadKeyEnvelope(body,{details,apiError:()=>new HistoryError('API_ERROR',details)}));
+	return withThreadKey(context,data.threadKey);
+}
+const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
+	'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',
+	'API_ERROR','HTTP_ERROR','INVALID_JSON','RESPONSE_TOO_LARGE','NETWORK_ERROR','RESPONSE_SCHEMA','COMMENT_SCHEMA',
+	'TARGET_SCHEMA','TARGET_NOT_ALLOWED','MISSING_TARGET','IDENTITY_CONFLICT','WATCH_SCHEMA','VIDEO_MISMATCH','MISSING_KEY',
+	'SERVER_NOT_ALLOWED','CONTEXT_CHANGED','UNKNOWN_ERROR']);
+function safeError(error){
+	const out={code:SAFE_CODES.has(error?.code)?error.code:'UNKNOWN_ERROR'};
+	if(Number.isInteger(error?.httpStatus))out.httpStatus=error.httpStatus;
+	if(API_CODES.has(error?.apiCode)||error?.apiCode==='OTHER')out.apiCode=error.apiCode;
+	if(Number.isFinite(error?.retryAfterMs)&&error.retryAfterMs>=0)out.retryAfterMs=error.retryAfterMs;
+	if(SAFE_CODES.has(error?.causeCode))out.causeCode=error.causeCode;
+	return out;
+}
+return Object.freeze({assertNotCancelled,withDeadline,abortableDelay,requestThreads,requestWatchContext,requestThreadKey,safeError});
+})();
+modules[3] = (() => {
+const {HistoryError,fail} = modules[0];
+const {normalizeSettings} = modules[1];
+const {withDeadline,abortableDelay,assertNotCancelled,safeError} = modules[2];
+class RequestCoordinator {
+	#settings;#now;#sleep;#random;#start=null;#nextAllowed=0;#tail=Promise.resolve();
+	#attempts=0;#successful=0;#retries=0;#keyRefreshes=0;
+	#byKind={metadata:0,comment:0,key:0};
+	constructor({settings={},now=()=>performance.now(),sleep=abortableDelay,random=Math.random}={}){
+		this.#settings=normalizeSettings(settings);this.#now=now;this.#sleep=sleep;this.#random=random;
+		if([now,sleep,random].some(f=>typeof f!=='function'))fail('OPTION');
+	}
+	#remaining(){return this.#settings.maxElapsedMs-(this.#now()-this.#start);}
+	#check(signal){
+		assertNotCancelled(signal);
+		if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+		if(this.#attempts>=this.#settings.maxRequests)throw new HistoryError('REQUEST_LIMIT');
+	}
+	async #queued(work,signal){
+		assertNotCancelled(signal);
+		if(this.#start===null)this.#start=this.#now();
+		const previous=this.#tail;let release;
+		const done=new Promise(resolve=>{release=resolve;});
+		this.#tail=previous.catch(()=>{}).then(()=>done);
+		try{
+			this.#check(signal);
+			await withDeadline(()=>previous,{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);return await work();
+		}finally{release();}
+	}
+	#retryable(e){
+		return ['NETWORK_ERROR','TIMEOUT','RATE_LIMITED'].includes(e?.code)||
+			e?.code==='HTTP_ERROR'&&[500,502,503,504].includes(e.httpStatus);
+	}
+	async #perform(work,{signal,kind='comment',onRetry}={}){
+		if(!['metadata','comment','key'].includes(kind)||typeof work!=='function')fail('OPTION');
+		let retried=0;
+		while(true){
+			this.#check(signal);
+			const delay=Math.max(0,Math.ceil(this.#nextAllowed-this.#now()));
+			if(delay>=this.#remaining())throw new HistoryError('TIME_LIMIT');
+			if(delay)await withDeadline(s=>this.#sleep(delay,s),{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);
+			const remaining=this.#remaining(),timeoutMs=Math.min(this.#settings.requestTimeoutMs,Math.max(1,Math.ceil(remaining)));
+			this.#attempts++;this.#byKind[kind]++;this.#nextAllowed=this.#now()+this.#settings.minIntervalMs;
+			try{
+				const result=await withDeadline(s=>work({signal:s,timeoutMs}),{signal,timeoutMs,
+					timeoutCode:remaining<=this.#settings.requestTimeoutMs?'TIME_LIMIT':'TIMEOUT'});
+				assertNotCancelled(signal);
+				if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+				this.#successful++;return result;
+			}catch(e){
+				assertNotCancelled(signal);
+				if(!this.#retryable(e))throw e;
+				if(retried>=this.#settings.maxRetries)throw new HistoryError('RETRY_LIMIT',{...safeError(e),causeCode:safeError(e).code});
+				this.#check(signal);
+				const random=this.#random();const jitter=Number.isFinite(random)?Math.floor(Math.max(0,Math.min(1,random))*250):0;
+				const exponential=1000*2**retried+jitter;
+				const rateWait=e.code==='RATE_LIMITED'?(Number.isFinite(e.retryAfterMs)&&e.retryAfterMs>=0?e.retryAfterMs:60000):0;
+				const waitMs=Math.ceil(Math.max(this.#settings.minIntervalMs,exponential,rateWait));
+				if(waitMs>=this.#remaining())throw new HistoryError('TIME_LIMIT',{causeCode:safeError(e).code});
+				this.#nextAllowed=Math.max(this.#nextAllowed,this.#now()+waitMs);
+				retried++;this.#retries++;
+				try{onRetry?.({kind,retryNumber:retried,waitMs,error:safeError(e)});}catch{}
+			}
+		}
+	}
+	execute(work,options={}){return this.#queued(()=>this.#perform(work,options),options.signal);}
+	refresh(work,options={}){
+		return this.#queued(()=>{
+			if(this.#keyRefreshes>=this.#settings.maxKeyRefreshes)throw new HistoryError('KEY_REFRESH_LIMIT');
+			this.#keyRefreshes++;return this.#perform(work,{...options,kind:'key'});
+		},options.signal);
+	}
+	stats(){
+		return {attempts:this.#attempts,successfulRequests:this.#successful,retries:this.#retries,keyRefreshes:this.#keyRefreshes,
+			requestsByKind:{...this.#byKind},remainingRequests:Math.max(0,this.#settings.maxRequests-this.#attempts),
+			elapsedMs:this.#start===null?0:Math.max(0,Math.round(this.#now()-this.#start))};
+	}
+}
+return Object.freeze({RequestCoordinator});
+})();
+modules[4] = (() => {
+const {validateThreads,integerOption,fail} = modules[0];
+class LayeredCommentStore {
+	#context;
+	#items=new Map();
+	#normalMeta=new Map();
+	#historyMeta=new Map();
+	#normalCount=0;
+	#historyCount=0;
+	#overlapCount=0;
+	#additionalOrder=[];
+	constructor(context){this.#context=context;}
+	#threadKey(t){return JSON.stringify([t.id,t.fork]);}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	#add(input,kind,allowance){
+		integerOption(allowance,0,50000);
+		if(!Array.isArray(input))fail('RESPONSE_SCHEMA');
+		if(!input.length)return {added:0,duplicates:0,limited:false};
+		const threads=validateThreads({meta:{status:200},data:{threads:input}},this.#context,input.map(t=>({id:t.id,fork:t.fork})));
+		const pageIds=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const k=this.#key(t,c),old=this.#items.get(k);
+			const id=old?.normal?.id??old?.history?.id??pageIds.get(k);
+			if(id!==undefined && id!==c.id)fail('IDENTITY_CONFLICT');
+			pageIds.set(k,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=this.#threadKey(t);
+			const meta=kind==='normal'?this.#normalMeta:this.#historyMeta;
+			meta.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const k=this.#key(t,c),old=this.#items.get(k);
+				const gains=kind==='history'?!old?.normal&&!old?.history:!old?.normal;
+				if(gains && added>=allowance){limited=true;continue;}
+				const entry=old??{thread:tk,normal:null,history:null};
+				if(entry[kind])duplicates++;
+				else {
+					if(kind==='normal')this.#normalCount++;else this.#historyCount++;
+					if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
+				}
+				if(gains){added++;if(kind==='history')this.#additionalOrder.push(k);}
+				entry[kind]=c;
+				this.#items.set(k,entry);
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	addNormal(threads){return this.#add(threads,'normal',50000);}
+	addHistory(threads,allowance=50000){return this.#add(threads,'history',allowance);}
+	removeHistory(){
+		for(const [key,entry] of this.#items){
+			if(entry.normal)entry.history=null;else this.#items.delete(key);
+		}
+		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;this.#additionalOrder=[];
+	}
+	additionalOrder(){return this.#additionalOrder.filter(k=>{const e=this.#items.get(k);return !!(e?.history&&!e.normal);});}
+	restoreAdditionalOrder(keys){
+		if(!Array.isArray(keys))return;
+		const current=new Set(this.#additionalOrder),seen=new Set(),out=[];
+		for(const k of keys)if(typeof k==='string'&&current.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}
+		for(const k of this.#additionalOrder)if(!seen.has(k)){seen.add(k);out.push(k);}
+		this.#additionalOrder=out;
+	}
+	historySnapshot(){
+		const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const entry of this.#items.values())if(entry.history){
+			const c=entry.history;out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		return [...out.values()];
+	}
+	counts(){
+		return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
+			additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
+	}
+	snapshot({historyEnabled=true,historyOnly=false,historyLimit}={}){
+		const out=new Map();
+		if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
+		for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
+		let allowed=null;
+		if(historyLimit!==undefined){integerOption(historyLimit,0,50000);allowed=new Set(this.additionalOrder().slice(0,historyLimit));}
+		for(const [key,entry] of this.#items){
+			const history=entry.history&&(!allowed||entry.normal||allowed.has(key))?entry.history:null;
+			const c=historyOnly?(entry.normal?null:history):(entry.normal??(historyEnabled?history:null));
+			if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
+		return [...out.values()];
+	}
+}
+return Object.freeze({LayeredCommentStore});
+})();
+modules[5] = (() => {
+const {HistoryError,integerOption,checkedTargets,validateThreads,summarizeThreads,withThreadKey} = modules[0];
+const {requestThreads,requestThreadKey,assertNotCancelled,safeError} = modules[2];
+const {normalizeSettings} = modules[1];
+const {RequestCoordinator} = modules[3];
+const {LayeredCommentStore} = modules[4];
+const resumeIdentity=c=>JSON.stringify([c.videoId,c.language,c.server,c.targets.map(t=>[String(t.id),t.fork]).sort()]);
+const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limit','retry_limit','cancelled','network_error','timeout','rate_limited','key_refresh_limit','token_invalid','token_expired','api_error','http_error']);
+class HistorySession {
+	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;#beginRead;#beginKey;
+	#controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
+	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey,beginRead,beginKey}={}){
+		this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
+		this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
+		if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
+		this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
+		this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
+		this.#beginRead=beginRead;this.#beginKey=beginKey;
+		this.#store=new LayeredCommentStore(context);
+		this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
+			settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
+			historyCursorProgressed:false,completeCoverageVerified:false};
+	}
+	cancel(){this.#controller.abort();}
+	removeHistory(){this.cancel();this.#store.removeHistory();}
+	snapshot(options){return this.#store.snapshot(options);}
+	report(){return JSON.parse(JSON.stringify({...this.#report,counts:this.#store.counts(),network:this.#finishedNetwork??this.#coordinator.stats()}));}
+	resumeData(){
+		if(!this.#report.finishedAt)throw new HistoryError('OPTION');
+		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),order:this.#store.additionalOrder(),
+			cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
+	}
+	#verifyRefreshed(next){
+		const previous=this.#context;
+		const targetIdentity=c=>JSON.stringify(c.targets.map(t=>[String(t.id),t.fork]).sort());
+		try{
+			if(!next||next.videoId!==previous.videoId||next.server!==previous.server||next.language!==previous.language||
+				targetIdentity(next)!==targetIdentity(previous)||typeof next.threadKey!=='string'||!next.threadKey)throw new Error();
+		}catch{throw new HistoryError('CONTEXT_CHANGED');}
+		return withThreadKey(previous,next.threadKey);
+	}
+	async #observeAttempt(begin,{signal},work){
+		const sessionSignal=this.#controller.signal;
+		const ticket=begin?.(this.#context.videoId,()=>!sessionSignal.aborted);
+		const onAbort=()=>ticket?.failure({code:sessionSignal.aborted?'CANCELLED':'TIMEOUT'});
+		if(ticket)signal.addEventListener('abort',onAbort,{once:true});
+		try{
+			const result=await work();
+			assertNotCancelled(signal);
+			ticket?.success();
+			return result;
+		}catch(error){
+			ticket?.failure(error);
+			throw error;
+		}finally{
+			if(ticket)signal.removeEventListener('abort',onAbort);
+		}
+	}
+	async #page(request,onRetry){
+		const signal=this.#controller.signal;
+		while(true){
+			assertNotCancelled(signal);
+			try{
+				return await this.#coordinator.execute(options=>this.#observeAttempt(this.#beginRead,options,async()=>{
+					const threads=await this.#fetchPage(this.#context,{...request,...options});
+					return validateThreads({meta:{status:200},data:{threads}},this.#context,request.targets);
+				}),{signal,kind:'comment',onRetry});
+			}catch(e){
+				if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
+				const next=await this.#coordinator.refresh(options=>this.#observeAttempt(this.#beginKey,options,async()=>{
+					const context=await this.#refreshKey(this.#context,options);
+					return this.#verifyRefreshed(context);
+				}),{signal,onRetry});
+				assertNotCancelled(signal);this.#context=next;
+			}
+		}
+	}
+	async run({signal,startWhen=Math.floor(Date.now()/1000),onProgress}={}){
+		integerOption(startWhen,0,9999999999);
+		if(this.#started)throw new HistoryError('ALREADY_RUN');this.#started=true;
+		this.#report.startedAt=new Date().toISOString();this.#report.startWhen=startWhen;
+		const abort=()=>this.cancel();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)this.cancel();
+		const localSignal=this.#controller.signal;
+		const notify=extra=>{try{onProgress?.({event:'progress',...extra,pages:this.#report.pages,counts:this.#store.counts(),network:this.#coordinator.stats()});}catch{}};
+		const onRetry=event=>notify({event:'retry',...event});
+		try{
+			assertNotCancelled(localSignal);
+			const baseline=this.#baseline??await this.#page({targets:this.#context.targets},onRetry);
+			assertNotCancelled(localSignal);
+			const normal=this.#store.addNormal(baseline);if(normal.limited)throw new HistoryError('BASELINE_LIMIT');
+			if(this.#resume){
+				const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
+				if(restored.limited)throw new HistoryError('OPTION');
+				this.#store.restoreAdditionalOrder(this.#resume.order);
+			}
+			notify({event:'baseline'});
+			const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
+			if(!selected.length)this.#report.reason='no_history_target';
+			const targets=selected.length?checkedTargets(this.#context,selected):[];
+			this.#report.targetResults=targets.map(t=>{
+				if(!this.#resume)return {...t,pages:0,nextWhen:startWhen,reason:null};
+				const matches=this.#resume.cursors.filter(s=>s.id===t.id&&s.fork===t.fork);
+				if(matches.length!==1)throw new HistoryError('CONTEXT_CHANGED');
+				const previous=matches[0];integerOption(previous.nextWhen,0,9999999999);
+				return {...t,pages:0,nextWhen:previous.nextWhen,reason:RESUMABLE.has(previous.reason)?null:previous.reason};
+			});
+			const states=this.#report.targetResults;let stopped=false;
+			while(states.some(s=>s.reason===null)&&!stopped){
+				for(const state of states){
+					if(state.reason!==null)continue;
+					assertNotCancelled(localSignal);
+					if(this.#report.pages>=this.#settings.maxPages){this.#report.reason='page_limit';stopped=true;break;}
+					if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){this.#report.reason='comment_limit';stopped=true;break;}
+					const target={id:state.id,fork:state.fork};const cursor=state.nextWhen;
+					const threads=await this.#page({targets:[target],when:cursor,resFrom:-1000},onRetry);
+					assertNotCancelled(localSignal);
+					const summary=summarizeThreads(threads)[0];
+					state.lastPageCount=summary.returnedCount;state.oldestUnixSeconds=summary.oldestUnixSeconds;state.newestUnixSeconds=summary.newestUnixSeconds;
+					this.#report.pages++;state.pages++;
+					if(threads[0].comments.some(c=>Date.parse(c.postedAt)/1000>cursor)){
+						state.reason='cursor_not_respected';this.#report.reason=state.reason;stopped=true;break;
+					}
+					const newestFirst=threads.map(t=>({...t,comments:[...t.comments].sort((a,b)=>Date.parse(b.postedAt)-Date.parse(a.postedAt)||b.no-a.no)}));
+					const added=this.#store.addHistory(newestFirst,this.#settings.maxAdditionalComments-this.#store.counts().additionalCount);
+					this.#report.duplicates+=added.duplicates;
+					notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
+					assertNotCancelled(localSignal);
+					if(added.limited){
+						state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
+					}
+					const reachedGoal=this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments;
+					if(!summary.returnedCount){state.reason='empty_page';continue;}
+					const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
+					if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
+					if(summary.oldestUnixSeconds===summary.newestUnixSeconds&&summary.returnedCount>1){
+						state.reason='same_second_boundary_unverified';continue;
+					}
+					state.nextWhen=oldest;
+					if(oldest>=cursor){state.reason='cursor_stalled';continue;}
+					this.#report.historyCursorProgressed=true;
+					if(reachedGoal){state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;}
+				}
+			}
+			if(!stopped&&states.length){
+				const reasons=[...new Set(states.map(s=>s.reason))];
+				this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+				if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments)this.#report.reason='comment_limit';
+			}
+			for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
+		}catch(e){
+			this.#report.error=safeError(e);this.#report.reason=this.#report.error.code.toLowerCase();
+			for(const state of this.#report.targetResults)if(state.reason===null)state.reason=this.#report.reason;
+		}finally{
+			signal?.removeEventListener('abort',abort);this.#report.finishedAt=new Date().toISOString();
+			this.#finishedNetwork=this.#coordinator.stats();
+			this.#report.resumeAvailable=this.#report.targetResults.some(s=>RESUMABLE.has(s.reason));
+		}
+		return this.report();
+	}
+}
+return Object.freeze({HistorySession});
+})();
+modules[6] = (() => {
+const {HistoryError,normalizeWatch,validateThreads,integerOption} = modules[0];
+const ZENZA_FORKS = Object.freeze({main:0,owner:1,easy:2});
+function seedError(code) { throw new HistoryError(code); }
+function freezeSeedData(value) {
+	if (value && typeof value === 'object') {
+		for (const child of Object.values(value)) freezeSeedData(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+function copyThreadDescriptor(info) {
+	if (!info || !Object.hasOwn(ZENZA_FORKS, info.forkLabel) ||
+			info.fork !== ZENZA_FORKS[info.forkLabel] || typeof info.label !== 'string' ||
+			!Number.isSafeInteger(info.layer?.index) || info.layer.index < 0) seedError('THREAD_METADATA');
+	const out = {id:String(info.id),fork:info.fork,forkLabel:info.forkLabel,label:info.label,
+		layer:{index:info.layer.index}};
+	if (typeof info.layer.isTranslucent === 'boolean') out.layer.isTranslucent = info.layer.isTranslucent;
+	return out;
+}
+function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevision} = {}) {
+	if (typeof playbackGeneration !== 'string' || !playbackGeneration) seedError('OPTION');
+	integerOption(normalRevision,1,Number.MAX_SAFE_INTEGER);
+	if (normalResult?.format !== 'threads' || !normalResult.threadInfo || !normalResult.body) seedError('UNSUPPORTED_FORMAT');
+	const msg = videoInfo?.msgInfo, resultInfo = normalResult.threadInfo;
+	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
+	const videoId = videoInfo.videoId;
+	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
+	const rawWhen = resultInfo.when ?? 0;
+	const isWaybackMode = resultInfo.isWaybackMode === true;
+	let historyStartWhen = null;
+	if (isWaybackMode) {
+		const now = Math.floor(Date.now() / 1000);
+		if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
+		historyStartWhen = rawWhen;
+	} else if (rawWhen !== 0) {
+		seedError('UNSUPPORTED_WAYBACK');
+	}
+	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
+	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
+	const nv = msg.nvComment;
+	const context = normalizeWatch({video:{id:videoId},comment:{nvComment:{
+		server:nv?.server,threadKey:nv?.threadKey,params:{targets:nv?.params?.targets,language}
+	}}},videoId);
+	const watchId = String(videoInfo.contextWatchId ?? videoInfo.watchId ?? videoId);
+	if (!/^(?:(?:sm|so|nm))?\d+$/.test(watchId)) seedError('WATCH_ID');
+	if (!Number.isFinite(videoInfo.duration) || videoInfo.duration < 0) seedError('DURATION');
+	if (!Array.isArray(msg.threads)) seedError('THREAD_METADATA');
+	const descriptors = new Map();
+	for (const target of context.targets) {
+		const found = msg.threads.filter(t => String(t.id) === target.id && t.forkLabel === target.fork);
+		if (found.length !== 1) seedError('THREAD_METADATA');
+		descriptors.set(JSON.stringify([target.id,target.fork]),copyThreadDescriptor(found[0]));
+	}
+	const baseline = validateThreads({meta:{status:200},data:{threads:normalResult.body.threads}},context);
+	const mainThreadId = resultInfo.threadId ?? null;
+	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
+	return freezeSeedData({context,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
+		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
+	});
+}
+function toZenzaThreads(seed, threads) {
+	if (!seed?.context || !Array.isArray(seed.render?.threads)) seedError('OPTION');
+	const copied = validateThreads({meta:{status:200},data:{threads}},seed.context);
+	return {threads:copied.map(thread=>{
+		const info = seed.render.threads.find(t=>t.id===thread.id && t.forkLabel===thread.fork);
+		if (!info) seedError('THREAD_METADATA');
+		return {...thread,info:{...info,layer:{...info.layer}}};
+	})};
+}
+return Object.freeze({createZenzaSeed,toZenzaThreads});
+})();
+modules[7] = (() => {
+const {HistorySession} = modules[5];
+const {createZenzaSeed,toZenzaThreads} = modules[6];
+const {normalizeSettings} = modules[1];
+const MAX_ADDITIONAL=20000;
+const RESET={hidden:false,phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
+class CommentHistoryController {
+	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
+	#displayLimit;#cachedRequest=0;#displayRevision=0;#restoreTarget=0;#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+	#state={enabled:false,videoId:null,normalCount:0,...RESET};
+	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{},displayLimit=()=>MAX_ADDITIONAL}={}){
+		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
+		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+		if(typeof displayLimit!=='function')throw new TypeError('Invalid display limit');
+		this.#displayLimit=displayLimit;
+		this.#state.enabled=preferences.get().enabled===true;
+		this.#off=preferences.subscribe(snapshot=>{
+			if(this.#disposed)return;
+			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
+			if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
+			else {
+				const limit=this.#limit();
+				const reduced=this.#state.appliedTarget>limit;
+				if(reduced){this.#displayRevision++;this.#restoreTarget=Math.min(this.#restoreTarget,limit);this.#state.appliedTarget=limit;}
+				this.#emit({});
+				if(!before&&this.#seed)void this.start();
+				else if(reduced&&!this.#operation&&!this.#state.hidden&&this.#report)void this.setCachedCount(limit);
+			}
+		});
+	}
+	get state(){return JSON.parse(JSON.stringify(this.#state));}
+	#limit(){try{const n=Number(this.#displayLimit());return Number.isFinite(n)?Math.max(0,Math.min(MAX_ADDITIONAL,Math.floor(n))):0;}catch{return 0;}}
+	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
+	#emit(changes){
+		Object.assign(this.#state,changes);
+		if('additionalCount' in changes)this.#state.cachedAdditional=this.#state.additionalCount;
+		for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
+	}
+	#cancel(clear){
+		this.#epoch++;this.#cachedRequest++;this.#displayRevision++;this.#restoreTarget=0;this.#operation?.abort();this.#operation=null;
+		this.#session?.removeHistory();this.#session=null;this.#report=null;
+		if(clear){try{this.#clear();}catch{}}
+	}
+	invalidate(){
+		this.#cancel(true);this.#seed=null;
+		this.#emit({...RESET,videoId:null,normalCount:0});
+	}
+	async normalReady({videoInfo,result,generation}={}){
+		if(this.#disposed)return;
+		this.invalidate();
+		try{
+			this.#seed=createZenzaSeed({videoInfo,normalResult:result,playbackGeneration:generation,normalRevision:++this.#normalRevision});
+			const normalCount=this.#seed.baseline.reduce((n,t)=>n+t.comments.length,0);
+			this.#emit({videoId:this.#seed.identity.videoId,normalCount});
+		}catch(error){this.#emit({phase:'unavailable',reason:typeof error?.code==='string'?error.code:'CONTEXT_CHANGED'});return;}
+		if(this.#state.enabled)return this.start();
+	}
+	setEnabled(value){this.#preferences.setEnabled(!!value);}
+	stop(){
+		if(this.#state.phase==='queued'){this.#operation?.abort();}
+		else this.#session?.cancel();
+	}
+	setHidden(value){
+		const hidden=!!value;
+		if(this.#disposed||!this.#seed||!this.#state.enabled||hidden===this.#state.hidden)return Promise.resolve(this.state);
+		this.#displayRevision++;
+		this.#cachedRequest++;
+		if(hidden){
+			this.#restoreTarget=this.#state.appliedTarget;
+			this.#clear({retain:true});
+			this.#emit({hidden:true,appliedAdditional:0});
+			return Promise.resolve(this.state);
+		}
+		this.#emit({hidden:false});
+		if(this.#operation)return this.#promise;
+		return this.start({displayOnly:true,target:this.#restoreTarget});
+	}
+	whenIdle(){return this.#promise;}
+	more(){return this.start({more:true});}
+	restart(){return this.start({restart:true});}
+	loadSelectedCount(){
+		let target;try{target=normalizeSettings(this.#preferences.get().settings).maxAdditionalComments;}catch{return this.start();}
+		if(this.#state.phase==='render-error'||(this.#report&&(!this.#report.resumeAvailable||this.#state.cachedAdditional>=target)))return this.setCachedCount(target);
+		return this.start({target,more:!!this.#report?.resumeAvailable});
+	}
+	setCachedCount(value){
+		if(!Number.isInteger(value)||value<0||value>MAX_ADDITIONAL)throw new TypeError('Invalid cached count');
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
+		if(this.#operation){
+			const request=++this.#cachedRequest,seed=this.#seed;
+			return this.#promise=this.#promise.then(()=>request===this.#cachedRequest&&seed===this.#seed?this.setCachedCount(value):this.state);
+		}
+		if(!this.#report||!this.#session)return Promise.resolve(this.state);
+		return this.start({displayOnly:true,target:Math.min(value,this.#limit(),this.#report.counts.additionalCount)});
+	}
+	setAppliedCount(value){
+		const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
+		if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
+		if(this.#operation)return this.#promise;
+		if(!this.#session||!this.#report){
+			if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
+			return this.start({target:n});
+		}
+		const cached=this.#report.counts.additionalCount;
+		if(n>cached&&this.#report.resumeAvailable&&cached<MAX_ADDITIONAL)return this.start({more:true,target:n});
+		return this.start({displayOnly:true,target:n});
+	}
+	start({more=false,restart=false,target,displayOnly=false}={}){
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
+		if(this.#operation)return this.#promise;
+		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
+		if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
+		if(more&&target===undefined&&this.#state.additionalCount>=MAX_ADDITIONAL&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		const retryRender=this.#state.phase==='render-error'&&!restart&&target===undefined;
+		const applyOnly=displayOnly||retryRender;
+		const continuing=!!(more&&!restart&&this.#session&&this.#report);
+		const resume=continuing?this.#session.resumeData():undefined;
+		if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
+		const oldGoal=this.#state.goal;
+		const goal=applyOnly?oldGoal:
+			target!==undefined?Math.min(MAX_ADDITIONAL,target):
+			continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+		const appliedTarget=Math.min(this.#limit(),target!==undefined?target:retryRender?this.#state.appliedTarget:goal);
+		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
+		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
+		const seed=this.#seed;
+		this.#emit({phase:applyOnly?'applying':'queued',goal,appliedTarget,reason:applyOnly?this.#state.reason:null,canContinue:false});
+		this.#promise=(async()=>{
+			try{
+				if(!applyOnly){
+					await this.#acquire(async()=>{
+						if(!current())return;
+						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
+						const session=this.#session;
+						this.#emit({phase:'fetching',pages:0});
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
+								waitingMs:progress.event==='retry'?progress.waitMs:0});
+						}});
+						if(!current())return;
+						this.#report=report;
+					},operation.signal);
+				}
+				if(!current()||!this.#report||!this.#session)return;
+				const report=this.#report;
+				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
+				let applied;
+				let limit=0;
+				while(current()&&!this.#state.hidden){
+					limit=Math.min(this.#state.appliedTarget,this.#limit(),report.counts.additionalCount);
+					const revision=this.#displayRevision;
+					const displayCurrent=()=>current()&&!this.#state.hidden&&revision===this.#displayRevision;
+					try{
+						applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:displayCurrent,signal:operation.signal});
+						if(displayCurrent())break;
+					}catch{
+						if(displayCurrent()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');return;}
+					}
+				}
+				if(!current())return;
+				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:this.#state.hidden?0:applied?.additionalCount??limit,
+					canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
+				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify(this.#state.hidden?'コメント増量：一部取得で終了しました。取得済みのコメントは保持しています。':'コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+			}catch{
+				if(this.#epoch===epoch&&this.#state.enabled){
+					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
+					if(!operation.signal.aborted)this.#notify('コメント増量：取得を開始できませんでした。パネルから再試行できます。');
+				}
+			}finally{if(this.#epoch===epoch)this.#operation=null;}
+			return this.state;
+		})();
+		return this.#promise;
+	}
+	dispose(){if(this.#disposed)return;this.#disposed=true;this.invalidate();this.#off?.();this.#listeners.clear();}
+}
+return Object.freeze({CommentHistoryController});
+})();
+modules[8] = (() => {
+const identity=chat=>JSON.stringify([String(chat.threadId??chat.thread),Number(chat.fork),Number(chat.no)]);
+const abortError=()=>Object.assign(new Error('Comment display update superseded'),{name:'AbortError'});
+class CommentHistoryRenderer {
+	#player;#Chat;#VM;#yield;#revision=0;#history=new Set();#deleted=new Set();
+	#retained=new Map();
+	constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
+		this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
+	}
+	#groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
+	reset(){this.#revision++;this.#history.clear();this.#deleted.clear();this.#retained.clear();}
+	removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#retained.delete(identity(chat));this.#revision++;}
+	get retainedCount(){return this.#retained.size;}
+	has(chat){return !!chat&&this.#history.has(chat);}
+	clear({retain=false}={}){
+		this.#revision++;
+		if(retain){for(const chat of this.#history)this.#retained.set(identity(chat),chat);}
+		else this.#retained.clear();
+		if(!this.#history.size)return;
+		for(const group of this.#groups()){
+			if(!group)continue;
+			group._members=group._members.filter(chat=>!this.#history.has(chat));
+			group._filteredMembers=[];group._filteredMembersValid=false;
+			group.onChange(null);
+		}
+		this.#history.clear();this.#player._view?.refresh();this.#player._model.emit('change');
+	}
+	async apply(data,{isCurrent=()=>true,signal}={}){
+		const revision=++this.#revision,model=this.#player._model;
+		const valid=()=>revision===this.#revision&&!signal?.aborted&&isCurrent();
+		const check=()=>{if(!valid())throw abortError();};
+		check();await model.promise('GetReady!');check();
+		if(!data||!Array.isArray(data.threads))throw new TypeError('Invalid history display input');
+		const count=data.threads.reduce((n,t)=>n+(Array.isArray(t.comments)?t.comments.length:Infinity),0);
+		if(count>20000)throw new RangeError('History display limit is 20000');
+		const types=[this.#Chat.TYPE.TOP,this.#Chat.TYPE.NAKA,this.#Chat.TYPE.BOTTOM];
+		const oldByKey=new Map([...this.#retained.values(),...this.#history].map(c=>[identity(c),c]));
+		const options=model._options||{};
+		const added=[],newChats=[],seen=new Set();
+		for(const thread of data.threads){
+			if(!thread.info||![0,2].includes(thread.info.fork)&&thread.comments.length)throw new TypeError('Unsupported history fork');
+			for(const c of thread.comments){
+				const key=identity({thread:thread.id,fork:thread.info.fork,no:c.no});
+				if(seen.has(key)||this.#deleted.has(key))continue;
+				seen.add(key);
+				let chat=oldByKey.get(key);
+				if(!chat){
+					chat=this.#Chat.create(Object.assign({},c,{
+						text:c.body,date:new Date(c.postedAt).getTime()/1000,cmd:c.commands.join(' '),
+						premium:c.isPremium,user_id:c.userId,vpos:c.vposMs/10,fork:thread.info.fork,
+						isMine:c.isMyPost,thread:thread.id,nicoru:c.nicoruCount,
+						layerId:thread.info.layer.index,threadLabel:thread.info.label
+					}),{videoDuration:options.duration,creditDuration:options.creditDuration,mainThreadId:options.mainThreadId});
+					if(chat.isDeleted||chat.isNicoScript)continue;
+					if(chat.fork===2)chat.size=this.#Chat.SIZE.SMALL;
+					if(model._wordReplacer)chat.text=model._wordReplacer(chat.text);
+					newChats.push(chat);
+				}
+				added.push(chat);
+				if(added.length%100===0){await this.#yield();check();}
+			}
+		}
+		if(newChats.length&&!model.nicoScripter.isEmpty)model.nicoScripter.apply(newChats);
+		check();
+		const prepared=[];
+		try{
+			for(let attempt=0;attempt<3;attempt++){
+				prepared.splice(0).forEach(x=>x.members.forEach(m=>m.reset()));
+				const groups=this.#groups(),vms=types.map(t=>this.#player._viewModel.getGroup(t));
+				if(groups.some(g=>!g)||vms.some(g=>!g))throw new Error('Comment view is not ready');
+				const sources=groups.map(g=>({array:g._members,length:g._members.length}));
+				const versions=vms.map(v=>v._lastUpdate);
+				const normals=groups.flatMap(g=>g._members.filter(c=>!this.#history.has(c)));
+				const normalKeys=new Set(normals.map(identity));
+				const extras=added.filter(c=>!normalKeys.has(identity(c))&&!this.#deleted.has(identity(c)));
+				const all=normals.concat(extras);
+				for(let i=0;i<groups.length;i++){
+					check();
+					const chats=all.filter(c=>c.type===types[i]||(i===1&&!types.includes(c.type)));
+					const filtered=model._nicoChatFilter.applyFilter(chats),members=[];
+					const entry={chats,filtered,members,group:groups[i],vm:vms[i],sorted:[],maxDuration:0};prepared.push(entry);
+					for(const c of filtered){
+						members.push(this.#VM.create(c,vms[i]._offScreen));
+						if(members.length%100===0){await this.#yield();check();}
+					}
+					this.#VM.prepareCommentArt?.(members);
+					const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
+					if(sorted.length){
+						const sent=sorted.map(c=>c.bulkLayoutData);
+						const result=await this.#wait(vms[i]._layoutWorker.post({command:'layout',params:{type:types[i],members:sent,lastUpdate:revision}}),signal);
+						check();
+						if(result?.lastUpdate!==revision||!Array.isArray(result.members)||result.members.length!==sent.length||
+							!sent.every((m,j)=>result.members[j]?.id===m.id&&Number.isFinite(result.members[j].ypos)&&typeof result.members[j].isOverflow==='boolean'))throw new Error('Invalid history layout response');
+						sorted.forEach((m,j)=>{m.bulkLayoutData=result.members[j];});
+						for(const m of sorted){const d=m.endRightTiming-m.beginLeftTiming;if(Number.isFinite(d)&&d>entry.maxDuration)entry.maxDuration=d;}
+					}
+				}
+				check();
+				if(groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
+				this.#player._view?.clear?.();
+				for(const e of prepared){
+					for(const c of e.chats)c.group=e.group;
+					e.group._members=e.chats;e.group._filteredMembers=e.filtered;e.group._filteredMembersValid=true;
+					const old=e.vm._members;
+					e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
+					for(const m of old)m.reset();
+				}
+				const next=new Set(extras);
+				for(const c of this.#history)if(!next.has(c))this.#retained.set(identity(c),c);
+				for(const c of extras)this.#retained.delete(identity(c));
+				this.#history=next;
+				prepared.length=0;
+				this.#player._view?.refresh();model.emit('change');
+				return {additionalCount:extras.length};
+			}
+			throw new Error('Comment collection changed during display preparation');
+		}finally{prepared.forEach(e=>e.members.forEach(m=>m.reset()));}
+	}
+	#wait(promise,signal){
+		return new Promise((resolve,reject)=>{
+			const finish=(fn,value)=>{clearTimeout(timer);signal?.removeEventListener('abort',cancel);fn(value);};
+			const cancel=()=>finish(reject,abortError());
+			const timer=setTimeout(()=>finish(reject,new Error('Comment layout timed out')),20000);
+			signal?.addEventListener('abort',cancel,{once:true});
+			Promise.resolve(promise).then(v=>finish(resolve,v),e=>finish(reject,e));
+			if(signal?.aborted)cancel();
+		});
+	}
+}
+return Object.freeze({CommentHistoryRenderer});
+})();
+modules[9] = (() => {
+const {HistoryError} = modules[0];
+const {SETTINGS_SCHEMA,normalizeSettings} = modules[1];
+const ZENZA_SETTINGS_NAMES = new Set(SETTINGS_SCHEMA.map(d=>d.name));
+const ZENZA_SETTINGS_KEYS = new Set(SETTINGS_SCHEMA.map(d=>d.key));
+const ZENZA_SETTINGS_EVENT = 'comment-history-settings';
+function settingsError(code) { return new HistoryError(code); }
+function checkedSettingNames(names) {
+	if (!Array.isArray(names) || names.some(n=>!ZENZA_SETTINGS_NAMES.has(n)) || new Set(names).size!==names.length) throw settingsError('OPTION');
+	return names;
+}
+class ZenzaSettingsRepository {
+	#storage; #prefix; #bus; #off; #last; #disposed=false; #listeners=new Set();
+	constructor({storage,prefix='ZenzaWatch_',bus} = {}) {
+		if (!storage || ['getItem','setItem','removeItem'].some(k=>typeof storage[k]!=='function') ||
+				typeof prefix!=='string' || !prefix || bus && ['publish','subscribe'].some(k=>typeof bus[k]!=='function')) throw settingsError('OPTION');
+		this.#storage=storage;this.#prefix=prefix;this.#bus=bus;
+		this.#last=this.#read().values;
+		if (bus) this.#off=bus.subscribe(message=>{
+			if (this.#disposed || message?.type!==ZENZA_SETTINGS_EVENT || !Array.isArray(message.keys) ||
+					!message.keys.length || message.keys.some(k=>!ZENZA_SETTINGS_KEYS.has(k))) return;
+			try { this.refresh(); } catch { /* Caller sees validation failure on next explicit get/start. */ }
+		});
+	}
+	#assertActive() { if(this.#disposed)throw settingsError('DISPOSED'); }
+	#read() {
+		this.#assertActive();
+		const input={},raw=new Map();
+		for(const d of SETTINGS_SCHEMA) {
+			let value;
+			try {value=this.#storage.getItem(this.#prefix+d.key);} catch {throw settingsError('SETTINGS_READ');}
+			raw.set(d.name,value);
+			if(value!==null && value!==undefined) {
+				try {input[d.name]=JSON.parse(value);} catch {throw settingsError('SETTINGS_INVALID');}
+			}
+		}
+		let values;
+		try {values=Object.freeze(normalizeSettings(input));} catch {throw settingsError('SETTINGS_INVALID');}
+		return {values,raw};
+	}
+	#accept(values) {
+		const changed=SETTINGS_SCHEMA.some(d=>values[d.name]!==this.#last[d.name]);
+		this.#last=values;
+		if(changed)for(const callback of [...this.#listeners]) {
+			try {callback(values);} catch { /* A UI failure must not reinterpret successful persistence. */ }
+		}
+	}
+	get() {return this.#read().values;}
+	refresh() {const values=this.get();this.#accept(values);return values;}
+	patch(changes) {
+		this.#assertActive();
+		if(!changes || typeof changes!=='object' || Array.isArray(changes))throw settingsError('OPTION');
+		checkedSettingNames(Object.keys(changes));
+		const before=this.#read();
+		const next=Object.freeze(normalizeSettings({...before.values,...changes}));
+		const entries=SETTINGS_SCHEMA.filter(d=>Object.hasOwn(changes,d.name)&&before.values[d.name]!==next[d.name])
+			.map(d=>({name:d.name,key:this.#prefix+d.key,publicKey:d.key,value:JSON.stringify(next[d.name]),previous:before.raw.get(d.name)}));
+		if(!entries.length){this.#accept(next);return next;}
+		const attempted=[];
+		let committed;
+		try {
+			for(const entry of entries) {
+				if(this.#storage.getItem(entry.key)!==entry.previous)throw settingsError('SETTINGS_CONFLICT');
+				attempted.push(entry);
+				this.#storage.setItem(entry.key,entry.value);
+			}
+			for(const entry of entries)if(this.#storage.getItem(entry.key)!==entry.value)throw settingsError('SETTINGS_WRITE');
+			committed=this.#read().values;
+		} catch {
+			let rollbackComplete=true;
+			for(const entry of attempted.reverse()) {
+				try {
+					const current=this.#storage.getItem(entry.key);
+					if(current===entry.previous)continue;
+					if(current!==entry.value){rollbackComplete=false;continue;}
+					if(entry.previous===null || entry.previous===undefined)this.#storage.removeItem(entry.key);
+					else this.#storage.setItem(entry.key,entry.previous);
+					if(this.#storage.getItem(entry.key)!==(entry.previous??null))rollbackComplete=false;
+				} catch {rollbackComplete=false;}
+			}
+			const error=settingsError('SETTINGS_WRITE');error.rollbackComplete=rollbackComplete;throw error;
+		}
+		this.#accept(committed);
+		try {this.#bus?.publish({type:ZENZA_SETTINGS_EVENT,keys:entries.map(e=>e.publicKey)});} catch { /* Storage succeeded; next explicit refresh reconciles. */ }
+		return committed;
+	}
+	reset(names=SETTINGS_SCHEMA.map(d=>d.name)) {
+		checkedSettingNames(names);
+		return this.patch(Object.fromEntries(SETTINGS_SCHEMA.filter(d=>names.includes(d.name)).map(d=>[d.name,d.default])));
+	}
+	subscribe(callback) {
+		this.#assertActive();if(typeof callback!=='function')throw settingsError('OPTION');
+		this.#listeners.add(callback);return()=>this.#listeners.delete(callback);
+	}
+	dispose() {
+		if(this.#disposed)return;this.#disposed=true;this.#listeners.clear();
+		if(typeof this.#off==='function')this.#off();this.#off=null;
+	}
+}
+return Object.freeze({ZenzaSettingsRepository});
+})();
+modules[10] = (() => {
+const {SETTINGS_SCHEMA,DEFAULT_SETTINGS} = modules[1];
+const {ZenzaSettingsRepository} = modules[9];
+const {HistoryError} = modules[0];
+const HISTORY_PRESETS=Object.freeze([1000,2500,5000,7500,10000,15000,20000]);
+const APPLIED_PRESETS=Object.freeze([0,...HISTORY_PRESETS]);
+const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
+const EVENT='ZenzaWatch-comment-history-settings';
+function createBrowserHistoryPreferences({window:win=globalThis.window,config,storage=win.localStorage}={}){
+	const prefix='ZenzaWatch_',enabledKey=prefix+'commentHistory.enabled';
+	const listeners=new Set();let repository,disposed=false,lastSignature='',snapshot;
+	function checked(){if(disposed)throw new HistoryError('DISPOSED');}
+	function read(){
+		checked();
+		try{
+			if(!repository)repository=new ZenzaSettingsRepository({storage,prefix});
+			const settings=repository.get(),raw=storage.getItem(enabledKey);
+			const enabled=raw===null?false:JSON.parse(raw);
+			if(typeof enabled!=='boolean')throw new Error('type');
+			return Object.freeze({valid:true,enabled,settings});
+		}catch{return Object.freeze({valid:false,enabled:false,settings:Object.freeze({...DEFAULT_SETTINGS}),error:'SETTINGS_INVALID'});}
+	}
+	function refresh(){
+		snapshot=read();const signature=JSON.stringify(snapshot);
+		if(signature===lastSignature)return snapshot;
+		lastSignature=signature;
+		if(snapshot.valid&&config?._data){
+			const values={...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,snapshot.settings[d.name]])),'commentHistory.enabled':snapshot.enabled};
+			for(const [key,value] of Object.entries(values)){
+				if(config.default&&!Object.hasOwn(config.default,key))continue;
+				if(config._data[key]===value)continue;
+				config._data[key]=value;
+				const emit=typeof config.emitAsync==='function'?config.emitAsync:config.emit;
+				if(typeof emit==='function'){emit.call(config,'update',key,value);emit.call(config,'update-'+key,value);}
+			}
+		}
+		for(const fn of [...listeners]){try{fn(snapshot);}catch{}}
+		return snapshot;
+	}
+	function publish(keys){win.dispatchEvent(new win.CustomEvent(EVENT,{detail:{keys}}));}
+	const onStorage=e=>{if(!disposed&&(e.key===null||typeof e.key==='string'&&e.key.startsWith(prefix+'commentHistory.'))&&(!e.storageArea||e.storageArea===storage))refresh();};
+	const onLocal=e=>{if(!disposed&&Array.isArray(e.detail?.keys)&&e.detail.keys.every(k=>Object.hasOwn(HISTORY_PREFERENCE_DEFAULTS,k)))refresh();};
+	win.addEventListener('storage',onStorage);win.addEventListener(EVENT,onLocal);refresh();
+	return {
+		get(){checked();return refresh();},
+		patch(changes){
+			checked();if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			repository.patch(changes);refresh();publish(Object.keys(changes).map(k=>'commentHistory.'+k));return snapshot;
+		},
+		setEnabled(enabled){
+			checked();if(typeof enabled!=='boolean')throw new HistoryError('OPTION');
+			if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			if(snapshot.enabled===enabled)return snapshot;
+			const before=storage.getItem(enabledKey),serialized=JSON.stringify(enabled);
+			try{storage.setItem(enabledKey,serialized);if(storage.getItem(enabledKey)!==serialized)throw new Error();}
+			catch{
+				try{if(storage.getItem(enabledKey)===serialized){before===null?storage.removeItem(enabledKey):storage.setItem(enabledKey,before);}}catch{}
+				throw new HistoryError('SETTINGS_WRITE');
+			}
+			refresh();publish(['commentHistory.enabled']);return snapshot;
+		},
+		subscribe(fn){checked();listeners.add(fn);return()=>listeners.delete(fn);},
+		dispose(){if(disposed)return;disposed=true;win.removeEventListener('storage',onStorage);win.removeEventListener(EVENT,onLocal);repository?.dispose();repository=null;listeners.clear();}
+	};
+}
+return Object.freeze({HISTORY_PRESETS,APPLIED_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
+})();
+modules[11] = (() => {
+const {SETTINGS_SCHEMA} = modules[1];
+const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[10];
+const {CommentHistoryController} = modules[7];
+const {HistorySession} = modules[5];
+const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
+const CSS=`
+.commentHistorySwitch .controlButtonInner{display:inline-block;width:26px;height:26px;vertical-align:middle}
+.commentHistorySwitch svg{display:block;width:100%;height:100%;fill:currentColor}
+.commentHistorySwitch.is-active{color:var(--enabled-button-color,#9cf);opacity:1}
+.commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
+.commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
+@keyframes zenzaHistoryPulse{50%{opacity:.48}}
+.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:12px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
+.zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
+.zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
+@keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+@keyframes zenzaHistoryOut{from{opacity:1;transform:none}to{opacity:0;transform:translate(8px,12px) scale(.92)}}
+@media(prefers-reduced-motion:reduce){.zenzaCommentHistoryPanel.is-open,.zenzaCommentHistoryPanel.is-closing{animation-duration:.01s}.commentHistorySwitch.is-fetching svg{animation:none}}
+.zenzaCommentHistoryPanel button,.zenzaCommentHistoryPanel select,.ch-settings input{font:inherit;box-sizing:border-box}
+.zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
+.zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
+.zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
+.ch-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}.ch-header strong{font-size:16px;flex:1}
+.ch-visibility{display:flex;align-items:center;justify-content:space-between;gap:8px}.ch-visibility strong{font-size:13px}.zenzaCommentHistoryPanel [data-ch-visibility]{min-width:76px;min-height:32px;padding:5px 8px;font-weight:700;background:#79dfc9;color:#0c2b28;border-color:#79dfc9}
+.ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
+.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:6px 0}.ch-status{margin-top:6px}
+.zenzaCommentHistoryPanel [hidden]{display:none!important}.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:8px 0}
+.ch-slider{margin:10px 0 6px}.ch-slider-label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;color:#b4c2d0;font-size:12px}.ch-slider-label output{color:#e6eef5;font-variant-numeric:tabular-nums}.ch-slider input{display:block;width:100%;height:24px;margin:2px 0;accent-color:#72e4cc}.ch-slider input:disabled{opacity:.45}.ch-slider-ticks{display:flex;justify-content:space-between;color:#b4c2d0;font-size:11px}
+.ch-action-row{display:grid;grid-template-columns:112px minmax(0,1fr) 68px;gap:6px;align-items:center;margin-top:8px}.ch-action-row label{color:#b4c2d0;font-size:12px}
+.zenzaCommentHistoryPanel select{width:100%;min-width:0;height:32px;padding:4px 6px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
+.zenzaCommentHistoryPanel [data-ch-primary]{min-height:32px;padding:5px 6px;font-weight:700}
+.ch-bottom{margin-top:12px;padding-top:10px;border-top:1px solid #33475d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px}.ch-details{display:contents}.ch-details:not([open])>div{display:none}.ch-details summary{grid-column:1;grid-row:1;padding:5px 0;cursor:pointer;color:#cedde9}.ch-details>div{grid-column:1/-1}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin:8px 0;font-size:12px}.ch-bottom [data-ch-advanced]{grid-column:2;grid-row:1;background:none;font-size:12px;padding:5px 8px;min-height:32px}.zenzaCommentHistoryPanel .ch-setting-error:empty{display:none}
+@media(max-width:360px){.ch-action-row{grid-template-columns:100px minmax(0,1fr) 60px;gap:5px}}
+.ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
+.is-youTube .commentHistorySwitch{display:none}
+`;
+function style(doc){if(doc.querySelector('style[data-zenza-comment-history]'))return;const el=doc.createElement('style');el.dataset.zenzaCommentHistory='';el.textContent=CSS;doc.head.append(el);}
+const fmt=n=>Number(n||0).toLocaleString('ja-JP');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mountHistorySettings(container,{preferences}={}){
+	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
+	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
+		`<label><span>${esc(d.name==='maxAdditionalComments'?'読み込むコメント数':d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
+	).join('')+'<p class="ch-setting-error" role="status"></p>';
+	const error=container.querySelector('.ch-setting-error');
+	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
+	const change=e=>{const name=e.target.dataset.historySetting,d=SETTINGS_SCHEMA.find(x=>x.name===name);if(!d)return;e.stopPropagation();try{const v=d.type==='boolean'?e.target.checked:e.target.value.trim()===''?NaN:Number(e.target.value);preferences.patch({[name]:v});error.textContent='';e.target.removeAttribute('aria-invalid');}catch{error.textContent='設定を保存できませんでした。入力範囲と保存領域を確認してください。';e.target.setAttribute('aria-invalid','true');}};
+	container.addEventListener('change',change);const off=preferences.subscribe(refresh);refresh();
+	return {dispose(){off();container.removeEventListener('change',change);container.replaceChildren();}};
+}
+class CommentHistoryPanel {
+	constructor({controller,preferences,anchor,window:win=globalThis.window}){
+		this.controller=controller;this.preferences=preferences;this.anchor=anchor;this.win=win;this.doc=win.document;this.listeners=[];this.closeTimer=null;this.swallowCleanup=[];this.disposed=false;
+		style(this.doc);
+		this.onOutside=e=>this._outside(e);this.onEscape=e=>{if(this.isOpen&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.close(true);}};
+		this.onResize=()=>this._place();
+		this.off=controller.subscribe(state=>this.refresh(state));this.offPrefs=preferences.subscribe(()=>this.refresh(controller.state));
+	}
+	get isOpen(){return !!this.view?.classList.contains('is-open')&&!this.view.classList.contains('is-closing');}
+	_init(){
+		if(this.view)return;
+		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel zen-family';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> 自動で増量</label></header>
+<div class="ch-visibility"><strong data-ch-visibility-status role="status" aria-live="polite"></strong><button type="button" data-ch-visibility aria-pressed="false">非表示</button></div>
+<div class="ch-status" data-ch-status role="status" aria-live="polite" hidden></div><div class="ch-progress" hidden><progress value="0" max="5000" aria-label="読み込みの進捗"></progress></div>
+<div class="ch-slider"><div class="ch-slider-label"><label for="zenza-history-percentage" data-ch-apply-label>追加コメント数</label><output for="zenza-history-percentage" data-ch-apply-summary></output></div><input id="zenza-history-percentage" type="range" min="0" max="100" step="1" value="0" data-ch-applied-target aria-label="追加コメント数"><div class="ch-slider-ticks"><span>0%</span><span>100%</span></div></div>
+<div class="ch-action-row"><label for="zenza-history-quota">読み込むコメント数</label><select id="zenza-history-quota" data-ch-quota aria-label="読み込むコメント数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select><button type="button" data-ch-primary>読込</button></div>
+<div class="ch-bottom"><details class="ch-details"><summary>詳細・説明</summary><div><p class="ch-note">非表示は今の動画だけです。再表示では読み込み済みデータを使います。次の動画は「自動で増量」の設定に従います。</p><p class="ch-note">「自動で増量」をOFFにすると通常コメントだけに戻り、読み込み済みデータを破棄します。追加コメント数の100%は、選択した読み込み数と読み込み済み数の小さい方です。</p><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>読み込み済みの追加分（保持中）</span><span data-ch-cached></span><span>表示中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button><p class="ch-note" data-ch-pages></p></div></details><button type="button" data-ch-advanced>上級者設定</button></div><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
+		el.querySelector('[data-ch-visibility]').onclick=()=>safe(()=>{void this.controller.setHidden(!this.controller.state.hidden);});
+		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
+		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
+		const slider=el.querySelector('[data-ch-applied-target]');
+		slider.oninput=()=>{if(slider.disabled)return;this.sliderDraft={key:this._sliderKey(),percent:Number(slider.value)};this._slider(this.controller.state,this.preferences.get());};
+		slider.onchange=()=>safe(()=>{
+			if(slider.disabled)return;
+			const count=Math.round(this._sliderLimit(this.controller.state,this.preferences.get())*Number(slider.value)/100);
+			this.sliderDraft=null;
+			void this.controller.setCachedCount(count).catch(()=>{if(!this.disposed)this.refresh(this.controller.state);});
+		});
+		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
+		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else void this.controller.loadSelectedCount();};
+		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
+		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
+		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
+	}
+	_sliderLimit(state,p){return state.cacheAvailable?Math.max(0,Math.min(Number(p.settings.maxAdditionalComments)||0,Number(state.cachedAdditional)||0)):0;}
+	_sliderKey(){const s=this.controller.state,p=this.preferences.get();return JSON.stringify([s.videoId,s.phase,s.hidden,s.enabled,s.appliedTarget,this._sliderLimit(s,p)]);}
+	_slider(state,p){
+		const slider=this.view.querySelector('[data-ch-applied-target]'),limit=this._sliderLimit(state,p);
+		const key=this._sliderKey();if(this.sliderDraft?.key!==key)this.sliderDraft=null;
+		const count=Math.min(limit,Math.max(0,Number(state.appliedTarget)||0));
+		const percent=this.sliderDraft?.percent??(limit?Math.round(count/limit*100):0);
+		const preview=this.sliderDraft?Math.round(limit*percent/100):count;
+		slider.value=String(percent);slider.disabled=!!state.hidden||!state.enabled||['fetching','queued','applying'].includes(state.phase)||!limit||p.valid===false;
+		slider.setAttribute('aria-valuetext',`${fmt(preview)} 件、${percent}%`);
+		this.view.querySelector('[data-ch-apply-summary]').textContent=`${fmt(preview)} / ${fmt(limit)} 件（${percent}%）`;
+		this.view.querySelector('[data-ch-apply-label]').textContent=state.hidden?'追加コメント数（保持）':'追加コメント数';
+	}
+	refresh(state){
+		const a=this.anchor?.();
+		if(a){a.classList.toggle('is-active',state.enabled&&!state.hidden);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：自動で増量 有効':'：自動で増量 無効'));}
+		if(!this.view)return;
+		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
+		q('[data-ch-enabled]').checked=state.enabled;
+		const visibility=q('[data-ch-visibility]');
+		visibility.textContent=state.hidden?'再表示':'非表示';
+		visibility.setAttribute('aria-label',state.hidden?'増量分を再表示':'増量分を非表示');
+		visibility.setAttribute('aria-pressed',String(!!state.hidden));
+		visibility.disabled=!state.enabled||!state.videoId||p.valid===false||(!running&&!state.hidden&&!state.cachedAdditional);
+		q('.ch-visibility').classList.toggle('is-hidden',!!state.hidden);
+		q('[data-ch-visibility-status]').textContent=state.hidden?'増量分：非表示中':!state.enabled?'自動増量：OFF':state.appliedAdditional>0?'増量分：表示中':running?'増量分：準備中':state.cachedAdditional?'増量分：表示なし':'増量分なし';
+		const quota=q('[data-ch-quota]');
+		quota.querySelector('[data-ch-custom]')?.remove();
+		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
+			const option=this.doc.createElement('option');option.dataset.chCustom='';
+			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
+		}
+		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
+		q('.ch-progress').hidden=!running;
+		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
+		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'自動増量なし · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
+		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
+		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
+		if(state.hidden)q('[data-ch-status]').textContent=running?'増量分は非表示 · 取得済みデータを保持しています':'増量分は非表示 · 再表示できます';
+		q('[data-ch-status]').hidden=!running&&!['partial','unavailable','render-error'].includes(state.phase)&&p.valid!==false;
+		this._slider(state,p);
+		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-cached]').textContent=fmt(state.cachedAdditional);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
+		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機中止':state.phase==='fetching'?'読込中止':state.phase==='applying'?'反映中':state.phase==='render-error'?'再反映':'読込';
+		button.title='選択したコメント数まで読み込みます。読み込み済みの分は再取得しません。';
+		button.disabled=(state.hidden&&!['fetching','queued'].includes(state.phase))||state.phase==='applying'||state.phase==='unavailable'||(state.phase!=='render-error'&&!running&&state.cacheAvailable&&state.appliedTarget>=this._sliderLimit(state,p)&&(state.cachedAdditional>=p.settings.maxAdditionalComments||state.canContinue===false))||p.valid===false;q('[data-ch-restart]').disabled=state.hidden||running||!state.enabled;
+	}
+	_place(){
+		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
+		const a=this.anchor?.()?.getBoundingClientRect(),width=Math.min(360,this.win.innerWidth-32);
+		this.view.style.left=Math.max(16,Math.min(this.win.innerWidth-width-16,(a?.right||this.win.innerWidth-16)-width))+'px';
+		this.view.style.bottom=Math.max(16,Math.min(this.win.innerHeight-120,a?this.win.innerHeight-a.top+10:50))+'px';
+		this.view.style.maxHeight=Math.max(100,this.win.innerHeight-parseFloat(this.view.style.bottom)-16)+'px';
+	}
+	_listen(){
+		const attach=win=>{if(this.listeners.includes(win))return;try{win.addEventListener('pointerdown',this.onOutside,true);win.addEventListener('keydown',this.onEscape,true);this.listeners.push(win);}catch{}};
+		attach(this.win);for(const f of this.doc.querySelectorAll('iframe')){try{if(f.contentWindow?.document)attach(f.contentWindow);}catch{}}
+	}
+	_unlisten(){for(const w of this.listeners){try{w.removeEventListener('pointerdown',this.onOutside,true);w.removeEventListener('keydown',this.onEscape,true);}catch{}}this.listeners=[];this.observer?.disconnect();this.observer=null;this.win.removeEventListener('resize',this.onResize);this.doc.removeEventListener('fullscreenchange',this.onResize);}
+	_outside(e){
+		if(!this.isOpen)return;const path=e.composedPath?.()||[e.target],a=this.anchor?.();if(path.includes(this.view)||path.includes(a))return;
+		let video=path.some(x=>x?.matches?.('video,.videoPlayer,.commentLayerFrame'));
+		try{video=video||e.view?.frameElement?.matches('.commentLayerFrame,[name="commentLayerFrame"]');}catch{}
+		this.close(false);
+		if(video&&e.button===0){
+			const target=e.target,win=e.view||this.win;
+			const swallow=event=>{if(event.target===target||(event.composedPath?.()||[]).includes(target)){event.preventDefault();event.stopImmediatePropagation();}cleanup();};
+			const timer=this.win.setTimeout(()=>cleanup(),600);
+			const cleanup=()=>{win.removeEventListener('click',swallow,true);this.win.clearTimeout(timer);const i=this.swallowCleanup.indexOf(cleanup);if(i>=0)this.swallowCleanup.splice(i,1);};
+			win.addEventListener('click',swallow,true);this.swallowCleanup.push(cleanup);
+		}
+	}
+	open(){
+		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(records=>{if(!externalTrial || frameTopologyChanged(records))this._listen();});this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+	}
+	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
+	toggle(){this.isOpen?this.close(true):this.open();}
+	dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
+}
+function createHistoryFeature({dialog,config,window:win=globalThis.window,beginRead,beginKey}){
+	const preferences=createBrowserHistoryPreferences({window:win,config});
+	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
+	const controller=new CommentHistoryController({preferences,acquire,displayLimit:()=>preferences.get().settings.maxAdditionalComments,
+		createSession:(context,options)=>new HistorySession(context,{...options,beginRead,beginKey}),
+		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
+		clearRender:options=>dialog._nicoVideoPlayer?.clearCommentHistory(options),
+		notify:text=>dialog.execCommand('notify',text)});
+	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
+	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
+}
+return Object.freeze({HISTORY_ICON,mountHistorySettings,CommentHistoryPanel,createHistoryFeature});
+})();
+return Object.freeze({
+COMMENT_ORIGIN: modules[0].COMMENT_ORIGIN,
+HistoryError: modules[0].HistoryError,
+fail: modules[0].fail,
+integerOption: modules[0].integerOption,
+normalizeWatch: modules[0].normalizeWatch,
+checkedTargets: modules[0].checkedTargets,
+buildNvThreadKeyUrl: modules[0].buildNvThreadKeyUrl,
+readNvThreadKeyEnvelope: modules[0].readNvThreadKeyEnvelope,
+buildNvThreadReadRequest: modules[0].buildNvThreadReadRequest,
+readNvThreadEnvelope: modules[0].readNvThreadEnvelope,
+buildThreadRequest: modules[0].buildThreadRequest,
+validateThreads: modules[0].validateThreads,
+CommentStore: modules[0].CommentStore,
+summarizeThreads: modules[0].summarizeThreads,
+withThreadKey: modules[0].withThreadKey,
+RequestCoordinator: modules[3].RequestCoordinator,
+HistorySession: modules[5].HistorySession,
+createZenzaSeed: modules[6].createZenzaSeed,
+toZenzaThreads: modules[6].toZenzaThreads,
+CommentHistoryController: modules[7].CommentHistoryController,
+CommentHistoryRenderer: modules[8].CommentHistoryRenderer,
+HISTORY_ICON: modules[11].HISTORY_ICON,
+mountHistorySettings: modules[11].mountHistorySettings,
+CommentHistoryPanel: modules[11].CommentHistoryPanel,
+createHistoryFeature: modules[11].createHistoryFeature,
+HISTORY_PRESETS: modules[10].HISTORY_PRESETS,
+APPLIED_PRESETS: modules[10].APPLIED_PRESETS,
+HISTORY_PREFERENCE_DEFAULTS: modules[10].HISTORY_PREFERENCE_DEFAULTS,
+createBrowserHistoryPreferences: modules[10].createBrowserHistoryPreferences,
+});
+})();
 const { ThreadLoader } = (() => {
 		const FRONT_ID = '6';
 		const FRONT_VER = '0';
@@ -21592,8 +23179,11 @@ const { ThreadLoader } = (() => {
 				}
 				return undefined;
 		};
-		const readJson = (url, options) => withSignal(async () => {
+		const readJson = (url, options, statuses) => withSignal(async () => {
 				const response = await netUtil.fetch(url, options);
+				if (statuses) {
+						statuses.httpStatus = response.status;
+				}
 				checkAbort(options.signal);
 				const header = response.headers && response.headers.get('Retry-After');
 				let retryAfterMs;
@@ -21621,15 +23211,15 @@ const { ThreadLoader } = (() => {
 				}
 				checkAbort(options.signal);
 				const apiStatus = body?.meta?.status;
+				if (statuses && typeof apiStatus === 'number') {
+						statuses.apiStatus = apiStatus;
+				}
 				if (Number.isInteger(response?.status) && response.status >= 400 &&
 						(!Number.isInteger(apiStatus) || apiStatus < 300)) {
 						const failure = { status: response.status };
 						throw retryAfterMs === undefined ? failure : { ...failure, retryAfterMs };
 				}
-				if (!Number.isInteger(apiStatus) || apiStatus < 200) {
-						throw commentSchemaError('invalid-api-meta');
-				}
-				if (apiStatus >= 300) {
+				if (Number.isInteger(apiStatus) && apiStatus >= 300) {
 						const failure = body.meta;
 						throw retryAfterMs === undefined ? failure : { ...failure, retryAfterMs };
 				}
@@ -21642,28 +23232,33 @@ const { ThreadLoader } = (() => {
 				async getThreadKey(videoId, options = {}) {
 						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
 								RequestDiagnostics.begin('comment-key', videoId, 'response', () => !options.signal?.aborted);
-						let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
+						const url = ZenzaCommentHistoryCore.buildNvThreadKeyUrl(videoId);
+						const statuses = {};
 						console.log('getThreadKey request');
 						try {
-								const { meta, data } = await readJson(url, {
+								const body = await readJson(url, {
 										headers: {
 												'X-Frontend-Id': FRONT_ID,
 												'X-Frontend-Version': FRONT_VER,
 										},
 										signal: options.signal,
-										credentials: 'include'
-								});
-								if (meta.status >= 300) {
-										throw meta;
-								}
+										credentials: 'include',
+										diagnosticActive: () => false
+								}, statuses);
 								checkAbort(options.signal);
-								const validData = CommentReadAdapter.threadKey(data);
+								const validData = ZenzaCommentHistoryCore.readNvThreadKeyEnvelope(body, {
+										acceptsStatus: status => status < 300,
+										schemaError: missing => ({
+												...commentSchemaError(missing === 'meta.status' ? 'invalid-api-meta' : 'missing-thread-key'), missing
+										}),
+										apiError: meta => meta
+								});
 								this._threadKeys[videoId] = validData.threadKey;
 								diagnostic?.success();
 								return validData;
 						}
 						catch (result) {
-								diagnostic?.failure(result);
+								diagnostic?.failure({ result, ...statuses });
 								throw { result, message: `ThreadKeyの取得失敗 ${videoId}` };
 						}
 				}
@@ -21731,24 +23326,20 @@ const { ThreadLoader } = (() => {
 						if (msgInfo.when > 0) {
 								packet.additionals.when = msgInfo.when;
 						}
-						const url = new URL('/v1/threads', server);
+						const { url, init } = ZenzaCommentHistoryCore.buildNvThreadReadRequest(server, packet);
 						console.log('load threads request');
 						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
 								RequestDiagnostics.begin('comment-read', String(msgInfo.videoId), 'response', () => !options.signal?.aborted);
 						try {
-								const { meta, data } = await readJson(url, {
-										method: 'POST',
-										signal: options.signal,
-										headers: {
-												'X-Frontend-Id': FRONT_ID,
-												'X-Frontend-Version': FRONT_VER,
-												'Content-Type': 'text/plain; charset=UTF-8'
-										},
-										body: JSON.stringify(packet)
+								const body = await readJson(url, { ...init, signal: options.signal });
+								const data = ZenzaCommentHistoryCore.readNvThreadEnvelope(body, {
+										acceptsMeta: meta => meta.status < 300,
+										schemaError: missing => ({
+												...commentSchemaError(missing === 'meta.status' ? 'invalid-api-meta' : 'invalid-thread-envelope'),
+												missing
+										}),
+										apiError: meta => meta
 								});
-								if (meta.status >= 300) {
-										throw meta;
-								}
 								checkAbort(options.signal);
 								const validData = CommentReadAdapter.threads(data, msgInfo);
 								validData.__usedLanguage = packet.params.language;
@@ -30606,1370 +32197,7 @@ class Storyboard extends Emitter {
 		}
 }
 
-const ZenzaCommentHistoryCore = (() => {
-'use strict';
-const modules = [];
-modules[0] = (() => {
-const COMMENT_ORIGIN = 'https://public.nvcomment.nicovideo.jp';
-class HistoryError extends Error {
-	constructor(code, details={}) {
-		super(code); this.name='HistoryError'; this.code=code;
-		for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
-	}
-}
-function fail(code) { throw new HistoryError(code); }
-function integerOption(value,min,max) {
-	if (!Number.isSafeInteger(value) || value<min || value>max) fail('OPTION');
-	return value;
-}
-function threadId(value) {
-	if (typeof value==='number' && !Number.isSafeInteger(value)) fail('TARGET_SCHEMA');
-	if (!/^[0-9]+$/.test(String(value))) fail('TARGET_SCHEMA');
-	return String(value);
-}
-function targetKey(t) {return `${t.id}:${t.fork}`;}
-function normalizeWatch(input, expectedVideoId) {
-	if(input?.meta?.status!==undefined && input.meta.status!==200)fail('WATCH_SCHEMA');
-	if (typeof expectedVideoId!=='string' || !/^(?:(?:sm|so|nm))?\d+$/.test(expectedVideoId)) fail('OPTION');
-	const candidates=[input?.data?.response?.$watchV4?.data,input?.data?.response,
-		input?.response?.$watchV4?.data,input?.response,input?.$watchV4?.data,input?.data,input];
-	const w=candidates.find(x=>x?.video?.id && x?.comment?.nvComment);
-	if (!w) fail('WATCH_SCHEMA');
-	if (w.video.id!==expectedVideoId) fail('VIDEO_MISMATCH');
-	const nv=w.comment.nvComment;
-	if (nv.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
-	if (typeof nv.threadKey!=='string' || !nv.threadKey) fail('MISSING_KEY');
-	const p=nv.params;
-	if (!p || !Array.isArray(p.targets) || !p.targets.length || typeof p.language!=='string' || !/^[a-z]{2}-[a-z]{2}$/i.test(p.language)) fail('WATCH_SCHEMA');
-	const targets=p.targets.map(t=>{
-		if (!['main','owner','easy'].includes(t.fork)) fail('TARGET_SCHEMA');
-		return Object.freeze({id:threadId(t.id),fork:t.fork});
-	});
-	if (new Set(targets.map(targetKey)).size!==targets.length) fail('TARGET_SCHEMA');
-	const ctx={videoId:expectedVideoId,server:COMMENT_ORIGIN,language:p.language,targets:Object.freeze(targets)};
-	Object.defineProperty(ctx,'threadKey',{value:nv.threadKey,enumerable:false});
-	return Object.freeze(ctx);
-}
-function checkedTargets(context, targets=context.targets) {
-	if (!Array.isArray(targets) || !targets.length) fail('OPTION');
-	const allowed=new Set(context.targets.map(targetKey));
-	const selected=targets.map(t=>({id:threadId(t.id),fork:t.fork}));
-	if (selected.some(t=>!allowed.has(targetKey(t)))) fail('TARGET_NOT_ALLOWED');
-	if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
-	return selected;
-}
-function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
-	if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
-	if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
-	const selected=checkedTargets(context,targets), additionals={};
-	if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
-	if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
-	return {url:`${COMMENT_ORIGIN}/v1/threads?pc=1`,init:{method:'POST',
-		headers:{'Content-Type':'text/plain;charset=UTF-8','X-Frontend-Id':'6','X-Frontend-Version':'0','X-Client-Os-Type':'others'},
-		mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
-		body:JSON.stringify({params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals})}};
-}
-const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
-function copyComment(c) {
-	const out={};for(const k of FIELDS) if(Object.hasOwn(c,k))out[k]=k==='commands'?[...c.commands]:c[k];
-	return out;
-}
-function normalizeComment(c) {
-	const idOk=typeof c?.id==='string' && c.id.length>0 || Number.isSafeInteger(c?.id) && c.id>=0;
-	if(!c || !idOk || !Number.isSafeInteger(c.no) || c.no<0 || !Number.isFinite(c.vposMs) ||
-		typeof c.body!=='string' || typeof c.userId!=='string' || !Array.isArray(c.commands) || c.commands.some(x=>typeof x!=='string') ||
-		typeof c.postedAt!=='string' || !/^\d{4}-\d\d-\d\dT/.test(c.postedAt) || !Number.isFinite(Date.parse(c.postedAt)) || Date.parse(c.postedAt)<0) fail('COMMENT_SCHEMA');
-	for(const k of ['isPremium','isMyPost'])if(Object.hasOwn(c,k)&&typeof c[k]!=='boolean')fail('COMMENT_SCHEMA');
-	if(Object.hasOwn(c,'score')&&!Number.isFinite(c.score))fail('COMMENT_SCHEMA');
-	if(Object.hasOwn(c,'nicoruCount')&&(!Number.isSafeInteger(c.nicoruCount)||c.nicoruCount<0))fail('COMMENT_SCHEMA');
-	if(Object.hasOwn(c,'source')&&typeof c.source!=='string')fail('COMMENT_SCHEMA');
-	if(Object.hasOwn(c,'nicoruId')&&c.nicoruId!==null&&typeof c.nicoruId!=='string'&&!(Number.isSafeInteger(c.nicoruId)&&c.nicoruId>=0))fail('COMMENT_SCHEMA');
-	if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
-	const out=copyComment(c);out.id=String(c.id);return out;
-}
-function validateThreads(body, context, targets=context.targets) {
-	if(body?.meta?.status!==200 || body?.meta?.errorCode) fail('API_ERROR');
-	if(!Array.isArray(body?.data?.threads)) fail('RESPONSE_SCHEMA');
-	const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
-	const result=body.data.threads.map(th=>{
-		const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
-		if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
-		if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);
-		if(!Array.isArray(th.comments) || !Number.isSafeInteger(th.commentCount) || th.commentCount<0)fail('RESPONSE_SCHEMA');
-		return {id,fork,commentCount:th.commentCount,comments:th.comments.map(normalizeComment)};
-	});
-	if(seen.size!==expected.size)fail('MISSING_TARGET');
-	return result;
-}
-class CommentStore {
-	#context; #items=new Map(); #threads=new Map();
-	constructor(context){this.#context=context;}
-	get size(){return this.#items.size;}
-	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
-	add(threads,allowance=Infinity) {
-		if(allowance!==Infinity)integerOption(allowance,0,50000);
-		if(threads.length)checkedTargets(this.#context,threads);
-		const ids=new Map();
-		for(const t of threads)for(const c of t.comments){
-			const key=this.#key(t,c),existing=this.#items.get(key)?.comment.id??ids.get(key);
-			if(existing!==undefined && existing!==c.id)fail('IDENTITY_CONFLICT');
-			ids.set(key,c.id);
-		}
-		let added=0,duplicates=0,limited=false;
-		for(const t of threads){
-			const tk=targetKey(t);this.#threads.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
-			for(const c of t.comments){
-				const key=this.#key(t,c);
-				if(this.#items.has(key)){duplicates++;continue;}
-				if(added>=allowance){limited=true;continue;}
-				this.#items.set(key,{thread:tk,comment:copyComment(c)});added++;
-			}
-		}
-		return {added,duplicates,limited};
-	}
-	snapshot(){
-		const out=new Map([...this.#threads].map(([k,t])=>[k,{...t,comments:[]}]));
-		for(const {thread,comment} of this.#items.values())out.get(thread).comments.push(copyComment(comment));
-		return [...out.values()];
-	}
-}
-function summarizeThreads(threads){
-	return threads.map(t=>{
-		let oldest=Infinity,newest=-Infinity,minNo=Infinity,maxNo=-Infinity,prevDate=-Infinity,prevNo=-Infinity,prevVpos=-Infinity;
-		let ascendingPostedAt=true,ascendingNo=true,ascendingVpos=true;
-		for(const c of t.comments){const sec=Date.parse(c.postedAt)/1000;oldest=Math.min(oldest,sec);newest=Math.max(newest,sec);
-			minNo=Math.min(minNo,c.no);maxNo=Math.max(maxNo,c.no);ascendingPostedAt&&=sec>=prevDate;ascendingNo&&=c.no>=prevNo;ascendingVpos&&=c.vposMs>=prevVpos;
-			prevDate=sec;prevNo=c.no;prevVpos=c.vposMs;}
-		return {id:t.id,fork:t.fork,commentCountField:t.commentCount,returnedCount:t.comments.length,
-			oldestUnixSeconds:oldest===Infinity?null:Math.floor(oldest),newestUnixSeconds:newest===-Infinity?null:Math.floor(newest),
-			minNo:minNo===Infinity?null:minNo,maxNo:maxNo===-Infinity?null:maxNo,ascendingPostedAt,ascendingNo,ascendingVpos};
-	});
-}
-function withThreadKey(context,key){
-	if(context.server!==COMMENT_ORIGIN)fail('SERVER_NOT_ALLOWED');
-	if(typeof key!=='string'||!key)fail('MISSING_KEY');
-	const next={videoId:context.videoId,server:context.server,language:context.language,targets:context.targets};
-	Object.defineProperty(next,'threadKey',{value:key,enumerable:false});
-	return Object.freeze(next);
-}
-return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
-})();
-modules[1] = (() => {
-const {HistoryError,integerOption,fail} = modules[0];
-const SETTINGS_SCHEMA=Object.freeze([
-	{name:'maxAdditionalComments',label:'追加コメント上限',type:'integer',default:5000,min:1,max:20000},
-	{name:'maxPages',label:'履歴ページ上限',type:'integer',default:100,min:1,max:100},
-	{name:'maxRequests',label:'総リクエスト上限（再試行・キー更新を含む）',type:'integer',default:150,min:1,max:200},
-	{name:'minIntervalMs',label:'通信の最小間隔（ミリ秒）',type:'integer',default:1500,min:1500,max:60000},
-	{name:'requestTimeoutMs',label:'通信タイムアウト（ミリ秒）',type:'integer',default:10000,min:1000,max:30000},
-	{name:'maxElapsedMs',label:'取得全体の時間上限（ミリ秒）',type:'integer',default:300000,min:1000,max:300000},
-	{name:'maxRetries',label:'一操作ごとの再試行上限',type:'integer',default:2,min:0,max:3},
-	{name:'maxKeyRefreshes',label:'キー更新の総上限',type:'integer',default:1,min:0,max:2},
-	{name:'includeEasy',label:'かんたんコメントも追加取得',type:'boolean',default:false},
-].map(d=>Object.freeze({...d,key:`commentHistory.${d.name}`})));
-const DEFAULT_SETTINGS=Object.freeze(Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.name,d.default])));
-function normalizeSettings(input={}){
-	if(!input || typeof input!=='object' || Array.isArray(input))fail('OPTION');
-	const names=new Set(SETTINGS_SCHEMA.map(d=>d.name));
-	if(Object.keys(input).some(k=>!names.has(k)))fail('OPTION');
-	const values={...DEFAULT_SETTINGS,...input};
-	for(const d of SETTINGS_SCHEMA){
-		if(d.type==='boolean'){if(typeof values[d.name]!=='boolean')fail('OPTION');}
-		else integerOption(values[d.name],d.min,d.max);
-	}
-	return values;
-}
-class SettingsStore {
-	#read;#write;
-	constructor({read,write}){
-		if(typeof read!=='function'||typeof write!=='function')fail('OPTION');
-		this.#read=read;this.#write=write;
-	}
-	get(){
-		const saved=this.#read();
-		if(saved===null||saved===undefined)return normalizeSettings();
-		if(saved.schema!=='nico-comment-history-settings'||saved.version!==1)throw new HistoryError('SETTINGS_VERSION');
-		if(!saved.values||typeof saved.values!=='object'||Array.isArray(saved.values))fail('OPTION');
-		return normalizeSettings(saved.values);
-	}
-	patch(changes){
-		if(!changes||typeof changes!=='object'||Array.isArray(changes))fail('OPTION');
-		const values=normalizeSettings({...this.get(),...changes});
-		this.#write({schema:'nico-comment-history-settings',version:1,values:{...values}});
-		return values;
-	}
-}
-return Object.freeze({SETTINGS_SCHEMA,DEFAULT_SETTINGS,normalizeSettings,SettingsStore});
-})();
-modules[2] = (() => {
-const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} = modules[0];
-function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
-async function withDeadline(work,{signal,timeoutMs=10000,timeoutCode='TIMEOUT'}={}){
-	integerOption(timeoutMs,1,300000);if(!['TIMEOUT','TIME_LIMIT'].includes(timeoutCode))throw new HistoryError('OPTION');assertNotCancelled(signal);
-	const controller=new AbortController();let timeout=false, rejectAbort;
-	const onParent=()=>controller.abort();const onAbort=()=>rejectAbort(new HistoryError(timeout?timeoutCode:'CANCELLED'));
-	const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
-	controller.signal.addEventListener('abort',onAbort,{once:true});signal?.addEventListener('abort',onParent,{once:true});
-	const timer=setTimeout(()=>{timeout=true;controller.abort();},timeoutMs);
-	try{return await Promise.race([Promise.resolve().then(()=>{assertNotCancelled(controller.signal);return work(controller.signal);}),aborted]);}
-	finally{clearTimeout(timer);signal?.removeEventListener('abort',onParent);controller.signal.removeEventListener('abort',onAbort);}
-}
-function abortableDelay(ms,signal){
-	integerOption(ms,0,300000);
-	return new Promise((resolve,reject)=>{
-		if(signal?.aborted){reject(new HistoryError('CANCELLED'));return;}
-		const finish=()=>{signal?.removeEventListener('abort',cancel);resolve();};
-		const timer=setTimeout(finish,ms);
-		function cancel(){clearTimeout(timer);signal?.removeEventListener('abort',cancel);reject(new HistoryError('CANCELLED'));}
-		signal?.addEventListener('abort',cancel,{once:true});
-	});
-}
-async function readBoundedText(response,maxBytes,signal){
-	if(!response.body)return '';
-	const reader=response.body.getReader(),parts=[];let size=0,finished=false;
-	const onAbort=()=>{void reader.cancel().catch(()=>{});};
-	signal?.addEventListener('abort',onAbort,{once:true});
-	try{
-		while(true){assertNotCancelled(signal);const {done,value}=await reader.read();if(done){finished=true;break;}
-			size+=value.byteLength;if(size>maxBytes)throw new HistoryError('RESPONSE_TOO_LARGE');parts.push(value);}
-		const data=new Uint8Array(size);let offset=0;for(const part of parts){data.set(part,offset);offset+=part.byteLength;}
-		return new TextDecoder('utf-8',{fatal:true}).decode(data);
-	}finally{signal?.removeEventListener('abort',onAbort);if(!finished){try{await reader.cancel();}catch{}}reader.releaseLock();}
-}
-const API_CODES=new Set(['TOO_MANY_REQUESTS','EXPIRED_TOKEN','INVALID_TOKEN','INVALID_PARAMETER','NOT_FOUND','FORBIDDEN']);
-function retryAfter(header){
-	if(!header)return undefined;
-	if(/^\d+(?:\.\d+)?$/.test(header)){const ms=Number(header)*1000;return Number.isSafeInteger(Math.ceil(ms))?Math.ceil(ms):undefined;}
-	const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
-}
-async function requestJson(url,init,options={}){
-	const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
-	integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
-	try{
-		return await withDeadline(async innerSignal=>{
-			const response=await fetchImpl(url,{...init,signal:innerSignal});assertNotCancelled(innerSignal);
-			const text=await readBoundedText(response,maxBytes,innerSignal);assertNotCancelled(innerSignal);
-			let data;try{data=JSON.parse(text);}catch{}
-			const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
-			const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
-			if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
-			if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
-			if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
-			if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
-			if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
-			if(data.meta?.status!==200||raw)throw new HistoryError('API_ERROR',details);
-			return data;
-		},{signal,timeoutMs});
-	}catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
-}
-async function requestThreads(context,options={}){
-	const {url,init}=buildThreadRequest(context,options);
-	return validateThreads(await requestJson(url,init,options),context,options.targets??context.targets);
-}
-const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
-function checkedVideoId(id){
-	if(typeof id!=='string'||!/^(?:(?:sm|so|nm))?\d+$/.test(id))throw new HistoryError('OPTION');return id;
-}
-async function requestWatchContext(videoId,options={}){
-	const id=checkedVideoId(videoId);
-	const data=await requestJson(`https://www.nicovideo.jp/watch/${id}?responseType=json`,
-		{method:'GET',credentials:'include',cache:'no-store',redirect:'error'},options);
-	return normalizeWatch(data,id);
-}
-async function requestThreadKey(context,options={}){
-	if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
-	const id=checkedVideoId(context.videoId);
-	const data=await requestJson(`https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${id}`,
-		{method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
-			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},options);
-	return withThreadKey(context,data?.data?.threadKey);
-}
-const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
-	'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',
-	'API_ERROR','HTTP_ERROR','INVALID_JSON','RESPONSE_TOO_LARGE','NETWORK_ERROR','RESPONSE_SCHEMA','COMMENT_SCHEMA',
-	'TARGET_SCHEMA','TARGET_NOT_ALLOWED','MISSING_TARGET','IDENTITY_CONFLICT','WATCH_SCHEMA','VIDEO_MISMATCH','MISSING_KEY',
-	'SERVER_NOT_ALLOWED','CONTEXT_CHANGED','UNKNOWN_ERROR']);
-function safeError(error){
-	const out={code:SAFE_CODES.has(error?.code)?error.code:'UNKNOWN_ERROR'};
-	if(Number.isInteger(error?.httpStatus))out.httpStatus=error.httpStatus;
-	if(API_CODES.has(error?.apiCode)||error?.apiCode==='OTHER')out.apiCode=error.apiCode;
-	if(Number.isFinite(error?.retryAfterMs)&&error.retryAfterMs>=0)out.retryAfterMs=error.retryAfterMs;
-	if(SAFE_CODES.has(error?.causeCode))out.causeCode=error.causeCode;
-	return out;
-}
-return Object.freeze({assertNotCancelled,withDeadline,abortableDelay,requestThreads,requestWatchContext,requestThreadKey,safeError});
-})();
-modules[3] = (() => {
-const {HistoryError,fail} = modules[0];
-const {normalizeSettings} = modules[1];
-const {withDeadline,abortableDelay,assertNotCancelled,safeError} = modules[2];
-class RequestCoordinator {
-	#settings;#now;#sleep;#random;#start=null;#nextAllowed=0;#tail=Promise.resolve();
-	#attempts=0;#successful=0;#retries=0;#keyRefreshes=0;
-	#byKind={metadata:0,comment:0,key:0};
-	constructor({settings={},now=()=>performance.now(),sleep=abortableDelay,random=Math.random}={}){
-		this.#settings=normalizeSettings(settings);this.#now=now;this.#sleep=sleep;this.#random=random;
-		if([now,sleep,random].some(f=>typeof f!=='function'))fail('OPTION');
-	}
-	#remaining(){return this.#settings.maxElapsedMs-(this.#now()-this.#start);}
-	#check(signal){
-		assertNotCancelled(signal);
-		if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
-		if(this.#attempts>=this.#settings.maxRequests)throw new HistoryError('REQUEST_LIMIT');
-	}
-	async #queued(work,signal){
-		assertNotCancelled(signal);
-		if(this.#start===null)this.#start=this.#now();
-		const previous=this.#tail;let release;
-		const done=new Promise(resolve=>{release=resolve;});
-		this.#tail=previous.catch(()=>{}).then(()=>done);
-		try{
-			this.#check(signal);
-			await withDeadline(()=>previous,{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
-			this.#check(signal);return await work();
-		}finally{release();}
-	}
-	#retryable(e){
-		return ['NETWORK_ERROR','TIMEOUT','RATE_LIMITED'].includes(e?.code)||
-			e?.code==='HTTP_ERROR'&&[500,502,503,504].includes(e.httpStatus);
-	}
-	async #perform(work,{signal,kind='comment',onRetry}={}){
-		if(!['metadata','comment','key'].includes(kind)||typeof work!=='function')fail('OPTION');
-		let retried=0;
-		while(true){
-			this.#check(signal);
-			const delay=Math.max(0,Math.ceil(this.#nextAllowed-this.#now()));
-			if(delay>=this.#remaining())throw new HistoryError('TIME_LIMIT');
-			if(delay)await withDeadline(s=>this.#sleep(delay,s),{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
-			this.#check(signal);
-			const remaining=this.#remaining(),timeoutMs=Math.min(this.#settings.requestTimeoutMs,Math.max(1,Math.ceil(remaining)));
-			this.#attempts++;this.#byKind[kind]++;this.#nextAllowed=this.#now()+this.#settings.minIntervalMs;
-			try{
-				const result=await withDeadline(s=>work({signal:s,timeoutMs}),{signal,timeoutMs,
-					timeoutCode:remaining<=this.#settings.requestTimeoutMs?'TIME_LIMIT':'TIMEOUT'});
-				assertNotCancelled(signal);
-				if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
-				this.#successful++;return result;
-			}catch(e){
-				assertNotCancelled(signal);
-				if(!this.#retryable(e))throw e;
-				if(retried>=this.#settings.maxRetries)throw new HistoryError('RETRY_LIMIT',{...safeError(e),causeCode:safeError(e).code});
-				this.#check(signal);
-				const random=this.#random();const jitter=Number.isFinite(random)?Math.floor(Math.max(0,Math.min(1,random))*250):0;
-				const exponential=1000*2**retried+jitter;
-				const rateWait=e.code==='RATE_LIMITED'?(Number.isFinite(e.retryAfterMs)&&e.retryAfterMs>=0?e.retryAfterMs:60000):0;
-				const waitMs=Math.ceil(Math.max(this.#settings.minIntervalMs,exponential,rateWait));
-				if(waitMs>=this.#remaining())throw new HistoryError('TIME_LIMIT',{causeCode:safeError(e).code});
-				this.#nextAllowed=Math.max(this.#nextAllowed,this.#now()+waitMs);
-				retried++;this.#retries++;
-				try{onRetry?.({kind,retryNumber:retried,waitMs,error:safeError(e)});}catch{}
-			}
-		}
-	}
-	execute(work,options={}){return this.#queued(()=>this.#perform(work,options),options.signal);}
-	refresh(work,options={}){
-		return this.#queued(()=>{
-			if(this.#keyRefreshes>=this.#settings.maxKeyRefreshes)throw new HistoryError('KEY_REFRESH_LIMIT');
-			this.#keyRefreshes++;return this.#perform(work,{...options,kind:'key'});
-		},options.signal);
-	}
-	stats(){
-		return {attempts:this.#attempts,successfulRequests:this.#successful,retries:this.#retries,keyRefreshes:this.#keyRefreshes,
-			requestsByKind:{...this.#byKind},remainingRequests:Math.max(0,this.#settings.maxRequests-this.#attempts),
-			elapsedMs:this.#start===null?0:Math.max(0,Math.round(this.#now()-this.#start))};
-	}
-}
-return Object.freeze({RequestCoordinator});
-})();
-modules[4] = (() => {
-const {validateThreads,integerOption,fail} = modules[0];
-class LayeredCommentStore {
-	#context;
-	#items=new Map();
-	#normalMeta=new Map();
-	#historyMeta=new Map();
-	#normalCount=0;
-	#historyCount=0;
-	#overlapCount=0;
-	#additionalOrder=[];
-	constructor(context){this.#context=context;}
-	#threadKey(t){return JSON.stringify([t.id,t.fork]);}
-	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
-	#add(input,kind,allowance){
-		integerOption(allowance,0,50000);
-		if(!Array.isArray(input))fail('RESPONSE_SCHEMA');
-		if(!input.length)return {added:0,duplicates:0,limited:false};
-		const threads=validateThreads({meta:{status:200},data:{threads:input}},this.#context,input.map(t=>({id:t.id,fork:t.fork})));
-		const pageIds=new Map();
-		for(const t of threads)for(const c of t.comments){
-			const k=this.#key(t,c),old=this.#items.get(k);
-			const id=old?.normal?.id??old?.history?.id??pageIds.get(k);
-			if(id!==undefined && id!==c.id)fail('IDENTITY_CONFLICT');
-			pageIds.set(k,c.id);
-		}
-		let added=0,duplicates=0,limited=false;
-		for(const t of threads){
-			const tk=this.#threadKey(t);
-			const meta=kind==='normal'?this.#normalMeta:this.#historyMeta;
-			meta.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
-			for(const c of t.comments){
-				const k=this.#key(t,c),old=this.#items.get(k);
-				const gains=kind==='history'?!old?.normal&&!old?.history:!old?.normal;
-				if(gains && added>=allowance){limited=true;continue;}
-				const entry=old??{thread:tk,normal:null,history:null};
-				if(entry[kind])duplicates++;
-				else {
-					if(kind==='normal')this.#normalCount++;else this.#historyCount++;
-					if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
-				}
-				if(gains){added++;if(kind==='history')this.#additionalOrder.push(k);}
-				entry[kind]=c;
-				this.#items.set(k,entry);
-			}
-		}
-		return {added,duplicates,limited};
-	}
-	addNormal(threads){return this.#add(threads,'normal',50000);}
-	addHistory(threads,allowance=50000){return this.#add(threads,'history',allowance);}
-	removeHistory(){
-		for(const [key,entry] of this.#items){
-			if(entry.normal)entry.history=null;else this.#items.delete(key);
-		}
-		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;this.#additionalOrder=[];
-	}
-	additionalOrder(){return this.#additionalOrder.filter(k=>{const e=this.#items.get(k);return !!(e?.history&&!e.normal);});}
-	restoreAdditionalOrder(keys){
-		if(!Array.isArray(keys))return;
-		const current=new Set(this.#additionalOrder),seen=new Set(),out=[];
-		for(const k of keys)if(typeof k==='string'&&current.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}
-		for(const k of this.#additionalOrder)if(!seen.has(k)){seen.add(k);out.push(k);}
-		this.#additionalOrder=out;
-	}
-	historySnapshot(){
-		const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
-		for(const entry of this.#items.values())if(entry.history){
-			const c=entry.history;out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
-		}
-		return [...out.values()];
-	}
-	counts(){
-		return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
-			additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
-	}
-	snapshot({historyEnabled=true,historyOnly=false,historyLimit}={}){
-		const out=new Map();
-		if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
-		for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
-		let allowed=null;
-		if(historyLimit!==undefined){integerOption(historyLimit,0,50000);allowed=new Set(this.additionalOrder().slice(0,historyLimit));}
-		for(const [key,entry] of this.#items){
-			const history=entry.history&&(!allowed||entry.normal||allowed.has(key))?entry.history:null;
-			const c=historyOnly?(entry.normal?null:history):(entry.normal??(historyEnabled?history:null));
-			if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
-		}
-		for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
-		return [...out.values()];
-	}
-}
-return Object.freeze({LayeredCommentStore});
-})();
-modules[5] = (() => {
-const {HistoryError,integerOption,checkedTargets,validateThreads,summarizeThreads,withThreadKey} = modules[0];
-const {requestThreads,requestThreadKey,assertNotCancelled,safeError} = modules[2];
-const {normalizeSettings} = modules[1];
-const {RequestCoordinator} = modules[3];
-const {LayeredCommentStore} = modules[4];
-const resumeIdentity=c=>JSON.stringify([c.videoId,c.language,c.server,c.targets.map(t=>[String(t.id),t.fork]).sort()]);
-const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limit','retry_limit','cancelled','network_error','timeout','rate_limited','key_refresh_limit','token_invalid','token_expired','api_error','http_error']);
-class HistorySession {
-	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;
-	#controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
-	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey}={}){
-		this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
-		this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
-		if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
-		this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
-		this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
-		this.#store=new LayeredCommentStore(context);
-		this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
-			settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
-			historyCursorProgressed:false,completeCoverageVerified:false};
-	}
-	cancel(){this.#controller.abort();}
-	removeHistory(){this.cancel();this.#store.removeHistory();}
-	snapshot(options){return this.#store.snapshot(options);}
-	report(){return JSON.parse(JSON.stringify({...this.#report,counts:this.#store.counts(),network:this.#finishedNetwork??this.#coordinator.stats()}));}
-	resumeData(){
-		if(!this.#report.finishedAt)throw new HistoryError('OPTION');
-		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),order:this.#store.additionalOrder(),
-			cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
-	}
-	#verifyRefreshed(next){
-		const previous=this.#context;
-		const targetIdentity=c=>JSON.stringify(c.targets.map(t=>[String(t.id),t.fork]).sort());
-		try{
-			if(!next||next.videoId!==previous.videoId||next.server!==previous.server||next.language!==previous.language||
-				targetIdentity(next)!==targetIdentity(previous)||typeof next.threadKey!=='string'||!next.threadKey)throw new Error();
-		}catch{throw new HistoryError('CONTEXT_CHANGED');}
-		return withThreadKey(previous,next.threadKey);
-	}
-	async #page(request,onRetry){
-		const signal=this.#controller.signal;
-		while(true){
-			assertNotCancelled(signal);
-			try{
-				return await this.#coordinator.execute(async ({signal,timeoutMs})=>{
-					const data=await this.#fetchPage(this.#context,{...request,signal,timeoutMs});assertNotCancelled(signal);
-					return validateThreads({meta:{status:200},data:{threads:data}},this.#context,request.targets);
-				},{signal,kind:'comment',onRetry});
-			}catch(e){
-				if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
-				const next=await this.#coordinator.refresh(async options=>this.#verifyRefreshed(await this.#refreshKey(this.#context,options)),{signal,onRetry});
-				assertNotCancelled(signal);this.#context=next;
-			}
-		}
-	}
-	async run({signal,startWhen=Math.floor(Date.now()/1000),onProgress}={}){
-		integerOption(startWhen,0,9999999999);
-		if(this.#started)throw new HistoryError('ALREADY_RUN');this.#started=true;
-		this.#report.startedAt=new Date().toISOString();this.#report.startWhen=startWhen;
-		const abort=()=>this.cancel();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)this.cancel();
-		const localSignal=this.#controller.signal;
-		const notify=extra=>{try{onProgress?.({event:'progress',...extra,pages:this.#report.pages,counts:this.#store.counts(),network:this.#coordinator.stats()});}catch{}};
-		const onRetry=event=>notify({event:'retry',...event});
-		try{
-			assertNotCancelled(localSignal);
-			const baseline=this.#baseline??await this.#page({targets:this.#context.targets},onRetry);
-			assertNotCancelled(localSignal);
-			const normal=this.#store.addNormal(baseline);if(normal.limited)throw new HistoryError('BASELINE_LIMIT');
-			if(this.#resume){
-				const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
-				if(restored.limited)throw new HistoryError('OPTION');
-				this.#store.restoreAdditionalOrder(this.#resume.order);
-			}
-			notify({event:'baseline'});
-			const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
-			if(!selected.length)this.#report.reason='no_history_target';
-			const targets=selected.length?checkedTargets(this.#context,selected):[];
-			this.#report.targetResults=targets.map(t=>{
-				if(!this.#resume)return {...t,pages:0,nextWhen:startWhen,reason:null};
-				const matches=this.#resume.cursors.filter(s=>s.id===t.id&&s.fork===t.fork);
-				if(matches.length!==1)throw new HistoryError('CONTEXT_CHANGED');
-				const previous=matches[0];integerOption(previous.nextWhen,0,9999999999);
-				return {...t,pages:0,nextWhen:previous.nextWhen,reason:RESUMABLE.has(previous.reason)?null:previous.reason};
-			});
-			const states=this.#report.targetResults;let stopped=false;
-			while(states.some(s=>s.reason===null)&&!stopped){
-				for(const state of states){
-					if(state.reason!==null)continue;
-					assertNotCancelled(localSignal);
-					if(this.#report.pages>=this.#settings.maxPages){this.#report.reason='page_limit';stopped=true;break;}
-					if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){this.#report.reason='comment_limit';stopped=true;break;}
-					const target={id:state.id,fork:state.fork};const cursor=state.nextWhen;
-					const threads=await this.#page({targets:[target],when:cursor,resFrom:-1000},onRetry);
-					assertNotCancelled(localSignal);
-					const summary=summarizeThreads(threads)[0];
-					state.lastPageCount=summary.returnedCount;state.oldestUnixSeconds=summary.oldestUnixSeconds;state.newestUnixSeconds=summary.newestUnixSeconds;
-					this.#report.pages++;state.pages++;
-					if(threads[0].comments.some(c=>Date.parse(c.postedAt)/1000>cursor)){
-						state.reason='cursor_not_respected';this.#report.reason=state.reason;stopped=true;break;
-					}
-					const newestFirst=threads.map(t=>({...t,comments:[...t.comments].sort((a,b)=>Date.parse(b.postedAt)-Date.parse(a.postedAt)||b.no-a.no)}));
-					const added=this.#store.addHistory(newestFirst,this.#settings.maxAdditionalComments-this.#store.counts().additionalCount);
-					this.#report.duplicates+=added.duplicates;
-					notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
-					assertNotCancelled(localSignal);
-					if(added.limited){
-						state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
-					}
-					const reachedGoal=this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments;
-					if(!summary.returnedCount){state.reason='empty_page';continue;}
-					const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
-					if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
-					if(summary.oldestUnixSeconds===summary.newestUnixSeconds&&summary.returnedCount>1){
-						state.reason='same_second_boundary_unverified';continue;
-					}
-					state.nextWhen=oldest;
-					if(oldest>=cursor){state.reason='cursor_stalled';continue;}
-					this.#report.historyCursorProgressed=true;
-					if(reachedGoal){state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;}
-				}
-			}
-			if(!stopped&&states.length){
-				const reasons=[...new Set(states.map(s=>s.reason))];
-				this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
-				if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments)this.#report.reason='comment_limit';
-			}
-			for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
-		}catch(e){
-			this.#report.error=safeError(e);this.#report.reason=this.#report.error.code.toLowerCase();
-			for(const state of this.#report.targetResults)if(state.reason===null)state.reason=this.#report.reason;
-		}finally{
-			signal?.removeEventListener('abort',abort);this.#report.finishedAt=new Date().toISOString();
-			this.#finishedNetwork=this.#coordinator.stats();
-			this.#report.resumeAvailable=this.#report.targetResults.some(s=>RESUMABLE.has(s.reason));
-		}
-		return this.report();
-	}
-}
-return Object.freeze({HistorySession});
-})();
-modules[6] = (() => {
-const {HistoryError,normalizeWatch,validateThreads,integerOption} = modules[0];
-const ZENZA_FORKS = Object.freeze({main:0,owner:1,easy:2});
-function seedError(code) { throw new HistoryError(code); }
-function freezeSeedData(value) {
-	if (value && typeof value === 'object') {
-		for (const child of Object.values(value)) freezeSeedData(child);
-		Object.freeze(value);
-	}
-	return value;
-}
-function copyThreadDescriptor(info) {
-	if (!info || !Object.hasOwn(ZENZA_FORKS, info.forkLabel) ||
-			info.fork !== ZENZA_FORKS[info.forkLabel] || typeof info.label !== 'string' ||
-			!Number.isSafeInteger(info.layer?.index) || info.layer.index < 0) seedError('THREAD_METADATA');
-	const out = {id:String(info.id),fork:info.fork,forkLabel:info.forkLabel,label:info.label,
-		layer:{index:info.layer.index}};
-	if (typeof info.layer.isTranslucent === 'boolean') out.layer.isTranslucent = info.layer.isTranslucent;
-	return out;
-}
-function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevision} = {}) {
-	if (typeof playbackGeneration !== 'string' || !playbackGeneration) seedError('OPTION');
-	integerOption(normalRevision,1,Number.MAX_SAFE_INTEGER);
-	if (normalResult?.format !== 'threads' || !normalResult.threadInfo || !normalResult.body) seedError('UNSUPPORTED_FORMAT');
-	const msg = videoInfo?.msgInfo, resultInfo = normalResult.threadInfo;
-	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
-	const videoId = videoInfo.videoId;
-	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
-	const rawWhen = resultInfo.when ?? 0;
-	const isWaybackMode = resultInfo.isWaybackMode === true;
-	let historyStartWhen = null;
-	if (isWaybackMode) {
-		const now = Math.floor(Date.now() / 1000);
-		if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
-		historyStartWhen = rawWhen;
-	} else if (rawWhen !== 0) {
-		seedError('UNSUPPORTED_WAYBACK');
-	}
-	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
-	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
-	const nv = msg.nvComment;
-	const context = normalizeWatch({video:{id:videoId},comment:{nvComment:{
-		server:nv?.server,threadKey:nv?.threadKey,params:{targets:nv?.params?.targets,language}
-	}}},videoId);
-	const watchId = String(videoInfo.contextWatchId ?? videoInfo.watchId ?? videoId);
-	if (!/^(?:(?:sm|so|nm))?\d+$/.test(watchId)) seedError('WATCH_ID');
-	if (!Number.isFinite(videoInfo.duration) || videoInfo.duration < 0) seedError('DURATION');
-	if (!Array.isArray(msg.threads)) seedError('THREAD_METADATA');
-	const descriptors = new Map();
-	for (const target of context.targets) {
-		const found = msg.threads.filter(t => String(t.id) === target.id && t.forkLabel === target.fork);
-		if (found.length !== 1) seedError('THREAD_METADATA');
-		descriptors.set(JSON.stringify([target.id,target.fork]),copyThreadDescriptor(found[0]));
-	}
-	const baseline = validateThreads({meta:{status:200},data:{threads:normalResult.body.threads}},context);
-	const mainThreadId = resultInfo.threadId ?? null;
-	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
-	return freezeSeedData({context,
-		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
-		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
-	});
-}
-function toZenzaThreads(seed, threads) {
-	if (!seed?.context || !Array.isArray(seed.render?.threads)) seedError('OPTION');
-	const copied = validateThreads({meta:{status:200},data:{threads}},seed.context);
-	return {threads:copied.map(thread=>{
-		const info = seed.render.threads.find(t=>t.id===thread.id && t.forkLabel===thread.fork);
-		if (!info) seedError('THREAD_METADATA');
-		return {...thread,info:{...info,layer:{...info.layer}}};
-	})};
-}
-return Object.freeze({createZenzaSeed,toZenzaThreads});
-})();
-modules[7] = (() => {
-const {HistorySession} = modules[5];
-const {createZenzaSeed,toZenzaThreads} = modules[6];
-const {normalizeSettings} = modules[1];
-const MAX_ADDITIONAL=20000;
-const RESET={hidden:false,phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
-class CommentHistoryController {
-	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
-	#displayLimit;#cachedRequest=0;#displayRevision=0;#restoreTarget=0;#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
-	#state={enabled:false,videoId:null,normalCount:0,...RESET};
-	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{},displayLimit=()=>MAX_ADDITIONAL}={}){
-		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
-		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
-		if(typeof displayLimit!=='function')throw new TypeError('Invalid display limit');
-		this.#displayLimit=displayLimit;
-		this.#state.enabled=preferences.get().enabled===true;
-		this.#off=preferences.subscribe(snapshot=>{
-			if(this.#disposed)return;
-			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
-			if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
-			else {
-				const limit=this.#limit();
-				const reduced=this.#state.appliedTarget>limit;
-				if(reduced){this.#displayRevision++;this.#restoreTarget=Math.min(this.#restoreTarget,limit);this.#state.appliedTarget=limit;}
-				this.#emit({});
-				if(!before&&this.#seed)void this.start();
-				else if(reduced&&!this.#operation&&!this.#state.hidden&&this.#report)void this.setCachedCount(limit);
-			}
-		});
-	}
-	get state(){return JSON.parse(JSON.stringify(this.#state));}
-	#limit(){try{const n=Number(this.#displayLimit());return Number.isFinite(n)?Math.max(0,Math.min(MAX_ADDITIONAL,Math.floor(n))):0;}catch{return 0;}}
-	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
-	#emit(changes){
-		Object.assign(this.#state,changes);
-		if('additionalCount' in changes)this.#state.cachedAdditional=this.#state.additionalCount;
-		for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
-	}
-	#cancel(clear){
-		this.#epoch++;this.#cachedRequest++;this.#displayRevision++;this.#restoreTarget=0;this.#operation?.abort();this.#operation=null;
-		this.#session?.removeHistory();this.#session=null;this.#report=null;
-		if(clear){try{this.#clear();}catch{}}
-	}
-	invalidate(){
-		this.#cancel(true);this.#seed=null;
-		this.#emit({...RESET,videoId:null,normalCount:0});
-	}
-	async normalReady({videoInfo,result,generation}={}){
-		if(this.#disposed)return;
-		this.invalidate();
-		try{
-			this.#seed=createZenzaSeed({videoInfo,normalResult:result,playbackGeneration:generation,normalRevision:++this.#normalRevision});
-			const normalCount=this.#seed.baseline.reduce((n,t)=>n+t.comments.length,0);
-			this.#emit({videoId:this.#seed.identity.videoId,normalCount});
-		}catch(error){this.#emit({phase:'unavailable',reason:typeof error?.code==='string'?error.code:'CONTEXT_CHANGED'});return;}
-		if(this.#state.enabled)return this.start();
-	}
-	setEnabled(value){this.#preferences.setEnabled(!!value);}
-	stop(){
-		if(this.#state.phase==='queued'){this.#operation?.abort();}
-		else this.#session?.cancel();
-	}
-	setHidden(value){
-		const hidden=!!value;
-		if(this.#disposed||!this.#seed||!this.#state.enabled||hidden===this.#state.hidden)return Promise.resolve(this.state);
-		this.#displayRevision++;
-		this.#cachedRequest++;
-		if(hidden){
-			this.#restoreTarget=this.#state.appliedTarget;
-			this.#clear({retain:true});
-			this.#emit({hidden:true,appliedAdditional:0});
-			return Promise.resolve(this.state);
-		}
-		this.#emit({hidden:false});
-		if(this.#operation)return this.#promise;
-		return this.start({displayOnly:true,target:this.#restoreTarget});
-	}
-	whenIdle(){return this.#promise;}
-	more(){return this.start({more:true});}
-	restart(){return this.start({restart:true});}
-	loadSelectedCount(){
-		let target;try{target=normalizeSettings(this.#preferences.get().settings).maxAdditionalComments;}catch{return this.start();}
-		if(this.#state.phase==='render-error'||(this.#report&&(!this.#report.resumeAvailable||this.#state.cachedAdditional>=target)))return this.setCachedCount(target);
-		return this.start({target,more:!!this.#report?.resumeAvailable});
-	}
-	setCachedCount(value){
-		if(!Number.isInteger(value)||value<0||value>MAX_ADDITIONAL)throw new TypeError('Invalid cached count');
-		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
-		if(this.#operation){
-			const request=++this.#cachedRequest,seed=this.#seed;
-			return this.#promise=this.#promise.then(()=>request===this.#cachedRequest&&seed===this.#seed?this.setCachedCount(value):this.state);
-		}
-		if(!this.#report||!this.#session)return Promise.resolve(this.state);
-		return this.start({displayOnly:true,target:Math.min(value,this.#limit(),this.#report.counts.additionalCount)});
-	}
-	setAppliedCount(value){
-		const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
-		if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
-		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
-		if(this.#operation)return this.#promise;
-		if(!this.#session||!this.#report){
-			if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
-			return this.start({target:n});
-		}
-		const cached=this.#report.counts.additionalCount;
-		if(n>cached&&this.#report.resumeAvailable&&cached<MAX_ADDITIONAL)return this.start({more:true,target:n});
-		return this.start({displayOnly:true,target:n});
-	}
-	start({more=false,restart=false,target,displayOnly=false}={}){
-		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
-		if(this.#operation)return this.#promise;
-		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
-		if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
-		if(more&&target===undefined&&this.#state.additionalCount>=MAX_ADDITIONAL&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
-		if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
-		const retryRender=this.#state.phase==='render-error'&&!restart&&target===undefined;
-		const applyOnly=displayOnly||retryRender;
-		const continuing=!!(more&&!restart&&this.#session&&this.#report);
-		const resume=continuing?this.#session.resumeData():undefined;
-		if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
-		const oldGoal=this.#state.goal;
-		const goal=applyOnly?oldGoal:
-			target!==undefined?Math.min(MAX_ADDITIONAL,target):
-			continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
-		const appliedTarget=Math.min(this.#limit(),target!==undefined?target:retryRender?this.#state.appliedTarget:goal);
-		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
-		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
-		const seed=this.#seed;
-		this.#emit({phase:applyOnly?'applying':'queued',goal,appliedTarget,reason:applyOnly?this.#state.reason:null,canContinue:false});
-		this.#promise=(async()=>{
-			try{
-				if(!applyOnly){
-					await this.#acquire(async()=>{
-						if(!current())return;
-						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
-						const session=this.#session;
-						this.#emit({phase:'fetching',pages:0});
-						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
-							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
-								waitingMs:progress.event==='retry'?progress.waitMs:0});
-						}});
-						if(!current())return;
-						this.#report=report;
-					},operation.signal);
-				}
-				if(!current()||!this.#report||!this.#session)return;
-				const report=this.#report;
-				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
-				let applied;
-				let limit=0;
-				while(current()&&!this.#state.hidden){
-					limit=Math.min(this.#state.appliedTarget,this.#limit(),report.counts.additionalCount);
-					const revision=this.#displayRevision;
-					const displayCurrent=()=>current()&&!this.#state.hidden&&revision===this.#displayRevision;
-					try{
-						applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:displayCurrent,signal:operation.signal});
-						if(displayCurrent())break;
-					}catch{
-						if(displayCurrent()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');return;}
-					}
-				}
-				if(!current())return;
-				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
-				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:this.#state.hidden?0:applied?.additionalCount??limit,
-					canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
-				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify(this.#state.hidden?'コメント増量：一部取得で終了しました。取得済みのコメントは保持しています。':'コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
-			}catch{
-				if(this.#epoch===epoch&&this.#state.enabled){
-					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
-					if(!operation.signal.aborted)this.#notify('コメント増量：取得を開始できませんでした。パネルから再試行できます。');
-				}
-			}finally{if(this.#epoch===epoch)this.#operation=null;}
-			return this.state;
-		})();
-		return this.#promise;
-	}
-	dispose(){if(this.#disposed)return;this.#disposed=true;this.invalidate();this.#off?.();this.#listeners.clear();}
-}
-return Object.freeze({CommentHistoryController});
-})();
-modules[8] = (() => {
-const identity=chat=>JSON.stringify([String(chat.threadId??chat.thread),Number(chat.fork),Number(chat.no)]);
-const abortError=()=>Object.assign(new Error('Comment display update superseded'),{name:'AbortError'});
-class CommentHistoryRenderer {
-	#player;#Chat;#VM;#yield;#revision=0;#history=new Set();#deleted=new Set();
-	#retained=new Map();
-	constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
-		this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
-	}
-	#groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
-	reset(){this.#revision++;this.#history.clear();this.#deleted.clear();this.#retained.clear();}
-	removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#retained.delete(identity(chat));this.#revision++;}
-	get retainedCount(){return this.#retained.size;}
-	has(chat){return !!chat&&this.#history.has(chat);}
-	clear({retain=false}={}){
-		this.#revision++;
-		if(retain){for(const chat of this.#history)this.#retained.set(identity(chat),chat);}
-		else this.#retained.clear();
-		if(!this.#history.size)return;
-		for(const group of this.#groups()){
-			if(!group)continue;
-			group._members=group._members.filter(chat=>!this.#history.has(chat));
-			group._filteredMembers=[];group._filteredMembersValid=false;
-			group.onChange(null);
-		}
-		this.#history.clear();this.#player._view?.refresh();this.#player._model.emit('change');
-	}
-	async apply(data,{isCurrent=()=>true,signal}={}){
-		const revision=++this.#revision,model=this.#player._model;
-		const valid=()=>revision===this.#revision&&!signal?.aborted&&isCurrent();
-		const check=()=>{if(!valid())throw abortError();};
-		check();await model.promise('GetReady!');check();
-		if(!data||!Array.isArray(data.threads))throw new TypeError('Invalid history display input');
-		const count=data.threads.reduce((n,t)=>n+(Array.isArray(t.comments)?t.comments.length:Infinity),0);
-		if(count>20000)throw new RangeError('History display limit is 20000');
-		const types=[this.#Chat.TYPE.TOP,this.#Chat.TYPE.NAKA,this.#Chat.TYPE.BOTTOM];
-		const oldByKey=new Map([...this.#retained.values(),...this.#history].map(c=>[identity(c),c]));
-		const options=model._options||{};
-		const added=[],newChats=[],seen=new Set();
-		for(const thread of data.threads){
-			if(!thread.info||![0,2].includes(thread.info.fork)&&thread.comments.length)throw new TypeError('Unsupported history fork');
-			for(const c of thread.comments){
-				const key=identity({thread:thread.id,fork:thread.info.fork,no:c.no});
-				if(seen.has(key)||this.#deleted.has(key))continue;
-				seen.add(key);
-				let chat=oldByKey.get(key);
-				if(!chat){
-					chat=this.#Chat.create(Object.assign({},c,{
-						text:c.body,date:new Date(c.postedAt).getTime()/1000,cmd:c.commands.join(' '),
-						premium:c.isPremium,user_id:c.userId,vpos:c.vposMs/10,fork:thread.info.fork,
-						isMine:c.isMyPost,thread:thread.id,nicoru:c.nicoruCount,
-						layerId:thread.info.layer.index,threadLabel:thread.info.label
-					}),{videoDuration:options.duration,creditDuration:options.creditDuration,mainThreadId:options.mainThreadId});
-					if(chat.isDeleted||chat.isNicoScript)continue;
-					if(chat.fork===2)chat.size=this.#Chat.SIZE.SMALL;
-					if(model._wordReplacer)chat.text=model._wordReplacer(chat.text);
-					newChats.push(chat);
-				}
-				added.push(chat);
-				if(added.length%100===0){await this.#yield();check();}
-			}
-		}
-		if(newChats.length&&!model.nicoScripter.isEmpty)model.nicoScripter.apply(newChats);
-		check();
-		const prepared=[];
-		try{
-			for(let attempt=0;attempt<3;attempt++){
-				prepared.splice(0).forEach(x=>x.members.forEach(m=>m.reset()));
-				const groups=this.#groups(),vms=types.map(t=>this.#player._viewModel.getGroup(t));
-				if(groups.some(g=>!g)||vms.some(g=>!g))throw new Error('Comment view is not ready');
-				const sources=groups.map(g=>({array:g._members,length:g._members.length}));
-				const versions=vms.map(v=>v._lastUpdate);
-				const normals=groups.flatMap(g=>g._members.filter(c=>!this.#history.has(c)));
-				const normalKeys=new Set(normals.map(identity));
-				const extras=added.filter(c=>!normalKeys.has(identity(c))&&!this.#deleted.has(identity(c)));
-				const all=normals.concat(extras);
-				for(let i=0;i<groups.length;i++){
-					check();
-					const chats=all.filter(c=>c.type===types[i]||(i===1&&!types.includes(c.type)));
-					const filtered=model._nicoChatFilter.applyFilter(chats),members=[];
-					const entry={chats,filtered,members,group:groups[i],vm:vms[i],sorted:[],maxDuration:0};prepared.push(entry);
-					for(const c of filtered){
-						members.push(this.#VM.create(c,vms[i]._offScreen));
-						if(members.length%100===0){await this.#yield();check();}
-					}
-					this.#VM.prepareCommentArt?.(members);
-					const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
-					if(sorted.length){
-						const sent=sorted.map(c=>c.bulkLayoutData);
-						const result=await this.#wait(vms[i]._layoutWorker.post({command:'layout',params:{type:types[i],members:sent,lastUpdate:revision}}),signal);
-						check();
-						if(result?.lastUpdate!==revision||!Array.isArray(result.members)||result.members.length!==sent.length||
-							!sent.every((m,j)=>result.members[j]?.id===m.id&&Number.isFinite(result.members[j].ypos)&&typeof result.members[j].isOverflow==='boolean'))throw new Error('Invalid history layout response');
-						sorted.forEach((m,j)=>{m.bulkLayoutData=result.members[j];});
-						for(const m of sorted){const d=m.endRightTiming-m.beginLeftTiming;if(Number.isFinite(d)&&d>entry.maxDuration)entry.maxDuration=d;}
-					}
-				}
-				check();
-				if(groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
-				this.#player._view?.clear?.();
-				for(const e of prepared){
-					for(const c of e.chats)c.group=e.group;
-					e.group._members=e.chats;e.group._filteredMembers=e.filtered;e.group._filteredMembersValid=true;
-					const old=e.vm._members;
-					e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
-					for(const m of old)m.reset();
-				}
-				const next=new Set(extras);
-				for(const c of this.#history)if(!next.has(c))this.#retained.set(identity(c),c);
-				for(const c of extras)this.#retained.delete(identity(c));
-				this.#history=next;
-				prepared.length=0;
-				this.#player._view?.refresh();model.emit('change');
-				return {additionalCount:extras.length};
-			}
-			throw new Error('Comment collection changed during display preparation');
-		}finally{prepared.forEach(e=>e.members.forEach(m=>m.reset()));}
-	}
-	#wait(promise,signal){
-		return new Promise((resolve,reject)=>{
-			const finish=(fn,value)=>{clearTimeout(timer);signal?.removeEventListener('abort',cancel);fn(value);};
-			const cancel=()=>finish(reject,abortError());
-			const timer=setTimeout(()=>finish(reject,new Error('Comment layout timed out')),20000);
-			signal?.addEventListener('abort',cancel,{once:true});
-			Promise.resolve(promise).then(v=>finish(resolve,v),e=>finish(reject,e));
-			if(signal?.aborted)cancel();
-		});
-	}
-}
-return Object.freeze({CommentHistoryRenderer});
-})();
-modules[9] = (() => {
-const {HistoryError} = modules[0];
-const {SETTINGS_SCHEMA,normalizeSettings} = modules[1];
-const ZENZA_SETTINGS_NAMES = new Set(SETTINGS_SCHEMA.map(d=>d.name));
-const ZENZA_SETTINGS_KEYS = new Set(SETTINGS_SCHEMA.map(d=>d.key));
-const ZENZA_SETTINGS_EVENT = 'comment-history-settings';
-function settingsError(code) { return new HistoryError(code); }
-function checkedSettingNames(names) {
-	if (!Array.isArray(names) || names.some(n=>!ZENZA_SETTINGS_NAMES.has(n)) || new Set(names).size!==names.length) throw settingsError('OPTION');
-	return names;
-}
-class ZenzaSettingsRepository {
-	#storage; #prefix; #bus; #off; #last; #disposed=false; #listeners=new Set();
-	constructor({storage,prefix='ZenzaWatch_',bus} = {}) {
-		if (!storage || ['getItem','setItem','removeItem'].some(k=>typeof storage[k]!=='function') ||
-				typeof prefix!=='string' || !prefix || bus && ['publish','subscribe'].some(k=>typeof bus[k]!=='function')) throw settingsError('OPTION');
-		this.#storage=storage;this.#prefix=prefix;this.#bus=bus;
-		this.#last=this.#read().values;
-		if (bus) this.#off=bus.subscribe(message=>{
-			if (this.#disposed || message?.type!==ZENZA_SETTINGS_EVENT || !Array.isArray(message.keys) ||
-					!message.keys.length || message.keys.some(k=>!ZENZA_SETTINGS_KEYS.has(k))) return;
-			try { this.refresh(); } catch { /* Caller sees validation failure on next explicit get/start. */ }
-		});
-	}
-	#assertActive() { if(this.#disposed)throw settingsError('DISPOSED'); }
-	#read() {
-		this.#assertActive();
-		const input={},raw=new Map();
-		for(const d of SETTINGS_SCHEMA) {
-			let value;
-			try {value=this.#storage.getItem(this.#prefix+d.key);} catch {throw settingsError('SETTINGS_READ');}
-			raw.set(d.name,value);
-			if(value!==null && value!==undefined) {
-				try {input[d.name]=JSON.parse(value);} catch {throw settingsError('SETTINGS_INVALID');}
-			}
-		}
-		let values;
-		try {values=Object.freeze(normalizeSettings(input));} catch {throw settingsError('SETTINGS_INVALID');}
-		return {values,raw};
-	}
-	#accept(values) {
-		const changed=SETTINGS_SCHEMA.some(d=>values[d.name]!==this.#last[d.name]);
-		this.#last=values;
-		if(changed)for(const callback of [...this.#listeners]) {
-			try {callback(values);} catch { /* A UI failure must not reinterpret successful persistence. */ }
-		}
-	}
-	get() {return this.#read().values;}
-	refresh() {const values=this.get();this.#accept(values);return values;}
-	patch(changes) {
-		this.#assertActive();
-		if(!changes || typeof changes!=='object' || Array.isArray(changes))throw settingsError('OPTION');
-		checkedSettingNames(Object.keys(changes));
-		const before=this.#read();
-		const next=Object.freeze(normalizeSettings({...before.values,...changes}));
-		const entries=SETTINGS_SCHEMA.filter(d=>Object.hasOwn(changes,d.name)&&before.values[d.name]!==next[d.name])
-			.map(d=>({name:d.name,key:this.#prefix+d.key,publicKey:d.key,value:JSON.stringify(next[d.name]),previous:before.raw.get(d.name)}));
-		if(!entries.length){this.#accept(next);return next;}
-		const attempted=[];
-		let committed;
-		try {
-			for(const entry of entries) {
-				if(this.#storage.getItem(entry.key)!==entry.previous)throw settingsError('SETTINGS_CONFLICT');
-				attempted.push(entry);
-				this.#storage.setItem(entry.key,entry.value);
-			}
-			for(const entry of entries)if(this.#storage.getItem(entry.key)!==entry.value)throw settingsError('SETTINGS_WRITE');
-			committed=this.#read().values;
-		} catch {
-			let rollbackComplete=true;
-			for(const entry of attempted.reverse()) {
-				try {
-					const current=this.#storage.getItem(entry.key);
-					if(current===entry.previous)continue;
-					if(current!==entry.value){rollbackComplete=false;continue;}
-					if(entry.previous===null || entry.previous===undefined)this.#storage.removeItem(entry.key);
-					else this.#storage.setItem(entry.key,entry.previous);
-					if(this.#storage.getItem(entry.key)!==(entry.previous??null))rollbackComplete=false;
-				} catch {rollbackComplete=false;}
-			}
-			const error=settingsError('SETTINGS_WRITE');error.rollbackComplete=rollbackComplete;throw error;
-		}
-		this.#accept(committed);
-		try {this.#bus?.publish({type:ZENZA_SETTINGS_EVENT,keys:entries.map(e=>e.publicKey)});} catch { /* Storage succeeded; next explicit refresh reconciles. */ }
-		return committed;
-	}
-	reset(names=SETTINGS_SCHEMA.map(d=>d.name)) {
-		checkedSettingNames(names);
-		return this.patch(Object.fromEntries(SETTINGS_SCHEMA.filter(d=>names.includes(d.name)).map(d=>[d.name,d.default])));
-	}
-	subscribe(callback) {
-		this.#assertActive();if(typeof callback!=='function')throw settingsError('OPTION');
-		this.#listeners.add(callback);return()=>this.#listeners.delete(callback);
-	}
-	dispose() {
-		if(this.#disposed)return;this.#disposed=true;this.#listeners.clear();
-		if(typeof this.#off==='function')this.#off();this.#off=null;
-	}
-}
-return Object.freeze({ZenzaSettingsRepository});
-})();
-modules[10] = (() => {
-const {SETTINGS_SCHEMA,DEFAULT_SETTINGS} = modules[1];
-const {ZenzaSettingsRepository} = modules[9];
-const {HistoryError} = modules[0];
-const HISTORY_PRESETS=Object.freeze([1000,2500,5000,7500,10000,15000,20000]);
-const APPLIED_PRESETS=Object.freeze([0,...HISTORY_PRESETS]);
-const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
-const EVENT='ZenzaWatch-comment-history-settings';
-function createBrowserHistoryPreferences({window:win=globalThis.window,config,storage=win.localStorage}={}){
-	const prefix='ZenzaWatch_',enabledKey=prefix+'commentHistory.enabled';
-	const listeners=new Set();let repository,disposed=false,lastSignature='',snapshot;
-	function checked(){if(disposed)throw new HistoryError('DISPOSED');}
-	function read(){
-		checked();
-		try{
-			if(!repository)repository=new ZenzaSettingsRepository({storage,prefix});
-			const settings=repository.get(),raw=storage.getItem(enabledKey);
-			const enabled=raw===null?false:JSON.parse(raw);
-			if(typeof enabled!=='boolean')throw new Error('type');
-			return Object.freeze({valid:true,enabled,settings});
-		}catch{return Object.freeze({valid:false,enabled:false,settings:Object.freeze({...DEFAULT_SETTINGS}),error:'SETTINGS_INVALID'});}
-	}
-	function refresh(){
-		snapshot=read();const signature=JSON.stringify(snapshot);
-		if(signature===lastSignature)return snapshot;
-		lastSignature=signature;
-		if(snapshot.valid&&config?._data){
-			const values={...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,snapshot.settings[d.name]])),'commentHistory.enabled':snapshot.enabled};
-			for(const [key,value] of Object.entries(values)){
-				if(config.default&&!Object.hasOwn(config.default,key))continue;
-				if(config._data[key]===value)continue;
-				config._data[key]=value;
-				const emit=typeof config.emitAsync==='function'?config.emitAsync:config.emit;
-				if(typeof emit==='function'){emit.call(config,'update',key,value);emit.call(config,'update-'+key,value);}
-			}
-		}
-		for(const fn of [...listeners]){try{fn(snapshot);}catch{}}
-		return snapshot;
-	}
-	function publish(keys){win.dispatchEvent(new win.CustomEvent(EVENT,{detail:{keys}}));}
-	const onStorage=e=>{if(!disposed&&(e.key===null||typeof e.key==='string'&&e.key.startsWith(prefix+'commentHistory.'))&&(!e.storageArea||e.storageArea===storage))refresh();};
-	const onLocal=e=>{if(!disposed&&Array.isArray(e.detail?.keys)&&e.detail.keys.every(k=>Object.hasOwn(HISTORY_PREFERENCE_DEFAULTS,k)))refresh();};
-	win.addEventListener('storage',onStorage);win.addEventListener(EVENT,onLocal);refresh();
-	return {
-		get(){checked();return refresh();},
-		patch(changes){
-			checked();if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
-			repository.patch(changes);refresh();publish(Object.keys(changes).map(k=>'commentHistory.'+k));return snapshot;
-		},
-		setEnabled(enabled){
-			checked();if(typeof enabled!=='boolean')throw new HistoryError('OPTION');
-			if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
-			if(snapshot.enabled===enabled)return snapshot;
-			const before=storage.getItem(enabledKey),serialized=JSON.stringify(enabled);
-			try{storage.setItem(enabledKey,serialized);if(storage.getItem(enabledKey)!==serialized)throw new Error();}
-			catch{
-				try{if(storage.getItem(enabledKey)===serialized){before===null?storage.removeItem(enabledKey):storage.setItem(enabledKey,before);}}catch{}
-				throw new HistoryError('SETTINGS_WRITE');
-			}
-			refresh();publish(['commentHistory.enabled']);return snapshot;
-		},
-		subscribe(fn){checked();listeners.add(fn);return()=>listeners.delete(fn);},
-		dispose(){if(disposed)return;disposed=true;win.removeEventListener('storage',onStorage);win.removeEventListener(EVENT,onLocal);repository?.dispose();repository=null;listeners.clear();}
-	};
-}
-return Object.freeze({HISTORY_PRESETS,APPLIED_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
-})();
-modules[11] = (() => {
-const {SETTINGS_SCHEMA} = modules[1];
-const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[10];
-const {CommentHistoryController} = modules[7];
-const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
-const CSS=`
-.commentHistorySwitch .controlButtonInner{display:inline-block;width:26px;height:26px;vertical-align:middle}
-.commentHistorySwitch svg{display:block;width:100%;height:100%;fill:currentColor}
-.commentHistorySwitch.is-active{color:var(--enabled-button-color,#9cf);opacity:1}
-.commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
-.commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
-@keyframes zenzaHistoryPulse{50%{opacity:.48}}
-.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:12px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
-.zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
-.zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
-@keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
-@keyframes zenzaHistoryOut{from{opacity:1;transform:none}to{opacity:0;transform:translate(8px,12px) scale(.92)}}
-@media(prefers-reduced-motion:reduce){.zenzaCommentHistoryPanel.is-open,.zenzaCommentHistoryPanel.is-closing{animation-duration:.01s}.commentHistorySwitch.is-fetching svg{animation:none}}
-.zenzaCommentHistoryPanel button,.zenzaCommentHistoryPanel select,.ch-settings input{font:inherit;box-sizing:border-box}
-.zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
-.zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
-.zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
-.ch-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}.ch-header strong{font-size:16px;flex:1}
-.ch-visibility{display:flex;align-items:center;justify-content:space-between;gap:8px}.ch-visibility strong{font-size:13px}.zenzaCommentHistoryPanel [data-ch-visibility]{min-width:76px;min-height:32px;padding:5px 8px;font-weight:700;background:#79dfc9;color:#0c2b28;border-color:#79dfc9}
-.ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
-.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:6px 0}.ch-status{margin-top:6px}
-.zenzaCommentHistoryPanel [hidden]{display:none!important}.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:8px 0}
-.ch-slider{margin:10px 0 6px}.ch-slider-label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;color:#b4c2d0;font-size:12px}.ch-slider-label output{color:#e6eef5;font-variant-numeric:tabular-nums}.ch-slider input{display:block;width:100%;height:24px;margin:2px 0;accent-color:#72e4cc}.ch-slider input:disabled{opacity:.45}.ch-slider-ticks{display:flex;justify-content:space-between;color:#b4c2d0;font-size:11px}
-.ch-action-row{display:grid;grid-template-columns:112px minmax(0,1fr) 68px;gap:6px;align-items:center;margin-top:8px}.ch-action-row label{color:#b4c2d0;font-size:12px}
-.zenzaCommentHistoryPanel select{width:100%;min-width:0;height:32px;padding:4px 6px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
-.zenzaCommentHistoryPanel [data-ch-primary]{min-height:32px;padding:5px 6px;font-weight:700}
-.ch-bottom{margin-top:12px;padding-top:10px;border-top:1px solid #33475d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px}.ch-details{display:contents}.ch-details:not([open])>div{display:none}.ch-details summary{grid-column:1;grid-row:1;padding:5px 0;cursor:pointer;color:#cedde9}.ch-details>div{grid-column:1/-1}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin:8px 0;font-size:12px}.ch-bottom [data-ch-advanced]{grid-column:2;grid-row:1;background:none;font-size:12px;padding:5px 8px;min-height:32px}.zenzaCommentHistoryPanel .ch-setting-error:empty{display:none}
-@media(max-width:360px){.ch-action-row{grid-template-columns:100px minmax(0,1fr) 60px;gap:5px}}
-.ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
-.is-youTube .commentHistorySwitch{display:none}
-`;
-function style(doc){if(doc.querySelector('style[data-zenza-comment-history]'))return;const el=doc.createElement('style');el.dataset.zenzaCommentHistory='';el.textContent=CSS;doc.head.append(el);}
-const fmt=n=>Number(n||0).toLocaleString('ja-JP');
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function mountHistorySettings(container,{preferences}={}){
-	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
-	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
-		`<label><span>${esc(d.name==='maxAdditionalComments'?'読み込むコメント数':d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
-	).join('')+'<p class="ch-setting-error" role="status"></p>';
-	const error=container.querySelector('.ch-setting-error');
-	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
-	const change=e=>{const name=e.target.dataset.historySetting,d=SETTINGS_SCHEMA.find(x=>x.name===name);if(!d)return;e.stopPropagation();try{const v=d.type==='boolean'?e.target.checked:e.target.value.trim()===''?NaN:Number(e.target.value);preferences.patch({[name]:v});error.textContent='';e.target.removeAttribute('aria-invalid');}catch{error.textContent='設定を保存できませんでした。入力範囲と保存領域を確認してください。';e.target.setAttribute('aria-invalid','true');}};
-	container.addEventListener('change',change);const off=preferences.subscribe(refresh);refresh();
-	return {dispose(){off();container.removeEventListener('change',change);container.replaceChildren();}};
-}
-class CommentHistoryPanel {
-	constructor({controller,preferences,anchor,window:win=globalThis.window}){
-		this.controller=controller;this.preferences=preferences;this.anchor=anchor;this.win=win;this.doc=win.document;this.listeners=[];this.closeTimer=null;this.swallowCleanup=[];this.disposed=false;
-		style(this.doc);
-		this.onOutside=e=>this._outside(e);this.onEscape=e=>{if(this.isOpen&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.close(true);}};
-		this.onResize=()=>this._place();
-		this.off=controller.subscribe(state=>this.refresh(state));this.offPrefs=preferences.subscribe(()=>this.refresh(controller.state));
-	}
-	get isOpen(){return !!this.view?.classList.contains('is-open')&&!this.view.classList.contains('is-closing');}
-	_init(){
-		if(this.view)return;
-		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel zen-family';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
-		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> 自動で増量</label></header>
-<div class="ch-visibility"><strong data-ch-visibility-status role="status" aria-live="polite"></strong><button type="button" data-ch-visibility aria-pressed="false">非表示</button></div>
-<div class="ch-status" data-ch-status role="status" aria-live="polite" hidden></div><div class="ch-progress" hidden><progress value="0" max="5000" aria-label="読み込みの進捗"></progress></div>
-<div class="ch-slider"><div class="ch-slider-label"><label for="zenza-history-percentage" data-ch-apply-label>追加コメント数</label><output for="zenza-history-percentage" data-ch-apply-summary></output></div><input id="zenza-history-percentage" type="range" min="0" max="100" step="1" value="0" data-ch-applied-target aria-label="追加コメント数"><div class="ch-slider-ticks"><span>0%</span><span>100%</span></div></div>
-<div class="ch-action-row"><label for="zenza-history-quota">読み込むコメント数</label><select id="zenza-history-quota" data-ch-quota aria-label="読み込むコメント数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select><button type="button" data-ch-primary>読込</button></div>
-<div class="ch-bottom"><details class="ch-details"><summary>詳細・説明</summary><div><p class="ch-note">非表示は今の動画だけです。再表示では読み込み済みデータを使います。次の動画は「自動で増量」の設定に従います。</p><p class="ch-note">「自動で増量」をOFFにすると通常コメントだけに戻り、読み込み済みデータを破棄します。追加コメント数の100%は、選択した読み込み数と読み込み済み数の小さい方です。</p><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>読み込み済みの追加分（保持中）</span><span data-ch-cached></span><span>表示中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button><p class="ch-note" data-ch-pages></p></div></details><button type="button" data-ch-advanced>上級者設定</button></div><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
-		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
-		el.querySelector('[data-ch-visibility]').onclick=()=>safe(()=>{void this.controller.setHidden(!this.controller.state.hidden);});
-		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
-		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
-		const slider=el.querySelector('[data-ch-applied-target]');
-		slider.oninput=()=>{if(slider.disabled)return;this.sliderDraft={key:this._sliderKey(),percent:Number(slider.value)};this._slider(this.controller.state,this.preferences.get());};
-		slider.onchange=()=>safe(()=>{
-			if(slider.disabled)return;
-			const count=Math.round(this._sliderLimit(this.controller.state,this.preferences.get())*Number(slider.value)/100);
-			this.sliderDraft=null;
-			void this.controller.setCachedCount(count).catch(()=>{if(!this.disposed)this.refresh(this.controller.state);});
-		});
-		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
-		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else void this.controller.loadSelectedCount();};
-		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
-		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
-		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
-	}
-	_sliderLimit(state,p){return state.cacheAvailable?Math.max(0,Math.min(Number(p.settings.maxAdditionalComments)||0,Number(state.cachedAdditional)||0)):0;}
-	_sliderKey(){const s=this.controller.state,p=this.preferences.get();return JSON.stringify([s.videoId,s.phase,s.hidden,s.enabled,s.appliedTarget,this._sliderLimit(s,p)]);}
-	_slider(state,p){
-		const slider=this.view.querySelector('[data-ch-applied-target]'),limit=this._sliderLimit(state,p);
-		const key=this._sliderKey();if(this.sliderDraft?.key!==key)this.sliderDraft=null;
-		const count=Math.min(limit,Math.max(0,Number(state.appliedTarget)||0));
-		const percent=this.sliderDraft?.percent??(limit?Math.round(count/limit*100):0);
-		const preview=this.sliderDraft?Math.round(limit*percent/100):count;
-		slider.value=String(percent);slider.disabled=!!state.hidden||!state.enabled||['fetching','queued','applying'].includes(state.phase)||!limit||p.valid===false;
-		slider.setAttribute('aria-valuetext',`${fmt(preview)} 件、${percent}%`);
-		this.view.querySelector('[data-ch-apply-summary]').textContent=`${fmt(preview)} / ${fmt(limit)} 件（${percent}%）`;
-		this.view.querySelector('[data-ch-apply-label]').textContent=state.hidden?'追加コメント数（保持）':'追加コメント数';
-	}
-	refresh(state){
-		const a=this.anchor?.();
-		if(a){a.classList.toggle('is-active',state.enabled&&!state.hidden);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：自動で増量 有効':'：自動で増量 無効'));}
-		if(!this.view)return;
-		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
-		q('[data-ch-enabled]').checked=state.enabled;
-		const visibility=q('[data-ch-visibility]');
-		visibility.textContent=state.hidden?'再表示':'非表示';
-		visibility.setAttribute('aria-label',state.hidden?'増量分を再表示':'増量分を非表示');
-		visibility.setAttribute('aria-pressed',String(!!state.hidden));
-		visibility.disabled=!state.enabled||!state.videoId||p.valid===false||(!running&&!state.hidden&&!state.cachedAdditional);
-		q('.ch-visibility').classList.toggle('is-hidden',!!state.hidden);
-		q('[data-ch-visibility-status]').textContent=state.hidden?'増量分：非表示中':!state.enabled?'自動増量：OFF':state.appliedAdditional>0?'増量分：表示中':running?'増量分：準備中':state.cachedAdditional?'増量分：表示なし':'増量分なし';
-		const quota=q('[data-ch-quota]');
-		quota.querySelector('[data-ch-custom]')?.remove();
-		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
-			const option=this.doc.createElement('option');option.dataset.chCustom='';
-			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
-		}
-		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
-		q('.ch-progress').hidden=!running;
-		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
-		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'自動増量なし · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
-		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
-		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
-		if(state.hidden)q('[data-ch-status]').textContent=running?'増量分は非表示 · 取得済みデータを保持しています':'増量分は非表示 · 再表示できます';
-		q('[data-ch-status]').hidden=!running&&!['partial','unavailable','render-error'].includes(state.phase)&&p.valid!==false;
-		this._slider(state,p);
-		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-cached]').textContent=fmt(state.cachedAdditional);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
-		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機中止':state.phase==='fetching'?'読込中止':state.phase==='applying'?'反映中':state.phase==='render-error'?'再反映':'読込';
-		button.title='選択したコメント数まで読み込みます。読み込み済みの分は再取得しません。';
-		button.disabled=(state.hidden&&!['fetching','queued'].includes(state.phase))||state.phase==='applying'||state.phase==='unavailable'||(state.phase!=='render-error'&&!running&&state.cacheAvailable&&state.appliedTarget>=this._sliderLimit(state,p)&&(state.cachedAdditional>=p.settings.maxAdditionalComments||state.canContinue===false))||p.valid===false;q('[data-ch-restart]').disabled=state.hidden||running||!state.enabled;
-	}
-	_place(){
-		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
-		const a=this.anchor?.()?.getBoundingClientRect(),width=Math.min(360,this.win.innerWidth-32);
-		this.view.style.left=Math.max(16,Math.min(this.win.innerWidth-width-16,(a?.right||this.win.innerWidth-16)-width))+'px';
-		this.view.style.bottom=Math.max(16,Math.min(this.win.innerHeight-120,a?this.win.innerHeight-a.top+10:50))+'px';
-		this.view.style.maxHeight=Math.max(100,this.win.innerHeight-parseFloat(this.view.style.bottom)-16)+'px';
-	}
-	_listen(){
-		const attach=win=>{if(this.listeners.includes(win))return;try{win.addEventListener('pointerdown',this.onOutside,true);win.addEventListener('keydown',this.onEscape,true);this.listeners.push(win);}catch{}};
-		attach(this.win);for(const f of this.doc.querySelectorAll('iframe')){try{if(f.contentWindow?.document)attach(f.contentWindow);}catch{}}
-	}
-	_unlisten(){for(const w of this.listeners){try{w.removeEventListener('pointerdown',this.onOutside,true);w.removeEventListener('keydown',this.onEscape,true);}catch{}}this.listeners=[];this.observer?.disconnect();this.observer=null;this.win.removeEventListener('resize',this.onResize);this.doc.removeEventListener('fullscreenchange',this.onResize);}
-	_outside(e){
-		if(!this.isOpen)return;const path=e.composedPath?.()||[e.target],a=this.anchor?.();if(path.includes(this.view)||path.includes(a))return;
-		let video=path.some(x=>x?.matches?.('video,.videoPlayer,.commentLayerFrame'));
-		try{video=video||e.view?.frameElement?.matches('.commentLayerFrame,[name="commentLayerFrame"]');}catch{}
-		this.close(false);
-		if(video&&e.button===0){
-			const target=e.target,win=e.view||this.win;
-			const swallow=event=>{if(event.target===target||(event.composedPath?.()||[]).includes(target)){event.preventDefault();event.stopImmediatePropagation();}cleanup();};
-			const timer=this.win.setTimeout(()=>cleanup(),600);
-			const cleanup=()=>{win.removeEventListener('click',swallow,true);this.win.clearTimeout(timer);const i=this.swallowCleanup.indexOf(cleanup);if(i>=0)this.swallowCleanup.splice(i,1);};
-			win.addEventListener('click',swallow,true);this.swallowCleanup.push(cleanup);
-		}
-	}
-	open(){
-		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(records=>{if(!externalTrial || frameTopologyChanged(records))this._listen();});this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
-	}
-	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
-	toggle(){this.isOpen?this.close(true):this.open();}
-	dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
-}
-function createHistoryFeature({dialog,config,window:win=globalThis.window}){
-	const preferences=createBrowserHistoryPreferences({window:win,config});
-	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
-	const controller=new CommentHistoryController({preferences,acquire,displayLimit:()=>preferences.get().settings.maxAdditionalComments,
-		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
-		clearRender:options=>dialog._nicoVideoPlayer?.clearCommentHistory(options),
-		notify:text=>dialog.execCommand('notify',text)});
-	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
-	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
-}
-return Object.freeze({HISTORY_ICON,mountHistorySettings,CommentHistoryPanel,createHistoryFeature});
-})();
-return Object.freeze({
-COMMENT_ORIGIN: modules[0].COMMENT_ORIGIN,
-HistoryError: modules[0].HistoryError,
-fail: modules[0].fail,
-integerOption: modules[0].integerOption,
-normalizeWatch: modules[0].normalizeWatch,
-checkedTargets: modules[0].checkedTargets,
-buildThreadRequest: modules[0].buildThreadRequest,
-validateThreads: modules[0].validateThreads,
-CommentStore: modules[0].CommentStore,
-summarizeThreads: modules[0].summarizeThreads,
-withThreadKey: modules[0].withThreadKey,
-RequestCoordinator: modules[3].RequestCoordinator,
-HistorySession: modules[5].HistorySession,
-createZenzaSeed: modules[6].createZenzaSeed,
-toZenzaThreads: modules[6].toZenzaThreads,
-CommentHistoryController: modules[7].CommentHistoryController,
-CommentHistoryRenderer: modules[8].CommentHistoryRenderer,
-HISTORY_ICON: modules[11].HISTORY_ICON,
-mountHistorySettings: modules[11].mountHistorySettings,
-CommentHistoryPanel: modules[11].CommentHistoryPanel,
-createHistoryFeature: modules[11].createHistoryFeature,
-HISTORY_PRESETS: modules[10].HISTORY_PRESETS,
-APPLIED_PRESETS: modules[10].APPLIED_PRESETS,
-HISTORY_PREFERENCE_DEFAULTS: modules[10].HISTORY_PREFERENCE_DEFAULTS,
-createBrowserHistoryPreferences: modules[10].createBrowserHistoryPreferences,
-});
-})();
+// already required
 // already required
 class TimelineGeometry {
 		clientLeft;
@@ -53941,23 +54169,80 @@ const NotificationHistoryPanel = (() => {
 						entry.details?.outcome === 'recovered' ? '復旧済み' :
 								entry.details?.reason === 'not-found' ? '対象なし・要確認' :
 										entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
+		const phaseLabels = new Map([
+				['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認']
+		]);
+		const explanations = {
+				schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+				timeout: '制限時間内に処理が完了しませんでした。',
+				permission: 'アクセス権限またはログイン状態の確認が必要な応答です。',
+				'not-found': '要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
+				http: 'サーバーからエラー応答が返りました。HTTP状態を確認できます。',
+				network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。',
+				'spec-change': '同じ機能で同じ種類の失敗が、別々の対象で続けて起きています。動画ごとの事情ではなく、ニコニコ側の仕様変更の可能性が高い状態です。「修正箇所の目安」のファイルと「読めなかった項目」から直す場所を探せます。',
+				script: 'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。',
+				'session-closed': '再生セッションが終了しました。',
+				unavailable: 'この動画の再生方式には未対応です。', service: 'サービス側の処理に失敗しました。',
+				integrity: '配布ファイルの照合に失敗しました。', 'module-load': '変換ライブラリを読み込めませんでした。',
+				external: '外部サイトからの再生に失敗しました。'
+		};
+		const reasonText = (reason) => typeof reason === 'string' && Object.prototype.hasOwnProperty.call(explanations, reason) ? explanations[reason] : undefined;
 		const description = (entry) => {
 				const d = entry.details || {};
 				if (d.outcome === 'recovered')
-						return 'その後の処理成功を確認しました。下の失敗理由・HTTP状態は最後の失敗時の記録です。';
+						return 'その後の処理成功を確認しました。下の失敗理由とステータスは最後の失敗時の記録です。';
 				if (d.reason === 'not-found' && (entry.source === 'advertising' || d.operation === 'advertising'))
 						return '広告APIが対象なしを返しました。広告なし・対象外・API変更などの可能性があり、この応答だけでは判別できません。調査できるよう記録を残しています。';
-				const explanations = {
-						schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
-						timeout: '制限時間内に処理が完了しませんでした。',
-						permission: 'アクセス権限またはログイン状態の確認が必要な応答です。',
-						'not-found': '要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
-						http: 'サーバーからエラー応答が返りました。HTTP状態を確認できます。',
-						network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。',
-						'spec-change': '同じ機能で同じ種類の失敗が、別々の対象で続けて起きています。動画ごとの事情ではなく、ニコニコ側の仕様変更の可能性が高い状態です。「修正箇所の目安」のファイルと「読めなかった項目」から直す場所を探せます。',
-						script: 'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。'
-				};
-				return explanations[String(d.reason)] || 'この通知について記録された情報を表示しています。';
+				return reasonText(d.reason) || 'この通知について記録された情報を表示しています。';
+		};
+		const reportFields = new Set([
+				'meta.status', 'data.threads', 'data.threadKey', 'data.contentUrl', 'data.session.content_uri', 'missing-thread-key', 'invalid-thread-envelope', 'invalid-global-count',
+				'invalid-thread-target', 'invalid-api-meta', 'msgInfo.threadInfo', 'threadInfo', 'videoId', 'data', 'data.client',
+				'data.client.watchId', 'data.client.watchTrackId', 'data.video', 'data.video.id', 'data.video.title',
+				'data.video.duration', 'data.video.count', 'data.video.thumbnail', 'data.player', 'data.genre', 'data.tags',
+				'data.tags.items', 'data.nicoads', 'data.isLogin', 'data.twitterLinkage.isLinked', 'data.isClipTweetAllowed',
+				'data.isUseLicensedMusic', 'data.clipId', 'data.status', 'data.clipUri', 'json', 'response.json'
+		]);
+		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+		const repairGuide = 'docs/maintenance/REPAIR_GUIDE.md';
+		const repairReport = (entry) => {
+				const d = entry.details || {};
+				const unknown = '記録なし（旧版・未分類など）';
+				const operation = String(d.operation || entry.source || '');
+				const registeredLabel = typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation);
+				let feature = Object.prototype.hasOwnProperty.call(labels, entry.category) ? labels[entry.category] : '通知';
+				let location = '修復ガイドの症状別の案内を参照';
+				if (registeredLabel) {
+						feature = registeredLabel + '（' + operation + '）';
+						location = modulePath(RequestDiagnostics.moduleFor(operation));
+				}
+				else if (operation === 'script-error') {
+						feature = 'スクリプトエラー（script-error）';
+				}
+				else if (operation === 'external-playback') {
+						feature = '外部サイトからの再生（external-playback）';
+						location = 'packages/external-playback/launcher.cjs';
+				}
+				else if (entry.source === 'comment') {
+						location = 'tools/typescript-stage1/nico-src/NicoVideoPlayerDialogComments.ts';
+				}
+				const version = typeof entry.version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,5}(?:-task\d{1,6})?$/.test(entry.version) ? entry.version : unknown;
+				const reason = reasonText(d.reason);
+				const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
+						'段階　' + (phaseLabels.get(String(d.phase)) || unknown),
+						'理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
+				if (d.outcome === 'recovered')
+						lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
+				if (validStatus(d.statusCode))
+						lines.push('HTTP状態　' + d.statusCode);
+				if (validStatus(d.apiStatus))
+						lines.push('API状態（meta.status）　' + d.apiStatus);
+				if (typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.isKnownErrorCode(d.errorCode))
+						lines.push('エラーコード　' + d.errorCode);
+				if (typeof d.errorName === 'string' && ['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError', 'Error'].includes(d.errorName))
+						lines.push('エラーの種類　' + d.errorName);
+				lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown), '修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
+				return lines.join('\n');
 		};
 		const mount = (root, events, isVisible = () => !!root?.classList.contains('activeTab')) => {
 				if (!root || root.querySelector('.zenzaNotificationHistory')) {
@@ -54041,14 +54326,15 @@ const NotificationHistoryPanel = (() => {
 						detailNode.append(back, element('p', 'znh-tag', stateLabel(entry)), element('h3', '', entry.message), element('p', '', description(entry)));
 						const pairs = [
 								['機能', featureLabel(entry)],
-								['段階', { transport: '通信', response: '応答の確認', session: '処理' }[String(entry.details?.phase)] || '記録なし'],
+								['段階', phaseLabels.get(String(entry.details?.phase)) || '記録なし'],
 								['発生回数', typeof entry.details?.count === 'number' ? entry.details.count + '回' : '1回'],
 								...(entry.details?.module ? [['修正箇所の目安', modulePath(String(entry.details.module))]] : []),
 								...(entry.details?.missing ? [['読めなかった項目', String(entry.details.missing)]] : []),
 								...(entry.details?.errorName ? [['エラーの種類', String(entry.details.errorName)]] : []),
 								...(entry.details?.where ? [['発生箇所', String(entry.details.where)]] : []),
 								...(typeof entry.details?.distinctTargets === 'number' ? [['同じ失敗が起きた対象', entry.details.distinctTargets + '件（30分以内）']] : []),
-								...(typeof entry.details?.statusCode === 'number' ? [['HTTP状態', String(entry.details.statusCode)]] : []),
+								...(validStatus(entry.details?.statusCode) ? [['HTTP状態', String(entry.details.statusCode)]] : []),
+								...(validStatus(entry.details?.apiStatus) ? [['API状態（meta.status）', String(entry.details.apiStatus)]] : []),
 								...(entry.details?.errorCode ? [['エラーコード', String(entry.details.errorCode)]] : []),
 								['発生時の版', entry.version || '記録なし（旧版など）'], ['ビルド', entry.build || '記録なし（旧版など）'],
 								['初回発生', formatTime(entry.firstOccurredAt)], ['最終発生', formatTime(entry.lastOccurredAt)],
@@ -54084,30 +54370,37 @@ const NotificationHistoryPanel = (() => {
 								activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
 								detailNode.append(activity);
 						}
+						const isProblem = entry.level === 'error' || entry.level === 'warning' ||
+								entry.details?.outcome === 'failed' || entry.details?.outcome === 'recovered' || !!entry.details?.reason;
 						if (entry.details?.outcome === 'recovered')
 								detailNode.append(element('p', '', 'この記録について追加の操作は不要です。'));
-						else if (entry.details?.outcome === 'failed' || entry.level === 'error' || entry.level === 'warning')
-								detailNode.append(element('p', '', '問題が続く場合は、下の「この記録をコピー」で発生時の情報を添えて報告できます。'));
 						const technical = element('details');
 						technical.open = wasOpen;
 						technical.append(element('summary', '', '技術的な詳細'), element('pre', '', JSON.stringify({ ...entry.details, source: entry.source }, null, 2)));
-						const copy = element('button', '', 'この記録をコピー');
+						const copy = element('button', '', isProblem ? '修復レポートをコピー' : 'この記録をコピー');
 						copy.type = 'button';
 						copy.dataset.historyAction = 'copy';
 						const copyStatus = element('p', 'znh-status');
 						copyStatus.setAttribute('role', 'status');
-						const diagnostic = NotificationJournal.toDiagnosticEntry(entry);
-						const report = [diagnostic.message, description(diagnostic), ...pairs.map(([key, value]) => key + ': ' + value), '診断情報: ' + JSON.stringify({ ...diagnostic.details, source: diagnostic.source })].join('\n');
+						let report;
+						if (isProblem) {
+								report = repairReport(entry);
+						}
+						else {
+								const diagnostic = NotificationJournal.toDiagnosticEntry(entry);
+								report = [diagnostic.message, description(diagnostic), ...pairs.map(([key, value]) => key + ': ' + value),
+										'診断情報: ' + JSON.stringify({ ...diagnostic.details, source: diagnostic.source })].join('\n');
+						}
 						copy.addEventListener('click', async () => {
 								try {
 										if (!window.navigator.clipboard?.writeText)
 												throw new Error('unavailable');
 										await window.navigator.clipboard.writeText(report);
-										if (!disposed && selectedId === entry.id)
-												copyStatus.textContent = 'この記録をコピーしました';
+										if (!disposed && selectedId === entry.id && copyStatus.isConnected)
+												copyStatus.textContent = isProblem ? '修復レポートをコピーしました。相談先に貼り付けてください。' : 'この記録をコピーしました';
 								}
 								catch {
-										if (disposed || selectedId !== entry.id)
+										if (disposed || selectedId !== entry.id || !copyStatus.isConnected)
 												return;
 										copyStatus.textContent = '自動コピーできませんでした。下の報告文を選択してコピーできます。';
 										let text = detailNode.querySelector('textarea');
@@ -54115,14 +54408,18 @@ const NotificationHistoryPanel = (() => {
 												text = element('textarea', 'znh-report');
 												text.readOnly = true;
 												text.setAttribute('aria-label', '報告文');
-												detailNode.append(text);
+												copyStatus.after(text);
 										}
 										text.value = report;
 										text.focus();
 										text.select();
 								}
 						});
-						detailNode.append(technical, copy, copyStatus);
+						detailNode.append(technical);
+						if (isProblem)
+								grid.before(copy, copyStatus);
+						else
+								detailNode.append(copy, copyStatus);
 						if (focused)
 								detailNode.querySelector('[data-history-action="' + focused + '"]')?.focus({ preventScroll: true });
 				};
@@ -54173,7 +54470,7 @@ const NotificationHistoryPanel = (() => {
 								const item = element('article', 'znh-entry');
 								item.dataset.level = entry.level;
 								const head = element('div', 'znh-head');
-								head.append(element('span', 'znh-tag', featureLabel(entry)), element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP')));
+								head.append(element('span', 'znh-tag', featureLabel(entry)), element('span', 'znh-date', formatTime(entry.timestamp)));
 								if (entry.videoId) {
 										head.append(element('span', 'znh-date', entry.videoId));
 								}
@@ -58994,6 +59291,7 @@ const NicoVideoPlayerDialogPlaylistSources = {
 						`親作品・子作品の表示情報の一部を取得できませんでした（動画は追加済み。表示した項目から詳細を取得します）`);
 		},
 };
+// already required
 const NicoVideoPlayerDialogComments = {
 		_ensureCommentHistory() {
 				if (this._commentHistory) {
@@ -59004,7 +59302,9 @@ const NicoVideoPlayerDialogComments = {
 				}
 				try {
 						return this._commentHistory = ZenzaCommentHistoryCore.createHistoryFeature({
-								dialog: this, config: this._playerConfig, window
+								dialog: this, config: this._playerConfig, window,
+								beginRead: (videoId, active) => RequestDiagnostics.begin('comment-history-read', videoId, 'response', active),
+								beginKey: (videoId, active) => RequestDiagnostics.begin('comment-key', videoId, 'response', active)
 						});
 				}
 				catch (error) {
@@ -61023,7 +61323,15 @@ class NicoVideoPlayerDialog extends Emitter {
 						pending.dispose();
 				}
 				if (!session) {
-						session = await VideoSessionWorker.create({ videoInfo, videoQuality, serverType, useHLS });
+						try {
+								session = await VideoSessionWorker.create({ videoInfo, videoQuality, serverType, useHLS, diagnosticActive: () => !isStale() });
+						}
+						catch (error) {
+								if (!isStale()) {
+										this._onVideoSessionFail(serverType, error);
+								}
+								return;
+						}
 						if (isStale()) {
 								Promise.resolve(session.close()).catch(() => { });
 								return;
@@ -76243,9 +76551,10 @@ class HoverMenu {
 								const message = String(error?.message ?? error ?? '').slice(0, 300);
 								const where = scriptErrorWhere(stack).replace(/[^A-Za-z0-9_.$@<>-]/g, '').slice(0, 100);
 								const missing = RequestDiagnostics?.missingFromMessage?.(message);
-								NotificationJournal.recordDiagnostic('script-error-' + name + '-' + (where || message.slice(0, 40)), {
+								const locationKey = (where || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 90);
+								NotificationJournal.recordDiagnostic('diag-script-' + name.toLowerCase() + '-' + locationKey, {
 										category: 'system', source: 'script-error', level: 'error',
-										message: 'ZenzaWatch のスクリプトエラー: ' + name + ': ' + message,
+										message: 'ZenzaWatch のスクリプトエラー（' + name + '）',
 										details: { operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name,
 												...(where ? { where } : {}), ...(missing ? { missing } : {}) }
 								});
@@ -76926,7 +77235,7 @@ const replaceRedirectLinks = async () => {
 				}
 				if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
 						NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
-						RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
+						const recordRequestDiagnostic = (event) => NotificationJournal.recordDiagnostic(event.key, {
 								category: 'network', source: event.operation, message: event.message,
 								level: event.outcome === 'recovered' ? 'success' :
 										['spec-change', 'script'].includes(event.reason) ? 'error' :
@@ -76934,12 +77243,14 @@ const replaceRedirectLinks = async () => {
 								details: { operation: event.operation, phase: event.phase, outcome: event.outcome,
 										reason: event.reason, elapsedMs: event.elapsedMs,
 										...(event.statusCode === undefined ? {} : { statusCode: event.statusCode }),
+										...(event.apiStatus === undefined ? {} : { apiStatus: event.apiStatus }),
 										...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }),
 										...(event.missing === undefined ? {} : { missing: event.missing }),
 										...(event.errorName === undefined ? {} : { errorName: event.errorName }),
 										...(event.module === undefined ? {} : { module: event.module }),
 										...(event.distinctTargets === undefined ? {} : { distinctTargets: event.distinctTargets }) }
-						}));
+						});
+						RequestDiagnostics.setSink(recordRequestDiagnostic);
 				}
 				if (typeof NotificationJournal !== 'undefined') {
 						installScriptErrorJournal();
@@ -87771,6 +88082,59 @@ const VideoSessionWorker = (() => {
 								}
 						}
 				};
+				class SessionResponseError extends Error {
+						details;
+						constructor(details) {
+								super('再生許可の応答を確認できませんでした');
+								this.details = details;
+						}
+				}
+				const readSessionResponse = async (response, serverType) => {
+						const httpStatus = response.status;
+						const schemaError = (missing) => new SessionResponseError({
+								kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing, httpStatus
+						});
+						if (httpStatus >= 300) {
+								throw new SessionResponseError({ httpStatus });
+						}
+						let result;
+						try {
+								result = await response.json();
+						}
+						catch (error) {
+								if (error?.name === 'SyntaxError') {
+										throw schemaError('response.json');
+								}
+								throw error;
+						}
+						const rawStatus = result?.meta?.status;
+						if (rawStatus != null || serverType === 'domand') {
+								const apiStatus = typeof rawStatus === 'string' && /^\d{3}$/.test(rawStatus) ? Number(rawStatus) : rawStatus;
+								if (!Number.isInteger(apiStatus) || apiStatus < 200 || apiStatus > 599) {
+										throw schemaError('meta.status');
+								}
+								if (apiStatus >= 300) {
+										throw new SessionResponseError({ httpStatus, apiStatus });
+								}
+						}
+						const isDomand = serverType === 'domand';
+						const value = isDomand ? result?.data?.contentUrl : result?.data?.session?.content_uri;
+						const missing = isDomand ? 'data.contentUrl' : 'data.session.content_uri';
+						if (typeof value !== 'string' || !/^(?:https?:)?\/\//i.test(value)) {
+								throw schemaError(missing);
+						}
+						let parsed;
+						try {
+								parsed = new URL(value, 'https://www.nicovideo.jp');
+						}
+						catch (_) {
+								throw schemaError(missing);
+						}
+						if (!parsed.hostname || parsed.username || parsed.password) {
+								throw schemaError(missing);
+						}
+						return result;
+				};
 				class DmcPostData {
 						constructor(dmcInfo, videoQuality, { useHLS = true, useSSL = false }) {
 								this._dmcInfo = dmcInfo;
@@ -88021,10 +88385,7 @@ const VideoSessionWorker = (() => {
 										},
 										credentials: 'include',
 										body: JSON.stringify(this._buildOutputsMatrix(videos, audioFormat))
-								}).then(res => res.json());
-								if (result.meta.status == null || result.meta.status >= 300) {
-										throw new Error('cannot create domand session', result);
-								}
+								}).then(res => readSessionResponse(res, 'domand'));
 								this._lastResponse = result.data || {};
 								const { contentUrl, expireTime } = this._lastResponse;
 								this._lastUpdate = Date.now();
@@ -88092,7 +88453,7 @@ const VideoSessionWorker = (() => {
 												timeout: 10000,
 												dataType: 'text',
 												body: postData.toString()
-										}).then(res => res.json())
+										}).then(res => readSessionResponse(res, 'dmc'))
 												.then(json => {
 												const data = json.data || {}, session = data.session || {};
 												const sessionId = session.id;
@@ -88121,7 +88482,12 @@ const VideoSessionWorker = (() => {
 												resolve(this.info);
 										}).catch(err => {
 												console.error('create api fail');
-												reject(err.message || err);
+												if (err instanceof SessionResponseError || ['AbortError', 'timeout', 'TimeoutError'].includes(err?.name)) {
+														reject(err);
+												}
+												else {
+														reject(err.message || err);
+												}
 										});
 								});
 						}
@@ -88250,7 +88616,20 @@ const VideoSessionWorker = (() => {
 						const session = findSession(sessionId);
 						if (!session)
 								throw new Error('session mismatch');
-						const connected = await session.connect();
+						let connected;
+						try {
+								connected = await session.connect();
+						}
+						catch (error) {
+								if (error instanceof SessionResponseError) {
+										return { sessionFailure: error.details };
+								}
+								const name = error?.name;
+								if (name === 'AbortError' || name === 'timeout' || name === 'TimeoutError') {
+										return { sessionFailure: { name } };
+								}
+								throw error;
+						}
 						if (findSession(sessionId) !== session)
 								throw new Error('session superseded');
 						return connected;
@@ -88335,7 +88714,7 @@ const VideoSessionWorker = (() => {
 		let worker;
 		let diagnosticGeneration = 0;
 		const observeSession = async (scope, active, operation) => {
-				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+				const diagnostic = typeof RequestDiagnostics === 'undefined' || !active() ? null :
 						RequestDiagnostics.begin('video-session', scope, 'session', active);
 				try {
 						const result = await operation();
@@ -88357,12 +88736,11 @@ const VideoSessionWorker = (() => {
 				});
 				return undefined;
 		};
-		const create = async ({ videoInfo, videoQuality, serverType, useHLS, prefetch = false }) => {
+		const create = async ({ videoInfo, videoQuality, serverType, useHLS, prefetch = false, diagnosticActive = () => true }) => {
 				let generation = prefetch ? diagnosticGeneration : ++diagnosticGeneration;
 				let closed = false;
 				let promoted = false;
-				const active = () => !closed && (prefetch && !promoted || generation === diagnosticGeneration);
-				await initWorker();
+				const active = () => !closed && (!prefetch || promoted) && generation === diagnosticGeneration && diagnosticActive();
 				const params = {
 						videoInfo: videoInfo.toJSON(),
 						videoQuality,
@@ -88371,12 +88749,21 @@ const VideoSessionWorker = (() => {
 						...(prefetch ? { prefetch: true } : {})
 				};
 				const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
-				const result = await observeSession(scope + '-create', active, () => worker.post({ command: 'create', params }));
+				const result = await observeSession(scope + '-create', active, async () => {
+						await initWorker();
+						return worker.post({ command: 'create', params });
+				});
 				const sessionId = result.sessionId;
 				return Object.assign(result, {
-						connect: () => observeSession(scope + '-connect', active, () => worker.post({ command: 'connect', params: { sessionId } })),
+						connect: () => observeSession(scope + '-connect', active, async () => {
+								const connected = await worker.post({ command: 'connect', params: { sessionId } });
+								if (connected?.sessionFailure) {
+										throw Object.assign(new Error('再生許可の応答を確認できませんでした'), connected.sessionFailure);
+								}
+								return connected;
+						}),
 						getState: () => {
-								const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+								const diagnostic = typeof RequestDiagnostics === 'undefined' || !active() ? null :
 										RequestDiagnostics.begin('session-state', scope, 'session', active);
 								return worker.post({ command: 'getState', params: { sessionId } }).then(state => {
 										if (state?.isAbnormallyClosed) {
@@ -89132,8 +89519,13 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 		await AntiPrototypeJs();
 		if (window.ZenzaLib) {
 			window.ZenzaJQuery = window.ZenzaLib.$;
+			const reportStartupFailure = () => {
+				if (location.host === 'www.nicovideo.jp') {
+					console.warn('[ZenzaWatch] 起動診断：プレイヤー本体の初期化に失敗しました。');
+				}
+			};
 			const blob = new Blob([
-				`(${monkey})('${PRODUCT}', '${encodeURIComponent(START_PAGE_QUERY)}');\n//# sourceURL=ZenzaWatchMain.js`
+				`(${monkey})(${JSON.stringify(PRODUCT)}, ${JSON.stringify(encodeURIComponent(START_PAGE_QUERY))}).catch(error => { (${reportStartupFailure})(); throw error; });\n//# sourceURL=ZenzaWatchMain.js`
 			], {type: 'text/javascript'});
 			const src = URL.createObjectURL(blob);
 			const handler = () => {
@@ -89144,7 +89536,10 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 				if (window.ZenzaWatch) { return; }
 				Promise.resolve()
 					.then(() => monkey(PRODUCT, encodeURIComponent(START_PAGE_QUERY)))
-					.catch(err => console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err));
+					.catch(err => {
+						if (host === 'www.nicovideo.jp') { reportStartupFailure(); }
+						else { console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err); }
+					});
 			};
 			const script = Object.assign(document.createElement('script'), {
 				id: `${PRODUCT}Loader`,
@@ -89297,7 +89692,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.473-task1096",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.475-task1098",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {read} from './nico-api-harness.mjs';
+import {ZenzaCommentHistoryCore} from '../../../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 
 const ts=read('tools/typescript-stage1/nico-src/ThreadLoader.ts');
 const js=read('packages/lib/src/nico/ThreadLoader.js');
@@ -43,7 +44,8 @@ function noLeak(c){
 function subject(method,extra={}){
   const c=capture();
   const s=runInNewContext('({'+method+'\n})',{
-    console:c.console,window:{console:c.console},URL,
+    console:c.console,window:{console:c.console},URL,ZenzaCommentHistoryCore,
+    commentSchemaError:reason=>({kind:'schema',errorCode:'RESPONSE_SCHEMA',reason}),
     FRONT_ID:'6',FRONT_VER:'0',threadLogSequence:0,
     checkAbort:(signal)=>{if(signal?.aborted)throw Object.assign(new Error('synthetic abort'),{name:'AbortError'});},
     readJson:async()=>({meta:{status:200},data:{threads:[],globalComments:[]}}),

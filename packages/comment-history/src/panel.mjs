@@ -1,6 +1,7 @@
 import {SETTINGS_SCHEMA} from './settings.mjs';
 import {HISTORY_PRESETS,createBrowserHistoryPreferences} from './browser-preferences.mjs';
 import {CommentHistoryController} from './controller.mjs';
+import {HistorySession} from './session.mjs';
 
 export const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
 const CSS=`
@@ -166,10 +167,11 @@ export class CommentHistoryPanel {
   dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
 }
 
-export function createHistoryFeature({dialog,config,window:win=globalThis.window}){
+export function createHistoryFeature({dialog,config,window:win=globalThis.window,beginRead,beginKey}){
   const preferences=createBrowserHistoryPreferences({window:win,config});
   const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
   const controller=new CommentHistoryController({preferences,acquire,displayLimit:()=>preferences.get().settings.maxAdditionalComments,
+    createSession:(context,options)=>new HistorySession(context,{...options,beginRead,beginKey}),
     render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
     clearRender:options=>dialog._nicoVideoPlayer?.clearCommentHistory(options),
     notify:text=>dialog.execCommand('notify',text)});

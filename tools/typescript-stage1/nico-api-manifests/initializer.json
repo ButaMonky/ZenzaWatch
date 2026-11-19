@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/initializer.ts",
   "runtime": "src/initializer.js",
-  "sourceSha256": "9477ec74ad2c5e28f1b7a5eb3c5db2abfdab23a66a55759a927f6fc081d10286",
-  "runtimeSha256": "5c490f696c54e85c1d0bd2bafe2874b05c76363f8dd4b4b9918aa7a59b320e8a"
+  "sourceSha256": "7b9c7f530ae2625a90f80179a3c377dcd00273772612e75fd752a1a9af38d673",
+  "runtimeSha256": "756945b3e30129f00402c2e5fa077bcca3f69f7dabf4b86bef7ab985b89c09ba"
 }

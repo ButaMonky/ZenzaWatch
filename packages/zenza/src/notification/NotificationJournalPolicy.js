@@ -5,7 +5,7 @@ const NotificationJournalPolicy = (() => {
     const levels = new Set(['info', 'success', 'warning', 'error']);
     const categories = new Set(['general', 'comment', 'like', 'network', 'player', 'system']);
     const safeKeys = new Set([
-        'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode',
+        'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode', 'apiStatus',
         'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
         'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs',
         // Task1036: 修正箇所の目安・読めなかった項目・発生箇所・仕様変更の疑いの件数。
@@ -46,6 +46,12 @@ const NotificationJournalPolicy = (() => {
         const fields = data;
         for (const key of safeKeys) {
             const value = fields[key];
+            if (key === 'apiStatus' || key === 'statusCode') {
+                if (typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599) {
+                    result[key] = value;
+                }
+                continue;
+            }
             if (typeof value === 'boolean') {
                 result[key] = value;
             }
@@ -125,7 +131,7 @@ const NotificationJournalPolicy = (() => {
             // Task1040: 動画の最後のニコニ広告一覧は、広告・ギフト・提供情報とは別にON/OFFする（初期値ON）
             'nicoad-end': 'nicoadEnd',
             'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
-            'comment-read': 'comment', 'comment-key': 'comment',
+            'comment-read': 'comment', 'comment-history-read': 'comment', 'comment-key': 'comment',
             'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',
             like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
             tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',

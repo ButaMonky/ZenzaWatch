@@ -1,3 +1,4 @@
+import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 import * as $ from 'jquery';
 import * as _ from 'lodash';
 import {global} from './ZenzaContext';
@@ -45,6 +46,7 @@ import {NicoVideoPlayerDialog} from './NicoVideoPlayerDialog';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/NicoVideoPlayerDialogComments.ts (Task1060). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 /** コメントの読み込み・投稿・削除・NG 登録と、コメント履歴。 */
 const NicoVideoPlayerDialogComments = {
     _ensureCommentHistory() {
@@ -56,7 +58,9 @@ const NicoVideoPlayerDialogComments = {
         }
         try {
             return this._commentHistory = ZenzaCommentHistoryCore.createHistoryFeature({
-                dialog: this, config: this._playerConfig, window
+                dialog: this, config: this._playerConfig, window,
+                beginRead: (videoId, active) => RequestDiagnostics.begin('comment-history-read', videoId, 'response', active),
+                beginKey: (videoId, active) => RequestDiagnostics.begin('comment-key', videoId, 'response', active)
             });
         }
         catch (error) {

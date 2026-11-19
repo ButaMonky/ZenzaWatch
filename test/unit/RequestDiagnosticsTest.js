@@ -21,6 +21,23 @@ describe('Request diagnostics boundaries',()=>{
   tickets[0].failure({status:503});assert.equal(events.length,3);
   tickets.slice(1).forEach(t=>t.success());
  });
+ it('separates the watch page, playback grant and scene images during startup',()=>{
+  const {diag,events}=harness();
+  const origin='https://nvapi.nicovideo.jp';
+  for(const [url,operation] of [
+   ['https://www.nicovideo.jp/watch/sm9','video-info'],
+   [origin+'/v4/watch/lazy/sm9','video-info'],
+   [origin+'/v1/watch/sm9/access-rights/hls?actionTrackId=PRIVATE','video-session'],
+   [origin+'/v1/watch/sm9/access-rights/storyboard?actionTrackId=PRIVATE','storyboard']
+  ]){
+   diag.startRequest(url).response({status:503});
+   assert.equal(events.at(-1).operation,operation);
+   diag.startRequest(url).response({status:200});
+   assert.equal(events.at(-1).outcome,'recovered');
+   assert.equal(events.at(-1).operation,operation);
+  }
+  assert(!JSON.stringify(events).includes('PRIVATE'));
+ });
  it('reports safe transport failure and recovery without altering the response',()=>{
   const {diag,events}=harness();
   const url='https://nvapi.nicovideo.jp/v1/videos/sm9?token=DO_NOT_STORE';

@@ -55,6 +55,8 @@ describe('Task1036 spec-change diagnostics',()=>{
   assert.equal(policy.recordingGroup(entry),'specChange');
   const script=policy.normalize({category:'system',message:'x',details:{operation:'script-error',reason:'script'}},{id:'b',timestamp:1});
   assert.equal(policy.recordingGroup(script),'scriptError');
+  const history=policy.normalize({category:'network',message:'x',details:{operation:'comment-history-read',reason:'network'}},{id:'history',timestamp:1});
+  assert.equal(policy.recordingGroup(history),'comment');
   const nicoru=policy.normalize({category:'network',message:'x',details:{operation:'nicoru',reason:'script'}},{id:'c',timestamp:1});
   assert.equal(policy.recordingGroup(nicoru),'commentAction');
   const url=policy.normalize({message:'x',details:{missing:'https://evil.example/a?token=1'}},{id:'d',timestamp:1});

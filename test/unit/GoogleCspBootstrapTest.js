@@ -26,7 +26,7 @@ function makeHarness(injection = 'fail') {
   const context = createContext({
     window: win, location: win.location,
     URL: fakeURL,
-    Blob: class {},
+    Blob: class {constructor(parts) {win.injectedCode=parts.join('');}},
     AntiPrototypeJs: async () => {},
     GateAPI: {},
     console
@@ -47,6 +47,26 @@ describe('Task311 Google strict CSP startup recovery', () => {
     await Promise.resolve();
     assert.strictEqual(h.calls.filter(x => Array.isArray(x) && x[0] === 'run').length, 1);
     assert(h.calls.includes('revoke'));
+  });
+  it('starts the injected player with a search term containing an apostrophe', async () => {
+    const h=makeHarness('success');
+    const query="keyword=rock'n'roll";
+    await h.boot(function (product, encoded) {
+      window.startedQuery=decodeURIComponent(encoded);
+      return Promise.resolve();
+    }, 'ZenzaWatch', query);
+    await run(h.win.injectedCode, createContext({window:h.win, location:h.win.location, console}));
+    assert.strictEqual(h.win.startedQuery,query);
+  });
+  it('leaves a fixed diagnostic when the main player fails before the journal opens', async () => {
+    const h = makeHarness('success');
+    h.win.location.host='www.nicovideo.jp';
+    h.win.location.href='https://www.nicovideo.jp/search/private-search';
+    await h.boot(function () { return Promise.reject(Error('private-failure')); }, 'ZenzaWatch', 'private-query');
+    const messages=[];
+    const context=createContext({window:h.win, location:h.win.location, console:{warn:(...args)=>messages.push(args)}});
+    await assert.rejects(run(h.win.injectedCode, context), /private-failure/);
+    assert.deepStrictEqual(messages,[['[ZenzaWatch] 起動診断：プレイヤー本体の初期化に失敗しました。']]);
   });
   it('does not duplicate a successful page-script bootstrap', async () => {
     const h = makeHarness('success');

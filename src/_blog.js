@@ -6,7 +6,7 @@
 // @grant          none
 // @author         segabito macmoto
 // @license        public domain
-// @version        1.1.47-task1096
+// @version        1.1.49-task1098
 // ==/UserScript==
 
 

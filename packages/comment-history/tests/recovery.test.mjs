@@ -14,10 +14,19 @@ test('key refresh uses exact read-only GET endpoint and session credentials',asy
  }});assert.equal(n.threadKey,'NEW_PRIVATE_KEY');assert.equal(c.threadKey,KEY);
 });
 test('malformed or empty refreshed key is rejected',async()=>{
- for(const key of ['',null,42])await assert.rejects(()=>requestThreadKey(ctx(),{fetchImpl:async()=>response({meta:{status:200},data:{threadKey:key}})}),e=>e.code==='MISSING_KEY');
+ for(const key of ['', ' \t',null,42])await assert.rejects(()=>requestThreadKey(ctx(),{fetchImpl:async()=>response({meta:{status:200},data:{threadKey:key}})}),e=>e.code==='MISSING_KEY'&&e.missing==='data.threadKey');
+ await assert.rejects(()=>requestThreadKey(ctx(),{fetchImpl:async()=>response({data:{threadKey:'PRIVATE'}})}),e=>e.code==='RESPONSE_SCHEMA'&&e.missing==='meta.status');
 });
 test('refresh failure is sanitized, not interpreted as an empty page',async()=>{
  await assert.rejects(()=>requestThreadKey(ctx(),{fetchImpl:async()=>response({meta:{status:403,errorCode:'FORBIDDEN',message:'SECRET'}},403)}),e=>e.code==='API_ERROR'&&!JSON.stringify(e).includes('SECRET'));
+});
+test('a denied key envelope preserves HTTP and API statuses and leaves the original key intact',async()=>{
+ const c=ctx();
+ await assert.rejects(()=>requestThreadKey(c,{fetchImpl:async()=>response({
+  meta:{status:401,errorCode:'FORBIDDEN'},data:{threadKey:'PRIVATE_DENIED_KEY'}
+ },200)}),error=>error.code==='API_ERROR'&&error.httpStatus===200&&error.apiStatus===401&&
+  error.apiCode==='FORBIDDEN'&&!JSON.stringify(error).includes('PRIVATE_DENIED_KEY'));
+ assert.equal(c.threadKey,KEY);
 });
 test('metadata GET is bounded and unwraps current watchV4 format',async()=>{
  const c=await requestWatchContext('sm1',{fetchImpl:async(url,init)=>{assert.equal(url,'https://www.nicovideo.jp/watch/sm1?responseType=json');assert.equal(init.credentials,'include');return response(watch());}});

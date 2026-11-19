@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/ThreadLoader.ts",
   "runtime": "packages/lib/src/nico/ThreadLoader.js",
-  "sourceSha256": "50d78eb51294f7facf9132d4435c0b7c75d2755cfd0ad9ac8a9ab81cc5618393",
-  "runtimeSha256": "98445f278d779c408d9394d97cc4fcf57784db203cd90b61bb73505248d47265"
+  "sourceSha256": "94c0da63811fe477105a823f824acebb193ecd89e5a102cea43c7804d9703f62",
+  "runtimeSha256": "ced9d4117b5842eef9458b02a3c62a5cb9222a815aec5a1f56c2abda135b4eb5"
 }

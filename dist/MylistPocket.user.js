@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.96-task1095
+// @version     0.5.98-task1098
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-19 01:28Z dba390dc
+// build: 2026-11-19 06:23Z c48fe360
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -3037,8 +3037,8 @@ const nicoUtil = {
 Object.assign(util, nicoUtil);
 const RequestDiagnostics = (() => {
 		const labels = {
-				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
-				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
+				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-history-read': 'コメント増量（過去のコメントを追加取得）', 'comment-key': 'コメント取得キーの更新',
+				'video-session': '再生セッション（映像の配信URL取得）', 'session-state': '再生セッションの維持',
 				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
 				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
 				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
@@ -3052,8 +3052,9 @@ const RequestDiagnostics = (() => {
 				'clip-post': 'クリップのX投稿', 'clip-post-status': 'クリップのX投稿状況', 'clip-delete': 'クリップの削除'
 		};
 		const modules = {
-				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'nico-src/CommentReadAdapter.ts',
-				'comment-key': 'nico-src/ThreadLoader.ts', 'video-session': 'nico-src/VideoSessionWorker.ts',
+				'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'packages/comment-history/src/core.mjs',
+				'comment-history-read': 'packages/comment-history/src/core.mjs',
+				'comment-key': 'packages/comment-history/src/core.mjs', 'video-session': 'nico-src/VideoSessionWorker.ts',
 				'session-state': 'nico-src/VideoSessionWorker.ts', storyboard: 'nico-src/Storyboard.ts',
 				search: 'nico-src/VideoSearch.ts', mylist: 'nico-src/MylistApiLoader.ts', playlist: 'nico-src/PlaylistApiLoader.ts',
 				like: 'nico-src/LikeApi.ts', tags: 'nico-src/TagEditApi.ts', 'nico-api': 'nico-src/RequestDiagnostics.ts',
@@ -3091,10 +3092,11 @@ const RequestDiagnostics = (() => {
 		const suspectReported = new Map();
 		const suspectReason = (failure) => failure.reason === 'schema' ||
 				(failure.reason === 'http' && [400, 410, 422].includes(Number(failure.statusCode))) ||
+				(failure.reason === 'service' && [400, 410, 422].includes(Number(failure.apiStatus))) ||
 				['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
 		const noteSuspect = (operation, key, failure, now) => {
-				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || failure.statusCode || '') +
-						(operation.startsWith('clip-') ? '|' + (failure.missing || '') : '');
+				const group = operation + '|' + failure.reason + '|' + (failure.errorCode || (failure.reason === 'service' ? failure.apiStatus : undefined) || failure.statusCode || '') +
+						(operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ? '|' + (failure.missing || '') : '');
 				const seen = suspects.get(group) || new Map();
 				seen.set(key, now);
 				for (const [k, at] of seen) {
@@ -3124,15 +3126,22 @@ const RequestDiagnostics = (() => {
 				}
 				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
 		};
+		const knownErrorCodes = new Set(['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
+				'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
+		const isKnownErrorCode = (value) => typeof value === 'string' && knownErrorCodes.has(value);
+		const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
 		const classify = (error) => {
 				const outer = error && typeof error === 'object' ? error : {};
 				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
-				const status = e.statusCode ?? e.status ?? e.httpStatus;
-				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-						'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND'];
+				const httpStatus = e.httpStatus ?? e.statusCode ?? e.status;
+				const apiStatus = validStatus(e.apiStatus) ? e.apiStatus : undefined;
+				const apiRejected = apiStatus !== undefined && apiStatus >= 300 &&
+						!(validStatus(httpStatus) && httpStatus >= 300);
+				const status = apiRejected ? apiStatus : httpStatus;
 				const fields = {
-						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
-						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
+						...(validStatus(httpStatus) ? { statusCode: httpStatus } : {}),
+						...(apiStatus !== undefined ? { apiStatus } : {}),
+						...(typeof e.errorCode === 'string' ? { errorCode: isKnownErrorCode(e.errorCode) ? e.errorCode : 'OTHER' } : {})
 				};
 				const missing = fieldName(e.missing) ||
 						(e.kind === 'schema' || /_SCHEMA$/.test(String(e.errorCode)) ? fieldName(e.reasonCode) || fieldName(e.reason) : undefined);
@@ -3166,6 +3175,9 @@ const RequestDiagnostics = (() => {
 				if (status === 401 || status === 403 || ['forbidden', 'need payment', 'premium only', 'member only'].includes(String(e.reason))) {
 						return { reason: 'permission', ...fields };
 				}
+				if (apiRejected) {
+						return { reason: 'service', ...fields };
+				}
 				if (e.reason === 'not supported') {
 						return { reason: 'unavailable', ...fields };
 				}
@@ -3179,7 +3191,57 @@ const RequestDiagnostics = (() => {
 				if (fields.statusCode) {
 						return { reason: 'http', ...fields };
 				}
+				if (apiStatus !== undefined && fields.errorCode) {
+						return { reason: 'service', ...fields };
+				}
 				return { reason: 'network' };
+		};
+		const classifyHistoryRead = (error, key = false) => {
+				const e = error && typeof error === 'object' ? error : {};
+				const code = e.code;
+				const statuses = { httpStatus: e.httpStatus, apiStatus: key ? e.apiStatus : undefined };
+				if (['RESPONSE_SCHEMA', 'COMMENT_SCHEMA', 'TARGET_SCHEMA', 'TARGET_NOT_ALLOWED', 'MISSING_TARGET', 'INVALID_JSON'].includes(String(code)) ||
+						(key && code === 'MISSING_KEY')) {
+						const missing = e.missing === 'meta.status' || e.missing === (key ? 'data.threadKey' : 'data.threads') ? e.missing : undefined;
+						return classify({ ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', ...(missing ? { missing } : {}) });
+				}
+				if (code === 'TIMEOUT') {
+						return { reason: 'timeout' };
+				}
+				if (code === 'NETWORK_ERROR') {
+						return { reason: 'network' };
+				}
+				if (code === 'TOKEN_INVALID' || code === 'TOKEN_EXPIRED') {
+						return { ...classify({ ...statuses, errorCode: code === 'TOKEN_INVALID' ? 'INVALID_TOKEN' : 'EXPIRED_TOKEN' }), reason: 'permission' };
+				}
+				if (['HTTP_ERROR', 'API_ERROR', 'RATE_LIMITED'].includes(String(code))) {
+						const result = classify({ ...statuses, errorCode: e.apiCode });
+						if (result.reason === 'network' || result.reason === 'http' && Number(result.statusCode) < 400) {
+								result.reason = 'service';
+						}
+						return result;
+				}
+				return { reason: 'cancelled' };
+		};
+		const classifyCommentKey = (error) => {
+				const outer = error && typeof error === 'object' ? error : {};
+				if (outer.code !== undefined && (outer.name === 'HistoryError' || outer.code === 'TIMEOUT' || outer.code === 'CANCELLED')) {
+						return classifyHistoryRead(outer, true);
+				}
+				const statuses = { httpStatus: outer.httpStatus ?? outer.status, apiStatus: outer.apiStatus };
+				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				if (e.kind === 'schema' || e.name === 'SyntaxError') {
+						const missing = e.missing === 'data.threadKey' || e.missing === 'meta.status' ? e.missing : undefined;
+						return classify({ ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', ...(missing ? { missing } : {}) });
+				}
+				const result = classify({ ...statuses, errorCode: e.errorCode, name: e.name });
+				if (e.errorCode === 'EXPIRED_TOKEN' || e.errorCode === 'INVALID_TOKEN') {
+						result.reason = 'permission';
+				}
+				else if (e.errorCode && (result.reason === 'network' || result.reason === 'http' && Number(result.statusCode) < 400)) {
+						result.reason = 'service';
+				}
+				return result;
 		};
 		const begin = (operation, scope, phase, active = () => true) => {
 				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
@@ -3247,7 +3309,9 @@ const RequestDiagnostics = (() => {
 				};
 				const failure = (error) => {
 						try {
-								emit('failed', classify(error));
+								const result = operation === 'comment-history-read' ? classifyHistoryRead(error) :
+										operation === 'comment-key' ? classifyCommentKey(error) : classify(error);
+								emit('failed', result);
 						}
 						catch (_) { /* untrusted error properties */ }
 				};
@@ -3301,6 +3365,12 @@ const RequestDiagnostics = (() => {
 						if (/\/watch-later(?:\/|$)/.test(p)) {
 								return 'mylist';
 						}
+						if (/\/access-rights\/storyboard\/?$/.test(p)) {
+								return 'storyboard';
+						}
+						if (/\/access-rights\//.test(p)) {
+								return 'video-session';
+						}
 						if (/\/watch\//.test(p)) {
 								return 'video-info';
 						}
@@ -3309,9 +3379,6 @@ const RequestDiagnostics = (() => {
 						}
 						if (/\/threads(?:\/|$)/.test(p)) {
 								return 'comment-read';
-						}
-						if (/\/access-rights\//.test(p)) {
-								return 'video-session';
 						}
 						if (/storyboard/.test(p)) {
 								return 'storyboard';
@@ -3380,7 +3447,7 @@ const RequestDiagnostics = (() => {
 		};
 		const setSink = (next) => { sink = next; };
 		const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
-		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor };
+		return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode };
 })();
 const netUtil = {
 		abortableFetch: async (url, params = {}) => {
@@ -7459,7 +7526,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.96-task1095', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.98-task1098', 'background: #ccf;');
       await config.promise('restore');
       window.addEventListener('click', openPocketLinkInNewTab, true);
       initDom();

@@ -26,7 +26,8 @@ function beginSection(rel) {
   }
   if (rel === 'packages/lib/src/nico/ThreadLoader.js') {
     return beginSection('packages/lib/src/nico/CommentPostWire.js') + '\n' +
-      beginSection('packages/lib/src/nico/CommentReadAdapter.js') + '\n' + body;
+      beginSection('packages/lib/src/nico/CommentReadAdapter.js') + '\n' +
+      beginSection('packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js') + '\n' + body;
   }
   if (rel === 'packages/lib/src/nico/VideoInfoLoader.js') {
     return beginSection('packages/lib/src/nico/CommentPostTarget.js') + '\n' + body;

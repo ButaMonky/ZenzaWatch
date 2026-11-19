@@ -12,14 +12,15 @@ const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limi
  * No renderer, posting, DOM, Zenza Config, disk cache or automatic resume dependency.
  */
 export class HistorySession {
-  #context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;
+  #context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;#beginRead;#beginKey;
   #controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
-  constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey}={}){
+  constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey,beginRead,beginKey}={}){
     this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
     this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
     if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
     this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
     this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
+    this.#beginRead=beginRead;this.#beginKey=beginKey;
     this.#store=new LayeredCommentStore(context);
     this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
       settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
@@ -44,19 +45,40 @@ export class HistorySession {
     }catch{throw new HistoryError('CONTEXT_CHANGED');}
     return withThreadKey(previous,next.threadKey);
   }
+  async #observeAttempt(begin,{signal},work){
+    const sessionSignal=this.#controller.signal;
+    const ticket=begin?.(this.#context.videoId,()=>!sessionSignal.aborted);
+    // The coordinator aborts an attempt for either a timeout or a user stop. Only the former is a failure.
+    const onAbort=()=>ticket?.failure({code:sessionSignal.aborted?'CANCELLED':'TIMEOUT'});
+    if(ticket)signal.addEventListener('abort',onAbort,{once:true});
+    try{
+      const result=await work();
+      assertNotCancelled(signal);
+      ticket?.success();
+      return result;
+    }catch(error){
+      ticket?.failure(error);
+      throw error;
+    }finally{
+      if(ticket)signal.removeEventListener('abort',onAbort);
+    }
+  }
   async #page(request,onRetry){
     const signal=this.#controller.signal;
     while(true){
       assertNotCancelled(signal);
       try{
-        return await this.#coordinator.execute(async ({signal,timeoutMs})=>{
-          const data=await this.#fetchPage(this.#context,{...request,signal,timeoutMs});assertNotCancelled(signal);
-          return validateThreads({meta:{status:200},data:{threads:data}},this.#context,request.targets);
-        },{signal,kind:'comment',onRetry});
+        return await this.#coordinator.execute(options=>this.#observeAttempt(this.#beginRead,options,async()=>{
+          const threads=await this.#fetchPage(this.#context,{...request,...options});
+          return validateThreads({meta:{status:200},data:{threads}},this.#context,request.targets);
+        }),{signal,kind:'comment',onRetry});
       }catch(e){
         if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
         // A failed/denied refresh propagates. It is not an instruction to log in or bypass auth.
-        const next=await this.#coordinator.refresh(async options=>this.#verifyRefreshed(await this.#refreshKey(this.#context,options)),{signal,onRetry});
+        const next=await this.#coordinator.refresh(options=>this.#observeAttempt(this.#beginKey,options,async()=>{
+          const context=await this.#refreshKey(this.#context,options);
+          return this.#verifyRefreshed(context);
+        }),{signal,onRetry});
         assertNotCancelled(signal);this.#context=next;
       }
     }

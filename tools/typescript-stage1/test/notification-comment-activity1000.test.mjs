@@ -57,7 +57,8 @@ test('list and details display own comment as text with video and position; copi
  assert.equal(detail.querySelector('.znh-activity-text').textContent,accepted.activity.text);
  assert.equal(detail.querySelector('a').href,'https://www.nicovideo.jp/watch/sm9');
  assert(detail.textContent.includes('自分の動画名'));assert(detail.textContent.includes('0:12'));assert.equal(detail.querySelector('img'),null);
- detail.querySelector('[data-history-action="copy"]').click();await flush();
+ const copy=detail.querySelector('[data-history-action="copy"]');assert.equal(copy.textContent,'この記録をコピー');
+ copy.click();await flush();
  assert.equal(h.copies.length,1);assert(!h.copies[0].includes('自分の'));assert(!h.copies[0].includes('<img'));
 });
 test('JSON diagnostics export omits comment and title while local search can find them',async t=>{

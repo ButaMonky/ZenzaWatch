@@ -1,5 +1,6 @@
 /** Canonical typed source for ZenzaWatch's notification history UI. */
 import type {JournalEntry, JournalCategory} from './NotificationJournal';
+import type {DiagnosticOperation} from './RequestDiagnostics';
 declare const NotificationJournal: typeof import('./NotificationJournal').NotificationJournal;
 declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 interface TabEvents {
@@ -89,12 +90,10 @@ const NotificationHistoryPanel = (() => {
     entry.details?.outcome === 'recovered' ? '復旧済み' :
     entry.details?.reason === 'not-found' ? '対象なし・要確認' :
     entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
-  const description = (entry: JournalEntry): string => {
-    const d = entry.details || {};
-    if(d.outcome === 'recovered') return 'その後の処理成功を確認しました。下の失敗理由・HTTP状態は最後の失敗時の記録です。';
-    if(d.reason === 'not-found' && (entry.source === 'advertising' || d.operation === 'advertising'))
-      return '広告APIが対象なしを返しました。広告なし・対象外・API変更などの可能性があり、この応答だけでは判別できません。調査できるよう記録を残しています。';
-    const explanations: Record<string,string> = {
+  const phaseLabels = new Map<string,string>([
+    ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認']
+  ]);
+  const explanations: Record<string,string> = {
       schema:'受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
       timeout:'制限時間内に処理が完了しませんでした。',
       permission:'アクセス権限またはログイン状態の確認が必要な応答です。',
@@ -103,9 +102,66 @@ const NotificationHistoryPanel = (() => {
       network:'通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。',
       // Task1036
       'spec-change':'同じ機能で同じ種類の失敗が、別々の対象で続けて起きています。動画ごとの事情ではなく、ニコニコ側の仕様変更の可能性が高い状態です。「修正箇所の目安」のファイルと「読めなかった項目」から直す場所を探せます。',
-      script:'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。'
-    };
-    return explanations[String(d.reason)] || 'この通知について記録された情報を表示しています。';
+      script:'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。',
+      'session-closed':'再生セッションが終了しました。',
+      unavailable:'この動画の再生方式には未対応です。', service:'サービス側の処理に失敗しました。',
+      integrity:'配布ファイルの照合に失敗しました。', 'module-load':'変換ライブラリを読み込めませんでした。',
+      external:'外部サイトからの再生に失敗しました。'
+  };
+  const reasonText = (reason: unknown): string | undefined =>
+    typeof reason === 'string' && Object.prototype.hasOwnProperty.call(explanations, reason) ? explanations[reason] : undefined;
+  const description = (entry: JournalEntry): string => {
+    const d = entry.details || {};
+    if(d.outcome === 'recovered') return 'その後の処理成功を確認しました。下の失敗理由とステータスは最後の失敗時の記録です。';
+    if(d.reason === 'not-found' && (entry.source === 'advertising' || d.operation === 'advertising'))
+      return '広告APIが対象なしを返しました。広告なし・対象外・API変更などの可能性があり、この応答だけでは判別できません。調査できるよう記録を残しています。';
+    return reasonText(d.reason) || 'この通知について記録された情報を表示しています。';
+  };
+  // Stored notification text and arbitrary identifiers are for local viewing only.
+  // Reports can quote a field name or code only when the entire value is known.
+  const reportFields = new Set([
+    'meta.status','data.threads','data.threadKey','data.contentUrl','data.session.content_uri','missing-thread-key','invalid-thread-envelope','invalid-global-count',
+    'invalid-thread-target','invalid-api-meta','msgInfo.threadInfo','threadInfo','videoId','data','data.client',
+    'data.client.watchId','data.client.watchTrackId','data.video','data.video.id','data.video.title',
+    'data.video.duration','data.video.count','data.video.thumbnail','data.player','data.genre','data.tags',
+    'data.tags.items','data.nicoads','data.isLogin','data.twitterLinkage.isLinked','data.isClipTweetAllowed',
+    'data.isUseLicensedMusic','data.clipId','data.status','data.clipUri','json','response.json'
+  ]);
+  const validStatus = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
+  const repairGuide = 'docs/maintenance/REPAIR_GUIDE.md';
+  const repairReport = (entry: JournalEntry): string => {
+    const d = entry.details || {};
+    const unknown = '記録なし（旧版・未分類など）';
+    const operation = String(d.operation || entry.source || '');
+    const registeredLabel = typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation);
+    let feature = Object.prototype.hasOwnProperty.call(labels, entry.category) ? labels[entry.category] : '通知';
+    let location = '修復ガイドの症状別の案内を参照';
+    if (registeredLabel) {
+      feature = registeredLabel + '（' + operation + '）';
+      location = modulePath(RequestDiagnostics.moduleFor(operation as DiagnosticOperation));
+    } else if (operation === 'script-error') {
+      feature = 'スクリプトエラー（script-error）';
+    } else if (operation === 'external-playback') {
+      feature = '外部サイトからの再生（external-playback）';
+      location = 'packages/external-playback/launcher.cjs';
+    } else if (entry.source === 'comment') {
+      location = 'tools/typescript-stage1/nico-src/NicoVideoPlayerDialogComments.ts';
+    }
+    const version = typeof entry.version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,5}(?:-task\d{1,6})?$/.test(entry.version) ? entry.version : unknown;
+    const reason = reasonText(d.reason);
+    const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
+      '段階　' + (phaseLabels.get(String(d.phase)) || unknown),
+      '理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
+    if (d.outcome === 'recovered') lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
+    if (validStatus(d.statusCode)) lines.push('HTTP状態　' + d.statusCode);
+    if (validStatus(d.apiStatus)) lines.push('API状態（meta.status）　' + d.apiStatus);
+    if (typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.isKnownErrorCode(d.errorCode)) lines.push('エラーコード　' + d.errorCode);
+    if (typeof d.errorName === 'string' && ['TypeError','ReferenceError','RangeError','SyntaxError','Error'].includes(d.errorName))
+      lines.push('エラーの種類　' + d.errorName);
+    lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown),
+      '修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
+    return lines.join('\n');
   };
   const mount = (root: HTMLElement | null, events?: TabEvents,
     isVisible: () => boolean = () => !!root?.classList.contains('activeTab')): (() => void) | void => {
@@ -182,7 +238,7 @@ const NotificationHistoryPanel = (() => {
       detailNode.append(back, element('p','znh-tag',stateLabel(entry)),element('h3','',entry.message),element('p','',description(entry)));
       const pairs: [string,string][] = [
         ['機能', featureLabel(entry)],
-        ['段階', ({transport:'通信',response:'応答の確認',session:'処理'} as Record<string,string>)[String(entry.details?.phase)] || '記録なし'],
+        ['段階', phaseLabels.get(String(entry.details?.phase)) || '記録なし'],
         ['発生回数', typeof entry.details?.count === 'number' ? entry.details.count+'回' : '1回'],
         // Task1036: 直す場所の手がかり（記録があるときだけ）。
         ...(entry.details?.module ? [['修正箇所の目安', modulePath(String(entry.details.module))] as [string,string]] : []),
@@ -190,7 +246,8 @@ const NotificationHistoryPanel = (() => {
         ...(entry.details?.errorName ? [['エラーの種類', String(entry.details.errorName)] as [string,string]] : []),
         ...(entry.details?.where ? [['発生箇所', String(entry.details.where)] as [string,string]] : []),
         ...(typeof entry.details?.distinctTargets === 'number' ? [['同じ失敗が起きた対象', entry.details.distinctTargets + '件（30分以内）'] as [string,string]] : []),
-        ...(typeof entry.details?.statusCode === 'number' ? [['HTTP状態', String(entry.details.statusCode)] as [string,string]] : []),
+        ...(validStatus(entry.details?.statusCode) ? [['HTTP状態', String(entry.details.statusCode)] as [string,string]] : []),
+        ...(validStatus(entry.details?.apiStatus) ? [['API状態（meta.status）', String(entry.details.apiStatus)] as [string,string]] : []),
         ...(entry.details?.errorCode ? [['エラーコード', String(entry.details.errorCode)] as [string,string]] : []),
         ['発生時の版', entry.version || '記録なし（旧版など）'],['ビルド',entry.build || '記録なし（旧版など）'],
         ['初回発生',formatTime(entry.firstOccurredAt)],['最終発生',formatTime(entry.lastOccurredAt)],
@@ -218,29 +275,38 @@ const NotificationHistoryPanel = (() => {
         activity.append(element('p','znh-private-note','自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
         detailNode.append(activity);
       }
+      const isProblem = entry.level === 'error' || entry.level === 'warning' ||
+        entry.details?.outcome === 'failed' || entry.details?.outcome === 'recovered' || !!entry.details?.reason;
       if(entry.details?.outcome === 'recovered') detailNode.append(element('p','','この記録について追加の操作は不要です。'));
-      else if(entry.details?.outcome === 'failed' || entry.level === 'error' || entry.level === 'warning')
-        detailNode.append(element('p','','問題が続く場合は、下の「この記録をコピー」で発生時の情報を添えて報告できます。'));
       const technical=element('details');technical.open=wasOpen;
       technical.append(element('summary','','技術的な詳細'),element('pre','',JSON.stringify({...entry.details,source:entry.source},null,2)));
-      const copy=element('button','','この記録をコピー');copy.type='button';copy.dataset.historyAction='copy';
+      const copy=element('button','',isProblem ? '修復レポートをコピー' : 'この記録をコピー');copy.type='button';copy.dataset.historyAction='copy';
       const copyStatus=element('p','znh-status');copyStatus.setAttribute('role','status');
-      const diagnostic=NotificationJournal.toDiagnosticEntry(entry);
-      const report=[diagnostic.message,description(diagnostic),...pairs.map(([key,value])=>key+': '+value),'診断情報: '+JSON.stringify({...diagnostic.details,source:diagnostic.source})].join('\n');
+      let report: string;
+      if (isProblem) {
+        report = repairReport(entry);
+      } else {
+        const diagnostic = NotificationJournal.toDiagnosticEntry(entry);
+        report = [diagnostic.message, description(diagnostic), ...pairs.map(([key,value]) => key + ': ' + value),
+          '診断情報: ' + JSON.stringify({...diagnostic.details, source:diagnostic.source})].join('\n');
+      }
       copy.addEventListener('click',async()=>{
         try {
           if(!window.navigator.clipboard?.writeText) throw new Error('unavailable');
           await window.navigator.clipboard.writeText(report);
-          if(!disposed && selectedId===entry.id) copyStatus.textContent='この記録をコピーしました';
+          if(!disposed && selectedId===entry.id && copyStatus.isConnected)
+            copyStatus.textContent=isProblem ? '修復レポートをコピーしました。相談先に貼り付けてください。' : 'この記録をコピーしました';
         } catch {
-          if(disposed || selectedId!==entry.id) return;
+          if(disposed || selectedId!==entry.id || !copyStatus.isConnected) return;
           copyStatus.textContent='自動コピーできませんでした。下の報告文を選択してコピーできます。';
           let text=detailNode.querySelector<HTMLTextAreaElement>('textarea');
-          if(!text){text=element('textarea','znh-report');text.readOnly=true;text.setAttribute('aria-label','報告文');detailNode.append(text);}
+          if(!text){text=element('textarea','znh-report');text.readOnly=true;text.setAttribute('aria-label','報告文');copyStatus.after(text);}
           text.value=report;text.focus();text.select();
         }
       });
-      detailNode.append(technical,copy,copyStatus);
+      detailNode.append(technical);
+      if (isProblem) grid.before(copy, copyStatus);
+      else detailNode.append(copy, copyStatus);
       if(focused) detailNode.querySelector<HTMLButtonElement>('[data-history-action="'+focused+'"]')?.focus({preventScroll:true});
     };
     let revision = 0;
@@ -281,7 +347,7 @@ const NotificationHistoryPanel = (() => {
         const head = element('div', 'znh-head');
         head.append(
           element('span', 'znh-tag', featureLabel(entry)),
-          element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP'))
+          element('span', 'znh-date', formatTime(entry.timestamp))
         );
         if (entry.videoId) { head.append(element('span', 'znh-date', entry.videoId)); }
         const entryButton=element('button','znh-message znh-entry-open',entry.message+' ›');

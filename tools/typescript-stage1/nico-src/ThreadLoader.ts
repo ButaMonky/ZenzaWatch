@@ -10,6 +10,22 @@ import type {NetFetchOptions} from './NicoApiTypes';
 
 declare const CommentPostWire: typeof import('./CommentPostWire').CommentPostWire;
 declare const CommentReadAdapter: typeof import('./CommentReadAdapter').CommentReadAdapter;
+declare const ZenzaCommentHistoryCore: {
+  buildNvThreadKeyUrl(videoId: string): string;
+  readNvThreadKeyEnvelope(body: unknown, errors: {
+    acceptsStatus(status: number): boolean;
+    schemaError(missing: 'meta.status' | 'data.threadKey'): Failure;
+    apiError(meta: Failure): Failure;
+  }): {threadKey: string; [key: string]: unknown};
+  buildNvThreadReadRequest(server: string, packet: {
+    params: NvCommentInfo['params']; threadKey: string; additionals: {when?: number}
+  }): {url: URL; init: {method: string; headers: Record<string, string>; body: string}};
+  readNvThreadEnvelope(body: unknown, errors: {
+    acceptsMeta(meta: Failure): boolean;
+    schemaError(missing: 'meta.status' | 'data.threads'): Failure;
+    apiError(meta: Failure): Failure;
+  }): unknown;
+};
 declare const netUtil: {fetch(url: string | URL, options: NetFetchOptions & {method?: string; body?: string}): Promise<Response>};
 declare const logSafe: {redact(value: unknown): Record<string, unknown>};
 declare const PopupMessage: {alert(message: string): unknown};
@@ -378,8 +394,11 @@ const {ThreadLoader} = (() => {
     } finally { if (timer !== undefined) { clearTimeout(timer); } }
     return undefined;
   };
-  const readJson = (url: string | URL, options: NetFetchOptions & {method?: string; body?: string; signal?: AbortSignal | undefined}): Promise<Failure> => withSignal(async (): Promise<Failure> => {
+  type ResponseStatuses = {httpStatus?: number; apiStatus?: number};
+  const readJson = (url: string | URL, options: NetFetchOptions & {method?: string; body?: string; signal?: AbortSignal | undefined},
+    statuses?: ResponseStatuses): Promise<Failure> => withSignal(async (): Promise<Failure> => {
     const response = await netUtil.fetch(url, options);
+    if (statuses) { statuses.httpStatus = response.status; }
     checkAbort(options.signal);
     const header = response.headers && response.headers.get('Retry-After');
     let retryAfterMs: number | undefined;
@@ -399,15 +418,13 @@ const {ThreadLoader} = (() => {
     }
     checkAbort(options.signal);
     const apiStatus = body?.meta?.status;
+    if (statuses && typeof apiStatus === 'number') { statuses.apiStatus = apiStatus; }
     if (Number.isInteger(response?.status) && response.status >= 400 &&
         (!Number.isInteger(apiStatus) || apiStatus < 300)) {
       const failure = {status: response.status};
       throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
     }
-    if (!Number.isInteger(apiStatus) || apiStatus < 200) {
-      throw commentSchemaError('invalid-api-meta');
-    }
-    if (apiStatus >= 300) {
+    if (Number.isInteger(apiStatus) && apiStatus >= 300) {
       const failure = body.meta;
       throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
     }
@@ -424,29 +441,34 @@ const {ThreadLoader} = (() => {
     async getThreadKey(videoId: string, options: LoadOptions = {}): Promise<{threadKey: string; [key: string]: unknown}> {
       const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
         RequestDiagnostics.begin('comment-key', videoId, 'response', () => !options.signal?.aborted);
-      let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
+      const url = ZenzaCommentHistoryCore.buildNvThreadKeyUrl(videoId);
+      const statuses: ResponseStatuses = {};
 
       console.log('getThreadKey request');
       try {
-        const { meta, data } = await readJson(url, {
+        const body = await readJson(url, {
           headers: {
             'X-Frontend-Id': FRONT_ID,
             'X-Frontend-Version': FRONT_VER,
           },
           signal: options.signal,
-          credentials: 'include'
-        });
-        if (meta.status >= 300) {
-          throw meta
-        }
+          credentials: 'include',
+          // Only the complete, validated key response can recover this operation.
+          diagnosticActive: () => false
+        }, statuses);
         checkAbort(options.signal);
-        // A malformed key response must never replace the last known good key.
-        const validData = CommentReadAdapter.threadKey(data) as {threadKey: string; [key: string]: unknown};
+        const validData = ZenzaCommentHistoryCore.readNvThreadKeyEnvelope(body, {
+          acceptsStatus: status => status < 300,
+          schemaError: missing => ({
+            ...commentSchemaError(missing === 'meta.status' ? 'invalid-api-meta' : 'missing-thread-key'), missing
+          }),
+          apiError: meta => meta
+        });
         this._threadKeys[videoId] = validData.threadKey;
         diagnostic?.success();
         return validData
       } catch (result) {
-        diagnostic?.failure(result);
+        diagnostic?.failure({result, ...statuses});
         throw { result, message: `ThreadKeyの取得失敗 ${videoId}` }
       }
     }
@@ -538,24 +560,20 @@ const {ThreadLoader} = (() => {
         packet.additionals.when = msgInfo.when as number;
       }
 
-      const url = new URL('/v1/threads', server);
+      const {url, init} = ZenzaCommentHistoryCore.buildNvThreadReadRequest(server, packet);
       console.log('load threads request');
       const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
         RequestDiagnostics.begin('comment-read', String(msgInfo.videoId), 'response', () => !options.signal?.aborted);
       try {
-        const { meta, data } = await readJson(url, {
-          method: 'POST',
-          signal: options.signal,
-          headers: {
-            'X-Frontend-Id': FRONT_ID,
-            'X-Frontend-Version': FRONT_VER,
-            'Content-Type': 'text/plain; charset=UTF-8'
-          },
-          body: JSON.stringify(packet)
+        const body = await readJson(url, {...init, signal: options.signal});
+        const data = ZenzaCommentHistoryCore.readNvThreadEnvelope(body, {
+          acceptsMeta: meta => meta.status < 300,
+          schemaError: missing => ({
+            ...commentSchemaError(missing === 'meta.status' ? 'invalid-api-meta' : 'invalid-thread-envelope'),
+            missing
+          }),
+          apiError: meta => meta
         });
-        if (meta.status >= 300) {
-          throw meta;
-        }
         checkAbort(options.signal);
         // Fail before changing the current video or accepting a foreign thread.
         // Unknown shapes are not retried as transient network failures.

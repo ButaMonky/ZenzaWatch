@@ -64,9 +64,10 @@ const ShareLocalClip = {
         </div>
       <div data-role="result" hidden>
         <video data-role="preview" controls playsinline preload="metadata" aria-label="作成したクリップ"></video>
-        <div class="clipActions"><button type="button" data-action="share" hidden>動画を共有…</button>
+        <div class="clipActions"><button type="button" data-action="direct-x" hidden>このMP4をXに投稿</button>
+        <button type="button" data-action="share" hidden>動画を共有…</button>
         <button type="button" data-action="copy-for-x" hidden>X用に動画をコピー</button>
-        <a class="shareAction" data-action="post-x" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く</a>
+        <a class="shareAction" data-action="post-x">コピーしてこのタブでXを開く</a>
         <a class="shareAction" download>動画を保存</a></div>
         <p class="clipHint" data-role="attachHint"></p>
       </div>
@@ -99,6 +100,7 @@ const ShareLocalClip = {
     const download = find('a[download]');
     const postX = find('[data-action=post-x]');
     const share = find('[data-action=share]');
+    const directX = find('[data-action=direct-x]');
     const copyForX = find('[data-action=copy-for-x]');
     const attachHint = find('[data-role=attachHint]');
     const status = find('[role=status]');
@@ -282,13 +284,20 @@ const ShareLocalClip = {
     }
     function showAttachmentOptions() {
       share.hidden = !navigator.canShare?.({files:[outputFile]});
-      copyForX.hidden = !ShareClipClipboard.supported();
-      attachHint.textContent = [share.hidden ? '' : '「動画を共有…」でXを選べます（端末の共有先にある場合）。',
-        copyForX.hidden ? '' : 'PCでは動画をコピーし、Xの投稿画面で「Zenzaの動画をクリップボードから読み込む」を押します。',
-        share.hidden && copyForX.hidden ? '「動画を保存」で保存し、Xの投稿画面のメディアボタンから添付できます。' : ''
+      directX.hidden = outputFile.type !== 'video/mp4' || document.documentElement.dataset.zenzaXPublisher !== 'ready';
+      const reason = ShareClipClipboard.copyUnavailableReason(outputFile);
+      copyForX.hidden = postX.hidden = !!reason;
+      if (window !== window.top) {
+        postX.target = '_blank';
+        postX.rel = 'noopener noreferrer';
+        postX.textContent = 'コピー後、別タブでXを開く';
+      }
+      attachHint.textContent = [
+        directX.hidden ? '' : 'このMP4を直接投稿するには、ご自身のXアプリの連携が必要です。',
+        reason || '下書きを使う場合は、Xで「Zenzaの動画をクリップボードから読み込む」を押してください。'
       ].filter(Boolean).join(' ');
     }
-    copyForX.onclick = async () => {
+    async function copyClipForX(openDraft) {
       const file = outputFile;
       if (!file) return;
       copyForX.disabled = true;
@@ -296,19 +305,33 @@ const ShareLocalClip = {
         await ShareClipClipboard.copy(file);
         if (file === outputFile) {
           status.textContent = '「' + file.name + '」をコピーしました。Xの投稿画面で読み込んでください。';
-          postX.focus({preventScroll:true});
+          if (openDraft) location.assign(postX.href);
+          else postX.focus({preventScroll:true});
         }
-      } catch (_) {
-        if (file === outputFile) status.textContent = '動画をコピーできませんでした。ブラウザーの許可を確認するか、「動画を共有…」または「動画を保存」を利用してください。';
+      } catch (error) {
+        if (file === outputFile) status.textContent = error.message || '動画をコピーできませんでした。';
       } finally { copyForX.disabled = false; }
-    };
+    }
+    copyForX.onclick = () => copyClipForX(false);
     function updatePostLink() {
       const intent = new URL('https://x.com/intent/tweet');
       const text = outputText ?? (source === localVideo ? fileInput.files[0]?.name.replace(/\.[^.]+$/, '') : getShareText?.() || title);
       if (text) intent.searchParams.set('text', text);
       postX.href = intent.href;
     }
-    postX.onclick = updatePostLink;
+    postX.onclick = event => {
+      if (window !== window.top && event.isTrusted) { updatePostLink(); return; }
+      event.preventDefault();
+      if (!event.isTrusted || copyForX.disabled) return;
+      updatePostLink();
+      copyClipForX(true);
+    };
+    directX.onclick = event => {
+      if (!event.isTrusted || !outputFile) return;
+      updatePostLink();
+      const text = new URL(postX.href).searchParams.get('text') || '';
+      window.postMessage({type:'zenza-open-x-publisher',file:outputFile,text},location.origin);
+    };
     async function record(active, from, to) {
       const options = {signal:active.events.signal};
       try {

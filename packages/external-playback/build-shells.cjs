@@ -2,6 +2,10 @@
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const mountXClipAttachment = require('./x-clip-attachment.cjs');
+const {createXRequest,mountXPostingBridge} = require('./x-direct-bridge.cjs');
+const {createXMediaPublisher} = require('./x-media-publish.cjs');
+const {createXUserAuth} = require('./x-user-auth.cjs');
+const mountXDirectDialog = require('./x-direct-dialog.cjs');
 const {startOrdinaryRuntime} = require('./ordinary-startup.cjs');
 module.exports=function buildShells({base,legacyBlog,header,runtime,externalModules,launcher,transport,network,closeRuntime,host,display,panelObserver,preferenceNames}) {
  const shared=`
@@ -60,6 +64,7 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
 // @connect        nicovideo.jp
 // @connect        nimg.jp
 // @connect        dmc.nico
+// @connect        api.x.com
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js`);
  const main=mainHeader+'\n'+(/^\/\/ build: .*$/m.exec(base)?.[0]||'// build: external-playback')+`
@@ -68,6 +73,15 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
    ${clipClipboard}
    (${mountXClipAttachment.toString()})(ShareClipClipboard);
    return;
+ }
+ if (location.origin === 'https://www.nicovideo.jp' && window === window.top &&
+     typeof GM_xmlhttpRequest === 'function' && typeof GM_getValue === 'function' &&
+     typeof GM_setValue === 'function' && typeof GM_deleteValue === 'function') {
+   const request=(${createXRequest.toString()})(options=>GM_xmlhttpRequest(options));
+   const prefix='zenza-x-user:';
+   const auth=(${createXUserAuth.toString()})({request,get:key=>GM_getValue(prefix+key),
+     set:(key,value)=>GM_setValue(prefix+key,value),remove:key=>GM_deleteValue(prefix+key)});
+   (${mountXPostingBridge.toString()})({request,auth,createPublisher:${createXMediaPublisher.toString()},showDialog:${mountXDirectDialog.toString()}});
  }
  ${externalModules}
  ${shared}

@@ -3,19 +3,21 @@ import {ShareOfficialClip} from './ShareOfficialClip';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {ShareClipRenderer} from './ShareClipRenderer';
 import {ShareLocalClip} from './ShareLocalClip';
+import {ShareClipJobs} from './ShareClipJobs';
 import {SharePlaybackFile} from './SharePlaybackFile';
 //===BEGIN===
 //@require PopupMessage
 //@require ShareOfficialClip
 //@require ShareLocalClip
+//@require ShareClipJobs
 //@require SharePlaybackFile
 //@require ShareClipRenderer
 const VideoSharePanel = (() => {
   let activeClose;
   const css = `
 .zenzaShare {color-scheme:dark;box-sizing:border-box;width:min(64rem,calc(100vw - 24px));max-width:none;
-  max-height:none;margin:auto;padding:0;color:#f2f5f8;background:#1b2027;border:1px solid #526175;
-  border-radius:12px;text-align:left;overflow:visible;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
+  max-height:100dvh;margin:auto;padding:0;color:#f2f5f8;background:#1b2027;border:1px solid #526175;
+  border-radius:12px;text-align:left;overflow:auto;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
 .zenzaShare::backdrop {background:#090c1066}
 .zenzaShare summary {cursor:pointer}
 .zenzaShare .shareProvider p {color:#c1ccd7}
@@ -112,6 +114,11 @@ const VideoSharePanel = (() => {
   .zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:38dvh}
 }
 
+@media(max-width:380px) {
+  .zenzaShare nav {gap:1px;padding-inline:4px}
+  .zenzaShare nav button {padding-inline:4px}
+  .zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:clamp(64px,calc(100dvh - 392px),210px)}
+}
 `;
   function open(info, position, getCurrentVideo, playerContext) {
     if (!info || !/^(?:[a-z]{2})?\d+$/i.test(info.watchId)) { return; }
@@ -124,6 +131,7 @@ const VideoSharePanel = (() => {
 <header><h2 id="zenzaShareHeading">動画を共有</h2><p class="shareTitle"></p><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
 <nav aria-label="共有方法">
 <button type="button" data-view="local" aria-controls="zenzaShareLocal">ビデオクリップ</button>
+<button type="button" data-view="official" aria-controls="zenzaShareOfficial" title="ニコニコでプレビューを作成してから投稿">Xに直接投稿</button>
 <button type="button" data-view="link" aria-controls="zenzaShareLink">リンク・埋め込み</button>
 </nav>
 <section id="zenzaShareLink" hidden>
@@ -131,7 +139,7 @@ const VideoSharePanel = (() => {
 <label><input type="number" name="start" min="0" step="0.01" inputmode="decimal"> 秒から</label></div>
 <label>共有リンク<input readonly name="link" aria-label="共有リンク"></label>
 <label>投稿本文<textarea rows="2"></textarea></label>
-<div class="shareRow"><a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">X で投稿画面を開く</a>
+<div class="shareRow"><a class="shareAction" data-action="x" rel="noopener noreferrer">このタブでXの下書きを開く</a>
 <button type="button" data-copy="link">リンクをコピー</button>
 <button type="button" data-copy="text">本文とリンクをコピー</button>
 <button type="button" data-action="system" hidden>端末で共有</button></div>
@@ -147,7 +155,7 @@ const VideoSharePanel = (() => {
 <p>ニコニコが元動画から3〜30秒の映像を作成します。確認してからXに投稿できます。</p>
 <p data-provider-range hidden></p><p data-provider-layers hidden>ここで選んだコメント・画面エフェクトは、端末で作成するファイルに反映されます。</p>
 </div></section>
-<section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><div data-official-editor></div></section>`;
+<section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><p data-selection-note hidden></p><div data-official-editor></div></section>`;
     const find = selector => dialog.querySelector(selector);
     find('style').textContent = css;
     find('.shareTitle').title = find('.shareTitle').textContent = info.title || info.watchId;
@@ -192,12 +200,17 @@ const VideoSharePanel = (() => {
       thumb.value = '<iframe width="312" height="176" src="https://ext.nicovideo.jp/thumb/' + videoId +
         '" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="' + attr(watch.href) + '">' +
         title + '</a></iframe>';
-      const intent = new URL('https://twitter.com/intent/tweet');
+      const draftLink = find('[data-action=x]');
+      const separate = window !== window.top || ShareClipJobs.busy;
+      draftLink.target = separate ? '_blank' : '_self';
+      draftLink.textContent = separate ? '別タブでXの下書きを開く' : 'このタブでXの下書きを開く';
+      const intent = new URL('https://x.com/intent/tweet');
       intent.searchParams.set('text', message.value);
       intent.searchParams.set('url', url.href);
-      find('[data-action=x]').href = intent.href;
+      draftLink.href = intent.href;
       status.textContent = '';
     }
+    find('[data-action=x]').addEventListener('click', update);
     for (const input of [time, useTime, message, size]) { input.addEventListener('input', update); }
     time.addEventListener('change', () => {
       time.value = String(Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity));
@@ -234,7 +247,7 @@ const VideoSharePanel = (() => {
     function showSelection(next) {
       selection = next;
       provider.hidden = next.isFile;
-      prepare.disabled = next.recording;
+      find('[data-view=official]').disabled = prepare.disabled = next.recording;
       find('[data-view=link]').disabled = next.recording;
       const length = next.end - next.start;
       prepare.textContent = length > 30 ? 'ニコニコで先頭30秒のX用プレビューを作成' : 'ニコニコでX用プレビューを作成';
@@ -261,8 +274,10 @@ const VideoSharePanel = (() => {
       resumeVideo = null;
     }
     function select(view) {
-      if (view === 'link') releasePlayback();
-      else holdPlayback();
+      if (view === 'link') {
+        update();
+        releasePlayback();
+      } else holdPlayback();
       if (view !== 'local') { mounted.get('local')?.stopPreview?.(); }
       if (view !== 'official' && mounted.has('official')) {
         mounted.get('official')();
@@ -271,13 +286,28 @@ const VideoSharePanel = (() => {
       }
       for (const [key, el] of Object.entries(sections)) { el.hidden = key !== view; }
       for (const btn of dialog.querySelectorAll('[data-view]')) {
-        btn.setAttribute('aria-pressed', String(btn.dataset.view === (view === 'official' ? 'local' : view)));
+        btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
       }
       if (view === 'official' && !mounted.has(view)) {
+        const note = find('[data-selection-note]');
+        if (selection.isFile) {
+          note.textContent = 'ニコニコ連携で投稿できるのは視聴ページの元動画です。選んだファイルはクリップ編集で作成し、完成した動画からXに添付できます。';
+          note.hidden = false;
+          return;
+        }
         const start = Number.isFinite(selection.start) ? selection.start : startTime;
         const end = Number.isFinite(selection.end) ? Math.min(selection.end, start + 30) : undefined;
+        const lengthMs = Math.round(selection.end * 1000) - Math.round(selection.start * 1000);
+        const differences = [];
+        if (lengthMs > 30000) differences.push('公式クリップの初期範囲は選択区間の先頭30秒です。');
+        else if (lengthMs < 3000) differences.push('公式クリップには3秒以上の区間を指定してください。');
+        if (selection.comments || selection.effects) differences.push('コメント表示はニコニコ側の設定になり、ZenzaWatchの画面エフェクトは含まれません。');
+        if (lengthMs > 30000 || selection.comments || selection.effects) differences.push('元の編集内容を使うには、クリップ編集に戻ってください。');
+        note.textContent = differences.join('');
+        note.hidden = !differences.length;
         mounted.set(view, ShareOfficialClip.mount(find('[data-official-editor]'), {
-          info, startTime:start, endTime:end, autoPreview:true, text:() => message.value, officialUrl:official.href,
+          info, startTime:start, endTime:end, autoPreview:selection.isCurrent && Number.isFinite(lengthMs) && !differences.length,
+          text:() => message.value, officialUrl:official.href,
           onUseLocal(range) {
             select('local');
             sections.local.querySelector('[data-editor-page=range]')?.click();
@@ -315,9 +345,17 @@ const VideoSharePanel = (() => {
       if (view === 'local') mounted.get('local')?.startPreview?.();
       dialog.scrollTop = 0;
     }
-    prepare.onclick = () => { select('official'); find('[data-action=back]').focus(); };
-    find('[data-action=back]').onclick = () => { select('local'); prepare.focus(); };
-    for (const btn of dialog.querySelectorAll('[data-view]')) { btn.onclick = () => select(btn.dataset.view); }
+    let officialOpener;
+    function openOfficial(button) {
+      officialOpener = button;
+      select('official');
+      find('[data-action=back]').focus();
+    }
+    prepare.onclick = () => openOfficial(prepare);
+    find('[data-action=back]').onclick = () => { select('local'); officialOpener?.focus(); };
+    for (const btn of dialog.querySelectorAll('[data-view]')) {
+      btn.onclick = () => btn.dataset.view === 'official' ? openOfficial(btn) : select(btn.dataset.view);
+    }
     const previousFocus = document.activeElement;
     function close() {
       if (activeClose !== close) { return; }

@@ -64,7 +64,7 @@ const ShareOfficialClip = (() => {
     let retryAt = 0, retryTimer;
 
     container.innerHTML = `
-<p>ニコニコが元動画から3〜30秒のクリップを作成します。プレビューを確認して、連携したXアカウントに投稿できます。</p>
+<p>ニコニコが元動画の指定区間（3〜30秒）を切り出します。コメントと音声はプレビューで確認し、ここから連携済みのXに投稿できます。</p>
 <p name="account"></p>
 <div class="shareRow">
   <label>開始 <input name="clipStart" type="number" min="0" step="0.001"> 秒</label>

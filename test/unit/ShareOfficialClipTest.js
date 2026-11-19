@@ -289,3 +289,82 @@ describe('official NicoNico clip sharing', () => {
     assert(!find('create') || find('create').disabled);
   });
 });
+
+describe('official X posting from the clip editor', () => {
+  let page, root, panel;
+  let localCreates, calls;
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  const tab = () => root.querySelector('[data-view=official]');
+  const find = name => root.querySelector('#zenzaShareOfficial [name="' + name + '"]');
+  function open(selection) {
+    page = new JSDOM('<body></body>', {url:'https://www.nicovideo.jp/watch/sm9', runScripts:'outside-only'});
+    const w = page.window;
+    w.HTMLDialogElement.prototype.showModal = function() { this.open = true; };
+    w.HTMLDialogElement.prototype.close = function() { this.open = false; };
+    w.textUtil = {secToTime:String};
+    w.ShareClipJobs = {busy:false};
+    w.ShareLocalClip = {mount(host, options) {
+      host.innerHTML = '<div data-provider-slot></div><button data-action=create></button>';
+      options.onSelectionChange(selection);
+      host.querySelector('button').onclick = () => { localCreates++; };
+      return () => {};
+    }};
+    localCreates = 0;
+    calls = [];
+    w.fetch = async (url, options) => {
+      const path = new URL(url).pathname;
+      calls.push({path, options});
+      let data;
+      if (path.endsWith('/tweet-possibility')) data = {isLogin:true, isClipTweetAllowed:true, twitterLinkage:{isLinked:true}};
+      else if (path.endsWith('/license')) data = {isUseLicensedMusic:false};
+      else if (path.endsWith('/clips')) data = {clipId:'selected-clip'};
+      else if (path.endsWith('/x-post')) data = {status:'DONE'};
+      else data = {status:'DONE',clipUri:'https://media.example/preview.mp4'};
+      return {ok:true,status:200,json:async () => ({meta:{status:200}, data})};
+    };
+    w.ShareOfficialClip = w.eval(beginSection('src/ShareOfficialClip.js') + '\nShareOfficialClip');
+    panel = w.eval(beginSection('src/VideoSharePanel.js') + '\nVideoSharePanel');
+    panel.open({watchId:'sm9', videoId:'sm9', title:'fixture', duration:180}, 0);
+    root = w.document.querySelector('dialog');
+  }
+  afterEach(() => { panel?.close(); page?.window.close(); });
+  it('prepares the chosen original interval from the first screen and posts only on confirmation', async () => {
+    open({isCurrent:true,start:8.25,end:18.5});
+    assert(tab() && !tab().closest('[hidden]'));
+    assert.equal(calls.length,0);
+    tab().click(); await flush();
+    const create = calls.find(call => call.path.endsWith('/clips'));
+    assert.deepEqual([...create.options.body], [['startTime','8250'],['endTime','18500']]);
+    assert.equal(localCreates,0);
+    assert.equal(tab().getAttribute('aria-pressed'),'true');
+    assert(!calls.some(call => call.path.endsWith('/x-post')));
+    find('post').click(); await flush();
+    const post = calls.find(call => call.path.endsWith('/x-post') && call.options.method === 'POST');
+    assert.deepEqual([...post.options.body.keys()],['text']);
+  });
+  for (const [selection, note] of [
+    [{start:5,end:65}, /先頭30秒/],
+    [{start:5,end:10,comments:true}, /コメント/],
+    [{start:5,end:10,effects:true}, /画面エフェクト/],
+    [{start:0,end:2.99}, /3秒/]
+  ]) {
+    it('explains the difference before creating a server clip ' + JSON.stringify(selection), async () => {
+      open({...selection,isCurrent:true});
+      tab().click(); await flush();
+      assert.match(root.querySelector('#zenzaShareOfficial [data-selection-note]').textContent, note);
+      assert(calls.every(call => call.options.method === 'GET'));
+      assert.equal(localCreates,0);
+      root.querySelector('[data-action=back]').click();
+      assert.equal(root.querySelector('#zenzaShareLocal').hidden,false);
+      assert.equal(localCreates,0);
+    });
+  }
+  it('explains sharing a device file without requesting a NicoNico clip for another source', async () => {
+    open({start:0,end:10,isFile:true});
+    tab().click(); await flush();
+    assert.match(root.querySelector('#zenzaShareOfficial [data-selection-note]').textContent, /ファイル/);
+    assert.equal(calls.length,0);
+    assert.equal(localCreates,0);
+    assert.equal(find('post'),null);
+  });
+});

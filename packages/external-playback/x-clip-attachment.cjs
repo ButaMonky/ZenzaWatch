@@ -45,7 +45,7 @@ module.exports = function mountXClipAttachment(clipboard) {
         if (!onCompose() || !host.isConnected) return;
         file = chosen;
         back.hidden = false;
-        status.textContent = file.name + '（' + (file.size / 1048576).toFixed(1) + ' MB）';
+        status.textContent = file.name + '（' + (file.size / 1048576).toFixed(1) + ' MiB）';
         button.textContent = 'この動画をXの下書きに添付';
       } else {
         const available = inputs();
@@ -66,8 +66,9 @@ module.exports = function mountXClipAttachment(clipboard) {
         status.textContent = 'Xの添付欄で動画を確認し、投稿してください。';
       }
     } catch (error) {
-      status.textContent = error.name === 'NotAllowedError' ? 'ブラウザーのクリップボード読み取りを許可してから、もう一度押してください。' :
+      const message = error.name === 'NotAllowedError' ? 'ブラウザーのクリップボード読み取りを許可してから、もう一度押してください。' :
         error.name === 'Error' ? error.message : '動画を読み取れませんでした。もう一度コピーしてお試しください。';
+      status.textContent = message + ' ZenzaWatchで「動画を保存」を選び、Xのメディアボタンから添付することもできます。';
     } finally { button.disabled = false; }
   });
 };

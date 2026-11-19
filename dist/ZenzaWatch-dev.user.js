@@ -47,10 +47,11 @@
 // @connect        nicovideo.jp
 // @connect        nimg.jp
 // @connect        dmc.nico
+// @connect        api.x.com
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.481-task1104
+// @version        2.7.482-task1105
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -58,7 +59,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 16:32Z ff996f3b
+// build: 2026-11-19 17:16Z b192810d
 (() => {
  if (location.hostname==='x.com') {
 
@@ -67,17 +68,42 @@ const ShareClipClipboard = (() => {
   const type = 'application/x-zenzawatch-clip';
   const format = 'web ' + type;
   const mediaTypes = ['video/mp4','video/webm'];
+  // Chromium's ClipboardHost::kMaxDataSize excludes payloads at or above this byte count.
+  const maxPayloadBytes = 1024 ** 3;
+  const maxHeaderBytes = 2048;
+  const manualAttachment = '「動画を保存」で保存し、Xの投稿画面のメディアボタンから添付してください。';
   function supported() {
-    return !!(globalThis.ClipboardItem && navigator.clipboard?.write && navigator.clipboard?.read &&
-      (!ClipboardItem.supports || ClipboardItem.supports(format)));
+    return !!(navigator.clipboard?.write && navigator.clipboard?.read && globalThis.ClipboardItem?.supports?.(format));
+  }
+  function encodeHeader(file) {
+    return new TextEncoder().encode(JSON.stringify({name:file.name, type:file.type}));
+  }
+  function copyUnavailableReason(file) {
+    if (!supported()) return 'このブラウザーでは動画のコピー形式を確認できません。' + manualAttachment;
+    if (!mediaTypes.includes(file?.type) || !file.size || typeof file.name !== 'string') {
+      return 'コピーできる動画はMP4またはWebMです。' + manualAttachment;
+    }
+    const headerBytes = encodeHeader(file).length;
+    if (headerBytes > maxHeaderBytes) return 'ファイル名が長すぎてコピーできません。' + manualAttachment;
+    if (4 + headerBytes + file.size >= maxPayloadBytes) {
+      return 'ファイル名などを含むコピー容量が1 GiB以上です。' + manualAttachment;
+    }
+    return '';
   }
   async function copy(file) {
-    if (!mediaTypes.includes(file?.type) || !file.size) throw Error('この動画をコピーできません。');
-    const header = new TextEncoder().encode(JSON.stringify({name:file.name, type:file.type}));
+    const reason = copyUnavailableReason(file);
+    if (reason) throw Error(reason);
+    const header = encodeHeader(file);
     const size = new Uint8Array(4);
     new DataView(size.buffer).setUint32(0,header.length);
     const blob = new Blob([size,header,file],{type});
-    await navigator.clipboard.write([new ClipboardItem({[format]:blob})]);
+    try {
+      await navigator.clipboard.write([new ClipboardItem({[format]:blob})]);
+    } catch (error) {
+      const message = error.name === 'NotAllowedError' ? 'ブラウザーのクリップボード書き込み許可を確認してください。' :
+        'クリップボードへの書き込みに失敗しました。';
+      throw Error(message + manualAttachment);
+    }
   }
   async function read() {
     const items = await navigator.clipboard.read();
@@ -87,7 +113,7 @@ const ShareClipClipboard = (() => {
     const invalid = () => new Error('動画を読み取れません。ZenzaWatchでもう一度コピーしてください。');
     if (blob.size < 5) throw invalid();
     const length = new DataView(await blob.slice(0,4).arrayBuffer()).getUint32(0);
-    if (!length || length > 2048 || 4 + length >= blob.size) throw invalid();
+    if (!length || length > maxHeaderBytes || 4 + length >= blob.size) throw invalid();
     let info;
     try { info = JSON.parse(await blob.slice(4,4+length).text()); } catch (_) { throw invalid(); }
     if (!mediaTypes.includes(info?.type) || typeof info.name !== 'string') throw invalid();
@@ -95,7 +121,7 @@ const ShareClipClipboard = (() => {
     const stem = info.name.replace(/\.(mp4|webm)$/i,'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,160);
     return new File([blob.slice(4+length)],(stem || 'clip') + extension,{type:info.type});
   }
-  return {supported, copy, read};
+  return {supported, copyUnavailableReason, copy, read};
 })();
 
    (function mountXClipAttachment(clipboard) {
@@ -143,7 +169,7 @@ const ShareClipClipboard = (() => {
         if (!onCompose() || !host.isConnected) return;
         file = chosen;
         back.hidden = false;
-        status.textContent = file.name + '（' + (file.size / 1048576).toFixed(1) + ' MB）';
+        status.textContent = file.name + '（' + (file.size / 1048576).toFixed(1) + ' MiB）';
         button.textContent = 'この動画をXの下書きに添付';
       } else {
         const available = inputs();
@@ -164,12 +190,824 @@ const ShareClipClipboard = (() => {
         status.textContent = 'Xの添付欄で動画を確認し、投稿してください。';
       }
     } catch (error) {
-      status.textContent = error.name === 'NotAllowedError' ? 'ブラウザーのクリップボード読み取りを許可してから、もう一度押してください。' :
+      const message = error.name === 'NotAllowedError' ? 'ブラウザーのクリップボード読み取りを許可してから、もう一度押してください。' :
         error.name === 'Error' ? error.message : '動画を読み取れませんでした。もう一度コピーしてお試しください。';
+      status.textContent = message + ' ZenzaWatchで「動画を保存」を選び、Xのメディアボタンから添付することもできます。';
     } finally { button.disabled = false; }
   });
 })(ShareClipClipboard);
    return;
+ }
+ if (location.origin === 'https://www.nicovideo.jp' && window === window.top &&
+     typeof GM_xmlhttpRequest === 'function' && typeof GM_getValue === 'function' &&
+     typeof GM_setValue === 'function' && typeof GM_deleteValue === 'function') {
+   const request=(function createXRequest(xhr) {
+  return function request(path, {method, headers, body, signal} = {}) {
+    const allowed = method === 'GET'
+      ? /^\/2\/(?:users\/me|media\/upload\?command=STATUS&media_id=\d{1,19})$/
+      : /^\/2\/(?:oauth2\/(?:token|revoke)|tweets|media\/upload\/(?:initialize|\d{1,19}\/(?:append|finalize)))$/;
+    if (typeof path !== 'string' || !['GET','POST'].includes(method) || !allowed.test(path)) throw Error('INVALID_ENDPOINT');
+    const url = 'https://api.x.com' + path;
+    return new Promise((resolve, reject) => {
+      let handle, settled = false;
+      function finish(callback, value) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+        callback(value);
+      }
+      function abort() {
+        finish(reject,new Error('CANCELLED'));
+        handle?.abort();
+      }
+      const timer = setTimeout(() => {
+        finish(reject,new Error('NETWORK'));
+        handle?.abort();
+      },90000);
+      if (signal?.aborted) return abort();
+      signal?.addEventListener('abort',abort,{once:true});
+      try {
+        handle = xhr({
+          url, method, headers, data:body, anonymous:true, redirect:'error',
+          onload(response) {
+            if (response.finalUrl && response.finalUrl !== url) return finish(reject,new Error('INVALID_ENDPOINT'));
+            let json;
+            try { json = JSON.parse(response.responseText); } catch (_) { json = null; }
+            finish(resolve,{status:response.status,json});
+          },
+          onerror:() => finish(reject,new Error('NETWORK')),
+          onabort:() => finish(reject,new Error('CANCELLED')),
+          ontimeout:() => finish(reject,new Error('NETWORK'))
+        });
+      } catch (error) { finish(reject,error); }
+    });
+  };
+})(options=>GM_xmlhttpRequest(options));
+   const prefix='zenza-x-user:';
+   const auth=(function createXUserAuth({get, set, remove, request}) {
+  const prefix = 'zenza.x.oauth.';
+  const settingsKey = prefix + 'config';
+  const loopback = 'http://127.0.0.1:48765/callback';
+  const required = ['tweet.read', 'users.read', 'media.write', 'tweet.write'];
+  const reserved = ['state', 'code', 'error', 'error_description', 'error_uri'];
+  const readSettings = () => get(settingsKey) || {clientId: '', redirectUri: loopback, generation: ''};
+  // Separate keys per configuration generation. Late asynchronous completions
+  // from a disconnected tab cannot replace tokens belonging to a new account.
+  const key = (settings, suffix) => prefix + settings.generation + '.' + suffix;
+  const current = settings => readSettings().generation === settings.generation;
+  let refreshing;
+
+  function fail(code) {
+    const err = new Error(code);
+    err.code = code;
+    return err;
+  }
+
+  function base64url(bytes) {
+    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function random() {
+    return base64url(crypto.getRandomValues(new Uint8Array(32)));
+  }
+
+  function config() {
+    const {clientId, redirectUri} = readSettings();
+    return {clientId, redirectUri};
+  }
+
+  function parse(value, error) {
+    if (typeof value !== 'string' || /[\s\\#]/.test(value)) throw fail(error);
+    let url;
+    try { url = new URL(value); } catch { throw fail(error); }
+    if (url.username || url.password) throw fail(error);
+    return url;
+  }
+
+  function configure({clientId, redirectUri} = {}) {
+    if (typeof clientId !== 'string' || !/^[A-Za-z0-9._~-]{1,512}$/.test(clientId)) throw fail('INVALID_CONFIG');
+    const uri = parse(redirectUri, 'INVALID_CONFIG');
+    if ((uri.protocol !== 'https:' && redirectUri !== loopback) ||
+        reserved.some(p => uri.searchParams.has(p))) throw fail('INVALID_CONFIG');
+    const old = readSettings();
+    if (old.clientId === clientId && old.redirectUri === redirectUri) return config();
+    const oldToken = get(key(old, 'token'));
+    set(settingsKey, {clientId, redirectUri, generation: random()});
+    clear(old);
+    if (oldToken) void revoke(old, oldToken);
+    return config();
+  }
+
+  function clear(settings) {
+    remove(key(settings, 'pending'));
+    remove(key(settings, 'token'));
+  }
+
+  async function begin() {
+    const settings = readSettings();
+    if (!settings.clientId) throw fail('INVALID_CONFIG');
+    const verifier = random();
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    if (!current(settings)) throw fail('AUTH_REQUIRED');
+    const state = random();
+    const url = new URL('https://x.com/i/oauth2/authorize');
+    url.search = new URLSearchParams({response_type: 'code', client_id: settings.clientId,
+      redirect_uri: settings.redirectUri, scope: [...required, 'offline.access'].join(' '),
+      state, code_challenge_method: 'S256', code_challenge: base64url(new Uint8Array(digest))}).toString();
+    set(key(settings, 'pending'), {state, verifier, expiresAt: Date.now() + 10 * 60 * 1000});
+    return url.href;
+  }
+
+  async function postForm(path, fields) {
+    try {
+      return await request(path, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams(fields).toString()});
+    } catch {
+      throw fail('NETWORK');
+    }
+  }
+
+  async function exchange(settings, fields, previous) {
+    const response = await postForm('/2/oauth2/token', {client_id: settings.clientId, ...fields});
+    if (response?.status !== 200) {
+      if (response?.json?.error === 'invalid_grant') throw fail('AUTH_EXPIRED');
+      throw fail('TOKEN_ERROR');
+    }
+    const raw = response.json;
+    try {
+      return tokenFrom(raw, previous);
+    } catch (err) {
+      await revoke(settings, {access: raw?.access_token, refresh: raw?.refresh_token});
+      throw err;
+    }
+  }
+
+  function tokenFrom(raw, previous) {
+    // A refresh may omit scope when it is unchanged (RFC 6749 section 5.1).
+    const scope = raw?.scope ?? previous?.scope;
+    const scopes = typeof scope === 'string' ? scope.split(/\s+/) : [];
+    if (!required.every(s => scopes.includes(s))) throw fail('SCOPE_MISSING');
+    if (typeof raw?.token_type !== 'string' || raw.token_type.toLowerCase() !== 'bearer' || typeof raw.access_token !== 'string' ||
+        !/^[!-~]+$/.test(raw.access_token) || !Number.isSafeInteger(raw.expires_in) || raw.expires_in < 1) {
+      throw fail('TOKEN_ERROR');
+    }
+    const refresh = scopes.includes('offline.access') ? raw.refresh_token ?? previous?.refresh : undefined;
+    if (refresh != null && (typeof refresh !== 'string' || !/^[!-~]+$/.test(refresh))) throw fail('TOKEN_ERROR');
+    return {id: random(), access: raw.access_token, refresh: refresh || '', scope,
+      expiresAt: Date.now() + raw.expires_in * 1000};
+  }
+
+  function callbackParams(value, settings) {
+    const callback = parse(value, 'INVALID_CALLBACK');
+    const registered = new URL(settings.redirectUri);
+    // Keep the exact origin and path, plus the registered fixed query (if any).
+    // Reject userinfo, alternate hosts, duplicate response fields, and query substitutions.
+    if (callback.origin !== registered.origin || callback.pathname !== registered.pathname ||
+        value.split('?')[0] !== settings.redirectUri.split('?')[0]) throw fail('INVALID_CALLBACK');
+    const params = callback.searchParams;
+    for (const name of new Set(registered.searchParams.keys())) {
+      const actual = params.getAll(name);
+      const expected = registered.searchParams.getAll(name);
+      if (actual.length !== expected.length || expected.some((v, i) => v !== actual[i])) throw fail('INVALID_CALLBACK');
+    }
+    if (params.getAll('state').length !== 1 || reserved.some(p => params.getAll(p).length > 1) ||
+        params.has('code') === params.has('error')) throw fail('INVALID_CALLBACK');
+    return params;
+  }
+
+  async function complete(value) {
+    const settings = readSettings();
+    const pendingKey = key(settings, 'pending');
+    const pending = get(pendingKey);
+    const params = callbackParams(value, settings);
+    if (!pending?.verifier || params.get('state') !== pending.state) throw fail('INVALID_CALLBACK');
+    if (Date.now() >= pending.expiresAt) {
+      remove(pendingKey);
+      throw fail('AUTH_EXPIRED');
+    }
+    if (params.has('error')) {
+      remove(pendingKey);
+      throw fail('AUTH_DENIED');
+    }
+    if (!params.get('code')) throw fail('INVALID_CALLBACK');
+    // Consume the verifier before awaiting any I/O. The state marker detects a newer link attempt.
+    set(pendingKey, {state: pending.state});
+    try {
+      const token = await exchange(settings, {grant_type: 'authorization_code', code: params.get('code'),
+        redirect_uri: settings.redirectUri, code_verifier: pending.verifier});
+      if (!current(settings) || get(pendingKey)?.state !== pending.state) {
+        if (!current(settings)) await revoke(settings, token);
+        throw fail('AUTH_REQUIRED');
+      }
+      set(key(settings, 'token'), token);
+      return true;
+    } finally {
+      if (get(pendingKey)?.state === pending.state) remove(pendingKey);
+    }
+  }
+
+  function isLinked() {
+    const token = get(key(readSettings(), 'token'));
+    return !!token?.access && (!!token.refresh || token.expiresAt > Date.now());
+  }
+
+  async function refresh(settings) {
+    if (!current(settings)) throw fail('AUTH_REQUIRED');
+    const tokenKey = key(settings, 'token');
+    const previous = get(tokenKey);
+    if (!previous?.access) throw fail('AUTH_REQUIRED');
+    if (previous.expiresAt > Date.now() + (previous.refresh ? 30000 : 0)) return previous.access;
+    if (!previous.refresh) throw fail('AUTH_REQUIRED');
+    let next;
+    try {
+      next = await exchange(settings, {grant_type: 'refresh_token', refresh_token: previous.refresh}, previous);
+    } catch (err) {
+      if (['AUTH_EXPIRED', 'SCOPE_MISSING'].includes(err.code) && get(tokenKey)?.id === previous.id) remove(tokenKey);
+      throw err;
+    }
+    if (!current(settings)) {
+      await revoke(settings, next);
+      throw fail('AUTH_REQUIRED');
+    }
+    const latest = get(tokenKey);
+    if (latest?.id !== previous.id) {
+      if (latest?.expiresAt > Date.now()) return latest.access;
+      throw fail('AUTH_REQUIRED');
+    }
+    set(tokenKey, next);
+    return next.access;
+  }
+
+  async function getToken() {
+    const settings = readSettings();
+    const token = get(key(settings, 'token'));
+    if (!token?.access) throw fail('AUTH_REQUIRED');
+    if (token.expiresAt > Date.now() + (token.refresh ? 30000 : 0)) return token.access;
+    if (refreshing?.generation === settings.generation) return refreshing.promise;
+    const locks = globalThis.navigator?.locks;
+    const run = () => refresh(settings);
+    const promise = locks ? locks.request(key(settings, 'refresh-lock'), run) : run();
+    refreshing = {generation: settings.generation, promise};
+    try { return await promise; }
+    finally { if (refreshing?.promise === promise) refreshing = undefined; }
+  }
+
+  async function revoke(settings, token) {
+    const values = [...new Set([token?.refresh, token?.access].filter(v => typeof v === 'string' && v.length))];
+    const results = await Promise.all(values.map(async value => {
+      try {
+        const r = await postForm('/2/oauth2/revoke', {token: value, client_id: settings.clientId});
+        return r?.status >= 200 && r.status < 300 && r.json?.revoked !== false;
+      } catch { return false; }
+    }));
+    return results.every(Boolean);
+  }
+
+  function disconnect() {
+    const old = readSettings();
+    const token = get(key(old, 'token'));
+    set(settingsKey, {...old, generation: random()});
+    clear(old);
+    return revoke(old, token);
+  }
+
+  return {config, configure, begin, complete, getToken, disconnect, isLinked};
+})({request,get:key=>GM_getValue(prefix+key),
+     set:(key,value)=>GM_setValue(prefix+key,value),remove:key=>GM_deleteValue(prefix+key)});
+   (function mountXPostingBridge({request,auth,createPublisher,showDialog}) {
+  if (window !== window.top || location.origin !== 'https://www.nicovideo.jp') return;
+  const origin = location.origin;
+  let open = false;
+  const fail = code => Object.assign(new Error(code),{code});
+  window.addEventListener('message', event => {
+    if (open || !event.isTrusted || event.origin !== origin || event.source !== window || event.data?.type !== 'zenza-open-x-publisher') return;
+    const {file,text} = event.data;
+    if (!(file instanceof File) || file.type !== 'video/mp4' || !file.size || typeof text !== 'string') return;
+    // Page messages can only open the preview. Access tokens, API methods and
+    // the final trusted-click confirmation remain in the isolated userscript.
+    let reviewed, inFlight = false, closed = false;
+    async function lookup(token, signal) {
+      const {status,json} = await request('/2/users/me',{method:'GET',headers:{Authorization:'Bearer '+token},signal});
+      if (status === 401) throw fail('AUTH_REQUIRED');
+      if (status === 402) throw fail('QUOTA');
+      if (status === 403) throw fail('ACCESS_DENIED');
+      if (status === 429) throw fail('RATE_LIMITED');
+      const identity = json?.data;
+      if (status !== 200 || typeof identity?.id !== 'string' || !/^\d{1,19}$/.test(identity.id) ||
+          typeof identity.username !== 'string' || !/^[A-Za-z0-9_]{1,15}$/.test(identity.username)) throw fail('ACCOUNT_UNKNOWN');
+      return {id:identity.id,username:identity.username};
+    }
+    async function account() {
+      reviewed = null;
+      const token = await auth.getToken();
+      const identity = await lookup(token);
+      if (closed) throw fail('CANCELLED');
+      reviewed = {id:identity.id,token};
+      return identity;
+    }
+    async function publish({text:body, signal, onProgress}) {
+      if (inFlight) throw fail('BUSY');
+      inFlight = true;
+      let beforeDispatch;
+      try {
+        const binding = reviewed;
+        if (!binding || closed) throw fail('ACCOUNT_CHANGED');
+        const publisher = createPublisher(async (path, options) => {
+          let token;
+          try {
+            if (!auth.isLinked()) throw fail('AUTH_REQUIRED');
+            token = await auth.getToken();
+            if (token !== binding.token) {
+              const identity = await lookup(token, signal);
+              if (identity.id !== binding.id || await auth.getToken() !== token) throw fail('ACCOUNT_CHANGED');
+              binding.token = token;
+            }
+            if (closed || signal?.aborted) throw fail('CANCELLED');
+          } catch (error) {
+            // The post has not been dispatched. Preserve this distinction for the dialog.
+            beforeDispatch = signal?.aborted ? fail('CANCELLED') : error;
+            throw beforeDispatch;
+          }
+          return request(path,{...options, headers:{...options.headers, Authorization:'Bearer '+token}});
+        });
+        return await publisher.publish({file,text:body,signal,onProgress});
+      } catch (error) {
+        throw beforeDispatch || error;
+      } finally { inFlight = false; }
+    }
+    open = true;
+    try {
+      showDialog({file,text,auth,account,publish,onClose() { if (!closed) { closed = true; reviewed = null; open = false; } }});
+    } catch (_) { open = false; }
+  });
+  document.documentElement.setAttribute('data-zenza-x-publisher','ready');
+})({request,auth,createPublisher:function createXMediaPublisher(request, options = {}) {
+  const sleep = options.sleep || wait;
+  const upload = '/2/media/upload';
+  // JSON APPEND carries base64; only one segment is read into memory at a time.
+  // https://docs.x.com/x-api/media/append-media-upload
+  const chunkSize = 4 * 1024 * 1024;
+  const isId = id => typeof id === 'string' && /^[0-9]{1,19}$/.test(id);
+  let busy = false;
+
+  function failure(code, status) {
+    const error = new Error(code);
+    error.code = code;
+    if (status) error.status = status;
+    return error;
+  }
+
+  function checkCancelled(signal) {
+    if (signal?.aborted) throw failure('CANCELLED');
+  }
+
+  function wait(ms, signal) {
+    checkCancelled(signal);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', abort);
+        resolve();
+      }, ms);
+      function abort() {
+        clearTimeout(timer);
+        reject(failure('CANCELLED'));
+      }
+      signal?.addEventListener('abort', abort, {once: true});
+    });
+  }
+
+  function httpFailure(status, json, creatingPost) {
+    if (creatingPost && (!(status >= 400 && status < 500) || status === 408)) {
+      return failure('POST_UNCERTAIN', status);
+    }
+    if (status === 402 || /\/(?:usage-capped|credits-depleted)$/i.test(json?.type || '')) {
+      return failure('QUOTA', status);
+    }
+    const reasons = [json?.detail, json?.message, ...(Array.isArray(json?.errors) ? json.errors.map(e => e?.message || e?.detail) : [])];
+    if (creatingPost && status === 403 && reasons.some(value =>
+        typeof value === 'string' && /not allowed to post a video longer than/i.test(value))) {
+      return failure('DURATION_LIMIT', status);
+    }
+    if (creatingPost && [400, 422].includes(status)) return failure('POST_REJECTED', status);
+    const errors = {401: 'AUTH_REQUIRED', 403: 'ACCESS_DENIED', 413: 'TOO_LARGE', 429: 'RATE_LIMITED'};
+    return failure(errors[status] || 'API_ERROR', status);
+  }
+
+  async function send(path, method, body, signal) {
+    checkCancelled(signal);
+    const creatingPost = path === '/2/tweets';
+    const options = {method, signal};
+    if (body !== undefined) {
+      options.headers = {'Content-Type': 'application/json'};
+      options.body = JSON.stringify(body);
+    }
+    let response;
+    try {
+      response = await request(path, options);
+    } catch {
+      if (creatingPost) throw failure('POST_UNCERTAIN');
+      checkCancelled(signal);
+      throw failure('NETWORK');
+    }
+    const status = response?.status;
+    const json = response?.json;
+    if (!Number.isInteger(status) || status < 200 || status >= 300) {
+      throw httpFailure(status, json, creatingPost);
+    }
+    if (!creatingPost && json?.errors?.length) throw failure('API_ERROR', status);
+    return json?.data;
+  }
+
+  async function encodeSegment(part) {
+    let bytes;
+    try {
+      bytes = new Uint8Array(await part.arrayBuffer());
+    } catch {
+      throw failure('FILE_READ');
+    }
+    if (typeof bytes.toBase64 === 'function') return bytes.toBase64();
+    // Older browser engines limit the number of arguments to fromCharCode().
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
+    return btoa(binary);
+  }
+
+  async function publish({file, text = '', signal, onProgress} = {}) {
+    if (busy) throw failure('BUSY');
+    checkCancelled(signal);
+    const mime = String(file?.type || '').split(';')[0].trim().toLowerCase();
+    const namedMp4 = (!mime || mime === 'application/octet-stream') && /\.mp4$/i.test(file?.name || '');
+    if (!(file instanceof Blob) || !Number.isSafeInteger(file.size) || file.size < 1 ||
+        (mime !== 'video/mp4' && !namedMp4)) throw failure('INVALID_FILE');
+    // The initialize schema caps total_bytes at 16 GiB. X enforces the posting
+    // account's own size/duration entitlement at upload and post creation.
+    // https://docs.x.com/x-api/media/quickstart/best-practices
+    if (file.size > 17179869184) throw failure('TOO_LARGE');
+    if (typeof text !== 'string') throw failure('INVALID_TEXT');
+
+    busy = true;
+    let uploadedBytes = 0;
+    const progress = (stage, percent = Math.floor(uploadedBytes * 100 / file.size)) =>
+      onProgress?.({stage, uploadedBytes, totalBytes: file.size, percent});
+    try {
+      progress('initialize');
+      const init = await send(upload + '/initialize', 'POST',
+        {media_type: 'video/mp4', media_category: 'tweet_video', total_bytes: file.size}, signal);
+      const mediaId = init?.id;
+      if (!isId(mediaId)) throw failure('INVALID_RESPONSE');
+      const path = upload + '/' + mediaId;
+      progress('upload');
+      for (let index = 0; uploadedBytes < file.size; index++) {
+        checkCancelled(signal);
+        const end = Math.min(uploadedBytes + chunkSize, file.size);
+        const media = await encodeSegment(file.slice(uploadedBytes, end));
+        await send(path + '/append', 'POST', {segment_index: index, media}, signal);
+        uploadedBytes = end;
+        progress('upload');
+      }
+
+      const finalized = await send(path + '/finalize', 'POST', undefined, signal);
+      if (finalized?.id !== mediaId) throw failure('INVALID_RESPONSE');
+      let info = finalized.processing_info;
+      // Respect the validity window on the returned media; never poll before X's delay.
+      const expirySeconds = finalized.expires_after_secs ?? init.expires_after_secs ?? 86400;
+      const deadline = Date.now() + expirySeconds * 1000;
+      while (info != null && info.state !== 'succeeded') {
+        if (info.state === 'failed') throw failure('PROCESSING_FAILED');
+        if (info.state !== 'pending' && info.state !== 'in_progress') throw failure('INVALID_RESPONSE');
+        progress('processing', Number.isFinite(info.progress_percent) ? info.progress_percent : 0);
+        const seconds = info.check_after_secs ?? 1;
+        if (!Number.isSafeInteger(seconds) || seconds < 0) throw failure('INVALID_RESPONSE');
+        const ms = Math.max(1, seconds) * 1000;
+        if (!Number.isFinite(deadline) || Date.now() + ms >= deadline) throw failure('PROCESSING_TIMEOUT');
+        await sleep(ms, signal);
+        const status = await send(upload + '?command=STATUS&media_id=' + mediaId, 'GET', undefined, signal);
+        if (status?.id !== mediaId || !status.processing_info) throw failure('INVALID_RESPONSE');
+        info = status.processing_info;
+      }
+
+      progress('post');
+      const body = {media: {media_ids: [mediaId]}};
+      if (text) body.text = text;
+      const result = await send('/2/tweets', 'POST', body, signal);
+      if (!isId(result?.id)) throw failure('POST_UNCERTAIN');
+      return {id: result.id, mediaId, url: 'https://x.com/i/status/' + result.id};
+    } finally {
+      busy = false;
+    }
+  }
+
+  return {publish};
+},showDialog:function mountXDirectDialog({file, text = '', auth, publish, account, onClose}) {
+  const previousFocus = document.activeElement;
+  const host = document.createElement('aside');
+  host.id = 'zenza-x-direct';
+  const root = host.attachShadow({mode:'closed'});
+  root.innerHTML = `<style>
+    :host {color-scheme:dark}
+    dialog {box-sizing:border-box;width:min(44rem,calc(100vw - 16px));max-width:none;max-height:calc(100dvh - 12px);overflow:auto;margin:auto;padding:16px 20px;border:1px solid #5c7183;border-radius:12px;background:#17232d;color:#f3f6f9;font:15px/1.45 system-ui,sans-serif}
+    dialog::backdrop {background:#0009}
+    header,.actions,.attachment {display:flex;align-items:center;flex-wrap:wrap;gap:5px 10px}
+    header {flex-wrap:nowrap;justify-content:space-between}
+    h2 {margin:0;font-size:1.15em}
+    .attachment {flex-wrap:nowrap;min-width:0;margin:4px 0 10px;color:#c1d0db;font-size:.9em}
+    #file {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #size {flex:none;font-variant-numeric:tabular-nums}
+    .fields,.columns {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
+    .columns:has(> [hidden]) {display:block}
+    .fields {margin-bottom:8px}
+    label {display:block}
+    input,textarea,button {font:inherit}
+    input,textarea {display:block;box-sizing:border-box;width:100%;margin-top:2px;padding:5px 8px;color:inherit;background:#111b23;border:1px solid #718595;border-radius:5px}
+    textarea {resize:none}
+    button {padding:5px 10px;border:1px solid #718595;border-radius:6px;color:inherit;background:#263b4a;cursor:pointer}
+    button:disabled {opacity:.55;cursor:default}
+    button:is([data-action=authorize],[data-action=account],[data-action=publish]) {color:#102639;background:#b8deff;border-color:#b8deff;font-weight:650}
+    .actions {margin:6px 0}
+    p,details {margin:6px 0;overflow-wrap:anywhere}
+    summary {cursor:pointer;color:#c6e4f9}
+    a {color:#a4dbff}
+    .fee {font-size:.86em;color:#c1d0db}
+    progress {width:100%}
+    #preview video {display:block;width:100%;height:min(50dvh,22rem);object-fit:contain;background:#10161c}
+    [hidden],p:empty {display:none!important}
+    @media(max-width:559px) {
+      dialog {padding:10px 12px;font-size:14px}
+      .fields,.columns {display:block}
+      .fields label+label {margin-top:5px}
+    }
+    @media(max-height:420px) {dialog{padding:6px 12px;font-size:13px}.attachment,.actions,p,details{margin-block:3px}#preview video{height:45dvh}}
+  </style><dialog aria-labelledby="title">
+    <header><h2 id="title">動画をXに直接投稿</h2><button data-action="close">閉じる</button></header>
+    <p class="attachment"><span id="file"></span><span id="size"></span></p>
+    <div id="workflow">
+      <section id="setup">
+        <div class="fields"><label>公開Client ID<input id="client" autocomplete="off" spellcheck="false"></label>
+        <label>登録済みコールバックURL<input id="redirect" type="url" autocomplete="off" spellcheck="false"></label></div>
+        <button data-action="authorize">Xで連携を許可</button>
+        <details><summary>初回設定の手順</summary>
+          <p>X Developer ConsoleでOAuth 2.0の公開クライアントを登録し、公開Client IDとコールバックURLを入力します。</p>
+          <p>既定のURLでは、連携の前にPCで受信ツールを起動します。リポジトリのルートでは <code>node packages/external-playback/x-oauth-loopback.cjs</code>、単体で取得した場合は保存先で <code>node x-oauth-loopback.cjs</code> を実行してください。</p>
+          <p>別のHTTPS URLを登録する場合は、ご自身で管理するサイトを指定します。</p></details>
+      </section>
+      <section id="authorization"><p>認可ページでXのアカウントと権限を確認してください。</p>
+        <div class="actions"><a id="authorizationLink" target="_blank" rel="noopener noreferrer">認可ページを開く</a>
+        <button data-action="abandon">認可を取り消す</button></div>
+        <details><summary>認可後に画面が切り替わらない場合</summary><label>認可後のコールバックURL<input id="callback" type="url" autocomplete="off" spellcheck="false"></label>
+        <div class="actions"><button data-action="complete">入力したURLで連携を完了</button></div></details>
+      </section>
+      <div class="columns"><label id="draft">投稿本文<textarea rows="3"></textarea></label>
+      <section id="linked"><p id="user"></p>
+        <div class="actions"><button data-action="account">投稿先アカウントを確認</button>
+        <button data-action="preview" hidden>添付動画を確認</button>
+        <button data-action="publish" hidden>内容を確認して投稿</button></div>
+        <button data-action="disconnect">この端末の連携を解除・切替</button>
+      </section></div>
+      <progress max="100" hidden></progress><button data-action="abort" hidden>送信を中止</button>
+      <p role="status" aria-live="polite"></p><a id="result" target="_blank" rel="noopener noreferrer" hidden></a>
+      <p class="fee">アカウント確認・アップロード・投稿にはX APIの料金が発生する場合があります。</p>
+    </div>
+    <section id="preview" hidden><video controls playsinline preload="metadata" aria-label="Xに添付する動画"></video>
+      <p id="previewStatus" aria-live="polite"></p><div class="actions"><button data-action="back">投稿内容に戻る</button></div></section>
+  </dialog>`;
+  const find = selector => root.querySelector(selector);
+  const action = name => find('[data-action="' + name + '"]');
+  const dialog = find('dialog'), body = find('textarea'), status = find('[role=status]');
+  const result = find('#result'), progress = find('progress');
+  const client = find('#client'), redirect = find('#redirect'), callback = find('#callback');
+  const video = find('#preview video');
+  let previewUrl;
+  const config = auth.config() || {};
+  client.value = config.clientId || '';
+  redirect.value = config.redirectUri || 'http://127.0.0.1:48765/callback';
+  body.value = text;
+  const size = (file.size / 1048576).toLocaleString('ja-JP',{maximumFractionDigits:2}) + ' MiB';
+  const bytes = file.size.toLocaleString('ja-JP') + ' バイト';
+  const fileSummary = file.name + '（' + size + '、' + bytes + '）';
+  find('#file').textContent = find('#file').title = file.name;
+  find('#size').textContent = file.size < 1048576 ? bytes : size;
+  find('#size').title = bytes;
+  let stage = auth.isLinked() ? 'linked' : 'setup';
+  let busy = false, closed = false, popup, registeredUrl, user, controller;
+  const messages = {
+    INVALID_CONFIG:'公開Client IDと、Xに登録したコールバックURLを確認してください。',
+    AUTH_EXPIRED:'認可の有効期限が切れました。もう一度連携してください。',
+    AUTH_REQUIRED:'Xの認可が必要です。もう一度連携してください。',
+    AUTH_DENIED:'Xで認可が取り消されました。',
+    INVALID_CALLBACK:'認可後のURLを確認してください。登録済みのURLと今回の認可情報が必要です。',
+    TOKEN_ERROR:'Xの認可情報を取得できませんでした。アプリ設定を確認し、もう一度連携してください。',
+    SCOPE_MISSING:'動画投稿に必要な権限がありません。Xのアプリ設定を確認し、もう一度連携してください。',
+    ACCOUNT_CHANGED:'連携中のアカウントが変わりました。投稿先をもう一度確認してください。',
+    ACCOUNT_UNKNOWN:'投稿先のアカウントを確認できませんでした。Xの認可と通信状態を確認してください。',
+    QUOTA:'Xの利用枠またはクレジットが不足しています。X Developer Consoleを確認してください。',
+    DURATION_LIMIT:'動画がこのXアカウントの投稿時間上限を超えています。クリップの区間を短くしてください。',
+    POST_REJECTED:'Xが投稿内容を受理しませんでした。本文の長さや動画の形式を確認してください。',
+    INVALID_RESPONSE:'Xから動画の受付結果を読み取れませんでした。修復箇所：x-media-publish.cjs のアップロード応答。',
+    ACCESS_DENIED:'この操作をXが許可しませんでした。アプリのアクセス権限を確認してください。',
+    TOO_LARGE:'動画がXの容量上限を超えています。短いクリップを作成してください。',
+    INVALID_FILE:'直接投稿できる形式はMP4です。MP4のクリップを選んでください。',
+    RATE_LIMITED:'Xの利用回数制限に達しました。時間をおいてください。',
+    NETWORK:'Xに接続できませんでした。通信状態を確認してください。',
+    PROCESSING_FAILED:'Xでの動画処理に失敗しました。', PROCESSING_TIMEOUT:'Xの動画処理が期限内に完了しませんでした。',
+    CANCELLED:'送信を中止しました。', FILE_READ:'動画ファイルを読み取れませんでした。'
+  };
+  function render() {
+    const sending = stage === 'sending', linked = stage === 'linked' || stage === 'review';
+    find('#setup').hidden = stage !== 'setup';
+    find('#authorization').hidden = stage !== 'authorization';
+    find('#linked').hidden = !linked && !sending;
+    find('#user').textContent = user ? '投稿先　@' + user.username : '投稿先は未確認です。';
+    find('#draft').hidden = stage === 'setup' || stage === 'authorization';
+    action('preview').hidden = stage !== 'review';
+    body.readOnly = sending || stage === 'sent' || stage === 'unknown';
+    action('publish').hidden = stage !== 'review';
+    action('account').hidden = stage !== 'linked';
+    action('disconnect').hidden = !linked;
+    for (const el of root.querySelectorAll('button,input')) el.disabled = busy;
+    action('close').disabled = sending;
+    action('abort').hidden = !sending;
+    action('abort').disabled = !sending || controller.signal.aborted;
+    progress.hidden = !sending;
+  }
+  function hidePreview() {
+    if (!previewUrl) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    find('#preview').hidden = true;
+    find('#workflow').hidden = false;
+    find('#previewStatus').textContent = '';
+  }
+  function openPreview() {
+    if (stage !== 'review' || previewUrl) return;
+    try { previewUrl = URL.createObjectURL(file); }
+    catch (_) { status.textContent = '添付動画のプレビューを開けませんでした。'; return; }
+    find('#workflow').hidden = true;
+    find('#preview').hidden = false;
+    video.src = previewUrl;
+    action('back').focus();
+  }
+  video.onerror = () => {
+    if (previewUrl) find('#previewStatus').textContent = 'このブラウザーでは添付動画を再生できません。';
+  };
+  function backFromPreview() {
+    hidePreview();
+    action('preview').focus();
+  }
+  function stopPopup() {
+    try { popup?.close(); } catch (_) {}
+    popup = null;
+    registeredUrl = null;
+    callback.value = '';
+    find('#authorizationLink').removeAttribute('href');
+  }
+  function close() {
+    if (closed) return;
+    if (controller) { controller.abort(); return; }
+    closed = true;
+    hidePreview();
+    stopPopup();
+    window.removeEventListener('message', onMessage);
+    dialog.close();
+    host.remove();
+    previousFocus?.focus();
+    onClose?.();
+  }
+  function showProfile() {
+    result.href = 'https://x.com/' + user.username;
+    result.textContent = '@' + user.username + ' の投稿を確認';
+    result.hidden = false;
+  }
+  async function run(work) {
+    if (busy || closed) return;
+    busy = true;
+    status.textContent = '';
+    render();
+    try {
+      await work();
+    } catch (error) {
+      if (closed) return;
+      const code = error?.code || error?.message;
+      if (code === 'POST_UNCERTAIN') {
+        stage = 'unknown';
+        status.textContent = 'Xから投稿結果を確認できませんでした。重複投稿を防ぐため、Xのプロフィールで投稿済みか確認してください。';
+        showProfile();
+      } else {
+        if (stage === 'sending') stage = 'review';
+        if (code === 'AUTH_REQUIRED' || code === 'AUTH_EXPIRED' || code === 'SCOPE_MISSING' || code === 'TOKEN_ERROR' || code === 'AUTH_DENIED') {
+          stopPopup(); user = null; stage = 'setup';
+        }
+        if (code === 'ACCOUNT_CHANGED') { user = null; stage = 'linked'; }
+        status.textContent = messages[code] || '操作を完了できませんでした。Xのアプリ設定と通信状態を確認してください。';
+      }
+    } finally {
+      busy = false;
+      if (!closed) render();
+    }
+  }
+  async function authorize() {
+    const settings = {clientId:client.value.trim(), redirectUri:redirect.value.trim()};
+    // Open while transient user activation still exists. COOP or blockers may sever the opener.
+    popup = window.open('about:blank','_blank','popup,width=620,height=720');
+    try {
+      await auth.configure(settings);
+      registeredUrl = new URL(settings.redirectUri);
+      const url = new URL(await auth.begin());
+      if (closed) return;
+      if (url.origin !== 'https://x.com' || url.pathname !== '/i/oauth2/authorize') throw Error('INVALID_CONFIG');
+      stage = 'authorization';
+      find('#authorizationLink').href = url.href;
+      if (popup && !popup.closed) {
+        try { popup.location.href = url.href; } catch (_) {}
+      }
+    } catch (error) { stopPopup(); throw error; }
+  }
+  async function complete(value) {
+    let url;
+    try { url = new URL(value); } catch (_) { throw Error('INVALID_CALLBACK'); }
+    if (url.origin !== registeredUrl?.origin || url.pathname !== registeredUrl.pathname) throw Error('INVALID_CALLBACK');
+    await auth.complete(url.href);
+    stopPopup();
+    stage = 'linked';
+    status.textContent = '連携しました。投稿先アカウントを確認してください。';
+  }
+  function onMessage(event) {
+    if (stage === 'authorization' && event.isTrusted && popup && event.source === popup && event.origin === registeredUrl?.origin &&
+        event.data?.type === 'zenza-x-oauth-complete' && typeof event.data.url === 'string') {
+      void run(() => complete(event.data.url));
+    }
+  }
+  async function checkAccount() {
+    const identity = await account();
+    if (closed) return;
+    if (!identity?.id || !/^[A-Za-z0-9_]{1,15}$/.test(identity.username || '')) throw Error('ACCOUNT_CHANGED');
+    user = identity;
+    stage = 'review';
+  }
+  async function sendPost() {
+    if (stage !== 'review' || !user) return;
+    const message = body.value;
+    if (!window.confirm('@' + user.username + ' としてXに公開しますか？\n\n動画：' + fileSummary +
+      '\n投稿本文：\n' + (message || '（本文なし）') + '\n\nX APIの利用料金が発生する場合があります。')) return;
+    controller = new AbortController();
+    stage = 'sending';
+    progress.value = 0;
+    render();
+    const labels = {initialize:'準備中',upload:'動画をアップロード中',processing:'Xで動画を処理中',post:'投稿を送信中'};
+    try {
+      const posted = await publish({file,text:message,signal:controller.signal,onProgress(update) {
+        progress.value = update.percent;
+        status.textContent = (labels[update.stage] || '送信中') + (update.stage === 'upload' || update.stage === 'processing' ? ' ' + update.percent + '%' : '');
+      }});
+      if (!/^\d{1,19}$/.test(posted?.id || '')) throw Error('POST_UNCERTAIN');
+      stage = 'sent';
+      result.href = 'https://x.com/i/status/' + posted.id;
+      result.textContent = 'Xで投稿を開く'; result.hidden = false;
+      status.textContent = '投稿しました。';
+    } finally { controller = null; }
+  }
+  dialog.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button || button.disabled || !event.isTrusted) return;
+    switch (button.dataset.action) {
+      case 'close': close(); break;
+      case 'preview': openPreview(); break;
+      case 'back': backFromPreview(); break;
+      case 'abort': controller?.abort(); render(); break;
+      case 'authorize': if (stage === 'setup') void run(authorize); break;
+      case 'abandon': stopPopup(); stage = 'setup'; status.textContent = ''; render(); break;
+      case 'complete': if (stage === 'authorization') void run(() => complete(callback.value.trim())); break;
+      case 'account': if (stage === 'linked') void run(checkAccount); break;
+      case 'disconnect':
+        void run(async () => {
+          const revoked = await auth.disconnect();
+          user = null; stage = 'setup';
+          status.textContent = revoked === false ? 'この端末の連携を解除しました。X側の解除結果は、Xの「連携しているアプリ」で確認してください。' :
+            '連携を解除しました。別のアカウントを使う場合は、Xの認可画面で選んでください。';
+        });
+        break;
+      case 'publish': void run(sendPost); break;
+    }
+  });
+  // Player shortcuts must not close the underlying clip editor while this modal has focus.
+  for (const name of ['keydown','keyup','keypress']) {
+    dialog.addEventListener(name,event => event.stopPropagation());
+  }
+  dialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    if (previewUrl) backFromPreview();
+    else if (!controller) close();
+  });
+  window.addEventListener('message',onMessage);
+  document.body.append(host);
+  render(); dialog.showModal();
+  return {close};
+}});
  }
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2371,10 +3209,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.481-task1104';
+    var VER = '2.7.482-task1105';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 16:32Z ff996f3b';
+    var BUILD = '2026-11-19 17:16Z b192810d';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -64011,7 +64849,7 @@ const ShareOfficialClip = (() => {
 		let createRequested = false;
 		let retryAt = 0, retryTimer;
 		container.innerHTML = `
-<p>ニコニコが元動画から3〜30秒のクリップを作成します。プレビューを確認して、連携したXアカウントに投稿できます。</p>
+<p>ニコニコが元動画の指定区間（3〜30秒）を切り出します。コメントと音声はプレビューで確認し、ここから連携済みのXに投稿できます。</p>
 <p name="account"></p>
 <div class="shareRow">
 	<label>開始 <input name="clipStart" type="number" min="0" step="0.001"> 秒</label>
@@ -64409,17 +65247,41 @@ const ShareClipClipboard = (() => {
 	const type = 'application/x-zenzawatch-clip';
 	const format = 'web ' + type;
 	const mediaTypes = ['video/mp4','video/webm'];
+	const maxPayloadBytes = 1024 ** 3;
+	const maxHeaderBytes = 2048;
+	const manualAttachment = '「動画を保存」で保存し、Xの投稿画面のメディアボタンから添付してください。';
 	function supported() {
-		return !!(globalThis.ClipboardItem && navigator.clipboard?.write && navigator.clipboard?.read &&
-			(!ClipboardItem.supports || ClipboardItem.supports(format)));
+		return !!(navigator.clipboard?.write && navigator.clipboard?.read && globalThis.ClipboardItem?.supports?.(format));
+	}
+	function encodeHeader(file) {
+		return new TextEncoder().encode(JSON.stringify({name:file.name, type:file.type}));
+	}
+	function copyUnavailableReason(file) {
+		if (!supported()) return 'このブラウザーでは動画のコピー形式を確認できません。' + manualAttachment;
+		if (!mediaTypes.includes(file?.type) || !file.size || typeof file.name !== 'string') {
+			return 'コピーできる動画はMP4またはWebMです。' + manualAttachment;
+		}
+		const headerBytes = encodeHeader(file).length;
+		if (headerBytes > maxHeaderBytes) return 'ファイル名が長すぎてコピーできません。' + manualAttachment;
+		if (4 + headerBytes + file.size >= maxPayloadBytes) {
+			return 'ファイル名などを含むコピー容量が1 GiB以上です。' + manualAttachment;
+		}
+		return '';
 	}
 	async function copy(file) {
-		if (!mediaTypes.includes(file?.type) || !file.size) throw Error('この動画をコピーできません。');
-		const header = new TextEncoder().encode(JSON.stringify({name:file.name, type:file.type}));
+		const reason = copyUnavailableReason(file);
+		if (reason) throw Error(reason);
+		const header = encodeHeader(file);
 		const size = new Uint8Array(4);
 		new DataView(size.buffer).setUint32(0,header.length);
 		const blob = new Blob([size,header,file],{type});
-		await navigator.clipboard.write([new ClipboardItem({[format]:blob})]);
+		try {
+			await navigator.clipboard.write([new ClipboardItem({[format]:blob})]);
+		} catch (error) {
+			const message = error.name === 'NotAllowedError' ? 'ブラウザーのクリップボード書き込み許可を確認してください。' :
+				'クリップボードへの書き込みに失敗しました。';
+			throw Error(message + manualAttachment);
+		}
 	}
 	async function read() {
 		const items = await navigator.clipboard.read();
@@ -64429,7 +65291,7 @@ const ShareClipClipboard = (() => {
 		const invalid = () => new Error('動画を読み取れません。ZenzaWatchでもう一度コピーしてください。');
 		if (blob.size < 5) throw invalid();
 		const length = new DataView(await blob.slice(0,4).arrayBuffer()).getUint32(0);
-		if (!length || length > 2048 || 4 + length >= blob.size) throw invalid();
+		if (!length || length > maxHeaderBytes || 4 + length >= blob.size) throw invalid();
 		let info;
 		try { info = JSON.parse(await blob.slice(4,4+length).text()); } catch (_) { throw invalid(); }
 		if (!mediaTypes.includes(info?.type) || typeof info.name !== 'string') throw invalid();
@@ -64437,7 +65299,7 @@ const ShareClipClipboard = (() => {
 		const stem = info.name.replace(/\.(mp4|webm)$/i,'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,160);
 		return new File([blob.slice(4+length)],(stem || 'clip') + extension,{type:info.type});
 	}
-	return {supported, copy, read};
+	return {supported, copyUnavailableReason, copy, read};
 })();
 const HlsLibrary = (() => {
 		const version = '1.7.3';
@@ -65647,9 +66509,10 @@ const ShareLocalClip = {
 				</div>
 			<div data-role="result" hidden>
 				<video data-role="preview" controls playsinline preload="metadata" aria-label="作成したクリップ"></video>
-				<div class="clipActions"><button type="button" data-action="share" hidden>動画を共有…</button>
+				<div class="clipActions"><button type="button" data-action="direct-x" hidden>このMP4をXに投稿</button>
+				<button type="button" data-action="share" hidden>動画を共有…</button>
 				<button type="button" data-action="copy-for-x" hidden>X用に動画をコピー</button>
-				<a class="shareAction" data-action="post-x" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く</a>
+				<a class="shareAction" data-action="post-x">コピーしてこのタブでXを開く</a>
 				<a class="shareAction" download>動画を保存</a></div>
 				<p class="clipHint" data-role="attachHint"></p>
 			</div>
@@ -65682,6 +66545,7 @@ const ShareLocalClip = {
 		const download = find('a[download]');
 		const postX = find('[data-action=post-x]');
 		const share = find('[data-action=share]');
+		const directX = find('[data-action=direct-x]');
 		const copyForX = find('[data-action=copy-for-x]');
 		const attachHint = find('[data-role=attachHint]');
 		const status = find('[role=status]');
@@ -65864,13 +66728,20 @@ const ShareLocalClip = {
 		}
 		function showAttachmentOptions() {
 			share.hidden = !navigator.canShare?.({files:[outputFile]});
-			copyForX.hidden = !ShareClipClipboard.supported();
-			attachHint.textContent = [share.hidden ? '' : '「動画を共有…」でXを選べます（端末の共有先にある場合）。',
-				copyForX.hidden ? '' : 'PCでは動画をコピーし、Xの投稿画面で「Zenzaの動画をクリップボードから読み込む」を押します。',
-				share.hidden && copyForX.hidden ? '「動画を保存」で保存し、Xの投稿画面のメディアボタンから添付できます。' : ''
+			directX.hidden = outputFile.type !== 'video/mp4' || document.documentElement.dataset.zenzaXPublisher !== 'ready';
+			const reason = ShareClipClipboard.copyUnavailableReason(outputFile);
+			copyForX.hidden = postX.hidden = !!reason;
+			if (window !== window.top) {
+				postX.target = '_blank';
+				postX.rel = 'noopener noreferrer';
+				postX.textContent = 'コピー後、別タブでXを開く';
+			}
+			attachHint.textContent = [
+				directX.hidden ? '' : 'このMP4を直接投稿するには、ご自身のXアプリの連携が必要です。',
+				reason || '下書きを使う場合は、Xで「Zenzaの動画をクリップボードから読み込む」を押してください。'
 			].filter(Boolean).join(' ');
 		}
-		copyForX.onclick = async () => {
+		async function copyClipForX(openDraft) {
 			const file = outputFile;
 			if (!file) return;
 			copyForX.disabled = true;
@@ -65878,19 +66749,33 @@ const ShareLocalClip = {
 				await ShareClipClipboard.copy(file);
 				if (file === outputFile) {
 					status.textContent = '「' + file.name + '」をコピーしました。Xの投稿画面で読み込んでください。';
-					postX.focus({preventScroll:true});
+					if (openDraft) location.assign(postX.href);
+					else postX.focus({preventScroll:true});
 				}
-			} catch (_) {
-				if (file === outputFile) status.textContent = '動画をコピーできませんでした。ブラウザーの許可を確認するか、「動画を共有…」または「動画を保存」を利用してください。';
+			} catch (error) {
+				if (file === outputFile) status.textContent = error.message || '動画をコピーできませんでした。';
 			} finally { copyForX.disabled = false; }
-		};
+		}
+		copyForX.onclick = () => copyClipForX(false);
 		function updatePostLink() {
 			const intent = new URL('https://x.com/intent/tweet');
 			const text = outputText ?? (source === localVideo ? fileInput.files[0]?.name.replace(/\.[^.]+$/, '') : getShareText?.() || title);
 			if (text) intent.searchParams.set('text', text);
 			postX.href = intent.href;
 		}
-		postX.onclick = updatePostLink;
+		postX.onclick = event => {
+			if (window !== window.top && event.isTrusted) { updatePostLink(); return; }
+			event.preventDefault();
+			if (!event.isTrusted || copyForX.disabled) return;
+			updatePostLink();
+			copyClipForX(true);
+		};
+		directX.onclick = event => {
+			if (!event.isTrusted || !outputFile) return;
+			updatePostLink();
+			const text = new URL(postX.href).searchParams.get('text') || '';
+			window.postMessage({type:'zenza-open-x-publisher',file:outputFile,text},location.origin);
+		};
 		async function record(active, from, to) {
 			const options = {signal:active.events.signal};
 			try {
@@ -66314,6 +67199,7 @@ const ShareLocalClip = {
 		return cleanup;
 	}
 };
+// already required
 const SharePlaybackFile = (() => {
 	const videoCodecs = new Set(['avc1', 'avc3', 'hvc1', 'hev1', 'av01', 'vp09', 'mp4v']);
 	const audioCodecs = new Set(['mp4a', 'Opus', 'ac-3', 'ec-3', 'fLaC']);
@@ -66522,8 +67408,8 @@ const VideoSharePanel = (() => {
 	let activeClose;
 	const css = `
 .zenzaShare {color-scheme:dark;box-sizing:border-box;width:min(64rem,calc(100vw - 24px));max-width:none;
-	max-height:none;margin:auto;padding:0;color:#f2f5f8;background:#1b2027;border:1px solid #526175;
-	border-radius:12px;text-align:left;overflow:visible;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
+	max-height:100dvh;margin:auto;padding:0;color:#f2f5f8;background:#1b2027;border:1px solid #526175;
+	border-radius:12px;text-align:left;overflow:auto;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
 .zenzaShare::backdrop {background:#090c1066}
 .zenzaShare summary {cursor:pointer}
 .zenzaShare .shareProvider p {color:#c1ccd7}
@@ -66619,6 +67505,11 @@ const VideoSharePanel = (() => {
 	.zenzaShare .zenzaLocalClip[data-page=result] [data-role=result] {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 	.zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:38dvh}
 }
+@media(max-width:380px) {
+	.zenzaShare nav {gap:1px;padding-inline:4px}
+	.zenzaShare nav button {padding-inline:4px}
+	.zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:clamp(64px,calc(100dvh - 392px),210px)}
+}
 `;
 	function open(info, position, getCurrentVideo, playerContext) {
 		if (!info || !/^(?:[a-z]{2})?\d+$/i.test(info.watchId)) { return; }
@@ -66631,6 +67522,7 @@ const VideoSharePanel = (() => {
 <header><h2 id="zenzaShareHeading">動画を共有</h2><p class="shareTitle"></p><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
 <nav aria-label="共有方法">
 <button type="button" data-view="local" aria-controls="zenzaShareLocal">ビデオクリップ</button>
+<button type="button" data-view="official" aria-controls="zenzaShareOfficial" title="ニコニコでプレビューを作成してから投稿">Xに直接投稿</button>
 <button type="button" data-view="link" aria-controls="zenzaShareLink">リンク・埋め込み</button>
 </nav>
 <section id="zenzaShareLink" hidden>
@@ -66638,7 +67530,7 @@ const VideoSharePanel = (() => {
 <label><input type="number" name="start" min="0" step="0.01" inputmode="decimal"> 秒から</label></div>
 <label>共有リンク<input readonly name="link" aria-label="共有リンク"></label>
 <label>投稿本文<textarea rows="2"></textarea></label>
-<div class="shareRow"><a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">X で投稿画面を開く</a>
+<div class="shareRow"><a class="shareAction" data-action="x" rel="noopener noreferrer">このタブでXの下書きを開く</a>
 <button type="button" data-copy="link">リンクをコピー</button>
 <button type="button" data-copy="text">本文とリンクをコピー</button>
 <button type="button" data-action="system" hidden>端末で共有</button></div>
@@ -66654,7 +67546,7 @@ const VideoSharePanel = (() => {
 <p>ニコニコが元動画から3〜30秒の映像を作成します。確認してからXに投稿できます。</p>
 <p data-provider-range hidden></p><p data-provider-layers hidden>ここで選んだコメント・画面エフェクトは、端末で作成するファイルに反映されます。</p>
 </div></section>
-<section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><div data-official-editor></div></section>`;
+<section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><p data-selection-note hidden></p><div data-official-editor></div></section>`;
 		const find = selector => dialog.querySelector(selector);
 		find('style').textContent = css;
 		find('.shareTitle').title = find('.shareTitle').textContent = info.title || info.watchId;
@@ -66699,12 +67591,17 @@ const VideoSharePanel = (() => {
 			thumb.value = '<iframe width="312" height="176" src="https://ext.nicovideo.jp/thumb/' + videoId +
 				'" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="' + attr(watch.href) + '">' +
 				title + '</a></iframe>';
-			const intent = new URL('https://twitter.com/intent/tweet');
+			const draftLink = find('[data-action=x]');
+			const separate = window !== window.top || ShareClipJobs.busy;
+			draftLink.target = separate ? '_blank' : '_self';
+			draftLink.textContent = separate ? '別タブでXの下書きを開く' : 'このタブでXの下書きを開く';
+			const intent = new URL('https://x.com/intent/tweet');
 			intent.searchParams.set('text', message.value);
 			intent.searchParams.set('url', url.href);
-			find('[data-action=x]').href = intent.href;
+			draftLink.href = intent.href;
 			status.textContent = '';
 		}
+		find('[data-action=x]').addEventListener('click', update);
 		for (const input of [time, useTime, message, size]) { input.addEventListener('input', update); }
 		time.addEventListener('change', () => {
 			time.value = String(Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity));
@@ -66741,7 +67638,7 @@ const VideoSharePanel = (() => {
 		function showSelection(next) {
 			selection = next;
 			provider.hidden = next.isFile;
-			prepare.disabled = next.recording;
+			find('[data-view=official]').disabled = prepare.disabled = next.recording;
 			find('[data-view=link]').disabled = next.recording;
 			const length = next.end - next.start;
 			prepare.textContent = length > 30 ? 'ニコニコで先頭30秒のX用プレビューを作成' : 'ニコニコでX用プレビューを作成';
@@ -66767,8 +67664,10 @@ const VideoSharePanel = (() => {
 			resumeVideo = null;
 		}
 		function select(view) {
-			if (view === 'link') releasePlayback();
-			else holdPlayback();
+			if (view === 'link') {
+				update();
+				releasePlayback();
+			} else holdPlayback();
 			if (view !== 'local') { mounted.get('local')?.stopPreview?.(); }
 			if (view !== 'official' && mounted.has('official')) {
 				mounted.get('official')();
@@ -66777,13 +67676,28 @@ const VideoSharePanel = (() => {
 			}
 			for (const [key, el] of Object.entries(sections)) { el.hidden = key !== view; }
 			for (const btn of dialog.querySelectorAll('[data-view]')) {
-				btn.setAttribute('aria-pressed', String(btn.dataset.view === (view === 'official' ? 'local' : view)));
+				btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
 			}
 			if (view === 'official' && !mounted.has(view)) {
+				const note = find('[data-selection-note]');
+				if (selection.isFile) {
+					note.textContent = 'ニコニコ連携で投稿できるのは視聴ページの元動画です。選んだファイルはクリップ編集で作成し、完成した動画からXに添付できます。';
+					note.hidden = false;
+					return;
+				}
 				const start = Number.isFinite(selection.start) ? selection.start : startTime;
 				const end = Number.isFinite(selection.end) ? Math.min(selection.end, start + 30) : undefined;
+				const lengthMs = Math.round(selection.end * 1000) - Math.round(selection.start * 1000);
+				const differences = [];
+				if (lengthMs > 30000) differences.push('公式クリップの初期範囲は選択区間の先頭30秒です。');
+				else if (lengthMs < 3000) differences.push('公式クリップには3秒以上の区間を指定してください。');
+				if (selection.comments || selection.effects) differences.push('コメント表示はニコニコ側の設定になり、ZenzaWatchの画面エフェクトは含まれません。');
+				if (lengthMs > 30000 || selection.comments || selection.effects) differences.push('元の編集内容を使うには、クリップ編集に戻ってください。');
+				note.textContent = differences.join('');
+				note.hidden = !differences.length;
 				mounted.set(view, ShareOfficialClip.mount(find('[data-official-editor]'), {
-					info, startTime:start, endTime:end, autoPreview:true, text:() => message.value, officialUrl:official.href,
+					info, startTime:start, endTime:end, autoPreview:selection.isCurrent && Number.isFinite(lengthMs) && !differences.length,
+					text:() => message.value, officialUrl:official.href,
 					onUseLocal(range) {
 						select('local');
 						sections.local.querySelector('[data-editor-page=range]')?.click();
@@ -66821,9 +67735,17 @@ const VideoSharePanel = (() => {
 			if (view === 'local') mounted.get('local')?.startPreview?.();
 			dialog.scrollTop = 0;
 		}
-		prepare.onclick = () => { select('official'); find('[data-action=back]').focus(); };
-		find('[data-action=back]').onclick = () => { select('local'); prepare.focus(); };
-		for (const btn of dialog.querySelectorAll('[data-view]')) { btn.onclick = () => select(btn.dataset.view); }
+		let officialOpener;
+		function openOfficial(button) {
+			officialOpener = button;
+			select('official');
+			find('[data-action=back]').focus();
+		}
+		prepare.onclick = () => openOfficial(prepare);
+		find('[data-action=back]').onclick = () => { select('local'); officialOpener?.focus(); };
+		for (const btn of dialog.querySelectorAll('[data-view]')) {
+			btn.onclick = () => btn.dataset.view === 'official' ? openOfficial(btn) : select(btn.dataset.view);
+		}
 		const previousFocus = document.activeElement;
 		function close() {
 			if (activeClose !== close) { return; }
@@ -91785,7 +92707,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.481-task1104",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.482-task1105",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

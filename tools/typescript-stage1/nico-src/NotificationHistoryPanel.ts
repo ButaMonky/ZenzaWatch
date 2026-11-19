@@ -1,6 +1,7 @@
 /** Canonical typed source for ZenzaWatch's notification history UI. */
 import type {JournalEntry, JournalCategory} from './NotificationJournal';
 import type {DiagnosticOperation} from './RequestDiagnostics';
+declare const PlaybackStartupTrace: import('./shared-types/PlaybackStartupTrace').PlaybackStartupTraceApi;
 declare const NotificationJournal: typeof import('./NotificationJournal').NotificationJournal;
 declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 interface TabEvents {
@@ -91,10 +92,13 @@ const NotificationHistoryPanel = (() => {
     entry.details?.reason === 'not-found' ? '対象なし・要確認' :
     entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
   const phaseLabels = new Map<string,string>([
-    ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認']
+    ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認'], ['startup','再生開始']
   ]);
   const explanations: Record<string,string> = {
       schema:'受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+      'startup-wait':'再生操作の後、進行を待っています。遅延の原因はまだ判別できません。',
+      'startup-error':'最初の映像の確認前に、再生処理がエラーを返しました。',
+      'play-blocked':'ブラウザが再生開始を許可しませんでした。',
       timeout:'制限時間内に処理が完了しませんでした。',
       permission:'アクセス権限またはログイン状態の確認が必要な応答です。',
       'not-found':'要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
@@ -142,7 +146,13 @@ const NotificationHistoryPanel = (() => {
     const registeredLabel = typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation);
     let feature = Object.prototype.hasOwnProperty.call(labels, entry.category) ? labels[entry.category] : '通知';
     let location = '修復ガイドの症状別の案内を参照';
-    if (registeredLabel) {
+    const startup = d.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined';
+    const lastStage = startup && PlaybackStartupTrace.describe(d.lastStage);
+    const nextStage = startup && PlaybackStartupTrace.describe(d.nextStage);
+    if (startup) {
+      feature = '動画の再生開始';
+      if (nextStage) location = nextStage.file;
+    } else if (registeredLabel) {
       feature = registeredLabel + '（' + operation + '）';
       location = modulePath(RequestDiagnostics.moduleFor(operation as DiagnosticOperation));
     } else if (operation === 'script-error') {
@@ -158,6 +168,12 @@ const NotificationHistoryPanel = (() => {
     const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
       '段階　' + (phaseLabels.get(String(d.phase)) || unknown),
       '理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
+    if (startup) {
+      lines.push('最後に成功した処理　' + (lastStage ? lastStage.label : unknown),
+        '次に待っていた処理　' + (nextStage ? nextStage.label : unknown));
+      if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
+        lines.push('操作からの経過　' + (d.elapsedMs / 1000).toFixed(1) + '秒');
+    }
     if (d.outcome === 'recovered') lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
     if (validStatus(d.statusCode)) lines.push('HTTP状態　' + d.statusCode);
     if (validStatus(d.apiStatus)) lines.push('API状態（meta.status）　' + d.apiStatus);
@@ -279,6 +295,12 @@ const NotificationHistoryPanel = (() => {
         }
         activity.append(element('p','znh-private-note','自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
         detailNode.append(activity);
+      }
+      if (entry.details?.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined') {
+        const last = PlaybackStartupTrace.describe(entry.details?.lastStage);
+        const next = PlaybackStartupTrace.describe(entry.details?.nextStage);
+        if (last && next) detailNode.append(element('p','',
+          '最後に成功した処理　' + last.label + '　／　次に待っていた処理　' + next.label), element('p','','修正箇所の目安　' + next.file));
       }
       const isProblem = entry.level === 'error' || entry.level === 'warning' ||
         entry.details?.outcome === 'failed' || entry.details?.outcome === 'recovered' || !!entry.details?.reason;

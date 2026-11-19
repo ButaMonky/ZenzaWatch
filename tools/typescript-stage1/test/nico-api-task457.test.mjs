@@ -235,6 +235,11 @@ test('legacy build directives are preserved in each runtime',()=>{
     // 足した import は registry の ESM_ADDED_IMPORTS に記録したものだけを許す。
     const added=new Set(ESM_ADDED_IMPORTS[spec.name]||[]);
     const actualDirectives=directives(after).filter(line=>!added.has(line));
+    if (['HoverMenu', 'NicoVideoPlayerDialog', 'NotificationHistoryPanel'].includes(spec.name)) {
+      const folder = spec.name === 'HoverMenu' ? '../../../../src/' : './';
+      expected.unshift("import {PlaybackStartupTrace} from '" + folder + "PlaybackStartupTrace';");
+      expected.splice(expected.indexOf('//===BEGIN===') + 1, 0, '//@require PlaybackStartupTrace');
+    }
     assert.deepEqual(normalizeContextImports(actualDirectives), normalizeContextImports(expected), spec.name);
     for(const line of added)assert(directives(after).includes(line),spec.name+' missing ESM import '+line);
     // Task475: compare exported names, since legacy exports may span lines.

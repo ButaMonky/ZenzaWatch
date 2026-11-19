@@ -8,6 +8,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 /** The lodash function used here. */
+declare const PlaybackStartupTrace: import('./shared-types/PlaybackStartupTrace').PlaybackStartupTraceApi;
 declare const _: {debounce<T extends (...args: Loose[]) => unknown>(fn: T, wait?: number): T & {cancel(): void}};
 declare const ZenzaWatch: {
   emitter: {on(name: string, fn: (...args: Loose[]) => unknown): unknown; emit(name: string, ...args: unknown[]): unknown};
@@ -291,10 +292,15 @@ class HoverMenu {
     if (earlyRead && typeof option.economy !== 'boolean') {
       option.economy = this._playerConfig.getValue('smileVideoQuality') === 'eco';
     }
-    const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option) : undefined;
+    if (earlyRead && this._pendingButtonOpen && typeof PlaybackStartupTrace !== 'undefined') {
+      PlaybackStartupTrace.abandon(this._pendingButtonOpen.option);
+    }
+    const trace = earlyRead && typeof PlaybackStartupTrace !== 'undefined' ? PlaybackStartupTrace.reserve(option) : undefined;
+    const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option, trace && (() => trace.mark('watch'))) : undefined;
     if (earlyRead) { this._pendingButtonOpen = {watchId, option}; }
     try {
       const player = await this._getPlayer();
+      if (!player && trace && this._pendingButtonOpen?.option === option) PlaybackStartupTrace.abandon(option, true);
       if (!player || (earlyRead && this._pendingButtonOpen?.option !== option)) { return; }
       if (this._playerConfig.getValue('enableSingleton')) {
         ZenzaWatch.external.sendOrOpen(watchId, option);
@@ -303,6 +309,7 @@ class HoverMenu {
       }
     } finally {
       if (this._pendingButtonOpen?.option === option) { this._pendingButtonOpen = undefined; }
+      if (trace) PlaybackStartupTrace.abandon(option);
       abandon?.();
     }
   }

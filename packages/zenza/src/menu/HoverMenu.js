@@ -1,3 +1,4 @@
+import {PlaybackStartupTrace} from '../../../../src/PlaybackStartupTrace';
 import {ZenzaWatch} from '../../../../src/ZenzaContext';
 import {uq} from '../../../lib/src/uQuery';
 import {nicoUtil} from '../../../lib/src/nico/nicoUtil';
@@ -7,6 +8,7 @@ import {WatchClickNavigation} from './WatchClickNavigation';
 import {VideoInfoLoader} from '../../../lib/src/nico/VideoInfoLoader';
 // GENERATED FROM tools/typescript-stage1/nico-src/HoverMenu.ts (Task902). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require PlaybackStartupTrace
 //@require PagePreviewGuard
 //@require WatchClickNavigation
 //@require VideoInfoLoader
@@ -294,12 +296,18 @@ class HoverMenu {
         if (earlyRead && typeof option.economy !== 'boolean') {
             option.economy = this._playerConfig.getValue('smileVideoQuality') === 'eco';
         }
-        const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option) : undefined;
+        if (earlyRead && this._pendingButtonOpen && typeof PlaybackStartupTrace !== 'undefined') {
+            PlaybackStartupTrace.abandon(this._pendingButtonOpen.option);
+        }
+        const trace = earlyRead && typeof PlaybackStartupTrace !== 'undefined' ? PlaybackStartupTrace.reserve(option) : undefined;
+        const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option, trace && (() => trace.mark('watch'))) : undefined;
         if (earlyRead) {
             this._pendingButtonOpen = { watchId, option };
         }
         try {
             const player = await this._getPlayer();
+            if (!player && trace && this._pendingButtonOpen?.option === option)
+                PlaybackStartupTrace.abandon(option, true);
             if (!player || (earlyRead && this._pendingButtonOpen?.option !== option)) {
                 return;
             }
@@ -314,6 +322,8 @@ class HoverMenu {
             if (this._pendingButtonOpen?.option === option) {
                 this._pendingButtonOpen = undefined;
             }
+            if (trace)
+                PlaybackStartupTrace.abandon(option);
             abandon?.();
         }
     }

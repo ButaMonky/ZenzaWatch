@@ -540,7 +540,9 @@ class NicoVideoPlayer extends Emitter {
       this._contextMenu.show(e.clientX, e.clientY);
     }
   }
+  declare onStartupSource?: (url: string, element: HTMLMediaElement | null) => void;
   setVideo(url?: Loose) {
+    const onSource = this.onStartupSource;
     this._terminalRepeat=null;
     const generation = this._setVideoGeneration = (this._setVideoGeneration || 0) + 1 as ZenzaVideoSetGeneration;
     this._cancelSupporterCredit();
@@ -549,6 +551,10 @@ class NicoVideoPlayer extends Emitter {
     const apply = (source: Loose) => {
       if (this._setVideoGeneration !== generation) { return; }
       this._videoPlayer.setSrc(source);
+      if (onSource) {
+        try { onSource(url, /(youtube\.com|youtu\.be)/.test(source) ? null : this.drawableVideoElement); }
+        catch (_) { /* A diagnostic observer must never interrupt source assignment. */ }
+      }
       this._isEnded = false;
       this._isSeeking = false;
     };

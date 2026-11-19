@@ -9,7 +9,7 @@ const NotificationJournalPolicy = (() => {
         'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
         'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs',
         // Task1036: 修正箇所の目安・読めなかった項目・発生箇所・仕様変更の疑いの件数。
-        'module', 'missing', 'where', 'distinctTargets'
+        'module', 'missing', 'where', 'distinctTargets', 'lastStage', 'nextStage'
     ]);
     const privatePath = (path) => path
         .replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)

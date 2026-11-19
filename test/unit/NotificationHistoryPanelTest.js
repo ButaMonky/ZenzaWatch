@@ -23,6 +23,7 @@ function setup(records) {
     NotificationJournal: journal
   });
   run(beginSection('packages/lib/src/infra/RequestDiagnostics.js'), context);
+  run(beginSection('src/PlaybackStartupTrace.js'), context);
   run('const NotificationHistoryPanel = ' +
     extract('src/NotificationHistoryPanel.js', 'NotificationHistoryPanel', 'var') +
     ';globalThis.__panel=NotificationHistoryPanel;', context);
@@ -61,6 +62,24 @@ describe('NotificationHistoryPanel (synthetic DOM)', () => {
         assert(!copied.includes(privateText), privateText);
       }
       assert(detail.querySelector('[role="status"]').textContent.includes('コピーしました'));
+    } finally { h.dom.window.close(); }
+  });
+
+  it('shows and copies the stalled stage and its canonical repair file', async () => {
+    const h = setup([{id:'startup', timestamp:1, category:'player', level:'warning', source:'playback-start',
+      details:{operation:'playback-start',phase:'startup',reason:'startup-wait',lastStage:'manifest',
+        nextStage:'metadata',elapsedMs:15203,module:'private-path',contentUrl:'https://private.invalid/signed'}}]);
+    try {
+      await flush();
+      h.root.querySelector('[data-entry-id]').click();
+      const detail = h.root.querySelector('.znh-detail');
+      assert(detail.textContent.includes('映像メタデータの受信'));
+      detail.querySelector('[data-history-action="copy"]').click();
+      await flush();
+      const report = detail.querySelector('textarea').value;
+      for (const expected of ['最後に成功した処理　HLS配信リストの解析','次に待っていた処理　映像メタデータの受信',
+        '15.2秒','tools/typescript-stage1/hls-src/HlsVideoElement.ts']) assert(report.includes(expected),expected);
+      assert(!report.includes('private'));
     } finally { h.dom.window.close(); }
   });
 

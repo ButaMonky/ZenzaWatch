@@ -8,6 +8,7 @@ import type {ZenzaDialogRequestId} from './PlayerLifetimeTypes';
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
+declare const PlaybackStartupTrace: import('./shared-types/PlaybackStartupTrace').PlaybackStartupTraceApi;
 declare const NicoVideoPlayerDialogView: typeof import('./NicoVideoPlayerDialogView').NicoVideoPlayerDialogView;
 // Task1060: 役割ごとに分けたメソッド（下の for で prototype に取り付ける）。
 declare const NicoVideoPlayerDialogPrefetch: typeof import('./NicoVideoPlayerDialogPrefetch').NicoVideoPlayerDialogPrefetch;
@@ -250,6 +251,7 @@ class NicoVideoPlayerDialog extends Emitter {
   declare _requestId: ZenzaDialogRequestId | null | undefined;
   declare _savePlaybackPositionNow: Loose;
   declare _playbackPositionSaves:Map<string,Promise<unknown>>|undefined;
+  declare _startupTrace: import('./shared-types/PlaybackStartupTrace').StartupTrace | undefined;
   declare _autoResumeClearCoordinator:AutoResumeClearAgent|null|undefined;
   declare _autoResumeSaveSuppress:Readonly<{
     watchId:string;requestId:unknown;videoInfo:unknown;
@@ -674,6 +676,8 @@ class NicoVideoPlayerDialog extends Emitter {
 
     // Task 090（監査v2 ZW-012）: この open の世代。await の後で、別の open・close があったら先へ進まない
     const requestId = this._requestId;
+    this._startupTrace?.cancel();
+    const trace = this._startupTrace = typeof PlaybackStartupTrace !== 'undefined' ? PlaybackStartupTrace.adopt(options.rawData) : undefined;
     let nicoVideoPlayer = this._nicoVideoPlayer;
     if (!nicoVideoPlayer) {
       // 最初のプレイヤーの準備中にもう一度開かれても、プレイヤーは1つだけ作る
@@ -682,7 +686,8 @@ class NicoVideoPlayerDialog extends Emitter {
           this._nicoVideoPlayerInit = null;
           throw err;
         });
-      nicoVideoPlayer = await this._nicoVideoPlayerInit;
+      try { nicoVideoPlayer = await this._nicoVideoPlayerInit; }
+      catch (error) { trace?.fail(); throw error; }
       if (this._requestId !== requestId) {
         return;
       }
@@ -698,6 +703,7 @@ class NicoVideoPlayerDialog extends Emitter {
       }
     }
 
+    trace?.mark('dialog');
     this._state.resetVideoLoadingStatus();
 
     this._state.isCommentReady = false;
@@ -785,9 +791,12 @@ class NicoVideoPlayerDialog extends Emitter {
   _loadVideoInfoForOpen(watchId: string, options: Loose, prepared: Loose): Promise<Loose> {
     const reason = this._prefetchDataReuseBlock(watchId, options, prepared);
     const timing = this._prefetchTiming;
+    const loadOptions = options.videoLoadOptions;
+    const trace = this._startupTrace;
+    if (trace) loadOptions.onWatchPage = () => trace.mark('watch');
     if (reason) {
       if (timing) { timing.infoSource = 'network'; timing.infoReuseBlocked = reason; }
-      return VideoInfoLoader.load(watchId, options.videoLoadOptions, options.rawData);
+      return VideoInfoLoader.load(watchId, loadOptions, options.rawData);
     }
     if (timing) {
       timing.infoSource = 'prefetch';
@@ -798,7 +807,7 @@ class NicoVideoPlayerDialog extends Emitter {
         if (timing) { timing.infoSource = 'network'; timing.infoReuseBlocked = 'adopt-failed'; }
         this._diag('ZENZA_INFO_REUSE', {watchId, fallback: true,
           error: String(error?.name || error?.message || error).slice(0, 80)});
-        return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+        return VideoInfoLoader.load(watchId, loadOptions);
       });
   }
   async _onVideoInfoLoaderLoad(requestId: Loose, [videoInfoData, localCacheData]: Loose) {
@@ -809,6 +818,7 @@ class NicoVideoPlayerDialog extends Emitter {
     this._markTiming('videoInfo');
     const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
     this._watchId = videoInfo.watchId;
+    this._startupTrace?.mark('info');
     WatchInfoCacheDb.putBestEffort(this._watchId as string, {videoInfo});
     let serverType;
     let videoQuality;
@@ -901,6 +911,7 @@ class NicoVideoPlayerDialog extends Emitter {
         return;
       }
     }
+    this._startupTrace?.mark('session');
     this._videoSession = session;
 
     if (this._videoFilter.isNgVideo(videoInfo)) {
@@ -917,6 +928,17 @@ class NicoVideoPlayerDialog extends Emitter {
       const sessionInfo = cachedSessionInfo || await session.connect();
       if (isStale()) {
         return;
+      }
+      const trace = this._startupTrace;
+      trace?.mark('delivery');
+      if (trace) {
+        const expectedUrl = sessionInfo.url;
+        this._nicoVideoPlayer.onStartupSource = (url: string, element: HTMLMediaElement | null) => {
+          if (this._requestId !== requestId || url !== expectedUrl) return;
+          this._nicoVideoPlayer.onStartupSource = undefined;
+          if (element) trace.observeMedia(element, this._playerConfig.props.autoPlay !== false);
+          else trace.cancel();
+        };
       }
       this._markTiming('session');
       this.setVideo(sessionInfo.url);
@@ -992,11 +1014,12 @@ class NicoVideoPlayerDialog extends Emitter {
       this._prefetchPending = null;
       if (held && !held.adopted) held.dispose();
     }
+    const checkpoint = this._startupTrace?.fail();
     this._recordDiagnostic({
       category: 'network', level: 'error',
       message: e.message || '動画情報の取得に失敗しました',
       videoId: watchId || this._watchId, source: 'videoInfo',
-      details: {reason: e.reason, kind: e.type}
+      details: {...checkpoint, reason: e.reason ?? checkpoint?.reason, kind: e.type}
     });
     (this as Loose)._setErrorMessage(e.message || '通信エラー', watchId);
     // Terminal video-info failures cannot leave the player in its loading state.
@@ -1022,13 +1045,14 @@ class NicoVideoPlayerDialog extends Emitter {
     }
   }
   _onVideoSessionFail(serverType?: Loose, result?: Loose) {
+    const checkpoint = this._startupTrace?.fail();
     const server = serverType === 'dmc' ? 'dmc.nico' : serverType;
     window.console.error('Video session failed',
       serverType === 'dmc' ? 'dmc' : serverType === 'domand' ? 'domand' : 'other');
     this._recordDiagnostic({
       category: 'player', level: 'error', message: '動画の読み込みに失敗しました',
       videoId: this._watchId, source: 'videoSession',
-      details: {reason: serverType}
+      details: {...checkpoint, reason: serverType ?? checkpoint?.reason}
     });
     (this as Loose)._setErrorMessage(
       `動画の読み込みに失敗しました(${server}) ${result && result.message || ''}`, this._watchId);
@@ -1059,11 +1083,12 @@ class NicoVideoPlayerDialog extends Emitter {
   _onVideoPlayStartFail(err?: Loose) {
     window.console.error('Video play start failed');
     const type = NicoVideoPlayerDialog.classifyPlayStartError(err);
+    const checkpoint = type === 'aborted' ? undefined : this._startupTrace?.fail(type === 'notAllowed' ? 'play-blocked' : 'startup-error', 'play');
     this._recordDiagnostic({
       category: 'player', level: type === 'aborted' || type === 'notAllowed' ? 'warning' : 'error',
       message: '動画の再生開始に失敗しました',
       videoId: this._watchId, source: 'playStart',
-      details: {kind: type, errorName: err && err.name}
+      details: {kind: type, errorName: err && err.name, ...checkpoint}
     });
     console.warn('Play request rejected', type);
     switch (type) {
@@ -1085,6 +1110,7 @@ class NicoVideoPlayerDialog extends Emitter {
     global.emitter.emitAsync('loadVideoPlayStartFail', type);
   }
   _onVideoFilterMatch() {
+    this._startupTrace?.cancel();
     window.console.error('ng video', this._watchId);
     this._setErrorMessage('再生除外対象の動画または投稿者です');
     this._state.isError = true;
@@ -1275,6 +1301,7 @@ class NicoVideoPlayerDialog extends Emitter {
     };
 
     const requestId = this._requestId;
+    const checkpoint = this._startupTrace?.fail();
     const sessionState = await this._videoSession.getState();
     if (this._requestId !== requestId) {
       return;  // Task 090（ZW-012）: 待っている間に別の動画を開いた・閉じた
@@ -1288,7 +1315,7 @@ class NicoVideoPlayerDialog extends Emitter {
       category: 'player', level: 'error',
       message: '動画の再生に失敗しました',
       videoId: this._watchId, source: 'videoError',
-      details: {errorCode: 'MEDIA_ERR_' + code,
+      details: {...checkpoint, errorCode: 'MEDIA_ERR_' + code,
         kind: isDmc ? 'dmc' : isDomand ? 'domand' : 'other'}
     });
 
@@ -1426,6 +1453,8 @@ class NicoVideoPlayerDialog extends Emitter {
     return Number.isFinite(t)&&Number.isFinite(d)&&d>0&&t>=d-3;
   }
   close() {
+    this._startupTrace?.cancel();
+    if (this._nicoVideoPlayer) this._nicoVideoPlayer.onStartupSource = undefined;
     this._hideNicoadEndScreen();
     this._view?.manualBookmarkDock?.deactivate();
     this._keyEmitter?.releaseTemporaryPlaybackRate?.();

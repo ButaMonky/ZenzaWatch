@@ -32,6 +32,7 @@ export interface LoadOptions {
   economy?: boolean;
   /** Optional cancellation supplied by a caller; playback Dialog currently does not wire it. */
   signal?: AbortSignal;
+  onWatchPage?: () => void;
   [key: string]: unknown;
 }
 export interface WatchLoadError {
@@ -48,7 +49,7 @@ export interface VideoInfoLoaderClient {
   /** Passive, cancellable metadata read; does not touch active watch ownership or publish events. */
   prefetch(watchId:string,options:LoadOptions):Promise<Loose>;
   adoptPrefetched(watchId: string, data: Loose, options: LoadOptions): Promise<Loose>;
-  beginFirstOpenPageRead(watchId: string, launchOptions: {economy?: boolean}): () => void;
+  beginFirstOpenPageRead(watchId: string, launchOptions: {economy?: boolean}, onWatchPage?: () => void): () => void;
   /** Resolves the legacy `html5watchApi` data; rejects with a WatchLoadError. */
   load(watchId: string, options: LoadOptions, launchOptions?: object): Promise<Loose>;
 }
@@ -789,13 +790,14 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     response: Promise<Loose>; owner: {isCurrent?: () => boolean};
   } | undefined;
 
-  const beginFirstOpenPageRead = (watchId: string, launchOptions: {economy?: boolean}): (() => void) => {
+  const beginFirstOpenPageRead = (watchId: string, launchOptions: {economy?: boolean}, onWatchPage?: () => void): (() => void) => {
     pendingFirstOpen?.controller.abort();
     const controller = new AbortController();
     const economy = launchOptions.economy === true;
     const owner: {isCurrent?: () => boolean} = {};
     const options = {economy, signal: controller.signal};
     const response = fetchWatchResponse(watchId, options, () => owner.isCurrent?.() === true).then(async page => {
+      onWatchPage?.();
       if (!page.data?.response?.$watchV4) return page;
       requireActive(options);
       // Owner/series use the selected video's V4 key. Start their normal read while
@@ -845,7 +847,10 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
           err && typeof err === 'object' && err.reason ? err :
             {reason: 'network', message: '通信エラー(network)'});
       })
-      .then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
+      .then(page => {
+        options.onWatchPage?.();
+        return onLoadPromise(watchId, options, isRetry, isCurrent, page);
+      })
       .then(result => { diagnostic?.success(); return result; })
       .catch((err: Loose): Promise<Loose> => {
         diagnostic?.failure(err);

@@ -527,6 +527,7 @@ class NicoVideoPlayer extends Emitter {
         }
     }
     setVideo(url) {
+        const onSource = this.onStartupSource;
         this._terminalRepeat = null;
         const generation = this._setVideoGeneration = (this._setVideoGeneration || 0) + 1;
         this._cancelSupporterCredit();
@@ -537,6 +538,12 @@ class NicoVideoPlayer extends Emitter {
                 return;
             }
             this._videoPlayer.setSrc(source);
+            if (onSource) {
+                try {
+                    onSource(url, /(youtube\.com|youtu\.be)/.test(source) ? null : this.drawableVideoElement);
+                }
+                catch (_) { /* A diagnostic observer must never interrupt source assignment. */ }
+            }
             this._isEnded = false;
             this._isSeeking = false;
         };

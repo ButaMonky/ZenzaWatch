@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.478-task1101
+// @version        2.7.479-task1102
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 12:12Z 79dfa84a
+// build: 2026-11-19 13:34Z ad5a2bc1
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2255,10 +2255,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.478-task1101';
+    var VER = '2.7.479-task1102';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 12:12Z 79dfa84a';
+    var BUILD = '2026-11-19 13:34Z ad5a2bc1';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -7906,7 +7906,7 @@ const NotificationJournalPolicy = (() => {
 				'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode', 'apiStatus',
 				'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
 				'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs',
-				'module', 'missing', 'where', 'distinctTargets'
+				'module', 'missing', 'where', 'distinctTargets', 'lastStage', 'nextStage'
 		]);
 		const privatePath = (path) => path
 				.replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
@@ -14293,13 +14293,14 @@ const VideoInfoLoader = (function () {
 				};
 		};
 		let pendingFirstOpen;
-		const beginFirstOpenPageRead = (watchId, launchOptions) => {
+		const beginFirstOpenPageRead = (watchId, launchOptions, onWatchPage) => {
 				pendingFirstOpen?.controller.abort();
 				const controller = new AbortController();
 				const economy = launchOptions.economy === true;
 				const owner = {};
 				const options = { economy, signal: controller.signal };
 				const response = fetchWatchResponse(watchId, options, () => owner.isCurrent?.() === true).then(async (page) => {
+						onWatchPage?.();
 						if (!page.data?.response?.$watchV4)
 								return page;
 						requireActive(options);
@@ -14348,7 +14349,10 @@ const VideoInfoLoader = (function () {
 								err && typeof err === 'object' && err.reason ? err :
 										{ reason: 'network', message: '通信エラー(network)' });
 				})
-						.then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
+						.then(page => {
+						options.onWatchPage?.();
+						return onLoadPromise(watchId, options, isRetry, isCurrent, page);
+				})
 						.then(result => { diagnostic?.success(); return result; })
 						.catch((err) => {
 						diagnostic?.failure(err);
@@ -28898,6 +28902,7 @@ class NicoVideoPlayer extends Emitter {
 				}
 		}
 		setVideo(url) {
+				const onSource = this.onStartupSource;
 				this._terminalRepeat = null;
 				const generation = this._setVideoGeneration = (this._setVideoGeneration || 0) + 1;
 				this._cancelSupporterCredit();
@@ -28908,6 +28913,12 @@ class NicoVideoPlayer extends Emitter {
 								return;
 						}
 						this._videoPlayer.setSrc(source);
+						if (onSource) {
+								try {
+										onSource(url, /(youtube\.com|youtu\.be)/.test(source) ? null : this.drawableVideoElement);
+								}
+								catch (_) { /* A diagnostic observer must never interrupt source assignment. */ }
+						}
 						this._isEnded = false;
 						this._isSeeking = false;
 				};
@@ -47434,6 +47445,161 @@ PlayList.SEARCH_LIMIT_MIN = 1;
 PlayList.SEARCH_LIMIT_MAX = 5000;
 
 // already required
+const PlaybackStartupTrace = (() => {
+	const nico = 'tools/typescript-stage1/nico-src/';
+	const media = 'tools/typescript-stage1/hls-src/HlsVideoElement.ts';
+	const stages = new Map([
+		['open', ['再生操作の受付', nico + 'HoverMenu.ts']],
+		['player', ['プレイヤーの準備', nico + 'initializer.ts']],
+		['dialog', ['再生画面の準備', nico + 'NicoVideoPlayerDialogView.ts']],
+		['watch', ['視聴ページの動画データ取得', nico + 'VideoInfoLoader.ts']],
+		['info', ['補助情報・動画情報の確定', nico + 'VideoInfoLoader.ts']],
+		['session', ['再生セッションの作成', nico + 'VideoSessionWorker.ts']],
+		['delivery', ['配信許可・配信URLの取得', nico + 'VideoSessionWorker.ts']],
+		['source', ['映像ソースの設定', nico + 'NicoVideoPlayer.ts']],
+		['manifest', ['HLS配信リストの解析', media]],
+		['metadata', ['映像メタデータの受信', media]],
+		['frame', ['最初の映像フレームの表示', media]],
+		['decoded', ['最初の映像データのデコード', media]],
+		['play', ['ブラウザでの再生開始', nico + 'NicoVideoPlayer.ts']]
+	]);
+	const next = {
+		info: 'session', session: 'delivery', delivery: 'source',
+		source: 'metadata', manifest: 'metadata', metadata: 'frame'
+	};
+	const waitMs = 15000;
+	const describe = id => {
+		const row = stages.get(id);
+		if (row) return {label:row[0],file:row[1]};
+	};
+	const pending = new WeakMap();
+	let sequence = 0;
+	function create() {
+		const started = Date.now(), key = 'diag-startup-' + started.toString(36) + '-' + (++sequence).toString(36);
+		let last = 'open', waiting = 'player', timer, removeMedia, closed = false, reported = false;
+		let pageReceived = false, previousWait;
+		const details = () => ({lastStage:last, nextStage:waiting, elapsedMs:Math.max(0,Date.now()-started)});
+		const write = (reason, outcome, recoveryMessage = '最初の映像を確認しました') => {
+			const checkpoint = outcome === 'recovered' ? previousWait : details();
+			if (outcome !== 'recovered') previousWait = checkpoint;
+			try {
+				NotificationJournal.recordDiagnostic(key,{category:'player',source:'playback-start',level:
+					outcome === 'recovered' ? 'success' : reason === 'startup-wait' ? 'warning' : 'error',
+					message:outcome === 'recovered' ? recoveryMessage :
+						'再生開始の修復レポート：' + describe(waiting).label,
+					details:{operation:'playback-start',phase:'startup',reason,outcome,...checkpoint}});
+			} catch (_) { /* Diagnostics must not affect the player. */ }
+		};
+		const onWait = () => {
+			if (closed) return;
+			if (document.hidden) {
+				document.addEventListener('visibilitychange', onVisible);
+				return;
+			}
+			reported = true;
+			write('startup-wait','failed');
+		};
+		const arm = () => {
+			clearTimeout(timer);
+			timer = setTimeout(onWait, waitMs);
+		};
+		const onVisible = () => {
+			if (document.hidden) return;
+			document.removeEventListener('visibilitychange', onVisible);
+			arm();
+		};
+		const cancel = () => {
+			closed = true;
+			clearTimeout(timer);
+			document.removeEventListener('visibilitychange',onVisible);
+			removeMedia?.();
+			removeMedia = undefined;
+		};
+		const mark = stage => {
+			if (closed || !stages.has(stage)) return;
+			if (stage === 'frame' || stage === 'decoded') {
+				if (reported) write('startup-wait','recovered');
+				cancel();
+				return;
+			}
+			if (stage === 'watch') {
+				if (pageReceived || !['player','dialog','watch'].includes(waiting)) return;
+				pageReceived = true;
+				if (waiting === 'watch') waiting = 'info';
+			} else if (stage === 'player') waiting = 'dialog';
+			else if (stage === 'dialog') waiting = pageReceived ? 'info' : 'watch';
+			else if (stage === 'manifest' && waiting !== 'manifest') return;
+			else if (stage === 'metadata' && !['manifest','metadata'].includes(waiting)) return;
+			else waiting = next[stage] || waiting;
+			last = stage;
+			if (reported) arm();
+		};
+		const fail = (reason = 'startup-error', at) => {
+			if (closed) return;
+			if (stages.has(at)) waiting = at;
+			const checkpoint = details();
+			write(reason,'failed');
+			cancel();
+			return {...checkpoint, phase:'startup', reason};
+		};
+		const observeMedia = (wrapper, expectPlayback = true) => {
+			if (closed || !wrapper) return;
+			removeMedia?.();
+			mark('source');
+			if (wrapper.playerMode === 'HLS-JS') waiting = 'manifest';
+			const video = wrapper.drawableElement || wrapper;
+			if (typeof video.addEventListener !== 'function') return;
+			let frame;
+			let canObserveFrame = typeof video.requestVideoFrameCallback === 'function';
+			const metadata = () => {
+				if (video.readyState < 1) return;
+				mark('metadata');
+				if (!expectPlayback && video.paused) {
+					if (reported) write('startup-wait', 'recovered', '動画の準備ができました（手動再生待ち）');
+					cancel();
+				}
+			};
+			const decoded = () => {
+				if (!canObserveFrame && video.readyState >= 2 && video.videoWidth > 0) mark('decoded');
+			};
+			const readiness = event => {if (event.detail?.stage === 'manifestReady') mark('manifest');};
+			wrapper.addEventListener('zenza-readiness',readiness);
+			video.addEventListener('loadedmetadata',metadata);
+			video.addEventListener('loadeddata',decoded);
+			removeMedia = () => {
+				wrapper.removeEventListener('zenza-readiness',readiness);
+				video.removeEventListener('loadedmetadata',metadata);
+				video.removeEventListener('loadeddata',decoded);
+				if (frame !== undefined) video.cancelVideoFrameCallback?.(frame);
+			};
+			if (canObserveFrame) {
+				try { frame = video.requestVideoFrameCallback(() => mark('frame')); }
+				catch (_) { canObserveFrame = false; }
+			}
+		};
+		arm();
+		return {mark,fail,cancel,observeMedia};
+	}
+	const reserve = intent => {
+		pending.get(intent)?.cancel();
+		const trace = create();
+		pending.set(intent, trace);
+		return trace;
+	};
+	const abandon = (intent, failed = false) => {
+		const trace=pending.get(intent);
+		pending.delete(intent);
+		if (failed) trace?.fail(); else trace?.cancel();
+	};
+	const adopt = intent => {
+		const trace=pending.get(intent) || create();
+		pending.delete(intent);
+		trace.mark('player');
+		return trace;
+	};
+	return {reserve,adopt,abandon,describe};
+})();
+// already required
 const MediaSessionApi = (() => {
 		const emitter = new Emitter();
 		let activeSession = null;
@@ -54567,6 +54733,7 @@ const SavedVideoThumbnail = (() => {
 })();
 // already required
 // already required
+// already required
 const NotificationHistoryPanel = (() => {
 		const STYLE_ID = 'zenzaNotificationHistoryStyle';
 		const docks = new WeakMap();
@@ -54642,10 +54809,13 @@ const NotificationHistoryPanel = (() => {
 								entry.details?.reason === 'not-found' ? '対象なし・要確認' :
 										entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
 		const phaseLabels = new Map([
-				['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認']
+				['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認'], ['startup', '再生開始']
 		]);
 		const explanations = {
 				schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+				'startup-wait': '再生操作の後、進行を待っています。遅延の原因はまだ判別できません。',
+				'startup-error': '最初の映像の確認前に、再生処理がエラーを返しました。',
+				'play-blocked': 'ブラウザが再生開始を許可しませんでした。',
 				timeout: '制限時間内に処理が完了しませんでした。',
 				permission: 'アクセス権限またはログイン状態の確認が必要な応答です。',
 				'not-found': '要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
@@ -54689,7 +54859,15 @@ const NotificationHistoryPanel = (() => {
 				const registeredLabel = typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation);
 				let feature = Object.prototype.hasOwnProperty.call(labels, entry.category) ? labels[entry.category] : '通知';
 				let location = '修復ガイドの症状別の案内を参照';
-				if (registeredLabel) {
+				const startup = d.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined';
+				const lastStage = startup && PlaybackStartupTrace.describe(d.lastStage);
+				const nextStage = startup && PlaybackStartupTrace.describe(d.nextStage);
+				if (startup) {
+						feature = '動画の再生開始';
+						if (nextStage)
+								location = nextStage.file;
+				}
+				else if (registeredLabel) {
 						feature = registeredLabel + '（' + operation + '）';
 						location = modulePath(RequestDiagnostics.moduleFor(operation));
 				}
@@ -54708,6 +54886,11 @@ const NotificationHistoryPanel = (() => {
 				const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
 						'段階　' + (phaseLabels.get(String(d.phase)) || unknown),
 						'理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
+				if (startup) {
+						lines.push('最後に成功した処理　' + (lastStage ? lastStage.label : unknown), '次に待っていた処理　' + (nextStage ? nextStage.label : unknown));
+						if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
+								lines.push('操作からの経過　' + (d.elapsedMs / 1000).toFixed(1) + '秒');
+				}
 				if (d.outcome === 'recovered')
 						lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
 				if (validStatus(d.statusCode))
@@ -54846,6 +55029,12 @@ const NotificationHistoryPanel = (() => {
 								}
 								activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
 								detailNode.append(activity);
+						}
+						if (entry.details?.phase === 'startup' && typeof PlaybackStartupTrace !== 'undefined') {
+								const last = PlaybackStartupTrace.describe(entry.details?.lastStage);
+								const next = PlaybackStartupTrace.describe(entry.details?.nextStage);
+								if (last && next)
+										detailNode.append(element('p', '', '最後に成功した処理　' + last.label + '　／　次に待っていた処理　' + next.label), element('p', '', '修正箇所の目安　' + next.file));
 						}
 						const isProblem = entry.level === 'error' || entry.level === 'warning' ||
 								entry.details?.outcome === 'failed' || entry.details?.outcome === 'recovered' || !!entry.details?.reason;
@@ -61598,6 +61787,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				console.log('Video open requested');
 				console.time('Video readiness notification');
 				const requestId = this._requestId;
+				this._startupTrace?.cancel();
+				const trace = this._startupTrace = typeof PlaybackStartupTrace !== 'undefined' ? PlaybackStartupTrace.adopt(options.rawData) : undefined;
 				let nicoVideoPlayer = this._nicoVideoPlayer;
 				if (!nicoVideoPlayer) {
 						this._nicoVideoPlayerInit = this._nicoVideoPlayerInit ||
@@ -61605,7 +61796,13 @@ class NicoVideoPlayerDialog extends Emitter {
 										this._nicoVideoPlayerInit = null;
 										throw err;
 								});
-						nicoVideoPlayer = await this._nicoVideoPlayerInit;
+						try {
+								nicoVideoPlayer = await this._nicoVideoPlayerInit;
+						}
+						catch (error) {
+								trace?.fail();
+								throw error;
+						}
 						if (this._requestId !== requestId) {
 								return;
 						}
@@ -61621,6 +61818,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								this._videoSession.close();
 						}
 				}
+				trace?.mark('dialog');
 				this._state.resetVideoLoadingStatus();
 				this._state.isCommentReady = false;
 				this._state.isCommentPosting = false;
@@ -61692,12 +61890,16 @@ class NicoVideoPlayerDialog extends Emitter {
 		_loadVideoInfoForOpen(watchId, options, prepared) {
 				const reason = this._prefetchDataReuseBlock(watchId, options, prepared);
 				const timing = this._prefetchTiming;
+				const loadOptions = options.videoLoadOptions;
+				const trace = this._startupTrace;
+				if (trace)
+						loadOptions.onWatchPage = () => trace.mark('watch');
 				if (reason) {
 						if (timing) {
 								timing.infoSource = 'network';
 								timing.infoReuseBlocked = reason;
 						}
-						return VideoInfoLoader.load(watchId, options.videoLoadOptions, options.rawData);
+						return VideoInfoLoader.load(watchId, loadOptions, options.rawData);
 				}
 				if (timing) {
 						timing.infoSource = 'prefetch';
@@ -61711,7 +61913,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						}
 						this._diag('ZENZA_INFO_REUSE', { watchId, fallback: true,
 								error: String(error?.name || error?.message || error).slice(0, 80) });
-						return VideoInfoLoader.load(watchId, options.videoLoadOptions);
+						return VideoInfoLoader.load(watchId, loadOptions);
 				});
 		}
 		async _onVideoInfoLoaderLoad(requestId, [videoInfoData, localCacheData]) {
@@ -61722,6 +61924,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._markTiming('videoInfo');
 				const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
 				this._watchId = videoInfo.watchId;
+				this._startupTrace?.mark('info');
 				WatchInfoCacheDb.putBestEffort(this._watchId, { videoInfo });
 				let serverType;
 				let videoQuality;
@@ -61820,6 +62023,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								return;
 						}
 				}
+				this._startupTrace?.mark('session');
 				this._videoSession = session;
 				if (this._videoFilter.isNgVideo(videoInfo)) {
 						return this._onVideoFilterMatch();
@@ -61834,6 +62038,20 @@ class NicoVideoPlayerDialog extends Emitter {
 						const sessionInfo = cachedSessionInfo || await session.connect();
 						if (isStale()) {
 								return;
+						}
+						const trace = this._startupTrace;
+						trace?.mark('delivery');
+						if (trace) {
+								const expectedUrl = sessionInfo.url;
+								this._nicoVideoPlayer.onStartupSource = (url, element) => {
+										if (this._requestId !== requestId || url !== expectedUrl)
+												return;
+										this._nicoVideoPlayer.onStartupSource = undefined;
+										if (element)
+												trace.observeMedia(element, this._playerConfig.props.autoPlay !== false);
+										else
+												trace.cancel();
+								};
 						}
 						this._markTiming('session');
 						this.setVideo(sessionInfo.url);
@@ -61899,11 +62117,12 @@ class NicoVideoPlayerDialog extends Emitter {
 						if (held && !held.adopted)
 								held.dispose();
 				}
+				const checkpoint = this._startupTrace?.fail();
 				this._recordDiagnostic({
 						category: 'network', level: 'error',
 						message: e.message || '動画情報の取得に失敗しました',
 						videoId: watchId || this._watchId, source: 'videoInfo',
-						details: { reason: e.reason, kind: e.type }
+						details: { ...checkpoint, reason: e.reason ?? checkpoint?.reason, kind: e.type }
 				});
 				this._setErrorMessage(e.message || '通信エラー', watchId);
 				this._state.setState({ isError: true, isLoading: false });
@@ -61927,12 +62146,13 @@ class NicoVideoPlayerDialog extends Emitter {
 				}
 		}
 		_onVideoSessionFail(serverType, result) {
+				const checkpoint = this._startupTrace?.fail();
 				const server = serverType === 'dmc' ? 'dmc.nico' : serverType;
 				window.console.error('Video session failed', serverType === 'dmc' ? 'dmc' : serverType === 'domand' ? 'domand' : 'other');
 				this._recordDiagnostic({
 						category: 'player', level: 'error', message: '動画の読み込みに失敗しました',
 						videoId: this._watchId, source: 'videoSession',
-						details: { reason: serverType }
+						details: { ...checkpoint, reason: serverType ?? checkpoint?.reason }
 				});
 				this._setErrorMessage(`動画の読み込みに失敗しました(${server}) ${result && result.message || ''}`, this._watchId);
 				this._state.setState({ isError: true, isLoading: false });
@@ -61957,11 +62177,12 @@ class NicoVideoPlayerDialog extends Emitter {
 		_onVideoPlayStartFail(err) {
 				window.console.error('Video play start failed');
 				const type = NicoVideoPlayerDialog.classifyPlayStartError(err);
+				const checkpoint = type === 'aborted' ? undefined : this._startupTrace?.fail(type === 'notAllowed' ? 'play-blocked' : 'startup-error', 'play');
 				this._recordDiagnostic({
 						category: 'player', level: type === 'aborted' || type === 'notAllowed' ? 'warning' : 'error',
 						message: '動画の再生開始に失敗しました',
 						videoId: this._watchId, source: 'playStart',
-						details: { kind: type, errorName: err && err.name }
+						details: { kind: type, errorName: err && err.name, ...checkpoint }
 				});
 				console.warn('Play request rejected', type);
 				switch (type) {
@@ -61981,6 +62202,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				global.emitter.emitAsync('loadVideoPlayStartFail', type);
 		}
 		_onVideoFilterMatch() {
+				this._startupTrace?.cancel();
 				window.console.error('ng video', this._watchId);
 				this._setErrorMessage('再生除外対象の動画または投稿者です');
 				this._state.isError = true;
@@ -62145,6 +62367,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						}, 3000);
 				};
 				const requestId = this._requestId;
+				const checkpoint = this._startupTrace?.fail();
 				const sessionState = await this._videoSession.getState();
 				if (this._requestId !== requestId) {
 						return; // Task 090（ZW-012）: 待っている間に別の動画を開いた・閉じた
@@ -62157,7 +62380,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						category: 'player', level: 'error',
 						message: '動画の再生に失敗しました',
 						videoId: this._watchId, source: 'videoError',
-						details: { errorCode: 'MEDIA_ERR_' + code,
+						details: { ...checkpoint, errorCode: 'MEDIA_ERR_' + code,
 								kind: isDmc ? 'dmc' : isDomand ? 'domand' : 'other' }
 				});
 				if (Date.now() - this._lastOpenAt > 3 * 60 * 1000 && isDeleted && !isAbnormallyClosed) {
@@ -62290,6 +62513,9 @@ class NicoVideoPlayerDialog extends Emitter {
 				return Number.isFinite(t) && Number.isFinite(d) && d > 0 && t >= d - 3;
 		}
 		close() {
+				this._startupTrace?.cancel();
+				if (this._nicoVideoPlayer)
+						this._nicoVideoPlayer.onStartupSource = undefined;
 				this._hideNicoadEndScreen();
 				this._view?.manualBookmarkDock?.deactivate();
 				this._keyEmitter?.releaseTemporaryPlaybackRate?.();
@@ -76470,6 +76696,7 @@ const HlsRuntime = {
 // already required
 // already required
 const { initialize } = (() => {
+// already required
 class PagePreviewGuard {
 		constructor(player, doc = document) {
 				this.player = player;
@@ -76936,12 +77163,18 @@ class HoverMenu {
 				if (earlyRead && typeof option.economy !== 'boolean') {
 						option.economy = this._playerConfig.getValue('smileVideoQuality') === 'eco';
 				}
-				const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option) : undefined;
+				if (earlyRead && this._pendingButtonOpen && typeof PlaybackStartupTrace !== 'undefined') {
+						PlaybackStartupTrace.abandon(this._pendingButtonOpen.option);
+				}
+				const trace = earlyRead && typeof PlaybackStartupTrace !== 'undefined' ? PlaybackStartupTrace.reserve(option) : undefined;
+				const abandon = earlyRead ? VideoInfoLoader.beginFirstOpenPageRead(watchId, option, trace && (() => trace.mark('watch'))) : undefined;
 				if (earlyRead) {
 						this._pendingButtonOpen = { watchId, option };
 				}
 				try {
 						const player = await this._getPlayer();
+						if (!player && trace && this._pendingButtonOpen?.option === option)
+								PlaybackStartupTrace.abandon(option, true);
 						if (!player || (earlyRead && this._pendingButtonOpen?.option !== option)) {
 								return;
 						}
@@ -76956,6 +77189,8 @@ class HoverMenu {
 						if (this._pendingButtonOpen?.option === option) {
 								this._pendingButtonOpen = undefined;
 						}
+						if (trace)
+								PlaybackStartupTrace.abandon(option);
 						abandon?.();
 				}
 		}
@@ -90349,7 +90584,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.478-task1101",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.479-task1102",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

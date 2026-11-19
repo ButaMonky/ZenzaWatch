@@ -654,13 +654,14 @@ const VideoInfoLoader = (function () {
     // Only a confirmed local first open owns a pending read. The ordinary foreground
     // path consumes its response once and keeps ownership of all playback effects.
     let pendingFirstOpen;
-    const beginFirstOpenPageRead = (watchId, launchOptions) => {
+    const beginFirstOpenPageRead = (watchId, launchOptions, onWatchPage) => {
         pendingFirstOpen?.controller.abort();
         const controller = new AbortController();
         const economy = launchOptions.economy === true;
         const owner = {};
         const options = { economy, signal: controller.signal };
         const response = fetchWatchResponse(watchId, options, () => owner.isCurrent?.() === true).then(async (page) => {
+            onWatchPage?.();
             if (!page.data?.response?.$watchV4)
                 return page;
             requireActive(options);
@@ -713,7 +714,10 @@ const VideoInfoLoader = (function () {
                 err && typeof err === 'object' && err.reason ? err :
                     { reason: 'network', message: '通信エラー(network)' });
         })
-            .then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
+            .then(page => {
+            options.onWatchPage?.();
+            return onLoadPromise(watchId, options, isRetry, isCurrent, page);
+        })
             .then(result => { diagnostic?.success(); return result; })
             .catch((err) => {
             diagnostic?.failure(err);

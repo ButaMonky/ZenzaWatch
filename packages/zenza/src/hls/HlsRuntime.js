@@ -219,7 +219,8 @@ const HlsRuntime = {
                     });
                 });
                 ZenzaWatch.debug.createVideoElement = createVideoElement;
-                void dependencies.dimport('https://esm.run/lit@2.0.2/html.js')
+                const settingsRenderer = ZenzaWatch.dll?.lit || dependencies.dimport('https://esm.run/lit@2.0.2/html.js');
+                void Promise.resolve(settingsRenderer)
                     .then(({ html, render }) => initDebug({ hlsConfig, html, render, ZenzaWatch }))
                     .catch(() => console.warn('HLS settings UI unavailable'));
             };

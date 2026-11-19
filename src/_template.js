@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.472-task1095
+// @version        2.7.473-task1096
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -43,6 +43,7 @@ import {Config, NaviConfig} from './Config';
 import {uQuery, uq} from '../packages/lib/src/uQuery';
 import {util} from './util';
 import {components} from '../packages/components/src/index';
+import * as bundledPlayerUi from '../packages/components/src/dll.js';
 import {PlayerState} from './State';
 import {VideoInfoLoader} from '../packages/lib/src/nico/loader';
 import {ThumbInfoLoader, PlaylistApiLoader, MylistApiLoader, CacheStorage, CrossDomainGate, UaaLoader, PlaybackPosition, NicoVideoApi, RecommendAPILoader, NVWatchCaller, CommonsTreeLoader, NicoRssLoader, MatrixRankingLoader} from '../packages/lib/src/nico/loader';
@@ -197,15 +198,8 @@ await Config.promise('restore');
     //@require RelatedMenuActions
     // Supported integration point for trusted external userscripts.
     ZenzaWatch.relatedMenu = RelatedMenuActions;
-    Promise.all([//https://esm.run/lit@2.0.2/html.js
-      dimport('https://esm.run/lit@2.0.2/html.js'),
-      dimport('https://esm.run/lit@2.0.2/directives/repeat'),
-      dimport('https://esm.run/lit@2.0.2/directives/class-map')
-    ]).then(([lit, ...directives]) => {
-      dll.lit = lit;
-      dll.directives = Object.assign({}, ...directives);
-      emitter.emitResolve('lit-html', dll.lit);
-    });
+    //@bundle bundledPlayerUi
+    Object.assign(dll, bundledPlayerUi.dll);
 
     const Navi = {
       version: VER,
@@ -227,6 +221,7 @@ await Config.promise('restore');
     window.ZenzaWatch.emitter = ZenzaWatch.emitter = new Emitter();
     const debug = ZenzaWatch.debug;
     const emitter = ZenzaWatch.emitter;
+    emitter.emitResolve('lit-html', dll.lit);
 
     // const modules = ZenzaWatch.modules;
 //@require CONSTANT

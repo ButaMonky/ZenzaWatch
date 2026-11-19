@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.472-task1095
+// @version        2.7.473-task1096
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 01:28Z dba390dc
+// build: 2026-11-19 02:31Z 4bde0a64
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -2111,10 +2111,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.472-task1095';
+    var VER = '2.7.473-task1096';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 01:28Z dba390dc';
+    var BUILD = '2026-11-19 02:31Z 4bde0a64';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -7326,15 +7326,60 @@ const uq = uQuery;
 // already required
     // Supported integration point for trusted external userscripts.
     ZenzaWatch.relatedMenu = RelatedMenuActions;
-    Promise.all([//https://esm.run/lit@2.0.2/html.js
-      dimport('https://esm.run/lit@2.0.2/html.js'),
-      dimport('https://esm.run/lit@2.0.2/directives/repeat'),
-      dimport('https://esm.run/lit@2.0.2/directives/class-map')
-    ]).then(([lit, ...directives]) => {
-      dll.lit = lit;
-      dll.directives = Object.assign({}, ...directives);
-      emitter.emitResolve('lit-html', dll.lit);
-    });
+/*
+BSD 3-Clause License
+
+Copyright (c) 2017 Google LLC. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+var bundledPlayerUi=(()=>{var G=Object.defineProperty;var mt=Object.getOwnPropertyDescriptor;var gt=Object.getOwnPropertyNames;var yt=Object.prototype.hasOwnProperty;var X=(i,t)=>{for(var e in t)G(i,e,{get:t[e],enumerable:!0})},xt=(i,t,e,n)=>{if(t&&typeof t=="object"||typeof t=="function")for(let s of gt(t))!yt.call(i,s)&&s!==e&&G(i,s,{get:()=>t[s],enumerable:!(n=mt(t,s))||n.enumerable});return i};var Tt=i=>xt(G({},"__esModule",{value:!0}),i);var Pt={};X(Pt,{dll:()=>z});var J={};X(J,{_$LH:()=>q,html:()=>Ct,noChange:()=>_,nothing:()=>A,render:()=>Mt,svg:()=>bt});/**
+ * @license
+ * Copyright 2017 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */var Q,I=window,b=I.trustedTypes,tt=b?b.createPolicy("lit-html",{createHTML:i=>i}):void 0,R="$lit$",m="lit$".concat((Math.random()+"").slice(9),"$"),Z="?"+m,Ht="<".concat(Z,">"),T=document,P=()=>T.createComment(""),S=i=>i===null||typeof i!="object"&&typeof i!="function",lt=Array.isArray,at=i=>lt(i)||typeof i?.[Symbol.iterator]=="function",Y="[ 	\n\f\r]",w=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,et=/-->/g,it=/>/g,y=RegExp(">|".concat(Y,"(?:([^\\s\"'>=/]+)(").concat(Y,"*=").concat(Y,"*(?:[^ 	\n\f\r\"'`<>=]|(\"|')|))|$)"),"g"),st=/'/g,nt=/"/g,ht=/^(?:script|style|textarea|title)$/i,dt=i=>(t,...e)=>({_$litType$:i,strings:t,values:e}),Ct=dt(1),bt=dt(2),_=Symbol.for("lit-noChange"),A=Symbol.for("lit-nothing"),rt=new WeakMap,x=T.createTreeWalker(T,129,null,!1);function ut(i,t){if(!Array.isArray(i)||!i.hasOwnProperty("raw"))throw Error("invalid template strings array");return tt!==void 0?tt.createHTML(t):t}var ct=(i,t)=>{let e=i.length-1,n=[],s,r=t===2?"<svg>":"",o=w;for(let h=0;h<e;h++){let l=i[h],a,u,$=-1,d=0;for(;d<l.length&&(o.lastIndex=d,u=o.exec(l),u!==null);)d=o.lastIndex,o===w?u[1]==="!--"?o=et:u[1]!==void 0?o=it:u[2]!==void 0?(ht.test(u[2])&&(s=RegExp("</"+u[2],"g")),o=y):u[3]!==void 0&&(o=y):o===y?u[0]===">"?(o=s??w,$=-1):u[1]===void 0?$=-2:($=o.lastIndex-u[2].length,a=u[1],o=u[3]===void 0?y:u[3]==='"'?nt:st):o===nt||o===st?o=y:o===et||o===it?o=w:(o=y,s=void 0);let c=o===y&&i[h+1].startsWith("/>")?" ":"";r+=o===w?l+Ht:$>=0?(n.push(a),l.slice(0,$)+R+l.slice($)+m+c):l+m+($===-2?(n.push(void 0),h):c)}return[ut(i,r+(i[e]||"<?>")+(t===2?"</svg>":"")),n]},B=class i{constructor({strings:t,_$litType$:e},n){let s;this.parts=[];let r=0,o=0,h=t.length-1,l=this.parts,[a,u]=ct(t,e);if(this.el=i.createElement(a,n),x.currentNode=this.el.content,e===2){let $=this.el.content,d=$.firstChild;d.remove(),$.append(...d.childNodes)}for(;(s=x.nextNode())!==null&&l.length<h;){if(s.nodeType===1){if(s.hasAttributes()){let $=[];for(let d of s.getAttributeNames())if(d.endsWith(R)||d.startsWith(m)){let c=u[o++];if($.push(d),c!==void 0){let v=s.getAttribute(c.toLowerCase()+R).split(m),p=/([.?@])?(.*)/.exec(c);l.push({type:1,index:r,name:p[2],strings:v,ctor:p[1]==="."?U:p[1]==="?"?V:p[1]==="@"?L:C})}else l.push({type:6,index:r})}for(let d of $)s.removeAttribute(d)}if(ht.test(s.tagName)){let $=s.textContent.split(m),d=$.length-1;if(d>0){s.textContent=b?b.emptyScript:"";for(let c=0;c<d;c++)s.append($[c],P()),x.nextNode(),l.push({type:2,index:++r});s.append($[d],P())}}}else if(s.nodeType===8)if(s.data===Z)l.push({type:2,index:r});else{let $=-1;for(;($=s.data.indexOf(m,$+1))!==-1;)l.push({type:7,index:r}),$+=m.length-1}r++}}static createElement(t,e){let n=T.createElement("template");return n.innerHTML=t,n}};function H(i,t,e=i,n){var s,r,o,h;if(t===_)return t;let l=n!==void 0?(s=e._$Co)===null||s===void 0?void 0:s[n]:e._$Cl,a=S(t)?void 0:t._$litDirective$;return l?.constructor!==a&&((r=l?._$AO)===null||r===void 0||r.call(l,!1),a===void 0?l=void 0:(l=new a(i),l._$AT(i,e,n)),n!==void 0?((o=(h=e)._$Co)!==null&&o!==void 0?o:h._$Co=[])[n]=l:e._$Cl=l),l!==void 0&&(t=H(i,l._$AS(i,t.values),l,n)),t}var D=class{constructor(t,e){this._$AV=[],this._$AN=void 0,this._$AD=t,this._$AM=e}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(t){var e;let{el:{content:n},parts:s}=this._$AD,r=((e=t?.creationScope)!==null&&e!==void 0?e:T).importNode(n,!0);x.currentNode=r;let o=x.nextNode(),h=0,l=0,a=s[0];for(;a!==void 0;){if(h===a.index){let u;a.type===2?u=new N(o,o.nextSibling,this,t):a.type===1?u=new a.ctor(o,a.name,a.strings,this,t):a.type===6&&(u=new j(o,this,t)),this._$AV.push(u),a=s[++l]}h!==a?.index&&(o=x.nextNode(),h++)}return x.currentNode=T,r}v(t){let e=0;for(let n of this._$AV)n!==void 0&&(n.strings!==void 0?(n._$AI(t,n,e),e+=n.strings.length-2):n._$AI(t[e])),e++}},N=class i{constructor(t,e,n,s){var r;this.type=2,this._$AH=A,this._$AN=void 0,this._$AA=t,this._$AB=e,this._$AM=n,this.options=s,this._$Cp=(r=s?.isConnected)===null||r===void 0||r}get _$AU(){var t,e;return(e=(t=this._$AM)===null||t===void 0?void 0:t._$AU)!==null&&e!==void 0?e:this._$Cp}get parentNode(){let t=this._$AA.parentNode,e=this._$AM;return e!==void 0&&t?.nodeType===11&&(t=e.parentNode),t}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(t,e=this){t=H(this,t,e),S(t)?t===A||t==null||t===""?(this._$AH!==A&&this._$AR(),this._$AH=A):t!==this._$AH&&t!==_&&this._(t):t._$litType$!==void 0?this.g(t):t.nodeType!==void 0?this.$(t):at(t)?this.T(t):this._(t)}k(t){return this._$AA.parentNode.insertBefore(t,this._$AB)}$(t){this._$AH!==t&&(this._$AR(),this._$AH=this.k(t))}_(t){this._$AH!==A&&S(this._$AH)?this._$AA.nextSibling.data=t:this.$(T.createTextNode(t)),this._$AH=t}g(t){var e;let{values:n,_$litType$:s}=t,r=typeof s=="number"?this._$AC(t):(s.el===void 0&&(s.el=B.createElement(ut(s.h,s.h[0]),this.options)),s);if(((e=this._$AH)===null||e===void 0?void 0:e._$AD)===r)this._$AH.v(n);else{let o=new D(r,this),h=o.u(this.options);o.v(n),this.$(h),this._$AH=o}}_$AC(t){let e=rt.get(t.strings);return e===void 0&&rt.set(t.strings,e=new B(t)),e}T(t){lt(this._$AH)||(this._$AH=[],this._$AR());let e=this._$AH,n,s=0;for(let r of t)s===e.length?e.push(n=new i(this.k(P()),this.k(P()),this,this.options)):n=e[s],n._$AI(r),s++;s<e.length&&(this._$AR(n&&n._$AB.nextSibling,s),e.length=s)}_$AR(t=this._$AA.nextSibling,e){var n;for((n=this._$AP)===null||n===void 0||n.call(this,!1,!0,e);t&&t!==this._$AB;){let s=t.nextSibling;t.remove(),t=s}}setConnected(t){var e;this._$AM===void 0&&(this._$Cp=t,(e=this._$AP)===null||e===void 0||e.call(this,t))}},C=class{constructor(t,e,n,s,r){this.type=1,this._$AH=A,this._$AN=void 0,this.element=t,this.name=e,this._$AM=s,this.options=r,n.length>2||n[0]!==""||n[1]!==""?(this._$AH=Array(n.length-1).fill(new String),this.strings=n):this._$AH=A}get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}_$AI(t,e=this,n,s){let r=this.strings,o=!1;if(r===void 0)t=H(this,t,e,0),o=!S(t)||t!==this._$AH&&t!==_,o&&(this._$AH=t);else{let h=t,l,a;for(t=r[0],l=0;l<r.length-1;l++)a=H(this,h[n+l],e,l),a===_&&(a=this._$AH[l]),o||(o=!S(a)||a!==this._$AH[l]),a===A?t=A:t!==A&&(t+=(a??"")+r[l+1]),this._$AH[l]=a}o&&!s&&this.j(t)}j(t){t===A?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,t??"")}},U=class extends C{constructor(){super(...arguments),this.type=3}j(t){this.element[this.name]=t===A?void 0:t}},Nt=b?b.emptyScript:"",V=class extends C{constructor(){super(...arguments),this.type=4}j(t){t&&t!==A?this.element.setAttribute(this.name,Nt):this.element.removeAttribute(this.name)}},L=class extends C{constructor(t,e,n,s,r){super(t,e,n,s,r),this.type=5}_$AI(t,e=this){var n;if((t=(n=H(this,t,e,0))!==null&&n!==void 0?n:A)===_)return;let s=this._$AH,r=t===A&&s!==A||t.capture!==s.capture||t.once!==s.once||t.passive!==s.passive,o=t!==A&&(s===A||r);r&&this.element.removeEventListener(this.name,this,s),o&&this.element.addEventListener(this.name,this,t),this._$AH=t}handleEvent(t){var e,n;typeof this._$AH=="function"?this._$AH.call((n=(e=this.options)===null||e===void 0?void 0:e.host)!==null&&n!==void 0?n:this.element,t):this._$AH.handleEvent(t)}},j=class{constructor(t,e,n){this.element=t,this.type=6,this._$AN=void 0,this._$AM=e,this.options=n}get _$AU(){return this._$AM._$AU}_$AI(t){H(this,t)}},q={O:R,P:m,A:Z,C:1,M:ct,L:D,R:at,D:H,I:N,V:C,H:V,N:L,U,F:j},ot=I.litHtmlPolyfillSupport;ot?.(B,N),((Q=I.litHtmlVersions)!==null&&Q!==void 0?Q:I.litHtmlVersions=[]).push("2.8.0");var Mt=(i,t,e)=>{var n,s;let r=(n=e?.renderBefore)!==null&&n!==void 0?n:t,o=r._$litPart$;if(o===void 0){let h=(s=e?.renderBefore)!==null&&s!==void 0?s:null;r._$litPart$=o=new N(t.insertBefore(P(),h),h,void 0,e??{})}return o._$AI(i),o};/**
+ * @license
+ * Copyright 2017 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */var k={ATTRIBUTE:1,CHILD:2,PROPERTY:3,BOOLEAN_ATTRIBUTE:4,EVENT:5,ELEMENT:6},O=i=>(...t)=>({_$litDirective$:i,values:t}),M=class{constructor(t){}get _$AU(){return this._$AM._$AU}_$AT(t,e,n){this._$Ct=t,this._$AM=e,this._$Ci=n}_$AS(t,e){return this.update(t,e)}update(t,e){return this.render(...e)}};/**
+ * @license
+ * Copyright 2020 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */var{I:Et}=q;var $t=()=>document.createComment(""),E=(i,t,e)=>{var n;let s=i._$AA.parentNode,r=t===void 0?i._$AB:t._$AA;if(e===void 0){let o=s.insertBefore($t(),r),h=s.insertBefore($t(),r);e=new Et(o,h,i,i.options)}else{let o=e._$AB.nextSibling,h=e._$AM,l=h!==i;if(l){let a;(n=e._$AQ)===null||n===void 0||n.call(e,i),e._$AM=i,e._$AP!==void 0&&(a=i._$AU)!==h._$AU&&e._$AP(a)}if(o!==r||l){let a=e._$AA;for(;a!==o;){let u=a.nextSibling;s.insertBefore(a,r),a=u}}}return e},g=(i,t,e=i)=>(i._$AI(t,e),i),wt={},vt=(i,t=wt)=>i._$AH=t,At=i=>i._$AH,W=i=>{var t;(t=i._$AP)===null||t===void 0||t.call(i,!1,!0);let e=i._$AA,n=i._$AB.nextSibling;for(;e!==n;){let s=e.nextSibling;e.remove(),e=s}};/**
+ * @license
+ * Copyright 2017 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */var pt=(i,t,e)=>{let n=new Map;for(let s=t;s<=e;s++)n.set(i[s],s);return n},_t=O(class extends M{constructor(i){if(super(i),i.type!==k.CHILD)throw Error("repeat() can only be used in text expressions")}ct(i,t,e){let n;e===void 0?e=t:t!==void 0&&(n=t);let s=[],r=[],o=0;for(let h of i)s[o]=n?n(h,o):o,r[o]=e(h,o),o++;return{values:r,keys:s}}render(i,t,e){return this.ct(i,t,e).values}update(i,[t,e,n]){var s;let r=At(i),{values:o,keys:h}=this.ct(t,e,n);if(!Array.isArray(r))return this.ut=h,o;let l=(s=this.ut)!==null&&s!==void 0?s:this.ut=[],a=[],u,$,d=0,c=r.length-1,v=0,p=o.length-1;for(;d<=c&&v<=p;)if(r[d]===null)d++;else if(r[c]===null)c--;else if(l[d]===h[v])a[v]=g(r[d],o[v]),d++,v++;else if(l[c]===h[p])a[p]=g(r[c],o[p]),c--,p--;else if(l[d]===h[p])a[p]=g(r[d],o[p]),E(i,a[p+1],r[d]),d++,p--;else if(l[c]===h[v])a[v]=g(r[c],o[v]),E(i,r[d],r[c]),c--,v++;else if(u===void 0&&(u=pt(h,v,p),$=pt(l,d,c)),u.has(l[d]))if(u.has(l[c])){let f=$.get(h[v]),F=f!==void 0?r[f]:null;if(F===null){let K=E(i,r[d]);g(K,o[v]),a[v]=K}else a[v]=g(F,o[v]),E(i,r[d],F),r[f]=null;v++}else W(r[c]),c--;else W(r[d]),d++;for(;v<=p;){let f=E(i,a[p+1]);g(f,o[v]),a[v++]=f}for(;d<=c;){let f=r[d++];f!==null&&W(f)}return this.ut=h,vt(i,a),_}});/**
+ * @license
+ * Copyright 2018 Google LLC
+ * SPDX-License-Identifier: BSD-3-Clause
+ */var ft=O(class extends M{constructor(i){var t;if(super(i),i.type!==k.ATTRIBUTE||i.name!=="class"||((t=i.strings)===null||t===void 0?void 0:t.length)>2)throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.")}render(i){return" "+Object.keys(i).filter((t=>i[t])).join(" ")+" "}update(i,[t]){var e,n;if(this.it===void 0){this.it=new Set,i.strings!==void 0&&(this.nt=new Set(i.strings.join(" ").split(/\s/).filter((r=>r!==""))));for(let r in t)t[r]&&!(!((e=this.nt)===null||e===void 0)&&e.has(r))&&this.it.add(r);return this.render(t)}let s=i.element.classList;this.it.forEach((r=>{r in t||(s.remove(r),this.it.delete(r))}));for(let r in t){let o=!!t[r];o===this.it.has(r)||!((n=this.nt)===null||n===void 0)&&n.has(r)||(o?(s.add(r),this.it.add(r)):(s.remove(r),this.it.delete(r)))}return _}});var z={directives:{}};z.lit=J;z.directives.repeat=_t;z.directives.classMap=ft;return Tt(Pt);})();
+
+    Object.assign(dll, bundledPlayerUi.dll);
 
     const Navi = {
       version: VER,
@@ -7356,6 +7401,7 @@ const uq = uQuery;
     window.ZenzaWatch.emitter = ZenzaWatch.emitter = new Emitter();
     const debug = ZenzaWatch.debug;
     const emitter = ZenzaWatch.emitter;
+    emitter.emitResolve('lit-html', dll.lit);
 
     // const modules = ZenzaWatch.modules;
 const CONSTANT = {
@@ -75608,7 +75654,8 @@ const HlsRuntime = {
 										});
 								});
 								ZenzaWatch.debug.createVideoElement = createVideoElement;
-								void dependencies.dimport('https://esm.run/lit@2.0.2/html.js')
+								const settingsRenderer = ZenzaWatch.dll?.lit || dependencies.dimport('https://esm.run/lit@2.0.2/html.js');
+								void Promise.resolve(settingsRenderer)
 										.then(({ html, render }) => initDebug({ hlsConfig, html, render, ZenzaWatch }))
 										.catch(() => console.warn('HLS settings UI unavailable'));
 						};
@@ -89250,7 +89297,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.472-task1095",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.473-task1096",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

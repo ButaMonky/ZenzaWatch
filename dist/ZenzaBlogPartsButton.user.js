@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaBlogPartsButton
 // @namespace    https://github.com/segabito/
-// @version      1.1.46-task1095
+// @version      1.1.47-task1096
 // @description  ブログパーツや外部サイトの動画リンクから、そのページ上でZenzaWatchを開く
 // @match        https://*/*
 // @match        http://ext.nicovideo.jp/thumb/*
@@ -22,8 +22,8 @@
 // @connect      dmc.nico
 // @sandbox      DOM
 // ==/UserScript==
-// build: 2026-11-19 01:28Z dba390dc
-// Shared runtime normalized SHA256: 55ae9c27211fe885befab56e79796f777a9b13fbc2a52504e304d1df105c1910
+// build: 2026-11-19 02:31Z 4bde0a64
+// Shared runtime normalized SHA256: 4ec48d7e1c179efe67dcb28e304cf6b6352852e4beef020cd539f465e580805e
 
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
@@ -1427,7 +1427,7 @@ function createDisplaySettings(w, gm, registered=[]) {
    displaySettings.publish();window.addEventListener('pagehide',()=>{disconnect();displaySettings.publish();},{once:true});return;
  }
  if(window!==window.top&&!playerFrame)return;
- extDiag('companion','boot',{playerFrame,version:"1.1.46-task1095",readyState:document.readyState});
+ extDiag('companion','boot',{playerFrame,version:"1.1.47-task1096",readyState:document.readyState});
  'use strict';
 
 // Private userscript storage carries messages. No ports, API responses or

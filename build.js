@@ -327,6 +327,22 @@ function loadTemplateFile(srcDir, indexFile, outFile, params) {
       lines.push('/* eslint-disable */');
       return;
     }
+    if (line.trim() === '//@bundle bundledPlayerUi') {
+      const entry = path.resolve(path.dirname(srcFile), imports.bundledPlayerUi);
+      BUILD_INPUTS.add(entry);
+      const bundle = require('esbuild').buildSync({
+        entryPoints: [entry], bundle: true, write: false, platform: 'browser',
+        nodePaths: require.resolve.paths('lit').filter(dir => fs.existsSync(dir)),
+        format: 'iife', globalName: 'bundledPlayerUi', target: 'es2020',
+        // Keep Lit's whitespace patterns escaped through the distribution formatter.
+        supported: {'template-literal': false}, minify: true, legalComments: 'inline'
+      });
+      const licensePath = require.resolve.paths('lit-html').map(dir => path.join(dir, 'lit-html', 'LICENSE'))
+        .find(file => fs.existsSync(file));
+      lines.push('/*\n' + fs.readFileSync(licensePath, 'utf8').replace(/\r\n/g, '\n') + '\n*/');
+      lines.push(bundle.outputFiles[0].text);
+      return;
+    }
     if (line.match(/^(\s*)\/\/\s*@build$/)) {
       lines.push(`${RegExp.$1}var BUILD = '${BUILD_ID}';`);
       return;

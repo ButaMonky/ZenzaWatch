@@ -4,14 +4,8 @@ import path from 'path';
 // import {ZenzaWatch} from '../src/ZenzaWatchIndex';
 // import {Config, util, AsyncEmitter, PopupMessage, WindowMessageEmitter} from '../src/util';
 
-// packages/components/src/dll.js does a live network import of the `lit`
-// library (`import * as lit from 'https://esm.run/lit';`) so it can run as
-// a Greasemonkey userscript in a real browser. Node refuses to resolve a
-// bare network URL specifier and throws ERR_NETWORK_IMPORT_DISALLOWED, which
-// aborts module loading for anything that imports dll.js (e.g.
-// src/ZenzaWatchIndex.js), even indirectly. Redirect any require of dll.js
-// to a same-shape test stub (test/mocks/dll.js) before any test file loads.
-// See test/mocks/dll.js for the full explanation.
+// Component unit tests run outside the browser. Use the test renderer stub here;
+// the browser tests exercise the bundled Lit renderer and its directives.
 const dllRealPath = path.resolve(__dirname, '../packages/components/src/dll.js');
 const dllMockPath = path.resolve(__dirname, './mocks/dll.js');
 // Task1069: 部品は global・ZenzaWatch を src/ZenzaContext から引く。単体テストでは中身の入った代わりを渡す（test/mocks/ZenzaContext.js）。

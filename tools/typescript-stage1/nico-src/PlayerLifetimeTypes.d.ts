@@ -49,6 +49,10 @@ export type ZenzaPlaylistLoadOwner = Readonly<{
 
 /** Only the player capabilities used by global command routing. */
 export interface ZenzaRootPlayerPort {
+  readonly _view?: {readonly videoControlBar?: {readonly storyboard?: {
+    createSavedPreview(host: HTMLElement, videoId: string, seconds: number): () => void;
+  }}};
+  readonly watchId: string | null | undefined;
   readonly currentTime: number;
   readonly _nicoVideoPlayer?: {
     readonly _videoPlayer?: {
@@ -59,11 +63,12 @@ export interface ZenzaRootPlayerPort {
     readonly commentViewModel?: unknown;
   };
   on(event: 'command', callback: (command: string, params?: unknown) => unknown): unknown;
-  on(event: 'close', callback: () => void): unknown;
+  on(event: 'open' | 'close', callback: () => void): unknown;
   execCommand(command: string, params?: unknown): unknown;
 }
 export interface ZenzaRootPlayerState {
   videoInfo?: {
+    readonly isOwnUpload?: boolean;
     readonly videoId: string;
     readonly watchId?: string;
     readonly watchUrl?: string;

@@ -374,6 +374,10 @@ const NicoVideoPlayerDialogCommands = {
       e.stopPropagation?.();
       return;
     }
+    if (name === 'OPEN_OFFICIAL_WATCH') {
+      if (!this._state.isOpen && !e?.repeat) { this.emit('requestOfficialLaunch', e); }
+      return;
+    }
     if (!this._state.isOpen) {
       const lastWatchId = this._playerConfig.props.lastWatchId;
       if (name === 'RE_OPEN' && lastWatchId) {

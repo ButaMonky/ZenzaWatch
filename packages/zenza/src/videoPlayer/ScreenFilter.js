@@ -1286,13 +1286,17 @@ const ScreenFilter = (() => {
         return null;
     };
     const isCanvasTarget = (target) => {
+        // 書き出しでは共有画面で「画面エフェクト」を選んだときだけ呼ばれる。
+        if (target === 'clip') {
+            return true;
+        }
         const key = target === 'screenshot' ? 'applyToScreenshot' : 'applyToCommentPip';
         const v = prop(key);
         return v === undefined ? true : !!v;
     };
     /**
      * canvas へ動画（または動画を描いた canvas）を、フィルター・反転・周辺減光つきで描く。
-     * target: 'screenshot' | 'commentPip'（それぞれの「反映する」設定を見る）
+     * target: 'clip' は書き出し時の選択。他の出力先はそれぞれの設定を見る。
      */
     const drawVideo = (ctx, source, dx, dy, w, h, { target = 'commentPip' } = {}) => {
         const use = isCanvasTarget(target);

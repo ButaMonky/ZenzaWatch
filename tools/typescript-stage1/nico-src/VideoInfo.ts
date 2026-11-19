@@ -471,6 +471,12 @@ class VideoInfoModel extends JSONable {
       premium: this._rawData.isPremiumFree};
   }
 
+  get isOwnUpload(): boolean {
+    const viewer = this._viewerInfo?.id;
+    return !this.isChannel && /^[1-9]\d*$/.test(String(viewer)) &&
+      String(viewer) === String(this._watchApiData.uploaderInfo?.id);
+  }
+
   get isChannel() {
     return !!this._videoDetail.channelId;
   }

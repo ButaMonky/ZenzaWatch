@@ -44,11 +44,30 @@ describe('Task318 real source setting inventory',()=>{
     const dom=new JSDOM(html,{url:'https://www.nicovideo.jp/my'});
     const root=dom.window.document.querySelector('.settingPanelInner');
     root.querySelector('.commentHistorySettingsContainer').innerHTML=history;
-    const modelCtx=createContext({document:dom.window.document});
+    const modelCtx=createContext({document:dom.window.document,UiVisibilityRegistry:ctx.UiVisibilityRegistry});
     const Model=loadClass('src/ModernAdvancedSettingsModel.js',
       'ModernAdvancedSettingsModel',modelCtx);
     const model=new Model({config:ctx.actual,legacyRoot:root,actions:ctx.actions,
       historySchema:ZenzaCommentHistorySettings.SETTINGS_SCHEMA});
+    const launchKey='KEY_OPEN_OFFICIAL_WATCH';
+    const inSection=(category,sub)=>model.sectionDescriptors(category,sub).find(row=>row.id===launchKey);
+    const official=inSection('再生・音声','公式プレイヤー連携'), shortcut=inSection('ショートカット','プレイヤー全般');
+    assert.ok(official && shortcut && official.sharedWith);
+    model.set(official.id,89);
+    assert.strictEqual(model.get(shortcut.id),89);
+    model.resetItem(shortcut.id);
+    assert.strictEqual(model.get(official.id),ctx.actual.default[launchKey]);
+    const visibilityRows=model.sectionDescriptors('画面・映像','表示・非表示');
+    for(const [id] of ctx.UiVisibilityRegistry.SHARED_SETTINGS) {
+      const original=model.descriptor(id);
+      const alias=visibilityRows.find(row=>row.id===id && row.sharedWith);
+      assert.ok(original && alias,id);
+      const saved=model.get(id);
+      model.set(alias.id,!saved);
+      assert.strictEqual(model.get(original.id),!saved,id);
+      model.cancel();
+      assert.strictEqual(model.get(alias.id),saved,id);
+    }
     const legacy=[...root.querySelectorAll('[data-setting-name]')].map(x=>x.dataset.settingName);
     const internalKeys=new Set(['screenFilter.enable','screenFilter.saved','screenFilter.userPresets']);
     const missing=legacy.filter(key=>!model.descriptor(key)&&!internalKeys.has(key));
@@ -56,8 +75,8 @@ describe('Task318 real source setting inventory',()=>{
     assert.deepStrictEqual(missing,[]);
     assert.deepStrictEqual(ignored,[]);
     // Task396 adds the previously absent original-video action, unbound by default.
-    assert.strictEqual(ctx.actions.filter(a=>!a.id.startsWith('SCENE_')).length,127,
-      'keep all 126 original actions plus notification history');
+    assert.strictEqual(ctx.actions.filter(a=>!a.id.startsWith('SCENE_')).length,128,
+      'keep existing actions and the official-page launcher');
     const sceneActions=ctx.actions.filter(a=>a.id.startsWith('SCENE_'));
     assert.strictEqual(sceneActions.length,12,'register all twelve new scene actions');
     assert(sceneActions.every(a=>a.defaultKey===0),

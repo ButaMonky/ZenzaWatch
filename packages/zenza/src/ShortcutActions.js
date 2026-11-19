@@ -129,6 +129,8 @@ const SHORTCUT_ACTIONS = [
     // 実際の動作: 動画を開いている間はその動画を再読み込みするだけ(RELOAD_VIDEO
     // と同じ)。動画を閉じている間だけ、最後に見ていた動画を開き直す特殊処理が
     // 別途ある(NicoVideoPlayerDialog._onKeyEvent参照)。
+    { id: 'OPEN_OFFICIAL_WATCH', category: 'プレイヤー全般', label: '公式プレイヤーからこの動画をZenzaWatchで開く',
+        defaultKey: KEY_MOD.ALT + KEY_MOD.SHIFT + 90, command: 'openOfficialWatch' },
     { id: 'RE_OPEN', legacy: true, category: 'プレイヤー全般',
         label: '今見ている動画を再読み込み(閉じている時は直前に見ていた動画を開く)',
         defaultKey: 27 + KEY_MOD.SHIFT, command: 'reload' },

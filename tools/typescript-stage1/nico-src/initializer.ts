@@ -117,6 +117,63 @@ const {initialize} = (() => {
   //   overrideGinza.resumeOnClose    Zenza を閉じたら、公式プレイヤーで同じ所から続きを再生する（初期値 OFF）
   // 「公式の再生ボタンを自分で押した」の見分け方: 公式プレイヤーの枠の上で押してから 1 秒以内の play() だけを利用者の操作とみなす
   // （一覧のリンクを押した直後の自動再生は、押した場所が枠の外なので止める）。
+  const installOfficialLaunchButton = (watchId: () => string | null, launch: () => void) => {
+    const player = '[class~="grid-area_[player]"]';
+    const selector = 'button[aria-label="コメントを非表示にする"],button[aria-label="コメントを表示する"]';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'zen-family zenzaOfficialLaunch';
+    button.textContent = 'Zen';
+    button.setAttribute('aria-label', 'この動画をZenzaWatchで開く');
+    button.title = 'この動画をZenzaWatchで開く';
+    button.addEventListener('click', event => { event.stopPropagation(); launch(); });
+    const addButtonStyle = () => cssUtil.addStyle(`
+      .zenzaOfficialLaunch { display:inline-grid;place-items:center;align-self:stretch;min-width:2em;
+        padding:0 .2em;border:0;border-radius:3px;background:transparent;color:#ccc;cursor:pointer;
+        font:700 14px/1 Arial,sans-serif; flex:0 0 auto; }
+      .zenzaOfficialLaunch:hover,.zenzaOfficialLaunch:focus-visible {color:#fff;background:rgba(255,255,255,.15)}
+      .zenzaOfficialLaunch:focus-visible {outline:2px solid currentColor;outline-offset:-2px}
+      .zenzaOfficialLaunch:active {background:rgba(255,255,255,.25)}
+    `, {className:'zenzaOfficialLaunchStyle'});
+    let styled = false;
+    let frame = 0;
+    let anchor: HTMLButtonElement | null = null;
+    let lastUrl = '';
+    const update = () => {
+      frame = 0;
+      lastUrl = location.href;
+      // A rebuilt toolbar can include an inert clone of our button.
+      document.querySelectorAll('#root .zenzaOfficialLaunch').forEach(el => { if (el !== button) { el.remove(); } });
+      if (!watchId() || !Config.getValue('officialLaunch.button')) { button.remove(); anchor = null; return; }
+      const area = document.querySelector('#root ' + player);
+      anchor = area?.querySelector<HTMLButtonElement>(selector) ?? null;
+      if (!anchor) { button.remove(); return; }
+      if (!styled) { addButtonStyle(); styled = true; }
+      if (Config.getValue('officialLaunch.side') === 'right') {
+        if (anchor.nextElementSibling !== button) { anchor.after(button); }
+      } else if (anchor.previousElementSibling !== button) { anchor.before(button); }
+    };
+    const schedule = () => { if (!frame) { frame = requestAnimationFrame(update); } };
+    const observer = new MutationObserver(records => {
+      if (lastUrl !== location.href) { schedule(); return; }
+      if (!location.pathname.startsWith('/watch/') || !Config.getValue('officialLaunch.button')) { return; }
+      if (anchor && button.isConnected && anchor.isConnected) {
+        const adjacent = Config.getValue('officialLaunch.side') === 'right' ? anchor.nextElementSibling : anchor.previousElementSibling;
+        if (adjacent !== button) { schedule(); }
+      } else if (anchor || records.some(r => [...r.addedNodes].some(n =>
+        n instanceof Element && (n.matches(selector) || n.querySelector(selector))))) { schedule(); }
+    });
+    observer.observe(document.getElementById('root') || document.documentElement, {subtree:true,childList:true});
+    window.addEventListener('popstate', schedule);
+    Config.onkey?.('officialLaunch.button', schedule);
+    Config.onkey?.('officialLaunch.side', schedule);
+    update();
+    return () => {
+      observer.disconnect(); window.removeEventListener('popstate', schedule);
+      Config.offkey?.('officialLaunch.button', schedule); Config.offkey?.('officialLaunch.side', schedule);
+      cancelAnimationFrame(frame); button.remove();
+    };
+  };
   const createOfficialPlaybackGuard = () => {
     let active = true;
     let dialog: Loose = null;
@@ -132,6 +189,11 @@ const {initialize} = (() => {
     let lastOfficialWatchId: Loose = currentWatchId();
     const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
       window.name !== 'watchGinza' && (!isShortsPage() || setting('overrideGinza.shorts') !== false);
+    let manual: {id:string; video:HTMLVideoElement|null; playing:boolean; starting:boolean} | null = null;
+    let disposeButton: (() => void) | undefined;
+    let recovering = false;
+    const launchId = () => location.pathname.startsWith('/watch/') && !zenzaOwnUrl() &&
+      window.name !== 'watchGinza' && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) ? currentWatchId() : null;
     const manualMode = () => setting('overrideGinza.officialPlayer') !== 'block';
     const officialRects = () => [...document.querySelectorAll('#root video')]
       .filter(isOfficialMedia)
@@ -160,7 +222,9 @@ const {initialize} = (() => {
     };
     // この video を止めておくべきか
     const shouldHold = (el: Loose) => {
-      if (!active || !isOfficialMedia(el) || !wanted() || userPlayed.has(el)) { return false; }
+      if (!active || !isOfficialMedia(el)) { return false; }
+      if (manual && currentWatchId() === manual.id && el.closest('[class~="grid-area_[player]"]')) { return true; }
+      if (!wanted() || userPlayed.has(el)) { return false; }
       const watchId = currentWatchId();
       if (!watchId) { return false; }                      // 視聴ページ以外の動画（一覧の試し再生など）には触らない
       if (!dialog || dialog.isOpen) { return true; }        // 起動の途中・Zenza が開いている間
@@ -191,7 +255,7 @@ const {initialize} = (() => {
     // Zenza が閉じている時に、止めるべき公式の再生が始まった = ページを読み込まずに視聴ページへ移った・判定が間に合わなかった
     const openIfClosed = () => {
       const watchId = currentWatchId();
-      if (dialog && !dialog.isOpen && watchId) { open(watchId); }
+      if (!manual && dialog && !dialog.isOpen && watchId) { open(watchId); }
     };
     const onPlay = (ev: Event) => {
       const el = ev.target as Loose;
@@ -227,6 +291,40 @@ const {initialize} = (() => {
         void realPlay.call(v).catch(() => {});
       } catch (_) { /* 続きから再生できなくても閉じるのは続ける */ }
     };
+    const failLaunch = (session: NonNullable<typeof manual>) => {
+      if (manual !== session) { return; }
+      const samePage = launchId() === session.id;
+      manual = null;
+      allowedWatchId = session.id;
+      recovering = true;
+      try {
+        if (dialog.isOpen && dialog.watchId === session.id) { dialog.close(); }
+      } finally { recovering = false; releaseHeld(); }
+      if (samePage && session.playing && setting('officialLaunch.restoreOnFailure') && session.video?.isConnected) {
+        void realPlay.call(session.video).catch(() => {});
+      }
+    };
+    const launch = () => {
+      const id = launchId();
+      if (!id || !dialog || dialog.isOpen || manual?.id === id) { return false; }
+      const area = document.querySelector('#root [class~="grid-area_[player]"]');
+      if (!area) { return false; }
+      const video = [...area.querySelectorAll('video')].find(v => isOfficialMedia(v) && v.getBoundingClientRect().width > 0) ?? null;
+      const session = {id,video,playing:!!video && !video.paused && !video.ended,starting:true};
+      const time = setting('officialLaunch.continueTime') && video && !video.ended && Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      manual = session;
+      lastGestureAt = -Infinity;
+      stopAll();
+      const openManual = async () => {
+        const full = document.fullscreenElement;
+        if (full && (area.contains(full) || full.contains(area))) { await document.exitFullscreen(); }
+        if (manual !== session || launchId() !== id) { failLaunch(session); return; }
+        await dialog.open(id, {currentTime:time,openNow:true,eventType:'officialManual'});
+        if (!dialog.isOpen || dialog.watchId !== id) { failLaunch(session); }
+      };
+      void openManual().catch(() => failLaunch(session));
+      return true;
+    };
     window.addEventListener('play', onPlay, true);
     window.addEventListener('playing', onPlay, true);
     window.addEventListener('pointerdown', onPointerDown, true);
@@ -234,15 +332,27 @@ const {initialize} = (() => {
     return {
       attach(next: Loose) {
         dialog = next;
+        disposeButton = installOfficialLaunchButton(launchId, () => launch());
+        next.on?.('requestOfficialLaunch', (e: KeyboardEvent) => {
+          if (launch()) { e.preventDefault(); e.stopPropagation(); }
+        });
+        next.on?.('canPlay', (id: string) => { if (manual?.id === id) { manual.starting = false; } });
+        const failed = () => {
+          if (manual?.starting && dialog.watchId === manual.id) { failLaunch(manual); }
+        };
+        next.on?.('loadVideoInfoFail', failed);
+        next.on?.('error', failed);
         next.on?.('close', () => {
           const watchId = currentWatchId();
           const closedWatchId = next.watchId, time = Number(next._lastCurrentTime) || 0;
+          manual = null;
           allowedWatchId = watchId;
           unwatchNew();
           releaseHeld();
-          if (watchId && closedWatchId === watchId) { resumeOfficial(watchId, time); }
+          if (!recovering && watchId && closedWatchId === watchId) { resumeOfficial(watchId, time); }
         });
-        next.on?.('open', () => {
+        next.on?.('open', (id: string) => {
+          if (manual && manual.id !== id) { manual = null; releaseHeld(); }
           // Zenza を開くたびに、公式は必ず止める（利用者が一緒に再生していたものも）
           allowedWatchId = null;
           userPlayed = new WeakSet();
@@ -254,6 +364,8 @@ const {initialize} = (() => {
       },
       release() {
         active = false;
+        manual = null;
+        disposeButton?.();
         unwatchNew();
         releaseHeld();
         window.removeEventListener('play', onPlay, true);

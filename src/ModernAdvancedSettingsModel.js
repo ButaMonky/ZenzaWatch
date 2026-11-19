@@ -323,6 +323,14 @@ class ModernAdvancedSettingsModel {
                     ])]
             ]),
             ...group('再生・音声', '公式プレイヤー連携', [
+                ['officialLaunch.button', '公式プレイヤーに「Zen」ボタンを表示', { type: 'boolean',
+                        description: '通常のニコニコ動画の再生バーに、今の動画をZenzaWatchで開くボタンを表示します。自動起動がオフでも使えます。ボタンを隠しても割り当てたキーは使えます。' }],
+                ['officialLaunch.side', 'Zenボタンを置く位置', { ...select([['left', 'コメント切替の左'], ['right', 'コメント切替の右']]), dependsOn: 'officialLaunch.button',
+                        description: '吹き出しのボタンを基準に位置を選びます。位置は公式の操作バーが表示されている間と全画面表示時に共通です。' }],
+                ['officialLaunch.continueTime', '手動で開くときに公式の再生位置を引き継ぐ', { type: 'boolean',
+                        description: 'ボタンとショートカットの両方に適用します。オンなら押した時点の位置から、オフなら冒頭から開きます。再生が終了した動画や位置をまだ取得できない動画は冒頭から開きます。' }],
+                ['officialLaunch.restoreOnFailure', '切り替えに失敗したら公式の再生を再開する', { type: 'boolean',
+                        description: '切り替え中は公式を一時停止します。ZenzaWatchで読み込めなかった場合は公式へ戻り、切り替え前に再生していた動画だけ再開します。オフなら一時停止のまま戻ります。' }],
                 ['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { description: '視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。ZenzaWatch を開いた時は、公式プレイヤーを必ず一時停止します。初期値OFF。下の項目で細かい動きを選べます。' }],
                 ['overrideGinza.officialPlayer', 'ZenzaWatch が開いている間の公式プレイヤー', {
                         ...select([['manual', '開いた時に止める。公式の再生ボタンを押した時だけ一緒に再生する'], ['block', '止めたままにする（公式の再生ボタンを押しても再生しない）']]),
@@ -1024,7 +1032,7 @@ class ModernAdvancedSettingsModel {
             const id = 'KEY_' + action.id;
             const [category, subcategory] = ModernAdvancedSettingsModel.categoryFor(id, action);
             add({ id, label: action.label || action.id, category, subcategory, type: 'shortcut',
-                description: '', actionId: action.id, defaultKey: action.defaultKey });
+                description: action.id === 'OPEN_OFFICIAL_WATCH' ? '通常の公式視聴ページで、その動画をZenzaWatchへ切り替えます。初期値は Alt + Shift + Z。コメントなどの文字入力中は働きません。割り当てを消すとボタンだけ使えます。「公式プレイヤー連携」と同じキー設定です。' : '', actionId: action.id, defaultKey: action.defaultKey });
             if (action.customSeekSlot) {
                 const seek = 'PARAM_' + action.id;
                 add({ id: seek, label: (action.label || action.id) + ' の秒数',
@@ -1116,6 +1124,11 @@ class ModernAdvancedSettingsModel {
     }
     sectionDescriptors(category, subcategory) {
         const entries = this.descriptors.filter(d => d.category === category && d.subcategory === subcategory);
+        if (category === '再生・音声' && subcategory === '公式プレイヤー連携') {
+            const shortcut = this.descriptor('KEY_OPEN_OFFICIAL_WATCH');
+            if (shortcut)
+                return [...entries, { ...shortcut, category, subcategory, sharedWith: shortcut.category + ' / ' + shortcut.subcategory }];
+        }
         if (category !== '画面・映像' || subcategory !== '表示・非表示') {
             return entries;
         }

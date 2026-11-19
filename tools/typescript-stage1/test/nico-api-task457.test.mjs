@@ -212,6 +212,12 @@ test('legacy build directives are preserved in each runtime',()=>{
         '//@require VideoInfoLoader','//@require netUtil','//@require RequestDiagnostics');
       // VideoSessionWorker is provided by the shared ZenzaLib scope, not redeclared.
     }
+    if (spec.name === 'RootDispatcher') {
+      const oldTweet = expected.indexOf("import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';");
+      assert.notEqual(oldTweet, -1);
+      expected.splice(oldTweet, 1, "import {VideoSharePanel} from './VideoSharePanel';");
+      expected.splice(expected.indexOf('//@require RelatedMenuActions') + 1, 0, '//@require VideoSharePanel');
+    }
     // Task1064: ES モジュールとして読めるように、本文で使う名前の import を足した（ビルドの //@require は変えない）。
     // 足した import は registry の ESM_ADDED_IMPORTS に記録したものだけを許す。
     const added=new Set(ESM_ADDED_IMPORTS[spec.name]||[]);

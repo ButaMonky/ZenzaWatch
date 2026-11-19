@@ -1104,7 +1104,7 @@ class NicoVideoPlayerDialog extends Emitter {
     if (currentTime > 0) {
       // Task1041: 終わりの位置（残り3秒以内）から始めると、すぐ終わって再生できないように見える。最初から再生する。
       const duration = this._nicoVideoPlayer?.duration;
-      if (NicoVideoPlayerDialog.isNearPlaybackEnd(currentTime, duration) && Number(duration) > 6) {
+      if (this._videoWatchOptions.eventType !== 'officialManual' && NicoVideoPlayerDialog.isNearPlaybackEnd(currentTime, duration) && Number(duration) > 6) {
         this.execCommand('notify', '保存されていた位置が動画の最後だったため、最初から再生します');
         return;
       }

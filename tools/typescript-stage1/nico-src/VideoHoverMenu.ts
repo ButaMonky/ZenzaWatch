@@ -52,6 +52,19 @@ class VideoHoverMenu {
       this._visibility = UiVisibilityRegistry.connect(this._config,this._view,'hover');
     }
 
+    const share = container.querySelector('.zenzaTweetButton') as HTMLElement | null;
+    if (share) {
+      for (const type of ['keydown', 'keyup'] as const) {
+        share.addEventListener(type, (event: KeyboardEvent) => {
+          if (event.key !== 'Enter' && event.key !== ' ') { return; }
+          event.stopPropagation();
+          event.preventDefault();
+          if (!event.repeat && ((event.key === 'Enter' && type === 'keydown') ||
+              (event.key === ' ' && type === 'keyup'))) { share.click(); }
+        });
+      }
+    }
+
     const $mc = util.$(container.querySelectorAll('.menuItemContainer'));
     $mc.on('contextmenu',
       (e?: Loose) => { e.preventDefault(); e.stopPropagation(); });
@@ -902,8 +915,8 @@ VideoHoverMenu.__tpl__ = (`
               >♡</div><div class="liked-heart"
               >♥</div><div class="heart-effect">♡</div></div>
           </div>
-          <div class="menuButton zenzaTweetButton" data-command="tweet">
-            <div class="tooltip">ツイート</div>
+          <div role="button" tabindex="0" class="menuButton zenzaTweetButton" style="pointer-events:auto" data-command="tweet" aria-label="動画を共有" aria-haspopup="dialog">
+            <div class="tooltip">共有（X・クリップ・リンク）</div>
             <div class="menuButtonInner">t</div>
           </div>
           <div class="menuButton mylistButton mylistAddMenu forMember"

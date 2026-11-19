@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.468-task1088
+// @version        2.7.471-task1094
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-18 04:54Z 7b2f7b30
+// build: 2026-11-19 00:26Z 4b944ee0
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1335,7 +1335,7 @@ function createDisplaySettings(w, gm, registered=[]) {
     storageTiming:()=>({saveCount:storageTiming.saveCount,totalSaveMs:Math.round(storageTiming.totalSaveMs),maxSaveMs:Math.round(storageTiming.maxSaveMs)})};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","historyExtension.enable","extensionIntegration.enable","extensionIntegration.nicotubeSaver","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","diagnostics.console.enabled","diagnostics.console.errors","diagnostics.console.startup","diagnostics.console.player","diagnostics.console.network","diagnostics.console.notifications","diagnostics.console.settings","diagnostics.console.events","diagnostics.console.performance","diagnostics.console.intervalSec","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.nicoadEnd","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","videoInfo.ownerVideoKindsStyle","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","playlist.prefetchAhead.skipWhenLoop","playlist.prefetchAhead.skipWhenPaused","playlist.prefetchAhead.skipWhenDataSaver","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","overrideGinza.officialPlayer","overrideGinza.followNavigation","overrideGinza.openOnNavigation","overrideGinza.shorts","overrideGinza.resumeOnClose","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","externalLinks.consoleLog","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","historyExtension.enable","extensionIntegration.enable","extensionIntegration.nicotubeSaver","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","diagnostics.console.enabled","diagnostics.console.errors","diagnostics.console.startup","diagnostics.console.player","diagnostics.console.network","diagnostics.console.notifications","diagnostics.console.settings","diagnostics.console.events","diagnostics.console.performance","diagnostics.console.intervalSec","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.nicoadEnd","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","notificationHistory.record.specChange","notificationHistory.record.scriptError","notificationHistory.record.commentAction","notificationHistory.maxRecords","notificationHistory.maxAgeDays","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","videoInfo.ownerVideoKindsStyle","commentPanel.nicoruStyle","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","playlist.prefetchAhead.enabled","playlist.prefetchAhead.sourcePlaylist","playlist.prefetchAhead.sourceRelated","playlist.prefetchAhead.sourceDescription","playlist.prefetchAhead.order","playlist.prefetchAhead.window","playlist.prefetchAhead.cacheMB","playlist.prefetchAhead.pacingMs","playlist.prefetchAhead.companions","playlist.prefetchAhead.showMark","playlist.prefetchAhead.notifyReady","playlist.prefetchAhead.notifyHit","playlist.prefetchAhead.notifyMiss","playlist.prefetchAhead.notify","playlist.prefetchAhead.consoleLog","playlist.prefetchAhead.skipWhenLoop","playlist.prefetchAhead.skipWhenPaused","playlist.prefetchAhead.skipWhenDataSaver","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","officialLaunch.button","officialLaunch.side","officialLaunch.continueTime","officialLaunch.restoreOnFailure","overrideGinza","overrideGinza.officialPlayer","overrideGinza.followNavigation","overrideGinza.openOnNavigation","overrideGinza.shorts","overrideGinza.resumeOnClose","enableGinzaSlayer","playbackRate","playbackRate.respectExternal","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","nicoadEnd.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -2089,10 +2089,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.468-task1088';
+    var VER = '2.7.471-task1094';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-18 04:54Z 7b2f7b30';
+    var BUILD = '2026-11-19 00:26Z 4b944ee0';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -2990,6 +2990,8 @@ const formatKeyCombo = (code) => {
 const SHORTCUT_ACTIONS = [
 		{ id: 'CLOSE', legacy: true, category: 'プレイヤー全般', label: '閉じる',
 				defaultKey: 27, command: 'close' },
+		{ id: 'OPEN_OFFICIAL_WATCH', category: 'プレイヤー全般', label: '公式プレイヤーからこの動画をZenzaWatchで開く',
+				defaultKey: KEY_MOD.ALT + KEY_MOD.SHIFT + 90, command: 'openOfficialWatch' },
 		{ id: 'RE_OPEN', legacy: true, category: 'プレイヤー全般',
 				label: '今見ている動画を再読み込み(閉じている時は直前に見ていた動画を開く)',
 				defaultKey: 27 + KEY_MOD.SHIFT, command: 'reload' },
@@ -6118,6 +6120,10 @@ const Config = (() => {
 				'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
 				'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 				'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
+				'officialLaunch.button': true,
+				'officialLaunch.side': 'left',
+				'officialLaunch.continueTime': true,
+				'officialLaunch.restoreOnFailure': true,
 				overrideGinza: false, // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
 				'overrideGinza.officialPlayer': 'manual', // manual: 開いた時に止め、公式の再生ボタンを押した時だけ再生 / block: 押しても再生しない
 				'overrideGinza.followNavigation': true, // 公式の画面で別の動画へ移ったら Zenza も切り替える
@@ -19206,6 +19212,11 @@ class VideoInfoModel extends JSONable {
 				return { paid: this._rawData.isNeedPayment, member: this._rawData.isMemberFree,
 						premium: this._rawData.isPremiumFree };
 		}
+		get isOwnUpload() {
+				const viewer = this._viewerInfo?.id;
+				return !this.isChannel && /^[1-9]\d*$/.test(String(viewer)) &&
+						String(viewer) === String(this._watchApiData.uploaderInfo?.id);
+		}
 		get isChannel() {
 				return !!this._videoDetail.channelId;
 		}
@@ -24047,6 +24058,9 @@ const ScreenFilter = (() => {
 				return null;
 		};
 		const isCanvasTarget = (target) => {
+				if (target === 'clip') {
+						return true;
+				}
 				const key = target === 'screenshot' ? 'applyToScreenshot' : 'applyToCommentPip';
 				const v = prop(key);
 				return v === undefined ? true : !!v;
@@ -54257,6 +54271,22 @@ class VideoHoverMenu {
 				if (this._config) {
 						this._visibility = UiVisibilityRegistry.connect(this._config, this._view, 'hover');
 				}
+				const share = container.querySelector('.zenzaTweetButton');
+				if (share) {
+						for (const type of ['keydown', 'keyup']) {
+								share.addEventListener(type, (event) => {
+										if (event.key !== 'Enter' && event.key !== ' ') {
+												return;
+										}
+										event.stopPropagation();
+										event.preventDefault();
+										if (!event.repeat && ((event.key === 'Enter' && type === 'keydown') ||
+												(event.key === ' ' && type === 'keyup'))) {
+												share.click();
+										}
+								});
+						}
+				}
 				const $mc = util.$(container.querySelectorAll('.menuItemContainer'));
 				$mc.on('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
 				$mc.on('click', this._onClick.bind(this));
@@ -55048,8 +55078,8 @@ VideoHoverMenu.__tpl__ = (`
 							>♡</div><div class="liked-heart"
 							>♥</div><div class="heart-effect">♡</div></div>
 					</div>
-					<div class="menuButton zenzaTweetButton" data-command="tweet">
-						<div class="tooltip">ツイート</div>
+					<div role="button" tabindex="0" class="menuButton zenzaTweetButton" style="pointer-events:auto" data-command="tweet" aria-label="動画を共有" aria-haspopup="dialog">
+						<div class="tooltip">共有（X・クリップ・リンク）</div>
 						<div class="menuButtonInner">t</div>
 					</div>
 					<div class="menuButton mylistButton mylistAddMenu forMember"
@@ -59863,6 +59893,12 @@ const NicoVideoPlayerDialogCommands = {
 						e.stopPropagation?.();
 						return;
 				}
+				if (name === 'OPEN_OFFICIAL_WATCH') {
+						if (!this._state.isOpen && !e?.repeat) {
+								this.emit('requestOfficialLaunch', e);
+						}
+						return;
+				}
 				if (!this._state.isOpen) {
 						const lastWatchId = this._playerConfig.props.lastWatchId;
 						if (name === 'RE_OPEN' && lastWatchId) {
@@ -60873,7 +60909,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				let currentTime = this._videoWatchOptions.currentTime;
 				if (currentTime > 0) {
 						const duration = this._nicoVideoPlayer?.duration;
-						if (NicoVideoPlayerDialog.isNearPlaybackEnd(currentTime, duration) && Number(duration) > 6) {
+						if (this._videoWatchOptions.eventType !== 'officialManual' && NicoVideoPlayerDialog.isNearPlaybackEnd(currentTime, duration) && Number(duration) > 6) {
 								this.execCommand('notify', '保存されていた位置が動画の最後だったため、最初から再生します');
 								return;
 						}
@@ -62272,11 +62308,1941 @@ const PipPageThumbnail = (() => {
 })();
 // already required
 // already required
+const ShareOfficialClip = (() => {
+	const base = 'https://nvapi.nicovideo.jp/v1';
+	const pollInterval = 5000;
+	const recent = new Map();
+	const pollLimit = 30 * 60 * 1000;
+	function mount(container, {info, startTime, endTime, autoPreview = false, text, officialUrl, onUseLocal}) {
+		const win = container.ownerDocument.defaultView;
+		const duration = Number(info.duration);
+		const videoId = String(info.videoId || info.watchId || '');
+		const source = '/videos/' + encodeURIComponent(videoId);
+		const lifetime = new win.AbortController();
+		let timer;
+		let clipId;
+		let phase = 'checking';
+		let task;
+		let deadline;
+		let account;
+		let recordKey;
+		container.innerHTML = `
+<p>ニコニコが元動画から3〜30秒のクリップを作成します。プレビューを確認して、連携したXアカウントに投稿できます。</p>
+<p name="account"></p>
+<div class="shareRow">
+	<label>開始 <input name="clipStart" type="number" min="0" step="0.001"> 秒</label>
+	<label>終了 <input name="clipEnd" type="number" min="0" step="0.001"> 秒</label>
+</div>
+<div name="editor" hidden>
+<p name="license" hidden></p>
+<button type="button" name="create" disabled>プレビューを作成</button>
+<div name="composer" hidden>
+<video aria-label="作成したビデオクリップ" controls playsinline preload="metadata" hidden></video>
+<label>投稿本文<textarea name="clipText" rows="3"></textarea></label>
+<div class="shareRow"><button type="button" name="post" disabled>この内容でXに投稿する</button>
+<button type="button" name="check" hidden>状態を再確認</button>
+<button type="button" name="again" hidden>別のクリップを作成</button>
+<button type="button" name="discard" hidden>クリップを削除して選び直す</button></div></div>
+</div>
+<p role="status" class="shareStatus"></p>
+<div class="shareRow"><button name="useLocal" type="button" hidden>この範囲を端末で作成</button>
+<a class="shareAction" target="_blank" rel="noopener noreferrer">ニコニコの視聴ページで開く</a></div>`;
+		const find = name => container.querySelector('[name="' + name + '"]');
+		const status = container.querySelector('[role=status]');
+		const preview = container.querySelector('video');
+		const link = container.querySelector('a');
+		const start = find('clipStart');
+		const end = find('clipEnd');
+		const draft = find('clipText');
+		const create = find('create');
+		const post = find('post');
+		const check = find('check');
+		const discard = find('discard');
+		const again = find('again');
+		const useLocal = find('useLocal');
+		const limit = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
+		const hasEnd = Number.isFinite(endTime);
+		const initialStart = Math.max(0, Math.min(Number(startTime) || 0, hasEnd ? limit : Math.max(0, limit - 3)));
+		const initialEnd = Math.max(0, Math.min(limit, hasEnd ? endTime : initialStart + 10));
+		start.value = String(initialStart);
+		end.value = String(initialEnd);
+		if (Number.isFinite(limit)) start.max = end.max = String(limit);
+		useLocal.hidden = typeof onUseLocal !== 'function';
+		useLocal.onclick = () => {
+			if (lifetime.signal.aborted || typeof onUseLocal !== 'function') return;
+			const from = start.valueAsNumber, to = end.valueAsNumber;
+			if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to <= from || to > limit) {
+				status.textContent = '開始と終了を動画の範囲内で指定してください。';
+				return;
+			}
+			onUseLocal({start:from, end:to});
+		};
+		link.href = officialUrl;
+		const shareUrl = 'https://nico.ms/' + encodeURIComponent(info.watchId);
+		const suppliedText = String(text() || '');
+		draft.value = suppliedText.includes(shareUrl) ? suppliedText : [suppliedText, shareUrl].filter(Boolean).join('\n');
+		function validRange() {
+			const first = Math.round(start.valueAsNumber * 1000);
+			const last = Math.round(end.valueAsNumber * 1000);
+			return Number.isSafeInteger(first) && Number.isSafeInteger(last) && start.validity.valid && end.validity.valid &&
+				last - first >= 3000 && last - first <= 30000 && last <= Math.floor(limit * 1000);
+		}
+		function update() {
+			const edit = phase === 'edit';
+			start.disabled = end.disabled = !['edit','denied','checking'].includes(phase);
+			find('composer').hidden = !clipId;
+			create.hidden = !!clipId;
+			create.disabled = !edit || !validRange();
+			post.disabled = phase !== 'preview' || !draft.value.trim();
+			draft.disabled = ['posting', 'posted', 'postUnknown'].includes(phase);
+			again.hidden = phase !== 'posted';
+			check.hidden = phase !== 'postUnknown' && phase !== 'clipUnknown';
+			discard.hidden = !clipId || !['preview','clipError','clipUnknown','postFailed'].includes(phase);
+		}
+		function state(value, message) {
+			if (lifetime.signal.aborted) return;
+			phase = value;
+			status.textContent = message;
+			update();
+		}
+		start.oninput = end.oninput = () => {
+			if (phase !== 'edit') return;
+			update();
+			status.textContent = validRange() ? '' : '動画の範囲内で、3〜30秒の区間を選んでください。';
+			if (Number.isFinite(start.valueAsNumber) && start.valueAsNumber >= 0) {
+				const url = new URL(officialUrl);
+				url.searchParams.set('from', String(Math.floor(start.valueAsNumber)));
+				link.href = url.href;
+			}
+		};
+		draft.oninput = update;
+		preview.onerror = () => {
+			if (phase === 'preview') {
+				task = 'clip';
+				state('clipUnknown', 'プレビューを読み込めません。「状態を再確認」で取得し直してください。');
+			}
+		};
+		function remember(kind) {
+			if (!recordKey) return;
+			const value = kind ? JSON.stringify({kind, id:clipId, start:start.value, end:end.value, text:draft.value}) : null;
+			if (value) recent.set(recordKey, value); else recent.delete(recordKey);
+			try {
+				if (value) win.sessionStorage.setItem(recordKey, value);
+				else win.sessionStorage.removeItem(recordKey);
+			} catch (_) { /* The open tab still retains its request state. */ }
+		}
+		function saved() {
+			try {
+				const value = JSON.parse(recent.get(recordKey) || win.sessionStorage.getItem(recordKey) || 'null');
+				if (value && ['clip','post','posted'].includes(value.kind) && value.id) return value;
+			} catch (_) { /* An unavailable or old record cannot be resumed. */ }
+			return null;
+		}
+		async function request(path, method = 'GET', fields) {
+			const abort = new win.AbortController();
+			const stop = () => abort.abort();
+			if (lifetime.signal.aborted) throw new Error('closed');
+			lifetime.signal.addEventListener('abort', stop, {once:true});
+			const timeout = win.setTimeout(stop, 20000);
+			try {
+				const headers = {'Accept':'application/json', 'X-Frontend-Id':'6', 'X-Frontend-Version':'0'};
+				if (method !== 'GET') headers['X-Request-With'] = win.location.origin;
+				const options = {method, headers, credentials:'include', cache:'no-store', signal:abort.signal};
+				if (fields) options.body = new win.URLSearchParams(fields);
+				const response = await win.fetch(base + path, options);
+				if (response.ok && response.status === 204 && (method === 'DELETE' || path.endsWith('/x-post') && method === 'POST')) {
+					return;
+				}
+				const envelope = await response.json().catch(() => null);
+				if (!response.ok || !Number.isInteger(envelope?.meta?.status) ||
+						envelope.meta.status < 200 || envelope.meta.status >= 300) {
+					const error = new Error(envelope?.meta?.errorCode || 'request failed');
+					error.httpStatus = response.ok ? envelope?.meta?.status : response.status;
+					throw error;
+				}
+				return envelope.data;
+			} finally {
+				win.clearTimeout(timeout);
+				lifetime.signal.removeEventListener('abort', stop);
+			}
+		}
+		function permissionMessage(data) {
+			if (!data || typeof data.isLogin !== 'boolean') return 'ニコニコの公式投稿を利用できるか確認できません。';
+			if (!data.isLogin && data.isClipTweetAllowedVideo === false) return 'ニコニコでは、この動画の公式クリップ投稿を利用できません。';
+			if (!data.isLogin) return '公式投稿にはニコニコへのログインとXアカウント連携が必要です。';
+			if (data.twitterLinkage?.isLinked !== true) return '公式投稿には、ニコニコの視聴ページでXアカウントの連携が必要です。';
+			if (data.isClipTweetAllowed !== true) return 'ニコニコでは、この動画またはアカウントの公式クリップ投稿を利用できません。';
+			return '';
+		}
+		async function load() {
+			if (!videoId || limit < 3) {
+				state('denied', '公式クリップには長さ3秒以上のニコニコ動画が必要です。');
+				return;
+			}
+			state('checking', 'ニコニコに公式投稿の利用状況を確認しています…');
+			try {
+				const permission = await request(source + '/tweet-possibility');
+				if (lifetime.signal.aborted) return;
+				const reason = permissionMessage(permission);
+				if (reason) { state('denied', reason); return; }
+				account = permission.twitterLinkage.screenName || '';
+				find('account').textContent = account ? '投稿先　@' + account : '連携した X アカウントに投稿';
+				find('editor').hidden = false;
+				recordKey = 'zenzaWatch:officialClip:' + videoId + ':' + account;
+				const previous = saved();
+				const sameRange = previous && Number(previous.start) === initialStart && Number(previous.end) === initialEnd;
+				if (previous && (!hasEnd || sameRange || previous.kind === 'post')) {
+					clipId = previous.id;
+					start.value = previous.start;
+					end.value = previous.end;
+					draft.value = previous.text;
+					if (previous.kind === 'posted') state('posted', 'X にクリップをポストしました。');
+					else {
+						task = previous.kind;
+						deadline = Date.now() + pollLimit;
+						void poll();
+					}
+				} else state('edit', '');
+				let licensed;
+				try { licensed = (await request(source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
+				if (lifetime.signal.aborted) return;
+				const note = find('license');
+				note.hidden = licensed === false;
+				note.textContent = licensed === true ? '権利楽曲利用の可能性があるため、クリップは映像のみになります。' :
+					'音声の利用可否は、作成したクリップのプレビューで確認してください。';
+				if (autoPreview && licensed === false && phase === 'edit' && validRange()) create.click();
+			} catch (_) {
+				state('denied', 'ニコニコの公式投稿を利用できるか確認できません。');
+			}
+		}
+		const clipPath = () => '/clips/' + encodeURIComponent(clipId);
+		function uncertain() {
+			if (task === 'post') state('postUnknown', '投稿結果を確認できません。「状態を再確認」で結果を確認してください。');
+			else state('clipUnknown', '生成状況を確認できません。「状態を再確認」で確認してください。');
+		}
+		const postFailures = {
+			X_TOKEN_INVALID:'X アカウントの連携を公式ページで確認してください。',
+			X_TOO_MANY_REQUESTS:'X の利用上限に達しました。しばらく時間をおいてください。',
+			VIDEO_CLIP_NOT_FOUND:'公式サービスでクリップが見つかりません。'
+		};
+		async function poll() {
+			if (lifetime.signal.aborted) return;
+			const posting = task === 'post';
+			state(posting ? 'posting' : 'generating', posting ? 'X への投稿結果を確認しています…' : 'クリップを生成しています…');
+			try {
+				const result = await request(clipPath() + (posting ? '/x-post' : ''));
+				if (lifetime.signal.aborted) return;
+				if (result?.status === 'DONE') {
+					if (posting) { remember('posted'); state('posted', 'X にクリップをポストしました。'); return; }
+					const uri = new URL(result.clipUri);
+					if (uri.protocol !== 'https:') throw new Error('preview');
+					preview.src = uri.href;
+					preview.hidden = false;
+					state('preview', '作成したクリップと投稿本文を確認してください。');
+					return;
+				}
+				if (result?.status === 'FAILED' || result?.status === 'ERROR') {
+					if (posting) state('postFailed', postFailures[result.failureReason] || 'X への投稿に失敗しました。');
+					else state('clipError', 'クリップの生成に失敗しました。');
+					return;
+				}
+				if (!result?.status || (!posting && !['WAITING', 'GENERATING'].includes(result.status)) ||
+						Date.now() >= deadline) { uncertain(); return; }
+				timer = win.setTimeout(poll, pollInterval);
+			} catch (_) { uncertain(); }
+		}
+		create.onclick = async () => {
+			if (phase !== 'edit' || !validRange()) return;
+			state('creating', 'クリップの作成をリクエストしています…');
+			try {
+				const result = await request(source + '/clips', 'POST', {
+					startTime:String(Math.round(start.valueAsNumber * 1000)), endTime:String(Math.round(end.valueAsNumber * 1000))
+				});
+				if (lifetime.signal.aborted) return;
+				if (!result?.clipId) throw new Error('missing clip');
+				clipId = result.clipId;
+				remember('clip');
+				task = 'clip';
+				deadline = Date.now() + pollLimit;
+				await poll();
+			} catch (error) {
+				if (error.message === 'USER_LIMIT_EXCEEDED') state('edit', '作成回数の上限に達しました。しばらく時間をおいてください。');
+				else if (error.httpStatus === 401 || error.httpStatus === 403) {
+					state('denied', 'ニコニコで公式クリップを作成できません。ログイン、X連携、動画の共有設定を確認してください。');
+				} else state('createUnknown', 'ニコニコでのクリップ作成結果を確認できません。');
+			}
+		};
+		post.onclick = async () => {
+			if (phase !== 'preview' || !draft.value.trim()) return;
+			const body = draft.value;
+			state('posting', 'ニコニコで投稿先アカウントを確認しています…');
+			try {
+				const permission = await request(source + '/tweet-possibility');
+				if (lifetime.signal.aborted) return;
+				const denied = permissionMessage(permission);
+				if (denied || account !== (permission.twitterLinkage.screenName || '')) {
+					state('postFailed', denied || '連携アカウントが変更されています。共有画面を開き直してください。');
+					return;
+				}
+			} catch (_) {
+				state('preview', 'ニコニコの公式投稿を利用できるか確認できません。まだ投稿していません。');
+				return;
+			}
+			task = 'post';
+			remember('post');
+			deadline = Date.now() + pollLimit;
+			state('posting', 'X にクリップを送信しています…');
+			try { await request(clipPath() + '/x-post', 'POST', {text:body}); }
+			catch (error) {
+				if (lifetime.signal.aborted) return;
+				if (error.httpStatus >= 400 && error.httpStatus < 500 && error.httpStatus !== 408 && error.httpStatus !== 409) {
+					task = 'clip';
+					remember('clip');
+					if (error.httpStatus === 400 || error.httpStatus === 422) state('preview', '投稿が受理されませんでした。本文の長さや内容を確認して修正してください。');
+					else if (error.httpStatus === 429) state('preview', 'X の利用上限に達しました。時間をおいてからお試しください。');
+					else state('postFailed', '投稿が受理されませんでした。公式の視聴ページで連携と利用条件を確認してください。');
+				} else uncertain();
+				return;
+			}
+			await poll();
+		};
+		check.onclick = () => {
+			if (!['postUnknown', 'clipUnknown'].includes(phase)) return;
+			deadline = Date.now() + pollLimit;
+			void poll();
+		};
+		function startAnother() {
+			remember(null);
+			clipId = null;
+			preview.hidden = true;
+			preview.removeAttribute('src');
+			if (hasEnd) {
+				start.value = String(initialStart);
+				end.value = String(initialEnd);
+			}
+			state('edit', '新しい区間を選んでください。');
+		}
+		again.onclick = () => { if (phase === 'posted') startAnother(); };
+		discard.onclick = async () => {
+			if (!clipId || discard.hidden) return;
+			const previous = phase;
+			state('discarding', 'クリップを削除しています…');
+			try {
+				await request(clipPath(), 'DELETE');
+				if (lifetime.signal.aborted) return;
+				startAnother();
+			} catch (_) { state(previous, '削除結果を確認できません。公式の視聴ページで確認してください。'); }
+		};
+		void load();
+		return () => {
+			lifetime.abort();
+			win.clearTimeout(timer);
+			if (!preview.paused) preview.pause();
+			preview.removeAttribute('src');
+			if (preview.currentSrc) preview.load();
+		};
+	}
+	return {mount};
+})();
+const ShareClipTimeline = (() => {
+	const previewInterval = 1000 / 15;
+	const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+	const clock = (time, fine = false) => {
+		const value = Math.max(0, Math.round(time * (fine ? 10 : 1)));
+		const seconds = fine ? Math.floor(value / 10) : value;
+		return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + (fine ? '.' + value % 10 : '');
+	};
+	const panel = `
+		<style>
+		.zwClipTimeline {min-width:0;color:#eaf0f7;--clip-blue:#429aff}
+		.zwClipTimeline .zwClipScreen {position:relative;background:#0c1015;aspect-ratio:16/9;width:100%;max-height:38vh;overflow:hidden;border-radius:5px}
+		.zwClipScreen>canvas,.zwClipScreen>.zwClipScene {display:block;width:100%;height:100%;object-fit:contain}
+		.zwClipScreen>.zwClipScene {position:absolute!important;inset:0;background:#0c1015}
+		.zwClipScreen .zwClipMessage {position:absolute;inset:0;display:grid;place-items:center;padding:12px;text-align:center;background:#10161ce8}
+		.zwClipTimeline [hidden] {display:none!important}
+		.zwClipTimeline .zwClipReadout,.zwClipTimeline .zwClipTools {display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
+		.zwClipTimeline output {font-variant-numeric:tabular-nums}
+		.zwClipReadout .zwClipLength {margin-left:auto;color:#c1d0df}
+		.zwClipTimeline .zwClipRailWrap {padding:0 12px;margin:8px 0}
+		.zwClipTimeline .zwClipTicks {display:flex;justify-content:space-between;font-size:11px;color:#b7c6d6;font-variant-numeric:tabular-nums;line-height:1.4}
+		.zwClipTimeline .zwClipRail {position:relative;height:clamp(38px,6vw,60px);margin-top:5px;touch-action:none;user-select:none;cursor:crosshair;isolation:isolate}
+		.zwClipFrames {display:flex;position:absolute;inset:0;overflow:hidden;background:#212a35;border-radius:3px}
+		.zwClipFrames>div {flex:1;min-width:0;height:100%;overflow:hidden;border-right:1px solid #172029;display:grid;place-items:center;color:#b5c0c9;font-size:10px}
+		.zwClipFrames canvas {display:block;width:100%;height:100%;object-fit:cover}
+		.zwClipRail .zwClipMask {position:absolute;inset-block:0;background:#080c13a0;pointer-events:none}
+		.zwClipRail .zwClipRange {position:absolute;inset-block:0;border-block:3px solid var(--clip-blue);box-sizing:border-box;cursor:grab}
+		.zwClipTimeline .zwClipRail [data-edge] {box-sizing:border-box;position:absolute;z-index:1;top:50%;transform:translate(-50%,-50%);height:calc(100% + 4px);width:17px;min-width:0;padding:0;border:1px solid #80baff;border-radius:4px;background:#297ce5;cursor:ew-resize;touch-action:none;color:white;box-shadow:0 1px 3px #0008}
+		.zwClipTimeline .zwClipRail [data-edge]::after {content:'';display:block;width:3px;height:17px;margin:auto;background:#fff;border-radius:2px}
+		.zwClipTimeline .zwClipRail [data-edge]:focus-visible {outline:2px solid white;outline-offset:2px;z-index:2}
+		.zwClipTimeline .zwClipTools {font-size:12px}
+		.zwClipTimeline .zwClipTools button {font:inherit;padding:3px 8px}
+		</style>
+		<div class="zwClipScreen"><canvas aria-label="選択した場面"></canvas><div class="zwClipScene" hidden></div><span class="zwClipMessage" hidden></span></div>
+		<div class="zwClipReadout"><button type="button" data-clip="play" aria-pressed="false">区間を再生</button><output class="zwClipTime" aria-label="プレビュー時刻"></output><output class="zwClipLength" aria-label="選択した区間の長さ"></output></div>
+		<div class="zwClipRailWrap"><div class="zwClipTicks" aria-hidden="true"></div>
+			<div class="zwClipRail"><div class="zwClipFrames" aria-hidden="true"></div><div class="zwClipMask"></div><div class="zwClipMask"></div><div class="zwClipRange"></div>
+				<button type="button" data-edge="start" role="slider" aria-label="開始位置"></button>
+				<button type="button" data-edge="end" role="slider" aria-label="終了位置"></button>
+			</div></div>
+		<div class="zwClipThumbHint" hidden><small aria-live="polite" aria-atomic="true" tabindex="-1"></small> <button type="button" data-clip="thumbnails">動画からサムネイルを読み込む</button></div>
+		<div class="zwClipTools" aria-label="タイムラインの表示範囲"><button type="button" data-clip="prev" aria-label="前の範囲">←</button><button type="button" data-clip="next" aria-label="次の範囲">→</button>
+		<button type="button" data-clip="zoomIn">拡大</button><button type="button" data-clip="zoomOut">縮小</button><button type="button" data-clip="all">全体</button></div>`;
+	function waitForFrame(video, time, signal, request, timeoutMs = 6000) {
+		return new Promise((resolve, reject) => {
+			const done = error => {
+				clearTimeout(timeout);
+				for (const event of ['loadeddata', 'seeked']) video.removeEventListener(event, check);
+				video.removeEventListener('error', failed);
+				signal.removeEventListener('abort', abort);
+				if (error) reject(error); else resolve();
+			};
+			const check = event => {
+				const tolerance = event?.type === 'seeked' ? 0.12 : 0.002;
+				if (video.readyState >= 2 && !video.seeking && (time == null || Math.abs(video.currentTime - time) <= tolerance)) done();
+			};
+			const failed = () => done(Error('この場面を読み込めませんでした。'));
+			const abort = () => done(new DOMException('中断', 'AbortError'));
+			const timeout = setTimeout(failed, timeoutMs);
+			if (signal.aborted) return abort();
+			signal.addEventListener('abort', abort, {once:true});
+			for (const event of ['loadeddata', 'seeked']) video.addEventListener(event, check);
+			video.addEventListener('error', failed, {once:true});
+			try {
+				if (request && request() === false) return failed();
+				check();
+			} catch (error) { done(error); }
+		});
+	}
+	function mount(container, {startInput, endInput, getSource, getThumbnail, seekSource, getPreviewRenderer,
+		isLocalSource = video => video.matches('[data-role=source]'), maxLength = Infinity}) {
+		const root = document.createElement('div');
+		root.className = 'zwClipTimeline';
+		root.innerHTML = panel;
+		container.append(root);
+		const find = selector => root.querySelector(selector);
+		const action = key => find('[data-clip=' + key + ']');
+		const rail = find('.zwClipRail'), frames = find('.zwClipFrames'), ticks = find('.zwClipTicks');
+		const range = find('.zwClipRange'), masks = root.querySelectorAll('.zwClipMask');
+		const handles = [...root.querySelectorAll('[data-edge]')];
+		const canvas = find('.zwClipScreen canvas'), scene = find('.zwClipScene'), message = find('.zwClipMessage');
+		const timeDisplay = find('.zwClipTime'), lengthDisplay = find('.zwClipLength');
+		const listeners = new AbortController();
+		let source, sourceUrl, sourceObject, decoder, thumbVideo, renderer, session, thumbnails, releaseScene;
+		let windowStart = 0, span = 0, duration = 0, time = 0, drag, disposed = false, writing = false;
+		let thumbKey, rendererError, dragTimer, restoring, thumbReport = '';
+		const thumbReleases = new Map(), capturedFrames = new Map();
+		const on = (node, event, fn) => node.addEventListener(event, fn, {signal:listeners.signal});
+		const sameSource = () => source && source === getSource() && source.currentSrc === sourceUrl && source.srcObject === sourceObject;
+		const locked = () => disposed || startInput.disabled || endInput.disabled || !sameSource();
+		const values = () => [startInput.valueAsNumber, endInput.valueAsNumber];
+		const showMessage = text => {
+			if (message.textContent !== text) message.textContent = text;
+			if (message.hidden !== !text) message.hidden = !text;
+		};
+		const setTime = value => {
+			time = value;
+			const label = clock(value,true) + ' / ' + clock(duration);
+			if (timeDisplay.textContent !== label) timeDisplay.textContent = label;
+		};
+		const clearScene = () => {
+			if (scene.hidden && !releaseScene) return;
+			releaseScene?.(); releaseScene = null; scene.hidden = true; scene.replaceChildren();
+		};
+		const newDecoder = () => {
+			const video = document.createElement('video');
+			video.playsInline = true;
+			video.preload = 'auto';
+			video.muted = true;
+			video.src = source.currentSrc || source.src;
+			return video;
+		};
+		const unload = video => { if (video) { video.pause(); video.removeAttribute('src'); video.load(); } };
+		const draw = media => {
+			if (media.seeking || media.readyState < 2 || !media.videoWidth) return false;
+			const scale = Math.min(1, 480 / Math.max(media.videoWidth, media.videoHeight),
+				270 / Math.min(media.videoWidth, media.videoHeight));
+			const width = Math.max(1, Math.round(media.videoWidth * scale)), height = Math.max(1, Math.round(media.videoHeight * scale));
+			if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+			const ctx = canvas.getContext('2d');
+			if (!ctx) throw Error('映像プレビューを利用できません。');
+			if (rendererError) throw rendererError;
+			if (renderer) {
+				if (renderer.draw(ctx, width, height) !== true) throw Error('選択したレイヤーを描画できません。');
+			} else { ctx.drawImage(media, 0, 0, width, height); }
+			clearScene(); showMessage('');
+			setTime(media.currentTime);
+			return true;
+		};
+		const seek = (media, seconds) => {
+			if (media === source && seekSource) return seekSource(seconds);
+			media.currentTime = seconds;
+			return true;
+		};
+		function forgetRestore() {
+			if (!restoring) return;
+			restoring.controller.abort();
+			clearTimeout(restoring.timer);
+			restoring = null;
+		}
+		function stopPreview({forRecording = false} = {}) {
+			clearTimeout(dragTimer); dragTimer = null;
+			clearScene();
+			const active = session;
+			let snapshot;
+			session = null;
+			if (active) {
+				active.controller.abort();
+				clearTimeout(active.frameTimer);
+				const media = active.media;
+				if (media === decoder) media.pause();
+				if (active.restore && sameSource()) {
+					snapshot = active.restore;
+					media.pause();
+					if (!forRecording) {
+						const {time:position,paused,loop,rate} = snapshot;
+						media.loop = loop; media.playbackRate = rate;
+						forgetRestore();
+						const controller = new AbortController();
+						restoring = {snapshot,controller,timer:setTimeout(forgetRestore,6500)};
+						const settled = () => { if (!media.seeking && Math.abs(media.currentTime-position) < 0.12) forgetRestore(); };
+						media.addEventListener('seeked', settled, {signal:controller.signal});
+						if (seek(media,position) !== false && !paused) media.play().catch(() => {});
+						settled();
+					}
+				}
+			}
+			if (active?.collecting) {
+				const focused = document.activeElement === thumbButton;
+				updateThumbHint();
+				if (focused && thumbButton.hidden) thumbStatus.focus({preventScroll:true});
+			}
+			action('play').setAttribute('aria-pressed', 'false');
+			action('play').textContent = '区間を再生';
+			if (forRecording && sameSource()) {
+				snapshot ||= restoring?.snapshot;
+				forgetRestore();
+				if (snapshot) snapshot.video.pause();
+				return snapshot || null;
+			}
+			return null;
+		}
+		function beginSession(media) {
+			const prior = stopPreview({forRecording:true});
+			const active = session = {media, controller:new AbortController()};
+			if (media === source) {
+				active.restore = prior || {video:media, time:media.currentTime, paused:media.paused, loop:media.loop, rate:media.playbackRate};
+				media.pause();
+				media.loop = false;
+				const signal = active.controller.signal;
+				media.addEventListener('emptied', () => { active.restore = null; stopPreview(); }, {signal});
+				media.getRootNode().addEventListener('ended', event => {
+					if (event.target === media && sameSource()) { event.stopImmediatePropagation(); stopPreview(); }
+				}, {capture:true,signal});
+			}
+			return active;
+		}
+		async function preview(seconds, play = false) {
+			if (locked()) { stopPreview(); return; }
+			const media = decoder || source;
+			const position = clamp(seconds, 0, duration);
+			const active = beginSession(media), controller = active.controller;
+			try {
+				if (play) {
+					action('play').setAttribute('aria-pressed','true');
+					action('play').textContent = '確認再生を停止';
+					media.playbackRate = 1;
+				}
+				await waitForFrame(media, null, controller.signal);
+				await waitForFrame(media, position, controller.signal, () => seek(media, position));
+				if (session !== active) return;
+				if (!draw(media)) throw Error('選択した場面を読み込めませんでした。');
+				if (!play) { stopPreview(); return; }
+				if (media === decoder) media.muted = false;
+				let drawnTime = media.currentTime;
+				let nextPaint = performance.now() + previewInterval;
+				await media.play();
+				const step = () => {
+					if (session !== active) return;
+					const secondsLeft = endInput.valueAsNumber - media.currentTime;
+					if (locked() || secondsLeft <= 0 || media.ended || media.paused) { stopPreview(); return; }
+					try {
+						if (performance.now() >= nextPaint) {
+							if (media.currentTime !== drawnTime && draw(media)) drawnTime = media.currentTime;
+							nextPaint = performance.now() + previewInterval;
+						}
+						active.frameTimer = setTimeout(step, Math.max(4, Math.min(secondsLeft*1000, nextPaint-performance.now())));
+					} catch (error) { stopPreview(); showMessage(error.message); }
+				};
+				step();
+			} catch (error) {
+				if (session === active) { stopPreview(); showMessage(error.message || '選択した場面を表示できません。'); }
+			}
+		}
+		const thumbHint = find('.zwClipThumbHint');
+		const thumbButton = action('thumbnails'), thumbStatus = thumbHint.querySelector('small');
+		const hasFrame = cell => !!cell.querySelector('canvas') || !!cell.querySelector('img')?.naturalWidth;
+		function updateThumbHint() {
+			const cells = [...frames.children];
+			const missing = cells.filter(cell => !hasFrame(cell) && cell.getAttribute('aria-busy') !== 'true' && cell.textContent !== '読み込み中');
+			const collecting = !!session?.collecting;
+			const canRead = !decoder && !source?.mediaKeys && !locked();
+			thumbHint.hidden = !cells.length || (!collecting && !missing.length && !thumbReport);
+			thumbButton.hidden = !collecting && (!missing.length || !canRead);
+			thumbButton.textContent = collecting ? '取得を中止' : '動画からサムネイルを読み込む';
+			thumbStatus.textContent = collecting ? '場面を取得中（' + cells.filter(hasFrame).length + ' / ' + cells.length + '枚）' :
+				thumbReport || (canRead ? '場面一覧にない画像を読み込む間、元の動画を一時停止します。' :
+					'場面一覧を取得できません。つまみを動かして選んだ位置の映像を確認できます。');
+		}
+		function tileFrom(media) {
+			const tile = document.createElement('canvas');
+			const scale = Math.min(144/media.videoWidth, 96/media.videoHeight);
+			tile.width = Math.max(1, Math.round(media.videoWidth*scale));
+			tile.height = Math.max(1, Math.round(media.videoHeight*scale));
+			tile.getContext('2d').drawImage(media, 0, 0, tile.width, tile.height);
+			return tile;
+		}
+		async function collectFrames() {
+			if (session?.collecting) { thumbReport = '取得を中止しました。'; stopPreview(); return; }
+			if (locked() || decoder || source.mediaKeys) return;
+			const active = beginSession(source), media = source;
+			active.collecting = true;
+			thumbReport = '';
+			updateThumbHint();
+			let failures = 0;
+			try {
+				for (const cell of frames.children) {
+					if (session !== active || !sameSource()) return;
+					if (hasFrame(cell)) continue;
+					const sec = Number(cell.dataset.seconds);
+					try {
+						await waitForFrame(media, sec, active.controller.signal, () => seek(media,sec), 15000);
+						if (session !== active || !sameSource()) return;
+						const tile = tileFrom(media);
+						const release = thumbReleases.get(cell);
+						if (release) { release(); thumbReleases.delete(cell); }
+						cell.replaceChildren(tile);
+						capturedFrames.set(sec, tile);
+						if (capturedFrames.size > 48) capturedFrames.delete(capturedFrames.keys().next().value);
+						failures = 0;
+						updateThumbHint();
+					} catch (error) {
+						if (error.name === 'AbortError' || ++failures >= 2) break;
+					}
+				}
+				if (session === active) {
+					const ready = [...frames.children].filter(hasFrame).length;
+					thumbReport = ready === frames.children.length ? ready + '枚の場面を読み込みました。' :
+						'一部の場面を読み込めませんでした。取得済みの画像はそのまま使えます。';
+				}
+			} finally { if (session === active) stopPreview(); }
+		}
+		on(thumbButton,'click',collectFrames);
+		const thumbObserver = new MutationObserver(updateThumbHint);
+		thumbObserver.observe(frames,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-busy']});
+		function clearThumbs() {
+			thumbnails?.abort(); thumbnails = null;
+			for (const release of thumbReleases.values()) release();
+			thumbReleases.clear();
+		}
+		function paintStrip() {
+			const key = [windowStart, span, duration].join('/');
+			if (key === thumbKey) return;
+			if (session?.collecting) stopPreview();
+			thumbKey = key;
+			thumbReport = '';
+			clearThumbs();
+			const controller = thumbnails = new AbortController();
+			ticks.replaceChildren();
+			for (let i = 0; i <= 4; i++) {
+				const tick = document.createElement('span');
+				tick.textContent = clock(windowStart + span * i / 4, span < 8);
+				ticks.append(tick);
+			}
+			const cells = Array.from({length:8}, (_, i) => {
+				const cell = document.createElement('div');
+				const sec = windowStart + span * (i + 0.5) / 8;
+				cell.dataset.seconds = String(sec);
+				cell.title = clock(sec, true);
+				cell.textContent = decoder ? '読み込み中' : '–';
+				return {cell, sec};
+			});
+			frames.replaceChildren(...cells.map(item => item.cell));
+			if (!decoder) {
+				for (const {cell, sec} of cells) {
+					const tile = capturedFrames.get(sec);
+					if (tile) { cell.replaceChildren(tile); continue; }
+					try { const release = getThumbnail?.(cell, sec); if (typeof release === 'function') thumbReleases.set(cell, release); }
+					catch (_) { cell.textContent = '画像なし'; }
+				}
+				return;
+			}
+			const media = thumbVideo;
+			(async () => {
+				try {
+					await waitForFrame(media, null, controller.signal);
+					for (const {cell, sec} of cells) {
+						await waitForFrame(media, sec, controller.signal, () => { media.currentTime = sec; });
+						if (controller.signal.aborted) return;
+						cell.replaceChildren(tileFrom(media));
+					}
+				} catch (_) {
+					if (!controller.signal.aborted) for (const {cell} of cells) if (!cell.firstElementChild) cell.textContent = '–';
+				}
+			})();
+		}
+		function render() {
+			const [a,b] = values();
+			const disabled = locked();
+			const valid = Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b <= duration && b > a && b - a <= maxLength + 0.0001;
+			lengthDisplay.textContent = valid ? '選択 ' + Number((b - a).toFixed(2)) + '秒' : '開始・終了を確認してください';
+			const left = clamp((a-windowStart)/span,0,1)*100, right = clamp((b-windowStart)/span,0,1)*100;
+			range.hidden = !Number.isFinite(left + right) || right <= left;
+			range.style.left = left + '%'; range.style.width = (right-left) + '%';
+			masks[0].style.left = 0; masks[0].style.width = left + '%';
+			masks[1].style.right = 0; masks[1].style.width = (100-right) + '%';
+			handles.forEach((handle,i) => {
+				const value = i ? b : a;
+				handle.style.left = (i ? right : left) + '%';
+				handle.hidden = !Number.isFinite(value) || value < windowStart - 0.001 || value > windowStart + span + 0.001;
+				handle.disabled = disabled;
+				handle.setAttribute('aria-valuemin', String(i ? a : Math.max(0,b-maxLength)));
+				handle.setAttribute('aria-valuemax', String(i ? Math.min(duration,a+maxLength) : b));
+				handle.setAttribute('aria-valuenow', String(value));
+				handle.setAttribute('aria-valuetext', clock(value,true));
+			});
+			action('play').disabled = disabled || !valid;
+			action('prev').disabled = disabled || windowStart <= 0;
+			action('next').disabled = disabled || windowStart + span >= duration - 0.001;
+			action('zoomIn').disabled = disabled || span <= Math.min(1,duration);
+			action('zoomOut').disabled = action('all').disabled = disabled || span >= duration;
+			if (!disabled) paintStrip();
+			updateThumbHint();
+		}
+		function viewport(start, width) {
+			span = clamp(width, Math.min(1,duration), duration);
+			windowStart = clamp(start, 0, duration-span);
+			render();
+		}
+		function refresh(rebuildRenderer = false) {
+			if (disposed) return;
+			const selected = getSource();
+			const available = selected && Number.isFinite(selected.duration) && selected.duration > 0;
+			const changed = (available && duration === 0) || source !== selected || sourceUrl !== selected?.currentSrc || sourceObject !== selected?.srcObject;
+			root.hidden = !available;
+			if (changed || !available) {
+				stopPreview(); forgetRestore(); clearThumbs(); clearScene();
+				unload(decoder); unload(thumbVideo); decoder = thumbVideo = null;
+				renderer?.dispose(); renderer = null;
+				capturedFrames.clear(); thumbReport = ''; thumbKey = null; drag = null;
+				source = selected; sourceUrl = selected?.currentSrc; sourceObject = selected?.srcObject;
+				if (!available) { duration = 0; return; }
+				if (isLocalSource(source)) { decoder = newDecoder(); thumbVideo = newDecoder(); }
+				duration = source.duration;
+				const [a,b] = values();
+				span = Math.min(duration, Math.max(Math.min(120, maxLength), (b-a) || 0));
+				windowStart = clamp((a||0) - span/4, 0, duration-span);
+				setTime(clamp(Number.isFinite(a) ? a : 0,0,duration));
+				rebuildRenderer = true;
+			}
+			if (!available) return;
+			duration = selected.duration;
+			if (locked()) { stopPreview(); if (thumbnails) { clearThumbs(); thumbKey = null; } }
+			if (rebuildRenderer) {
+				stopPreview();
+				renderer?.dispose(); renderer = null;
+				try {
+					rendererError = null;
+					try { renderer = getPreviewRenderer?.(decoder || source) || null; }
+					catch (error) { rendererError = error; throw error; }
+					if (!locked()) {
+						if (decoder || !changed) preview(time);
+						else if (!draw(source)) showMessage('開始または終了を選ぶと、その場面を表示します。');
+					}
+				} catch (error) { showMessage(error.message); }
+			}
+			render();
+		}
+		function write(a,b) {
+			writing = true;
+			try {
+				const changed = [[startInput,a],[endInput,b]].filter(([input,value]) => Math.abs(input.valueAsNumber-value) > 0.00001);
+				for (const [input,value] of changed) input.value = Number(value.toFixed(3));
+				for (const [input] of changed) input.dispatchEvent(new Event('input',{bubbles:true}));
+			} finally { writing = false; }
+			render();
+		}
+		const gap = () => Math.min(0.01, duration);
+		function moveEdge(edge, value) {
+			const [a,b] = values();
+			if (edge === 'start') {
+				const start = clamp(value, Math.max(0,b-maxLength), Math.max(0,b-gap()));
+				write(start,b); return start;
+			}
+			const end = clamp(value, Math.min(duration,a+gap()), Math.min(duration,a+maxLength));
+			write(a,end); return end;
+		}
+		function moveBlock(value, length) {
+			const start = clamp(value, 0, duration-length);
+			write(start, start+length);
+			return start;
+		}
+		function at(event) {
+			const box = rail.getBoundingClientRect();
+			return windowStart + clamp((event.clientX-box.left)/box.width,0,1)*span;
+		}
+		function updateDrag(event) {
+			if (!drag || event.pointerId !== drag.id) return;
+			const t = at(event);
+			const selected = drag.edge ? moveEdge(drag.edge, t) : moveBlock(drag.a + t - drag.origin, drag.length);
+			setTime(selected);
+			drag.time = selected;
+			if (!dragTimer) dragTimer = setTimeout(() => {
+				dragTimer = null;
+				if (!drag || locked()) return;
+				const t = drag.time;
+				if (decoder) { preview(t); return; }
+				if (getThumbnail && !renderer && !rendererError) {
+					clearScene(); scene.hidden = false;
+					scene.textContent = '指を離すとこの場面を表示します';
+					try {
+						const release = getThumbnail(scene,t);
+						if (typeof release === 'function') releaseScene = release;
+					} catch (_) { scene.textContent = '指を離すとこの場面を表示します'; }
+					showMessage('');
+				}
+			},100);
+		}
+		on(rail,'pointerdown',event => {
+			if (locked() || event.button !== 0) return;
+			event.preventDefault();
+			stopPreview();
+			const [a,b] = values(), origin = at(event);
+			if (!Number.isFinite(a+b)) return;
+			const handle = event.target.closest('[data-edge]');
+			const length = clamp(b-a, gap(), Math.min(duration,maxLength));
+			const inside = origin >= a && origin <= b;
+			drag = {id:event.pointerId, edge:handle?.dataset.edge, a:inside ? a : origin-length/2, origin, length};
+			if (handle) handle.focus({preventScroll:true});
+			rail.setPointerCapture(event.pointerId);
+			updateDrag(event);
+		});
+		on(rail,'pointermove',updateDrag);
+		const endDrag = event => {
+			if (!drag || event.pointerId !== drag.id) return;
+			const selected = drag.time;
+			drag = null;
+			if (rail.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId);
+			clearTimeout(dragTimer); dragTimer = null;
+			if (event.type !== 'pointercancel' && Number.isFinite(selected)) preview(selected); else stopPreview();
+		};
+		on(rail,'pointerup', endDrag); on(rail,'pointercancel',endDrag);
+		for (const handle of handles) on(handle,'keydown',event => {
+			if (locked()) return;
+			const edge = handle.dataset.edge;
+			const v = edge === 'start' ? startInput.valueAsNumber : endInput.valueAsNumber;
+			const step = event.shiftKey ? 1 : 0.1;
+			const keys = {ArrowLeft:v-step, ArrowDown:v-step, ArrowRight:v+step, ArrowUp:v+step,
+				PageDown:v-5,PageUp:v+5,Home:0,End:duration};
+			if (!Object.hasOwn(keys,event.key)) return;
+			event.preventDefault(); event.stopPropagation();
+			const next = moveEdge(edge,keys[event.key]);
+			if (next < windowStart || next > windowStart+span) viewport(next-span/2,span);
+			setTime(next);
+			if (decoder) preview(next);
+			else {
+				clearTimeout(dragTimer);
+				dragTimer = setTimeout(() => preview(next),180);
+			}
+		});
+		for (const input of [startInput,endInput]) {
+			on(input,'input',() => {
+				if (writing || !sameSource() || !Number.isFinite(input.valueAsNumber)) return;
+				stopPreview();
+				const value = input.valueAsNumber;
+				if (value < windowStart || value > windowStart+span) viewport(value-span/2,span); else render();
+			});
+			on(input,'change',() => { if (!writing && Number.isFinite(input.valueAsNumber)) preview(input.valueAsNumber); });
+		}
+		on(action('play'),'click',() => {
+			if (action('play').getAttribute('aria-pressed') === 'true') stopPreview();
+			else preview(startInput.valueAsNumber, true);
+		});
+		on(action('prev'),'click',() => viewport(windowStart-span/2,span));
+		on(action('next'),'click',() => viewport(windowStart+span/2,span));
+		const zoom = factor => {
+			const next = clamp(span*factor, Math.min(1,duration), duration);
+			const center = clamp(time,windowStart,windowStart+span);
+			viewport(center - next * (center-windowStart)/span, next);
+		};
+		on(action('zoomIn'),'click',() => zoom(0.5)); on(action('zoomOut'),'click',() => zoom(2));
+		on(action('all'),'click',() => viewport(0,duration));
+		on(document,'visibilitychange',() => { if (document.hidden) stopPreview(); });
+		refresh();
+		return {refresh, stopPreview, dispose() {
+			if (disposed) return;
+			disposed = true;
+			stopPreview(); forgetRestore(); clearThumbs(); clearScene(); thumbObserver.disconnect(); listeners.abort();
+			renderer?.dispose(); capturedFrames.clear(); unload(decoder); unload(thumbVideo); root.remove();
+		}};
+	}
+	return {mount};
+})();
+const ShareFastClip = (() => {
+	const moduleUrl = 'https://cdn.jsdelivr.net/npm/mediabunny@1.66.1/dist/bundles/mediabunny.min.mjs';
+	const digest = '19062c195ea4d32bc4eefd3a7254ae0e8a901bc0607ac3a0174013e165980498';
+	let library;
+	async function load() {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 10000);
+		let url;
+		try {
+			const response = await fetch(moduleUrl, {credentials:'omit', referrerPolicy:'no-referrer', signal:controller.signal});
+			if (!response.ok) throw Error('変換ライブラリを取得できません。');
+			const bytes = await response.arrayBuffer();
+			const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+			if (Array.from(hash, n => n.toString(16).padStart(2, '0')).join('') !== digest) throw Error('変換ライブラリを検証できません。');
+			url = URL.createObjectURL(new Blob([bytes], {type:'text/javascript'}));
+			return await import(url);
+		} finally {
+			clearTimeout(timeout);
+			if (url) URL.revokeObjectURL(url);
+		}
+	}
+	async function convert({blob, from, to, signal, onProgress, drawFrame}) {
+		if (!(blob instanceof Blob) || !Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to <= from) throw Error('元ファイルまたは指定範囲が無効です。');
+		signal?.throwIfAborted();
+		if (!library) library = load().catch(error => { library = null; throw error; });
+		const media = await library;
+		signal?.throwIfAborted();
+		const input = new media.Input({source:new media.BlobSource(blob), formats:[media.MP4, media.QTFF, media.MATROSKA, media.WEBM]});
+		let conversion, cancellation;
+		const cancel = () => {
+			if (conversion && !cancellation) cancellation = conversion.cancel().catch(() => {});
+			return cancellation;
+		};
+		try {
+			const [video, audio] = await Promise.all([input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack()]);
+			if (!video) throw Error('元ファイルに映像がありません。');
+			const parts = [];
+			const target = new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { parts.push(new Blob([chunk])); }}));
+			const output = new media.Output({format:new media.Mp4OutputFormat({fastStart:'fragmented'}), target});
+			const videoOptions = {codec:'avc'};
+			if (drawFrame) {
+				const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
+				const scale = Math.min(1, 1920 / Math.max(w,h), 1080 / Math.min(w,h));
+				const width = Math.max(2, 2 * Math.round(w * scale / 2));
+				const height = Math.max(2, 2 * Math.round(h * scale / 2));
+				const image = document.createElement('canvas'), frame = document.createElement('canvas');
+				image.width = frame.width = width;
+				image.height = frame.height = height;
+				const sourceCtx = image.getContext('2d'), frameCtx = frame.getContext('2d');
+				Object.assign(videoOptions, {processedWidth:width, processedHeight:height, allowTransformationMetadata:false,
+					process(sample) {
+						signal?.throwIfAborted();
+						sample.draw(sourceCtx, 0, 0, width, height);
+						if (drawFrame(frameCtx, width, height, image, from + sample.timestamp) !== true) throw Error('フレームを合成できません。');
+						return frame;
+					}});
+			}
+			signal?.throwIfAborted();
+			conversion = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
+				copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
+				video:videoOptions, audio:{codec:'aac'}, tags:{}, showWarnings:false});
+			if (!conversion.isValid || !conversion.utilizedTracks.includes(video) || (audio && !conversion.utilizedTracks.includes(audio))) throw Error('この端末で元の映像・音声を変換できません。');
+			signal?.throwIfAborted();
+			signal?.addEventListener('abort', cancel, {once:true});
+			conversion.onProgress = onProgress;
+			await conversion.execute();
+			signal?.throwIfAborted();
+			const result = new Blob(parts, {type:'video/mp4'});
+			if (!result.size) throw Error('映像を書き出せませんでした。');
+			return result;
+		} catch (error) {
+			await cancel();
+			throw error;
+		} finally {
+			signal?.removeEventListener('abort', cancel);
+			input.dispose();
+		}
+	}
+	return {convert};
+})();
+const ShareLocalClip = {
+	mount(container, {title = '', startTime = 0, getCurrentVideo, seekCurrentVideo, getShareText,
+		createFrameRenderer, getThumbnail, onSelectionChange, getCurrentFile} = {}) {
+		const root = document.createElement('section');
+		root.className = 'zenzaLocalClip';
+		root.innerHTML = `
+			<style>
+				.zenzaLocalClip .clipSources,.zenzaLocalClip .clipActions,.zenzaLocalClip .clipLayers,.zenzaLocalClip .clipRange {display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+				.zenzaLocalClip .clipSources {margin-bottom:.6rem}
+				.zenzaLocalClip .clipSources [aria-pressed=true] {border-color:#83caff;color:#c4e6ff}
+				.zenzaLocalClip .clipFile {position:relative;overflow:hidden;cursor:pointer}
+				.zenzaLocalClip .clipFile:focus-within {outline:2px solid #85d2ff;outline-offset:2px}
+				.zenzaLocalClip .clipFile input {position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
+				.zenzaLocalClip .clipSourceName {overflow-wrap:anywhere;font-size:.9em}
+				.zenzaLocalClip .clipLayers {border:0;padding:0;margin:.6rem 0}
+				.zenzaLocalClip .clipLayers label {display:inline-flex;align-items:center;gap:.3rem}
+				.zenzaLocalClip .clipRange {margin-top:.5rem}
+				.zenzaLocalClip .clipActions {margin:.65rem 0}
+				.zenzaLocalClip video[data-role=preview] {display:block;width:100%;max-height:min(45vh,380px);object-fit:contain;background:#080b0e;border-radius:6px}
+				.zenzaLocalClip .clipActions [data-action=create],.zenzaLocalClip .clipActions a[download] {background:#b8deff;border:1px solid #b8deff;color:#11263c;font-weight:650}
+				.zenzaLocalClip .clipHint {color:#bac6d5;font-size:.9em}
+			</style>
+			<video data-role="source" playsinline hidden aria-label="元ファイル"></video>
+			<div data-role="timeline"></div>
+			<div class="clipRange" role="group" aria-label="秒数を直接指定">
+				<label>開始 <input type="number" name="start" min="0" step="any" disabled> 秒</label>
+				<label>終了 <input type="number" name="end" min="0" step="any" disabled> 秒</label>
+			</div>
+			<p class="clipHint" data-role="lengthHint" hidden>Xで添付できる動画の長さは、アカウントにより異なります。</p>
+			<div class="clipLayers" role="group" aria-label="書き出しに含めるもの">
+				<label><input type="checkbox" name="comments"> <span data-role="commentsLabel">コメント</span></label>
+				<label><input type="checkbox" name="effects"> 画面エフェクト</label>
+			</div>
+			<p class="clipHint" data-role="layerHint"></p>
+			<div class="clipActions"><button type="button" data-action="create" disabled>クリップを作成</button>
+			<button type="button" data-action="cancel" hidden>キャンセル</button></div>
+			<p class="clipHint">元ファイルを直接処理できない場合は、このタブで区間を再生して最大フルHD・30fpsで書き出します。</p>
+			<p role="status" aria-live="polite"></p>
+			<div data-role="result" hidden>
+				<video data-role="preview" controls playsinline preload="metadata" aria-label="作成したクリップ"></video>
+				<div class="clipActions"><a class="shareAction" download>動画を保存</a>
+				<a class="shareAction" data-action="post-x" target="_blank" rel="noopener noreferrer">Xの投稿画面を開く</a>
+				<button type="button" data-action="share" hidden>アプリで共有</button></div>
+				<p class="clipHint">「動画を保存」で保存したファイルを、Xの投稿画面に添付してください。</p>
+			</div>
+			<details data-role="fileOptions"><summary>動画ファイルを使う</summary><div class="clipSources">
+				<label class="shareAction clipFile">ファイルを選ぶ<input type="file" accept="video/*,.mp4,.webm,.mov,.m4v" aria-label="動画ファイルを選ぶ"></label>
+				<span class="clipSourceName" data-role="sourceName"></span>
+				<button type="button" data-action="current" hidden>再生中の動画に戻る</button>
+			</div></details>`;
+		container.append(root);
+		const find = selector => root.querySelector(selector);
+		const fileInput = find('[type=file]');
+		const localVideo = find('[data-role=source]');
+		const current = find('[data-action=current]');
+		current.hidden = typeof getCurrentVideo !== 'function';
+		const comments = find('[name=comments]');
+		const effects = find('[name=effects]');
+		const commentsLabel = find('[data-role=commentsLabel]');
+		const layerHint = find('[data-role=layerHint]');
+		const preview = find('[data-role=preview]');
+		const start = find('[name=start]');
+		const end = find('[name=end]');
+		const create = find('[data-action=create]');
+		const cancel = find('[data-action=cancel]');
+		const result = find('[data-role=result]');
+		const download = find('a[download]');
+		const postX = find('[data-action=post-x]');
+		const share = find('[data-action=share]');
+		const status = find('[role=status]');
+		const recorderTypes = [
+			'video/mp4;codecs=avc1.42001e,mp4a.40.2',
+			'video/mp4;codecs=avc1,mp4a.40.2',
+			'video/webm;codecs=vp8,opus',
+			'video/webm;codecs=vp9,opus'
+		];
+		const types = recorderTypes.filter(type => window.MediaRecorder?.isTypeSupported(type));
+		const available = types.length && HTMLCanvasElement.prototype.captureStream && (localVideo.captureStream || localVideo.mozCaptureStream);
+		let source = localVideo;
+		let selectedSrc, selectedObject;
+		let sourceUrl, outputUrl, outputFile, job, timeline;
+		const editorEvents = new AbortController();
+		let pickedSource = false;
+		function currentSelection() {
+			return source === localVideo || (getCurrentVideo() === source && source.currentSrc === selectedSrc && source.srcObject === selectedObject);
+		}
+		function seek(seconds) {
+			if (source !== localVideo && seekCurrentVideo) return seekCurrentVideo(source, seconds);
+			source.currentTime = seconds;
+			return true;
+		}
+		function rangeError() {
+			const from = start.valueAsNumber, to = end.valueAsNumber;
+			if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to <= from || to > source.duration) {
+				return '開始・終了を動画の範囲内で指定してください。終了は開始より後にします。';
+			}
+			return '';
+		}
+		function refresh(layersChanged = false) {
+			const ready = (source !== localVideo || !!sourceUrl) && !source.error && Number.isFinite(source.duration) && source.duration > 0 && source.videoWidth > 0;
+			fileInput.disabled = current.disabled = !!job;
+			const local = source === localVideo;
+			current.setAttribute('aria-pressed', String(!local));
+			find('[data-role=sourceName]').textContent = local && sourceUrl ? fileInput.files[0]?.name || '' : '';
+			const canExport = available || local && !!sourceUrl || !local && !!getCurrentFile;
+			comments.disabled = effects.disabled = !ready || !!job || !canExport || typeof createFrameRenderer !== 'function';
+			commentsLabel.textContent = local && sourceUrl ? '視聴中の' + (title ? '「' + title + '」' : '動画') + 'のコメントを重ねる' : 'コメント';
+			layerHint.textContent = local && sourceUrl
+				? 'コメントは元ファイルの0秒を視聴中の動画の0秒に合わせて表示します。画面エフェクトにはZenzaWatchの現在の設定を使います。'
+				: typeof createFrameRenderer !== 'function' ? 'このプレイヤーでは画面合成を利用できません。' : '';
+			layerHint.hidden = !layerHint.textContent;
+			start.disabled = end.disabled = !ready || !!job;
+			create.disabled = !canExport || !ready || !!job || !!rangeError();
+			find('[data-role=lengthHint]').hidden = !(ready && end.valueAsNumber - start.valueAsNumber > 140);
+			cancel.hidden = !job;
+			timeline?.refresh(layersChanged);
+			onSelectionChange?.({start:start.valueAsNumber, end:end.valueAsNumber, isCurrent:!local && currentSelection(), isFile:local && !!sourceUrl,
+				comments:comments.checked, effects:effects.checked, recording:!!job});
+		}
+		function unload(video) {
+			video.pause();
+			video.removeAttribute('src');
+			video.load();
+		}
+		function clearResult() {
+			result.hidden = true;
+			share.hidden = true;
+			download.removeAttribute('href');
+			postX.removeAttribute('href');
+			unload(preview);
+			if (outputUrl) URL.revokeObjectURL(outputUrl);
+			outputUrl = outputFile = null;
+		}
+		function finish(message, restorePlayback = true) {
+			const active = job;
+			job = null;
+			if (active) {
+				active.events.abort();
+				clearInterval(active.clock);
+				clearInterval(active.frames);
+				if (active.recorder && active.recorder.state !== 'inactive') active.recorder.stop();
+				active.stream?.getTracks().forEach(track => track.stop());
+				active.sourceStream?.getTracks().forEach(track => track.stop());
+				try { active.renderer?.dispose?.(); }
+				catch (_) { message += ' 画面合成の終了処理に失敗しました。'; }
+				if (!active.fast && !active.replaced && currentSelection()) {
+					source.pause();
+					if (restorePlayback && active.restore) {
+						source.loop = active.restore.loop;
+						source.playbackRate = active.restore.rate;
+						if (seek(active.restore.time) && !active.restore.paused) source.play().catch(() => {});
+					}
+				}
+			}
+			status.textContent = message;
+			refresh();
+		}
+		function present(active, blob, from, to) {
+			if (!currentSelection()) return finish('再生中の動画が変わったため中断しました。');
+			const mp4 = blob.type.startsWith('video/mp4');
+			const sourceName = source === localVideo ? fileInput.files[0]?.name.replace(/\.[^.]+$/, '') : title;
+			const base = (sourceName || 'clip').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100);
+			outputFile = new File([blob], base + '_' + from + '-' + to + (mp4 ? '.mp4' : '.webm'),
+				{type:mp4 ? 'video/mp4' : 'video/webm'});
+			outputUrl = URL.createObjectURL(outputFile);
+			const options = {once:true, signal:active.events.signal};
+			const failed = timingMismatch => {
+				if (job !== active) return;
+				clearResult();
+				if (active.fast) return useRecorder(active, from, to);
+				if (mp4 && !active.webm && currentSelection() && !document.hidden && types.some(type => type.startsWith('video/webm'))) {
+					finish('', false);
+					startRecording(from, to, true, active.restore);
+				} else {
+					finish(timingMismatch === true ? '書き出した動画の長さが指定した範囲と一致しませんでした。もう一度お試しください。'
+						: '映像を読み出せませんでした。範囲または元のファイルを変えてお試しください。');
+				}
+			};
+			preview.addEventListener('error', failed, options);
+			preview.addEventListener('loadedmetadata', () => {
+				if (!currentSelection() || (active.sameSource && !active.sameSource())) {
+					clearResult();
+					return finish('再生中の動画が変わったため中断しました。');
+				}
+				if (!preview.videoWidth) return failed();
+				const tolerance = active.fast ? 0.15 : Math.min(0.6, Math.max(0.35, (to - from) * 0.005));
+				if (Number.isFinite(preview.duration) && Math.abs(preview.duration - (to - from)) > tolerance) return failed(true);
+				download.href = outputUrl;
+				download.download = outputFile.name;
+				updatePostLink();
+				result.hidden = false;
+				share.hidden = !navigator.canShare?.({files:[outputFile]});
+				finish(active.fast ? '元ファイルからMP4を作成しました。保存した動画をXの投稿に添付できます。'
+					: mp4 ? 'MP4を作成しました。プレビューで確認し、保存した動画をXの投稿に添付できます。'
+					: 'WebMを作成しました。Xで添付できない場合はH.264/AACのMP4へ変換してください。');
+			}, options);
+			active.clock = setTimeout(failed, 10000);
+			preview.src = outputUrl;
+		}
+		function updatePostLink() {
+			const intent = new URL('https://twitter.com/intent/tweet');
+			const text = source === localVideo ? fileInput.files[0]?.name.replace(/\.[^.]+$/, '') : getShareText?.() || title;
+			if (text) intent.searchParams.set('text', text);
+			postX.href = intent.href;
+		}
+		postX.onclick = updatePostLink;
+		async function record(active, from, to) {
+			const options = {signal:active.events.signal};
+			try {
+				if (!currentSelection()) return finish('再生中の動画が変わったため中断しました。');
+				if (source.seeking || Math.abs(source.currentTime - from) > 0.06) {
+					return finish('指定した開始位置を確認できませんでした。もう一度お試しください。');
+				}
+				source.addEventListener('seeking', () => finish('作成中に再生位置が変わったため中断しました。'), options);
+				if (source.mediaKeys) return finish('保護された動画は書き出せません。');
+				const sourceStream = active.sourceStream = (source.captureStream || source.mozCaptureStream).call(source);
+				const canvas = document.createElement('canvas');
+				const {videoWidth:w, videoHeight:h} = source;
+				const scale = Math.min(1, 1920 / Math.max(w, h), 1080 / Math.min(w, h));
+				canvas.width = Math.max(2, 2 * Math.floor(w * scale / 2));
+				canvas.height = Math.max(2, 2 * Math.floor(h * scale / 2));
+				const ctx = canvas.getContext('2d', {alpha:false, willReadFrequently:true});
+				ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+				ctx.getImageData(0, 0, 1, 1);
+				if (comments.checked || effects.checked) {
+					active.renderer = createFrameRenderer({comments:comments.checked, effects:effects.checked, video:source});
+					if (typeof active.renderer?.draw !== 'function' || typeof active.renderer?.dispose !== 'function') {
+						throw Error('選択したレイヤーを取得できませんでした。');
+					}
+				}
+				active.clock = setInterval(() => finish('元の動画を再生できませんでした。'), 10000);
+				source.playbackRate = 1;
+				await source.play();
+				if (job !== active) return;
+				if (!currentSelection()) return finish('再生中の動画が変わったため中断しました。');
+				if (source.seeking || Math.abs(source.currentTime - from) > 0.25) return finish('指定した開始位置から録画できませんでした。');
+				if (source.playbackRate !== 1) return finish('等速で再生できません。再生速度を1倍にしてからお試しください。');
+				clearInterval(active.clock);
+				const draw = () => {
+					if (!currentSelection()) throw Error('再生中の動画が変わったため中断しました。');
+					if (active.renderer) {
+						if (active.renderer.draw(ctx, canvas.width, canvas.height) !== true) {
+							throw Error('選択したレイヤーの映像を描画できませんでした。');
+						}
+					} else {
+						ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+					}
+				};
+				draw();
+				ctx.getImageData(0, 0, 1, 1);
+				const stream = active.stream = canvas.captureStream(30);
+				const videoTrack = stream.getVideoTracks()[0];
+				const audioTracks = sourceStream.getAudioTracks();
+				for (const audio of audioTracks) stream.addTrack(audio);
+				const lostAudio = () => {
+					const attached = sourceStream.getAudioTracks();
+					if (!audioTracks.length) {
+						return attached.length > 0 || source.audioTracks?.length > 0 || source.mozHasAudio === true || source.webkitAudioDecodedByteCount > 0;
+					}
+					if (audioTracks.some(audio => !audio.enabled)) return true;
+					if (source.ended || (to === source.duration && source.currentTime >= to - 0.05)) return false;
+					return audioTracks.some(audio => audio.readyState !== 'live' || audio.muted || !attached.includes(audio));
+				};
+				if (lostAudio()) return finish('元の音声を取得できないため録画を開始できませんでした。');
+				let recorder;
+				for (const mimeType of types) {
+					if (active.webm && !mimeType.startsWith('video/webm')) continue;
+					try {
+						recorder = new MediaRecorder(stream, {mimeType, videoBitsPerSecond:5000000, audioBitsPerSecond:128000});
+						recorder.start(250);
+						break;
+					} catch (_) { recorder = null; }
+				}
+				if (!recorder) throw Error('この動画をエンコードできませんでした。');
+				active.recorder = recorder;
+				const recordOrigin = source.currentTime;
+				const recordStart = performance.now();
+				const timingLost = () => Math.abs((performance.now() - recordStart) / 1000 - (source.currentTime - recordOrigin)) > 0.75;
+				const interrupted = () => {
+					if (!currentSelection()) return finish('再生中の動画が変わったため中断しました。');
+					if (!active.completed && !source.ended) finish('元の動画の再生が止まったため作成を中断しました。');
+				};
+				source.addEventListener('waiting', interrupted, options);
+				source.addEventListener('pause', () => { if (source.paused) interrupted(); }, options);
+				draw();
+				videoTrack.requestFrame?.();
+				active.frames = setInterval(() => {
+					try {
+						draw();
+						videoTrack.requestFrame?.();
+					} catch (error) {
+						finish('作成できませんでした。' + error.message);
+					}
+				}, 1000 / 30);
+				source.addEventListener('ratechange', () => {
+					if (source.playbackRate !== 1) finish('作成中に再生速度が変わったため中断しました。');
+				}, options);
+				const chunks = [];
+				let bytes = 0;
+				recorder.addEventListener('dataavailable', event => {
+					bytes += event.data.size;
+					if (event.data.size) chunks.push(event.data);
+				}, options);
+				recorder.addEventListener('error', event => finish(event.error?.name === 'QuotaExceededError'
+					? '録画を保存できる容量が不足しています。端末の空き容量を確認してください。'
+					: 'エンコードに失敗しました。範囲を短くするか、別の動画でお試しください。'), options);
+				recorder.addEventListener('stop', () => {
+					if (!active.completed || !bytes) return finish('最後まで記録できませんでした。もう一度お試しください。');
+					try {
+						present(active, new Blob(chunks, {type:recorder.mimeType}), from, to);
+					} catch (_) { finish('動画ファイルを準備できませんでした。端末の空き容量を確認するか、範囲を短くしてください。'); }
+				}, options);
+				function complete() {
+					if (recorder.state === 'inactive') return;
+					if (!currentSelection()) return finish('再生中の動画が変わったため中断しました。');
+					if (lostAudio()) return finish('録画中に元の音声を取得できなくなったため中断しました。');
+					if (timingLost()) return finish('元動画と録画の時間がずれたため作成を中断しました。');
+					active.completed = true;
+					clearInterval(active.frames);
+					try { ctx.getImageData(0, 0, 1, 1); }
+					catch (_) { return finish('ブラウザーが録画した映像の読み取りを許可していません。'); }
+					recorder.stop();
+					source.pause();
+					clearInterval(active.clock);
+				}
+				active.onEnd = complete;
+				source.addEventListener('ended', complete, options);
+				const deadline = performance.now() + (to - from + 12) * 1000;
+				active.clock = setInterval(() => {
+					if (!currentSelection()) return finish('再生中の動画が変わったため中断しました。');
+					if (lostAudio()) return finish('録画中に元の音声を取得できなくなったため中断しました。');
+					if (timingLost()) return finish('元動画と録画の時間がずれたため作成を中断しました。');
+					if (source.playbackRate !== 1) return finish('再生速度が変わったため作成を中断しました。');
+					if (source.currentTime >= to) return complete();
+					if (performance.now() >= deadline) return finish('再生が止まったため作成を中断しました。');
+					const remaining = Math.ceil(to - source.currentTime);
+					const message = (active.webm ? 'WebMで再試行中' : '作成中') + ' · 残り約' + remaining + '秒';
+					if (status.textContent !== message) status.textContent = message;
+				}, 25);
+			} catch (error) {
+				if (job === active) finish(error.name === 'SecurityError'
+					? 'ブラウザーがこの動画の映像または音声の取得を許可していません。元の動画ファイルを選んでください。'
+					: '作成できませんでした。' + error.message);
+			}
+		}
+		fileInput.onchange = () => {
+			find('[data-role=fileOptions]').open = true;
+			pickedSource = true;
+			timeline?.stopPreview();
+			finish('');
+			clearResult();
+			source = localVideo;
+			comments.checked = effects.checked = false;
+			unload(source);
+			if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+			const file = fileInput.files[0];
+			sourceUrl = file ? URL.createObjectURL(file) : null;
+			source.hidden = true;
+			start.value = end.value = '';
+			if (file) {
+				source.src = sourceUrl;
+				status.textContent = '動画を読み込んでいます。';
+			}
+			refresh();
+		};
+		function prepareRange() {
+			const duration = source.duration;
+			if (!Number.isFinite(duration) || duration <= 0 || !source.videoWidth) {
+				status.textContent = '動画の長さを読み取れませんでした。長さが記録された動画ファイルを選んでください。';
+				return refresh();
+			}
+			const from = source !== localVideo && startTime >= 0 && startTime < duration ? Number(startTime) : 0;
+			start.value = from;
+			end.value = Math.min(duration, from + 30);
+			start.max = end.max = duration;
+			status.textContent = '';
+			refresh(true);
+		}
+		localVideo.onloadedmetadata = () => { if (source === localVideo) prepareRange(); };
+		localVideo.onerror = () => {
+			if (source === localVideo) finish('元の動画を再生できません。このブラウザーで再生できる動画を選んでください。');
+		};
+		function selectCurrent(automatic = false) {
+			const video = getCurrentVideo?.();
+			if (!(video instanceof HTMLVideoElement) || !video.videoWidth || video.mediaKeys) {
+				if (video?.mediaKeys) status.textContent = 'この動画は保護されているため、ブラウザーで映像を取得できません。手元の元ファイルを選ぶこともできます。';
+				else if (automatic && video) status.textContent = '再生中の映像を読み込んでいます。';
+				else status.textContent = 'プレイヤーから映像を取得できません。動画ファイルを選んで編集できます。';
+				return;
+			}
+			if (source === video && currentSelection()) return;
+			pickedSource = true;
+			timeline?.stopPreview();
+			clearResult();
+			source = video;
+			comments.checked = effects.checked = false;
+			selectedSrc = video.currentSrc;
+			selectedObject = video.srcObject;
+			unload(localVideo);
+			if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+			sourceUrl = null;
+			localVideo.hidden = true;
+			fileInput.value = '';
+			find('[data-role=fileOptions]').open = false;
+			prepareRange();
+		}
+		current.onclick = () => selectCurrent();
+		comments.onchange = effects.onchange = () => {
+			clearResult();
+			status.textContent = '';
+			refresh(true);
+		};
+		start.oninput = end.oninput = () => {
+			clearResult();
+			status.textContent = rangeError();
+			refresh();
+		};
+		function startRecording(from, to, webm, restore, fallback = false) {
+			if (!available) return finish('このブラウザーではこの動画を書き出せません。PC版のChromeまたはEdgeでお試しください。');
+			if (!currentSelection()) return finish('再生中の動画が変わりました。もう一度動画を選んでください。');
+			const previewOrigin = timeline?.stopPreview({forRecording:true});
+			clearResult();
+			const active = job = {events:new AbortController(), webm};
+			const options = {signal:active.events.signal};
+			if (source !== localVideo) {
+				active.restore = restore || (previewOrigin?.video === source ? previewOrigin : null) ||
+					{time:source.currentTime, rate:source.playbackRate, paused:source.paused, loop:source.loop};
+				source.loop = false;
+				const clipVideo = source;
+				clipVideo.getRootNode().addEventListener('ended', event => {
+					if (event.target !== clipVideo || !currentSelection()) return;
+					event.stopImmediatePropagation();
+					if (active.onEnd) active.onEnd();
+					else finish('指定した範囲を再生できませんでした。');
+				}, {capture:true, ...options});
+			}
+			source.pause();
+			source.addEventListener('emptied', () => {
+				active.replaced = true;
+				finish('元の動画が切り替わったため中断しました。');
+			}, options);
+			source.addEventListener('encrypted', () => finish('保護された動画は書き出せません。'), options);
+			refresh();
+			status.textContent = webm ? 'MP4が正しく書き出せなかったため、同じ範囲をWebMで再試行中です。'
+				: fallback ? '元ファイルを直接処理できないため、このタブで再生して作成します。' : '作成を開始しています。';
+			document.addEventListener('visibilitychange', () => {
+				if (document.hidden) finish('タブが非表示になったため作成を中断しました。');
+			}, options);
+			const begin = () => {
+				clearInterval(active.clock);
+				record(active, from, to);
+			};
+			if (!previewOrigin && Math.abs(source.currentTime - from) < 0.001 && !source.seeking && source.readyState >= 2) return begin();
+			source.addEventListener('seeked', begin, {once:true, ...options});
+			active.clock = setInterval(() => finish('開始位置を読み込めませんでした。'), 10000);
+			if (!seek(from)) {
+				active.replaced = true;
+				finish('再生中の動画が変わったため中断しました。');
+			}
+		}
+		function useRecorder(active, from, to) {
+			if (job !== active) return;
+			if (!currentSelection() || source.mediaKeys) return finish('元の動画が切り替わったか保護されているため中断しました。');
+			finish('', false);
+			startRecording(from, to, false, undefined, true);
+		}
+		async function createClip(from, to) {
+			const local = source === localVideo;
+			if (!local && !getCurrentFile) return startRecording(from, to, false);
+			if (!currentSelection() || source.mediaKeys) return finish('元の動画を確認できません。もう一度動画を選んでください。');
+			timeline.stopPreview();
+			clearResult();
+			const active = job = {fast:true, events:new AbortController()};
+			const signal = active.events.signal;
+			const selected = source;
+			const file = local ? fileInput.files[0] : null;
+			const sameSource = active.sameSource = () => job === active && selected === source && currentSelection() &&
+				!selected.mediaKeys && (!local || file === fileInput.files[0]);
+			selected.addEventListener('emptied', () => finish('元の動画が切り替わったため中断しました。'), {signal});
+			selected.addEventListener('encrypted', () => finish('保護された動画は書き出せません。'), {signal});
+			refresh();
+			status.textContent = '元ファイルを確認しています。';
+			try {
+				const blob = local ? file : await getCurrentFile(selected, signal);
+				if (!sameSource()) { if (job === active) finish('元の動画が切り替わったため中断しました。'); return; }
+				if (!(blob instanceof Blob)) return useRecorder(active, from, to);
+				let drawFrame;
+				if (comments.checked || effects.checked) {
+					active.renderer = createFrameRenderer({video:selected, comments:comments.checked, effects:effects.checked});
+					if (typeof active.renderer?.drawFrame !== 'function') return useRecorder(active, from, to);
+					drawFrame = active.renderer.drawFrame.bind(active.renderer);
+				}
+				status.textContent = '元ファイルから直接書き出しています。';
+				const clip = await ShareFastClip.convert({blob, from, to, signal, drawFrame, onProgress(fraction) {
+					if (job === active) status.textContent = '元ファイルから直接書き出しています · ' + Math.round(fraction * 100) + '%';
+				}});
+				if (sameSource()) present(active, clip, from, to);
+				else if (job === active) finish('元の動画が切り替わったため中断しました。');
+			} catch (_) {
+				if (sameSource()) useRecorder(active, from, to);
+				else if (job === active) finish('元の動画が切り替わったため中断しました。');
+			}
+		}
+		create.onclick = () => { if (!create.disabled) createClip(start.valueAsNumber, end.valueAsNumber); };
+		cancel.onclick = () => {
+			finish('作成をキャンセルしました。');
+			clearResult();
+		};
+		share.onclick = async () => {
+			const file = outputFile;
+			try {
+				const files = [file];
+				const text = source !== localVideo && getShareText?.();
+				const withText = {files, text};
+				await navigator.share(text && navigator.canShare(withText) ? withText : {files});
+			}
+			catch (error) {
+				if (error.name !== 'AbortError' && file === outputFile) status.textContent = '共有できませんでした。「動画を保存」から保存してください。';
+			}
+		};
+		timeline = ShareClipTimeline.mount(find('[data-role=timeline]'), {
+			startInput:start, endInput:end,
+			getSource:() => (source !== localVideo || sourceUrl) && currentSelection() ? source : null,
+			isLocalSource:video => video === localVideo,
+			getThumbnail:(host, seconds) => source !== localVideo && currentSelection() ? getThumbnail?.(host, seconds) : undefined,
+			seekSource:seconds => !job && currentSelection() && seek(seconds),
+			getPreviewRenderer:video => (comments.checked || effects.checked) && createFrameRenderer
+				? createFrameRenderer({video, comments:comments.checked, effects:effects.checked}) : null
+		});
+		const candidate = getCurrentVideo?.();
+		if (candidate instanceof HTMLVideoElement) {
+			selectCurrent(true);
+			if (!pickedSource) candidate.addEventListener('loadeddata', () => {
+				if (!pickedSource && getCurrentVideo?.() === candidate) selectCurrent(true);
+			}, {once:true, signal:editorEvents.signal});
+		}
+		if (!candidate && getCurrentVideo) status.textContent = '映像の読み込み後に「再生中の動画」を押すか、動画ファイルを選んでください。';
+		find('[data-role=fileOptions]').open = source === localVideo;
+		refresh();
+		const cleanup = () => {
+			onSelectionChange = undefined;
+			editorEvents.abort();
+			timeline.dispose();
+			timeline = null;
+			finish('');
+			localVideo.onerror = localVideo.onloadedmetadata = null;
+			unload(localVideo);
+			if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+			sourceUrl = null;
+			clearResult();
+			root.remove();
+		};
+		cleanup.setRange = ({start:from, end:to}) => {
+			if (job || !Number.isFinite(from) || !Number.isFinite(to)) return false;
+			start.value = from;
+			end.value = to;
+			end.dispatchEvent(new Event('input', {bubbles:true}));
+			return !rangeError();
+		};
+		cleanup.stopPreview = () => {
+			timeline?.stopPreview();
+			if (!preview.paused) preview.pause();
+		};
+		return cleanup;
+	}
+};
+const SharePlaybackFile = (() => {
+	const videoCodecs = new Set(['avc1', 'avc3', 'hvc1', 'hev1', 'av01', 'vp09', 'mp4v']);
+	const audioCodecs = new Set(['mp4a', 'Opus', 'ac-3', 'ec-3', 'fLaC']);
+	const containers = new Set(['trak', 'mdia', 'minf', 'stbl']);
+	const typeAt = (view, pos) => String.fromCharCode(view.getUint8(pos), view.getUint8(pos + 1),
+		view.getUint8(pos + 2), view.getUint8(pos + 3));
+	function readBox(view, offset, remaining) {
+		if (remaining < 8 || view.byteLength - offset < 8) return null;
+		let size = view.getUint32(offset);
+		let header = 8;
+		if (size === 1) {
+			if (remaining < 16 || view.byteLength - offset < 16) return null;
+			size = Number(view.getBigUint64(offset + 8));
+			header = 16;
+		} else if (!size) {
+			size = remaining;
+		}
+		return Number.isSafeInteger(size) && size >= header && size <= remaining
+			? {type:typeAt(view, offset + 4), size, header} : null;
+	}
+	function plainTracks(buffer) {
+		if (/pssh|sinf|schm|tenc|senc|seig|encv|enca|drms|drmi|uuid|mvex/.test(new TextDecoder('latin1').decode(buffer))) return false;
+		const view = new DataView(buffer);
+		let hasVideo = false;
+		function inspect(start, end, depth) {
+			if (depth > 5) return false;
+			for (let i = start; i < end;) {
+				const box = readBox(view, i, end - i);
+				if (!box) return false;
+				const content = i + box.header;
+				const next = i + box.size;
+				if (containers.has(box.type) && !inspect(content, next, depth + 1)) return false;
+				if (box.type === 'stsd') {
+					if (next - content < 8) return false;
+					const count = view.getUint32(content + 4);
+					if (!count) return false;
+					let pos = content + 8;
+					for (let j = 0; j < count; j++) {
+						const entry = readBox(view, pos, next - pos);
+						if (!entry || !(videoCodecs.has(entry.type) || audioCodecs.has(entry.type))) return false;
+						hasVideo ||= videoCodecs.has(entry.type);
+						pos += entry.size;
+					}
+					if (pos !== next) return false;
+				}
+				i = next;
+			}
+			return true;
+		}
+		return inspect(0, view.byteLength, 0) && hasVideo;
+	}
+	async function isPlainMovie(blob, current) {
+		if (!/^(?:video|application)\/mp4(?:;|$)/i.test(blob.type)) return false;
+		let movie = false, media = false;
+		for (let offset = 0, count = 0; offset < blob.size; count++) {
+			if (count >= 256 || !current()) return false;
+			const header = new DataView(await blob.slice(offset, offset + 16).arrayBuffer());
+			const box = readBox(header, 0, blob.size - offset);
+			if (!box || (!offset && box.type !== 'ftyp') ||
+					!['ftyp','mdat','moov','free','skip','wide'].includes(box.type)) return false;
+			if (box.type === 'mdat') media ||= box.size > box.header;
+			if (box.type === 'moov') {
+				if (movie || box.size > 16 * 1024 * 1024 || !current()) return false;
+				movie = plainTracks(await blob.slice(offset + box.header, offset + box.size).arrayBuffer());
+				if (!movie) return false;
+			}
+			offset += box.size;
+		}
+		return media && movie && current();
+	}
+	async function get(video, assigned, {signal, isCurrent} = {}) {
+		if (!video || !assigned || typeof isCurrent !== 'function') return null;
+		const object = video.srcObject;
+		const selected = video.currentSrc;
+		const current = () => !signal?.aborted && isCurrent() && !video.mediaKeys &&
+			video.srcObject === object && video.currentSrc === selected;
+		if (!current()) return null;
+		try {
+			let blob;
+			if (object) {
+				if (!(object instanceof Blob) || object !== assigned) return null;
+				blob = object;
+			} else {
+				if (typeof assigned !== 'string' || !selected) return null;
+				const url = new URL(assigned, location.href);
+				if (url.href !== selected || url.origin !== location.origin) return null;
+				const options = {signal, mode:'same-origin', redirect:'error'};
+				if (url.protocol === 'https:' && /\.(?:mp4|m4v)$/i.test(url.pathname)) {
+					if (navigator.serviceWorker?.controller) return null;
+					options.cache = 'only-if-cached';
+				} else if (url.protocol !== 'blob:') {
+					return null;
+				}
+				const response = await fetch(url.href, options);
+				if (!current() || response.status !== 200 || response.headers.has('Content-Range') ||
+						!/^(?:video|application)\/mp4(?:;|$)/i.test(response.headers.get('Content-Type') || '')) {
+					await response.body?.cancel();
+					return null;
+				}
+				blob = await response.blob();
+			}
+			return current() && await isPlainMovie(blob, current) ? blob : null;
+		} catch (_) {
+			return null;
+		}
+	}
+	return {get};
+})();
+// already required
+// already required
+const ShareClipRenderer = {
+	create({video, comments = false, effects = false, config, getViewModel}) {
+		if (comments && (!config?.props || typeof getViewModel !== 'function')) {
+			throw new Error('コメントの描画に必要な情報を取得できません。');
+		}
+		let renderer = comments ? new CommentPictureInPicture.CommentRenderer({config}) : null;
+		let disposed = false;
+		function drawFrame(ctx, width, height, image, sec) {
+			if (disposed || !image || !(width > 0 && height > 0)) return false;
+			const sourceWidth = image.videoWidth ?? image.displayWidth ?? image.width;
+			const sourceHeight = image.videoHeight ?? image.displayHeight ?? image.height;
+			if (!(sourceWidth > 0 && sourceHeight > 0)) return false;
+			const viewModel = comments && getViewModel();
+			if (comments && (!Number.isFinite(sec) || typeof viewModel?.getGroup !== 'function')) {
+				throw new Error('この動画のコメントを取得できません。');
+			}
+			const scale = Math.min(width / sourceWidth, height / sourceHeight);
+			const w = sourceWidth * scale, h = sourceHeight * scale;
+			const x = (width - w) / 2, y = (height - h) / 2;
+			ctx.save();
+			try {
+				ctx.globalAlpha = 1;
+				ctx.fillStyle = '#000';
+				ctx.fillRect(0, 0, width, height);
+				if (effects) {
+					if (!('filter' in ctx) && !ScreenFilter.bypass && ScreenFilter.buildFilter() !== 'none') {
+						throw new Error('このブラウザーでは選択中の画面エフェクトを書き出せません。');
+					}
+					ScreenFilter.drawVideo(ctx, image, x, y, w, h, {target:'clip'});
+				} else {
+					ctx.drawImage(image, x, y, w, h);
+				}
+				if (renderer) {
+					renderer.draw(ctx, {viewModel, sec, width, height, now:performance.now()});
+				}
+				return true;
+			} finally {
+				ctx.restore();
+			}
+		}
+		return {
+			drawFrame,
+			draw(ctx, width, height) {
+				return !!video && !video.seeking && video.readyState >= 2 &&
+					drawFrame(ctx, width, height, video, video.currentTime);
+			},
+			dispose() {
+				disposed = true;
+				renderer?.clearCache();
+				renderer = null;
+				video = getViewModel = null;
+			}
+		};
+	}
+};
+const VideoSharePanel = (() => {
+	let activeClose;
+	const css = `
+.zenzaShare {color-scheme:dark;color:#f2f5f8;background:#1d2229;border:1px solid #526175;
+	border-radius:12px;width:min(35rem,94vw);max-width:94vw;max-height:88vh;box-sizing:border-box;
+	margin:auto;padding:0;text-align:left;overflow:auto;font:14px/1.5 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
+.zenzaShare {width:min(33rem,calc(100vw - 24px));max-height:calc(100dvh - 24px);margin:auto 12px auto auto;
+	background:#1b2027;scrollbar-width:thin;overscroll-behavior:contain}
+.zenzaShare::backdrop {background:#090c104d}
+.zenzaShare .shareProvider {border-top:1px solid #465365;padding-top:.65rem;margin-top:.9rem}
+.zenzaShare summary {cursor:pointer}
+.zenzaShare .shareProvider p {color:#c1ccd7}
+.zenzaShare [data-action=back] {margin-bottom:.5rem}
+@media(max-width:600px) {.zenzaShare {width:calc(100vw - 12px);max-width:none;max-height:calc(100dvh - 12px);margin:auto}}
+.zenzaShare * {box-sizing:border-box}
+.zenzaShare header,.zenzaShare > section {padding:14px 18px}
+.zenzaShare header {display:flex;align-items:center;justify-content:space-between;padding-bottom:4px}
+.zenzaShare h2 {font:700 19px/1.5 system-ui;margin:0;color:inherit}
+.zenzaShare p {margin:6px 0 10px}
+.zenzaShare .shareTitle {color:#c3cdd7;padding:0 18px;overflow-wrap:anywhere}
+.zenzaShare nav,.zenzaShare .shareRow {display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.zenzaShare nav {padding:6px 18px 0;gap:3px;border-bottom:1px solid #475364}
+.zenzaShare button,.zenzaShare a {color:#edf3fb;font:inherit;cursor:pointer}
+.zenzaShare button,.zenzaShare .shareAction {display:inline-block;background:#313a46;border:1px solid #526175;border-radius:6px;padding:5px 10px;text-decoration:none;line-height:1.5}
+.zenzaShare nav button {background:none;border:0;border-bottom:3px solid transparent;border-radius:0;padding:6px 8px}
+.zenzaShare nav button[aria-pressed=true] {border-bottom-color:#6fc5ff;font-weight:700;color:white}
+.zenzaShare :is(a,button):hover {background:#414d5c}
+.zenzaShare :focus-visible {outline:2px solid #85d2ff;outline-offset:2px}
+.zenzaShare input,.zenzaShare textarea,.zenzaShare select {font:inherit;color:#f2f5f8;background:#11161c;border:1px solid #697889;border-radius:4px;padding:5px}
+.zenzaShare input[type=number] {width:6em}
+.zenzaShare input[type=file],.zenzaShare video {max-width:100%}
+.zenzaShare video {display:block;width:100%;max-height:190px}
+.zenzaShare textarea,.zenzaShare input[readonly] {display:block;width:100%;margin:4px 0 10px}
+.zenzaShare textarea {resize:vertical;min-height:4em}
+.zenzaShare :disabled {opacity:.55;cursor:default}
+.zenzaShare [hidden] {display:none!important}
+.zenzaShare .shareTime {margin-bottom:10px}
+.zenzaShare .shareStatus {min-height:1.5em;margin:6px 0 0;color:#afdfff}
+`;
+	function open(info, position, getCurrentVideo, playerContext) {
+		if (!info || !/^(?:[a-z]{2})?\d+$/i.test(info.watchId)) { return; }
+		if (activeClose) { activeClose(); }
+		const dialog = document.createElement('dialog');
+		dialog.className = 'zen-family zenzaShare';
+		dialog.setAttribute('aria-labelledby', 'zenzaShareHeading');
+		dialog.innerHTML = `
+<style></style>
+<header><h2 id="zenzaShareHeading">動画を共有</h2><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
+<p class="shareTitle"></p>
+<nav aria-label="共有方法">
+<button type="button" data-view="local" aria-controls="zenzaShareLocal">ビデオクリップ</button>
+<button type="button" data-view="link" aria-controls="zenzaShareLink">リンク・埋め込み</button>
+</nav>
+<section id="zenzaShareLink" hidden>
+<div class="shareRow shareTime"><label><input type="checkbox" name="includeTime"> 開始位置を指定</label>
+<label><input type="number" name="start" min="0" step="0.01" inputmode="decimal"> 秒から</label></div>
+<label>共有リンク<input readonly name="link" aria-label="共有リンク"></label>
+<label>投稿本文<textarea rows="2"></textarea></label>
+<div class="shareRow"><a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">X で投稿画面を開く</a>
+<button type="button" data-copy="link">リンクをコピー</button>
+<button type="button" data-copy="text">本文とリンクをコピー</button>
+<button type="button" data-action="system" hidden>端末で共有</button></div>
+<details><summary>埋め込みコード</summary>
+<label>プレーヤーのサイズ <select name="embedSize"><option value="320,180">小（320 × 180）</option><option value="640,360">中（640 × 360）</option><option value="720,480">大（720 × 480）</option></select></label>
+<label>外部プレーヤー<textarea rows="3" name="embed" readonly></textarea></label>
+<button type="button" data-copy="embed">プレーヤーのコードをコピー</button>
+<label>動画情報とサムネイル<textarea rows="3" name="thumb" readonly></textarea></label>
+<button type="button" data-copy="thumb">動画情報のコードをコピー</button></details>
+<p class="shareStatus" role="status"></p></section>
+<section id="zenzaShareLocal" hidden><div data-clip-editor></div>
+<div class="shareProvider"><button type="button" data-action="official">ニコニコでX用プレビューを作成</button>
+<p>ニコニコが元動画から3〜30秒の映像を作ります。端末での録画や添付を省き、映像を確認してから投稿できます。</p>
+<p data-provider-range hidden></p><p data-provider-layers hidden>ここで選んだコメント・画面エフェクトは、端末で作成するファイルに反映されます。</p>
+</div></section>
+<section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><div data-official-editor></div></section>`;
+		const find = selector => dialog.querySelector(selector);
+		find('style').textContent = css;
+		find('.shareTitle').textContent = info.title || info.watchId;
+		const time = find('[name=start]');
+		const useTime = find('[name=includeTime]');
+		const message = find('#zenzaShareLink textarea');
+		const duration = Math.max(0, Math.floor(Number(info.duration) || 0));
+		const startTime = Math.min(Math.max(0, Math.floor((Number(position) || 0) * 100) / 100), duration || Infinity);
+		time.value = String(startTime);
+		if (duration) { time.max = String(duration); }
+		const tags = [info.videoId, info.isChannel && 'nicoch'].filter(Boolean).map(tag => '#' + tag);
+		const length = duration ? '(' + textUtil.secToTime(duration) + ')' : '';
+		message.value = [(info.title || '').replace(/@/g, '@ ') + length, ...tags].join(' ').trim();
+		const watch = new URL('https://www.nicovideo.jp/watch/' + info.watchId);
+		const official = new URL(watch);
+		official.searchParams.set('zenza_official', '1');
+		if (startTime) { official.searchParams.set('from', String(startTime)); }
+		const status = find('.shareStatus');
+		const link = find('[name=link]');
+		const embed = find('[name=embed]');
+		const thumb = find('[name=thumb]');
+		const size = find('[name=embedSize]');
+		const attr = value => String(value).replace(/[&<>"']/g, char =>
+			({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'})[char]);
+		const videoId = /^(?:[a-z]{2})?\d+$/i.test(info.videoId) ? info.videoId : info.watchId;
+		const shorts = location.hostname === 'www.nicovideo.jp' && location.pathname === '/shorts/' + videoId;
+		function update() {
+			const url = new URL('https://www.nicovideo.jp/' + (shorts ? 'shorts/' : 'watch/') + videoId);
+			const embedUrl = new URL('https://embed.nicovideo.jp/watch/' + videoId + '/script');
+			const [width, height] = size.value.split(',');
+			embedUrl.searchParams.set('w', width); embedUrl.searchParams.set('h', height);
+			const sec = Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity);
+			if (useTime.checked && sec) {
+				url.searchParams.set('from', String(sec));
+				embedUrl.searchParams.set('from', String(sec));
+			}
+			time.disabled = !useTime.checked;
+			link.value = url.href;
+			const title = attr(info.title || videoId);
+			embed.value = '<script type="application/javascript" src="' + attr(embedUrl.href) + '"></' + 'script>' +
+				'<noscript><a href="' + attr(url.href) + '">' + title + '</a></noscript>';
+			thumb.value = '<iframe width="312" height="176" src="https://ext.nicovideo.jp/thumb/' + videoId +
+				'" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="' + attr(watch.href) + '">' +
+				title + '</a></iframe>';
+			const intent = new URL('https://twitter.com/intent/tweet');
+			intent.searchParams.set('text', message.value);
+			intent.searchParams.set('url', url.href);
+			find('[data-action=x]').href = intent.href;
+			status.textContent = '';
+		}
+		for (const input of [time, useTime, message, size]) { input.addEventListener('input', update); }
+		time.addEventListener('change', () => {
+			time.value = String(Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity));
+			update();
+		});
+		for (const button of dialog.querySelectorAll('[data-copy]')) {
+			button.onclick = async () => {
+				const values = {link:link.value, text:[message.value, link.value].filter(Boolean).join('\n'), embed:embed.value, thumb:thumb.value};
+				try {
+					if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(values[button.dataset.copy]); }
+					else {
+						const temp = document.createElement('textarea');
+						temp.value = values[button.dataset.copy]; dialog.append(temp); temp.select();
+						let copied;
+						try { copied = document.execCommand('copy'); } finally { temp.remove(); button.focus(); }
+						if (!copied) { throw new Error('copy'); }
+					}
+					status.textContent = 'コピーしました。';
+				} catch (_) { status.textContent = 'コピーできませんでした。上の欄を選択してコピーできます。'; }
+			};
+		}
+		const system = find('[data-action=system]');
+		system.hidden = !navigator.share;
+		system.onclick = async () => {
+			try { await navigator.share({title:info.title, text:message.value, url:link.value}); }
+			catch (error) { if (error.name !== 'AbortError') { status.textContent = '端末の共有画面を開けませんでした。'; } }
+		};
+		const mounted = new Map();
+		const sections = {link:find('#zenzaShareLink'), official:find('#zenzaShareOfficial'), local:find('#zenzaShareLocal')};
+		const provider = find('.shareProvider');
+		const prepare = find('[data-action=official]');
+		const rangeNote = find('[data-provider-range]');
+		let selection = {};
+		function showSelection(next) {
+			selection = next;
+			provider.hidden = next.isFile;
+			prepare.disabled = next.recording;
+			find('[data-view=link]').disabled = next.recording;
+			const length = next.end - next.start;
+			prepare.textContent = length > 30 ? 'ニコニコで先頭30秒のX用プレビューを作成' : 'ニコニコでX用プレビューを作成';
+			rangeNote.hidden = !(length > 30 || length < 3);
+			rangeNote.textContent = length > 30 ? 'ニコニコには選択範囲の先頭30秒を渡します。' :
+				'ニコニコでの投稿には3秒以上の範囲を指定してください。';
+			find('[data-provider-layers]').hidden = !next.comments && !next.effects;
+		}
+		function select(view) {
+			if (view !== 'local') { mounted.get('local')?.stopPreview?.(); }
+			if (view !== 'official' && mounted.has('official')) {
+				mounted.get('official')();
+				mounted.delete('official');
+				find('[data-official-editor]').replaceChildren();
+			}
+			for (const [key, el] of Object.entries(sections)) { el.hidden = key !== view; }
+			for (const btn of dialog.querySelectorAll('[data-view]')) {
+				btn.setAttribute('aria-pressed', String(btn.dataset.view === (view === 'official' ? 'local' : view)));
+			}
+			if (view === 'official' && !mounted.has(view)) {
+				const start = Number.isFinite(selection.start) ? selection.start : startTime;
+				const end = Number.isFinite(selection.end) ? Math.min(selection.end, start + 30) : undefined;
+				mounted.set(view, ShareOfficialClip.mount(find('[data-official-editor]'), {
+					info, startTime:start, endTime:end, autoPreview:true, text:() => message.value, officialUrl:official.href,
+					onUseLocal(range) {
+						select('local');
+						const valid = mounted.get('local')?.setRange?.(range);
+						const create = sections.local.querySelector('[data-action=create]');
+						if (valid && create && !create.disabled) {
+							create.click();
+						} else {
+							find('[data-view=local]').focus({preventScroll:true});
+						}
+					}
+				}));
+			}
+			if (view === 'local' && !mounted.has(view)) {
+				mounted.set(view, ShareLocalClip.mount(find('[data-clip-editor]'), {
+					title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
+					getThumbnail:playerContext?.getThumbnail, onSelectionChange:showSelection,
+					getCurrentFile(video, signal) {
+						const src = playerContext?.getCurrentFileSource?.(video);
+						if (!src) return Promise.resolve(null);
+						return SharePlaybackFile.get(video, src, {
+							signal, isCurrent:() => playerContext.getCurrentFileSource(video) === src
+						});
+					},
+					createFrameRenderer: options => ShareClipRenderer.create({...playerContext, ...options}),
+					getShareText: () => [message.value, link.value].filter(Boolean).join('\n')
+				}));
+			}
+			dialog.scrollTop = 0;
+		}
+		prepare.onclick = () => { select('official'); find('[data-action=back]').focus(); };
+		find('[data-action=back]').onclick = () => { select('local'); prepare.focus(); };
+		for (const btn of dialog.querySelectorAll('[data-view]')) { btn.onclick = () => select(btn.dataset.view); }
+		const previousFocus = document.activeElement;
+		function close() {
+			if (activeClose !== close) { return; }
+			activeClose = null;
+			for (const cleanup of mounted.values()) { if (typeof cleanup === 'function') { cleanup(); } }
+			if (dialog.open) { dialog.close(); }
+			dialog.remove();
+			if (previousFocus?.isConnected) { previousFocus.focus({preventScroll:true}); }
+		}
+		activeClose = close;
+		find('[data-action=close]').onclick = close;
+		dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+		dialog.addEventListener('close', close);
+		for (const type of ['keydown', 'keyup', 'keypress']) { dialog.addEventListener(type, event => event.stopPropagation()); }
+		(document.fullscreenElement || document.body).append(dialog);
+		update();
+		dialog.showModal();
+		select('local');
+	}
+	return {open, close() { if (activeClose) { activeClose(); } }};
+})();
 const RootDispatcher = (() => {
 		let config;
 		let player;
 		let playerState;
 		let lifetime = 0;
+		let closeShare;
 		class RootDispatcher {
 				static initialize(dialog) {
 						player = dialog;
@@ -62297,11 +64263,18 @@ const RootDispatcher = (() => {
 								}
 								return undefined;
 						});
+						player.on('open', () => {
+								if (player === dialog) {
+										lifetime++;
+										closeShare?.();
+								}
+						});
 						player.on('close', () => {
 								if (player !== dialog) {
 										return;
 								}
 								lifetime++;
+								closeShare?.();
 								const active = document.pictureInPictureElement;
 								const ownVideo = player?._nicoVideoPlayer?._videoPlayer?.videoElement;
 								const closeNative = !!active && active === ownVideo &&
@@ -62419,11 +64392,45 @@ const RootDispatcher = (() => {
 										}
 										break;
 								}
-								case 'tweet':
-										if (playerState.videoInfo) {
-												nicoUtil.openTweetWindow(playerState.videoInfo);
+								case 'tweet': {
+										const info = playerState.videoInfo;
+										if (!info || !info.watchId || info.watchId !== player.watchId) {
+												break;
 										}
+										const session = lifetime;
+										const currentPlayer = () => session === lifetime && player.watchId === info.watchId && playerState.videoInfo === info
+												? player._nicoVideoPlayer : null;
+										const getCurrentVideo = () => {
+												const displayed = currentPlayer()?.drawableVideoElement;
+												const frame = displayed && 'drawableElement' in displayed ? displayed.drawableElement : displayed;
+												return frame instanceof HTMLVideoElement ? frame : null;
+										};
+										VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
+												config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
+												getCurrentFileSource(video) {
+														const displayed = currentPlayer()?.drawableVideoElement;
+														if (displayed !== video || getCurrentVideo() !== video)
+																return undefined;
+														return video.srcObject instanceof Blob ? video.srcObject : video.src || video.currentSrc;
+												},
+												getThumbnail(host, seconds) {
+														if (!currentPlayer() || !info.watchId) {
+																return undefined;
+														}
+														return player._view?.videoControlBar?.storyboard?.createSavedPreview(host, info.watchId, seconds);
+												},
+												seekCurrentVideo(video, seconds) {
+														const displayed = currentPlayer()?.drawableVideoElement;
+														if (!displayed || getCurrentVideo() !== video) {
+																return false;
+														}
+														displayed.currentTime = seconds;
+														return true;
+												}
+										});
+										closeShare = VideoSharePanel.close;
 										break;
+								}
 								case 'open-uad': {
 										const info = playerState.videoInfo;
 										const uadVideoId = info && (info.watchId || info.videoId);
@@ -73861,6 +75868,93 @@ class HoverMenu {
 				const root = document.getElementById('root');
 				return !!root && root.contains(el);
 		};
+		const installOfficialLaunchButton = (watchId, launch) => {
+				const player = '[class~="grid-area_[player]"]';
+				const selector = 'button[aria-label="コメントを非表示にする"],button[aria-label="コメントを表示する"]';
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.className = 'zen-family zenzaOfficialLaunch';
+				button.textContent = 'Zen';
+				button.setAttribute('aria-label', 'この動画をZenzaWatchで開く');
+				button.title = 'この動画をZenzaWatchで開く';
+				button.addEventListener('click', event => { event.stopPropagation(); launch(); });
+				const addButtonStyle = () => cssUtil.addStyle(`
+			.zenzaOfficialLaunch { display:inline-grid;place-items:center;align-self:stretch;min-width:2em;
+				padding:0 .2em;border:0;border-radius:3px;background:transparent;color:#ccc;cursor:pointer;
+				font:700 14px/1 Arial,sans-serif; flex:0 0 auto; }
+			.zenzaOfficialLaunch:hover,.zenzaOfficialLaunch:focus-visible {color:#fff;background:rgba(255,255,255,.15)}
+			.zenzaOfficialLaunch:focus-visible {outline:2px solid currentColor;outline-offset:-2px}
+			.zenzaOfficialLaunch:active {background:rgba(255,255,255,.25)}
+		`, { className: 'zenzaOfficialLaunchStyle' });
+				let styled = false;
+				let frame = 0;
+				let anchor = null;
+				let lastUrl = '';
+				const update = () => {
+						frame = 0;
+						lastUrl = location.href;
+						document.querySelectorAll('#root .zenzaOfficialLaunch').forEach(el => { if (el !== button) {
+								el.remove();
+						} });
+						if (!watchId() || !Config.getValue('officialLaunch.button')) {
+								button.remove();
+								anchor = null;
+								return;
+						}
+						const area = document.querySelector('#root ' + player);
+						anchor = area?.querySelector(selector) ?? null;
+						if (!anchor) {
+								button.remove();
+								return;
+						}
+						if (!styled) {
+								addButtonStyle();
+								styled = true;
+						}
+						if (Config.getValue('officialLaunch.side') === 'right') {
+								if (anchor.nextElementSibling !== button) {
+										anchor.after(button);
+								}
+						}
+						else if (anchor.previousElementSibling !== button) {
+								anchor.before(button);
+						}
+				};
+				const schedule = () => { if (!frame) {
+						frame = requestAnimationFrame(update);
+				} };
+				const observer = new MutationObserver(records => {
+						if (lastUrl !== location.href) {
+								schedule();
+								return;
+						}
+						if (!location.pathname.startsWith('/watch/') || !Config.getValue('officialLaunch.button')) {
+								return;
+						}
+						if (anchor && button.isConnected && anchor.isConnected) {
+								const adjacent = Config.getValue('officialLaunch.side') === 'right' ? anchor.nextElementSibling : anchor.previousElementSibling;
+								if (adjacent !== button) {
+										schedule();
+								}
+						}
+						else if (anchor || records.some(r => [...r.addedNodes].some(n => n instanceof Element && (n.matches(selector) || n.querySelector(selector))))) {
+								schedule();
+						}
+				});
+				observer.observe(document.getElementById('root') || document.documentElement, { subtree: true, childList: true });
+				window.addEventListener('popstate', schedule);
+				Config.onkey?.('officialLaunch.button', schedule);
+				Config.onkey?.('officialLaunch.side', schedule);
+				update();
+				return () => {
+						observer.disconnect();
+						window.removeEventListener('popstate', schedule);
+						Config.offkey?.('officialLaunch.button', schedule);
+						Config.offkey?.('officialLaunch.side', schedule);
+						cancelAnimationFrame(frame);
+						button.remove();
+				};
+		};
 		const createOfficialPlaybackGuard = () => {
 				let active = true;
 				let dialog = null;
@@ -73875,6 +75969,11 @@ class HoverMenu {
 				let lastOfficialWatchId = currentWatchId();
 				const wanted = () => !!Config.props.overrideGinza && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) &&
 						window.name !== 'watchGinza' && (!isShortsPage() || setting('overrideGinza.shorts') !== false);
+				let manual = null;
+				let disposeButton;
+				let recovering = false;
+				const launchId = () => location.pathname.startsWith('/watch/') && !zenzaOwnUrl() &&
+						window.name !== 'watchGinza' && !OfficialPlayerRoute.isOfficialRequest(currentQuery()) ? currentWatchId() : null;
 				const manualMode = () => setting('overrideGinza.officialPlayer') !== 'block';
 				const officialRects = () => [...document.querySelectorAll('#root video')]
 						.filter(isOfficialMedia)
@@ -73910,7 +76009,13 @@ class HoverMenu {
 						}
 				};
 				const shouldHold = (el) => {
-						if (!active || !isOfficialMedia(el) || !wanted() || userPlayed.has(el)) {
+						if (!active || !isOfficialMedia(el)) {
+								return false;
+						}
+						if (manual && currentWatchId() === manual.id && el.closest('[class~="grid-area_[player]"]')) {
+								return true;
+						}
+						if (!wanted() || userPlayed.has(el)) {
 								return false;
 						}
 						const watchId = currentWatchId();
@@ -73962,7 +76067,7 @@ class HoverMenu {
 				const releaseHeld = () => { [...held].forEach(unhold); };
 				const openIfClosed = () => {
 						const watchId = currentWatchId();
-						if (dialog && !dialog.isOpen && watchId) {
+						if (!manual && dialog && !dialog.isOpen && watchId) {
 								open(watchId);
 						}
 				};
@@ -74016,6 +76121,59 @@ class HoverMenu {
 						}
 						catch (_) { /* 続きから再生できなくても閉じるのは続ける */ }
 				};
+				const failLaunch = (session) => {
+						if (manual !== session) {
+								return;
+						}
+						const samePage = launchId() === session.id;
+						manual = null;
+						allowedWatchId = session.id;
+						recovering = true;
+						try {
+								if (dialog.isOpen && dialog.watchId === session.id) {
+										dialog.close();
+								}
+						}
+						finally {
+								recovering = false;
+								releaseHeld();
+						}
+						if (samePage && session.playing && setting('officialLaunch.restoreOnFailure') && session.video?.isConnected) {
+								void realPlay.call(session.video).catch(() => { });
+						}
+				};
+				const launch = () => {
+						const id = launchId();
+						if (!id || !dialog || dialog.isOpen || manual?.id === id) {
+								return false;
+						}
+						const area = document.querySelector('#root [class~="grid-area_[player]"]');
+						if (!area) {
+								return false;
+						}
+						const video = [...area.querySelectorAll('video')].find(v => isOfficialMedia(v) && v.getBoundingClientRect().width > 0) ?? null;
+						const session = { id, video, playing: !!video && !video.paused && !video.ended, starting: true };
+						const time = setting('officialLaunch.continueTime') && video && !video.ended && Number.isFinite(video.currentTime) ? video.currentTime : 0;
+						manual = session;
+						lastGestureAt = -Infinity;
+						stopAll();
+						const openManual = async () => {
+								const full = document.fullscreenElement;
+								if (full && (area.contains(full) || full.contains(area))) {
+										await document.exitFullscreen();
+								}
+								if (manual !== session || launchId() !== id) {
+										failLaunch(session);
+										return;
+								}
+								await dialog.open(id, { currentTime: time, openNow: true, eventType: 'officialManual' });
+								if (!dialog.isOpen || dialog.watchId !== id) {
+										failLaunch(session);
+								}
+						};
+						void openManual().catch(() => failLaunch(session));
+						return true;
+				};
 				window.addEventListener('play', onPlay, true);
 				window.addEventListener('playing', onPlay, true);
 				window.addEventListener('pointerdown', onPointerDown, true);
@@ -74023,17 +76181,39 @@ class HoverMenu {
 				return {
 						attach(next) {
 								dialog = next;
+								disposeButton = installOfficialLaunchButton(launchId, () => launch());
+								next.on?.('requestOfficialLaunch', (e) => {
+										if (launch()) {
+												e.preventDefault();
+												e.stopPropagation();
+										}
+								});
+								next.on?.('canPlay', (id) => { if (manual?.id === id) {
+										manual.starting = false;
+								} });
+								const failed = () => {
+										if (manual?.starting && dialog.watchId === manual.id) {
+												failLaunch(manual);
+										}
+								};
+								next.on?.('loadVideoInfoFail', failed);
+								next.on?.('error', failed);
 								next.on?.('close', () => {
 										const watchId = currentWatchId();
 										const closedWatchId = next.watchId, time = Number(next._lastCurrentTime) || 0;
+										manual = null;
 										allowedWatchId = watchId;
 										unwatchNew();
 										releaseHeld();
-										if (watchId && closedWatchId === watchId) {
+										if (!recovering && watchId && closedWatchId === watchId) {
 												resumeOfficial(watchId, time);
 										}
 								});
-								next.on?.('open', () => {
+								next.on?.('open', (id) => {
+										if (manual && manual.id !== id) {
+												manual = null;
+												releaseHeld();
+										}
 										allowedWatchId = null;
 										userPlayed = new WeakSet();
 										stopAll();
@@ -74046,6 +76226,8 @@ class HoverMenu {
 						},
 						release() {
 								active = false;
+								manual = null;
+								disposeButton?.();
 								unwatchNew();
 								releaseHeld();
 								window.removeEventListener('play', onPlay, true);
@@ -75585,6 +77767,14 @@ class ModernAdvancedSettingsModel {
 										])]
 						]),
 						...group('再生・音声', '公式プレイヤー連携', [
+								['officialLaunch.button', '公式プレイヤーに「Zen」ボタンを表示', { type: 'boolean',
+												description: '通常のニコニコ動画の再生バーに、今の動画をZenzaWatchで開くボタンを表示します。自動起動がオフでも使えます。ボタンを隠しても割り当てたキーは使えます。' }],
+								['officialLaunch.side', 'Zenボタンを置く位置', { ...select([['left', 'コメント切替の左'], ['right', 'コメント切替の右']]), dependsOn: 'officialLaunch.button',
+												description: '吹き出しのボタンを基準に位置を選びます。位置は公式の操作バーが表示されている間と全画面表示時に共通です。' }],
+								['officialLaunch.continueTime', '手動で開くときに公式の再生位置を引き継ぐ', { type: 'boolean',
+												description: 'ボタンとショートカットの両方に適用します。オンなら押した時点の位置から、オフなら冒頭から開きます。再生が終了した動画や位置をまだ取得できない動画は冒頭から開きます。' }],
+								['officialLaunch.restoreOnFailure', '切り替えに失敗したら公式の再生を再開する', { type: 'boolean',
+												description: '切り替え中は公式を一時停止します。ZenzaWatchで読み込めなかった場合は公式へ戻り、切り替え前に再生していた動画だけ再開します。オフなら一時停止のまま戻ります。' }],
 								['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { description: '視聴ページをアドレス・ブックマーク・別タブなどで直接開いたときも、公式プレイヤーの代わりにZenzaWatchで再生します。ZenzaWatch を開いた時は、公式プレイヤーを必ず一時停止します。初期値OFF。下の項目で細かい動きを選べます。' }],
 								['overrideGinza.officialPlayer', 'ZenzaWatch が開いている間の公式プレイヤー', {
 												...select([['manual', '開いた時に止める。公式の再生ボタンを押した時だけ一緒に再生する'], ['block', '止めたままにする（公式の再生ボタンを押しても再生しない）']]),
@@ -76275,7 +78465,7 @@ class ModernAdvancedSettingsModel {
 						const id = 'KEY_' + action.id;
 						const [category, subcategory] = ModernAdvancedSettingsModel.categoryFor(id, action);
 						add({ id, label: action.label || action.id, category, subcategory, type: 'shortcut',
-								description: '', actionId: action.id, defaultKey: action.defaultKey });
+								description: action.id === 'OPEN_OFFICIAL_WATCH' ? '通常の公式視聴ページで、その動画をZenzaWatchへ切り替えます。初期値は Alt + Shift + Z。コメントなどの文字入力中は働きません。割り当てを消すとボタンだけ使えます。「公式プレイヤー連携」と同じキー設定です。' : '', actionId: action.id, defaultKey: action.defaultKey });
 						if (action.customSeekSlot) {
 								const seek = 'PARAM_' + action.id;
 								add({ id: seek, label: (action.label || action.id) + ' の秒数',
@@ -76364,6 +78554,11 @@ class ModernAdvancedSettingsModel {
 		}
 		sectionDescriptors(category, subcategory) {
 				const entries = this.descriptors.filter(d => d.category === category && d.subcategory === subcategory);
+				if (category === '再生・音声' && subcategory === '公式プレイヤー連携') {
+						const shortcut = this.descriptor('KEY_OPEN_OFFICIAL_WATCH');
+						if (shortcut)
+								return [...entries, { ...shortcut, category, subcategory, sharedWith: shortcut.category + ' / ' + shortcut.subcategory }];
+				}
 				if (category !== '画面・映像' || subcategory !== '表示・非表示') {
 						return entries;
 				}
@@ -86701,7 +88896,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.468-task1088",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.471-task1094",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

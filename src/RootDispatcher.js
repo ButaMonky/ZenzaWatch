@@ -3,7 +3,7 @@ import {ZenzaWatch} from './ZenzaContext';
 import {PopupMessage} from './util';
 import {PlayerConfig} from './NicoVideoPlayerDialog';
 import {Clipboard} from '../packages/lib/src/dom/Clipboard';
-import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
+import {VideoSharePanel} from './VideoSharePanel';
 import {CommentPictureInPicture} from '../packages/zenza/src/commentLayer/CommentPictureInPicture';
 import {PipPageThumbnail} from '../packages/zenza/src/videoPlayer/PipPageThumbnail';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
@@ -15,11 +15,13 @@ import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions'
 //@require PipPageThumbnail
 //@require RelatedMenuOrder
 //@require RelatedMenuActions
+//@require VideoSharePanel
 const RootDispatcher = (() => {
     let config;
     let player;
     let playerState;
     let lifetime = 0;
+    let closeShare;
     class RootDispatcher {
         static initialize(dialog) {
             player = dialog;
@@ -40,11 +42,18 @@ const RootDispatcher = (() => {
                 }
                 return undefined;
             });
+            player.on('open', () => {
+                if (player === dialog) {
+                    lifetime++;
+                    closeShare?.();
+                }
+            });
             player.on('close', () => {
                 if (player !== dialog) {
                     return;
                 }
                 lifetime++;
+                closeShare?.();
                 // Task712: the video dialog is gone, so its *native* PiP must also
                 // close. Stopping the comment-PiP session alone does not close it.
                 // Capture ownership first: never dismiss another site's PiP window.
@@ -166,12 +175,46 @@ const RootDispatcher = (() => {
                     }
                     break;
                 }
-                case 'tweet':
-                    // Task1072: 動画を開いていない時（videoInfo が null）は何もしない（以前は openTweetWindow の中で例外になっていた）
-                    if (playerState.videoInfo) {
-                        nicoUtil.openTweetWindow(playerState.videoInfo);
+                case 'tweet': {
+                    const info = playerState.videoInfo;
+                    if (!info || !info.watchId || info.watchId !== player.watchId) {
+                        break;
                     }
+                    const session = lifetime;
+                    const currentPlayer = () => session === lifetime && player.watchId === info.watchId && playerState.videoInfo === info
+                        ? player._nicoVideoPlayer : null;
+                    const getCurrentVideo = () => {
+                        const displayed = currentPlayer()?.drawableVideoElement;
+                        const frame = displayed && 'drawableElement' in displayed ? displayed.drawableElement : displayed;
+                        return frame instanceof HTMLVideoElement ? frame : null;
+                    };
+                    VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
+                        config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
+                        getCurrentFileSource(video) {
+                            // HLS wrappers display a different, MediaSource-backed element.
+                            const displayed = currentPlayer()?.drawableVideoElement;
+                            if (displayed !== video || getCurrentVideo() !== video)
+                                return undefined;
+                            return video.srcObject instanceof Blob ? video.srcObject : video.src || video.currentSrc;
+                        },
+                        getThumbnail(host, seconds) {
+                            if (!currentPlayer() || !info.watchId) {
+                                return undefined;
+                            }
+                            return player._view?.videoControlBar?.storyboard?.createSavedPreview(host, info.watchId, seconds);
+                        },
+                        seekCurrentVideo(video, seconds) {
+                            const displayed = currentPlayer()?.drawableVideoElement;
+                            if (!displayed || getCurrentVideo() !== video) {
+                                return false;
+                            }
+                            displayed.currentTime = seconds;
+                            return true;
+                        }
+                    });
+                    closeShare = VideoSharePanel.close;
                     break;
+                }
                 // Task 060: 関連メニュー(RelatedInfoMenu、VideoInfoPanel.js内)の
                 // 「ニコニ広告で宣伝」「twitterの反応を見る」「親作品・コンテンツ
                 // ツリー」と同じURLをキーボードショートカットからも開けるように

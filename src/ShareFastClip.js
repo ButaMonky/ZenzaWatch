@@ -79,10 +79,8 @@ const ShareFastClip = (() => {
     try {
       const [video, audio] = await Promise.all([input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack()]);
       if (!video) throw Error('元ファイルに映像がありません。');
-      const parts = [];
-      const target = new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { parts.push(new Blob([chunk])); }}));
-      const output = new media.Output({format:new media.Mp4OutputFormat({fastStart:'fragmented'}), target});
-      const videoOptions = {codec:'avc'};
+      let parts = [];
+      const videoOptions = {};
       if (maxHeight && !drawFrame && await video.getDisplayHeight() > maxHeight) videoOptions.height = maxHeight;
       if (drawFrame) {
         const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
@@ -103,18 +101,36 @@ const ShareFastClip = (() => {
             return frame;
           }});
       }
-      signal?.throwIfAborted();
-      conversion = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
-        copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
-        video:videoOptions, audio:{codec:'aac'}, tags:{}, showWarnings:false});
-      if (!conversion.isValid || !conversion.utilizedTracks.includes(video) || (audio && !conversion.utilizedTracks.includes(audio))) throw Error('この端末で元の映像・音声を変換できません。');
+      // H.264/AAC MP4 is preferred for X. Browsers without an AAC or H.264 encoder (Linux Chrome, some Firefox builds)
+      // get a WebM from the same fast path instead of falling back to real-time recording.
+      let type = 'video/mp4';
+      for (const plan of [{type:'video/mp4', video:'avc', audio:'aac'}, {type:'video/webm', video:'vp9', audio:'opus'}, {type:'video/webm', video:'vp8', audio:'opus'}]) {
+        signal?.throwIfAborted();
+        const chunks = [], mp4 = plan.type === 'video/mp4';
+        // WebM is buffered so the muxer can write its duration and cues; an append-only WebM has no duration.
+        const target = mp4 ? new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { chunks.push(new Blob([chunk])); }}))
+          : new media.BufferTarget();
+        if (!mp4) chunks.target = target;
+        const format = mp4 ? new media.Mp4OutputFormat({fastStart:'fragmented'}) : new media.WebMOutputFormat();
+        const output = new media.Output({format, target});
+        const candidate = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
+          copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
+          video:{...videoOptions, codec:plan.video}, audio:{codec:plan.audio}, tags:{}, showWarnings:false});
+        if (candidate.isValid && candidate.utilizedTracks.includes(video) && (!audio || candidate.utilizedTracks.includes(audio))) {
+          conversion = candidate;
+          parts = chunks;
+          type = plan.type;
+          break;
+        }
+      }
+      if (!conversion) throw Error('この端末で元の映像・音声を変換できません。');
       signal?.throwIfAborted();
       signal?.addEventListener('abort', cancel, {once:true});
       conversion.onProgress = onProgress;
       onStage?.('encoding');
       await conversion.execute();
       signal?.throwIfAborted();
-      const result = new Blob(parts, {type:'video/mp4'});
+      const result = new Blob(parts.target ? [parts.target.buffer] : parts, {type});
       if (!result.size) throw Error('映像を書き出せませんでした。');
       return result;
     } catch (error) {

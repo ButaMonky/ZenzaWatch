@@ -15,7 +15,10 @@ function startOrdinaryRuntime(w, start) {
     const setting = key => w.localStorage.getItem('ZenzaWatch_' + key);
     // Match Config's mobile default for link interception. Invalid or inaccessible storage starts immediately.
     const links = setting('overrideWatchLink');
-    immediate = JSON.parse(setting('overrideGinza')) ||
+    // Task1108: the takeover of the official player only matters on watch/shorts pages. Elsewhere it can wait for
+    // the first paint like any other page; a later SPA move to a watch page is still held by the playback guard.
+    const watchPage = /^\/(watch|shorts)\//.test(w.location.pathname);
+    immediate = (JSON.parse(setting('overrideGinza')) && watchPage) ||
         (links === null ? /(Android|iPad;|CriOS)/i.test(w.navigator.userAgent) : JSON.parse(links)) ||
         w.sessionStorage.getItem('ZenzaWatch_PlayingStatus') !== null ||
         w.location.hash || (/^\/(watch|shorts)\//.test(w.location.pathname) && w.location.search) ||

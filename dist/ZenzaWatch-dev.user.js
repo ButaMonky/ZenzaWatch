@@ -51,7 +51,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.482-task1105
+// @version        2.7.484-task1108
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -59,7 +59,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-19 17:16Z b192810d
+// build: 2026-11-20 03:14Z e9576f56
 (() => {
  if (location.hostname==='x.com') {
 
@@ -3209,10 +3209,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.482-task1105';
+    var VER = '2.7.484-task1108';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-19 17:16Z b192810d';
+    var BUILD = '2026-11-20 03:14Z e9576f56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -66310,10 +66310,8 @@ const ShareFastClip = (() => {
 		try {
 			const [video, audio] = await Promise.all([input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack()]);
 			if (!video) throw Error('元ファイルに映像がありません。');
-			const parts = [];
-			const target = new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { parts.push(new Blob([chunk])); }}));
-			const output = new media.Output({format:new media.Mp4OutputFormat({fastStart:'fragmented'}), target});
-			const videoOptions = {codec:'avc'};
+			let parts = [];
+			const videoOptions = {};
 			if (maxHeight && !drawFrame && await video.getDisplayHeight() > maxHeight) videoOptions.height = maxHeight;
 			if (drawFrame) {
 				const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
@@ -66333,18 +66331,33 @@ const ShareFastClip = (() => {
 						return frame;
 					}});
 			}
-			signal?.throwIfAborted();
-			conversion = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
-				copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
-				video:videoOptions, audio:{codec:'aac'}, tags:{}, showWarnings:false});
-			if (!conversion.isValid || !conversion.utilizedTracks.includes(video) || (audio && !conversion.utilizedTracks.includes(audio))) throw Error('この端末で元の映像・音声を変換できません。');
+			let type = 'video/mp4';
+			for (const plan of [{type:'video/mp4', video:'avc', audio:'aac'}, {type:'video/webm', video:'vp9', audio:'opus'}, {type:'video/webm', video:'vp8', audio:'opus'}]) {
+				signal?.throwIfAborted();
+				const chunks = [], mp4 = plan.type === 'video/mp4';
+				const target = mp4 ? new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { chunks.push(new Blob([chunk])); }}))
+					: new media.BufferTarget();
+				if (!mp4) chunks.target = target;
+				const format = mp4 ? new media.Mp4OutputFormat({fastStart:'fragmented'}) : new media.WebMOutputFormat();
+				const output = new media.Output({format, target});
+				const candidate = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
+					copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
+					video:{...videoOptions, codec:plan.video}, audio:{codec:plan.audio}, tags:{}, showWarnings:false});
+				if (candidate.isValid && candidate.utilizedTracks.includes(video) && (!audio || candidate.utilizedTracks.includes(audio))) {
+					conversion = candidate;
+					parts = chunks;
+					type = plan.type;
+					break;
+				}
+			}
+			if (!conversion) throw Error('この端末で元の映像・音声を変換できません。');
 			signal?.throwIfAborted();
 			signal?.addEventListener('abort', cancel, {once:true});
 			conversion.onProgress = onProgress;
 			onStage?.('encoding');
 			await conversion.execute();
 			signal?.throwIfAborted();
-			const result = new Blob(parts, {type:'video/mp4'});
+			const result = new Blob(parts.target ? [parts.target.buffer] : parts, {type});
 			if (!result.size) throw Error('映像を書き出せませんでした。');
 			return result;
 		} catch (error) {
@@ -66418,7 +66431,8 @@ const ShareClipJobs = (() => {
 					}});
 				signal.throwIfAborted();
 				const base = (name || 'clip').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0,100);
-				const file = new File([output], base + '_' + from + '-' + to + '.mp4', {type:'video/mp4'});
+				const webm = String(output.type).startsWith('video/webm');
+				const file = new File([output], base + '_' + from + '-' + to + (webm ? '.webm' : '.mp4'), {type:webm ? 'video/webm' : 'video/mp4'});
 				setStage('checking');
 				await checkOutput(file, to-from, signal);
 				signal.throwIfAborted();
@@ -67062,7 +67076,9 @@ const ShareLocalClip = {
 				updatePostLink();
 				result.hidden = false;
 				showAttachmentOptions();
-				status.textContent = label + (task.hls ? ' の選択区間からMP4' : ' の元ファイルからMP4') + 'を作成しました。';
+				const kind = outputFile.type.startsWith('video/webm') ? 'WebM' : 'MP4';
+				status.textContent = label + (task.hls ? ' の選択区間から' : ' の元ファイルから') + kind + 'を作成しました。'
+						(kind === 'WebM' ? 'このブラウザーはH.264/AACで書き出せないため、WebMにしました。' : '');
 				return;
 			}
 			if (task.state === 'cancelled') {
@@ -92707,7 +92723,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.482-task1105",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.484-task1108",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}
@@ -92724,7 +92740,10 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
     const setting = key => w.localStorage.getItem('ZenzaWatch_' + key);
     // Match Config's mobile default for link interception. Invalid or inaccessible storage starts immediately.
     const links = setting('overrideWatchLink');
-    immediate = JSON.parse(setting('overrideGinza')) ||
+    // Task1108: the takeover of the official player only matters on watch/shorts pages. Elsewhere it can wait for
+    // the first paint like any other page; a later SPA move to a watch page is still held by the playback guard.
+    const watchPage = /^\/(watch|shorts)\//.test(w.location.pathname);
+    immediate = (JSON.parse(setting('overrideGinza')) && watchPage) ||
         (links === null ? /(Android|iPad;|CriOS)/i.test(w.navigator.userAgent) : JSON.parse(links)) ||
         w.sessionStorage.getItem('ZenzaWatch_PlayingStatus') !== null ||
         w.location.hash || (/^\/(watch|shorts)\//.test(w.location.pathname) && w.location.search) ||

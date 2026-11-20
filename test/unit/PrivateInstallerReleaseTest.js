@@ -52,11 +52,11 @@ describe('Task928 private backup with public-only update destinations', () => {
   });
   it('records the reviewed build versions of the five installers', () => {
     const wanted = {
-      'ZenzaWatch-dev':'2.7.482-task1105',
+      'ZenzaWatch-dev':'2.7.484-task1108',
       'ZenzaHLS':'0.1.0-task997',
       'MylistPocket':'0.5.101-task1104',
       'ZenzaAdvancedSettings':'0.4.0-task993',
-      'ZenzaBlogPartsButton':'1.1.56-task1105'
+      'ZenzaBlogPartsButton':'1.1.58-task1108'
     };
     for (const [name,version] of Object.entries(wanted)) {
       assert.strictEqual(meta(name).version, version, name);

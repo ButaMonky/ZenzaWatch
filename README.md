@@ -155,6 +155,8 @@ The public [offline API lookup and source index](docs/research/README.md) docume
 
 通知履歴に記録する通信・応答の範囲は [通信診断](docs/REQUEST_DIAGNOSTICS.md) を参照してください。
 
+不具合を自分で直したい方は [はじめての修理](docs/maintenance/BEGINNER_REPAIR.md) と [症状別の修理案内](docs/maintenance/REPAIR_GUIDE.md) を参照してください。修復レポートと元ファイル1〜2個を無料のAIに渡す手順を説明しています。
+
 ### 外部サイトで再生する
 
 本体とZenzaBlogPartsButtonをインストールし、ニコニコでログインしてから一度ニコニコのページを再読み込みしてください。外部のHTTPSページでは、ニコニコ動画へのリンク横の「Zen」から開けます。設定は本体の **上級者設定 → 外部サイトからの再生** にあります。

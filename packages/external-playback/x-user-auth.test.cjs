@@ -4,6 +4,22 @@ const assert = require('node:assert/strict');
 const {createHash, randomUUID} = require('node:crypto');
 const {createXUserAuth} = require('./x-user-auth.cjs');
 
+// Browsers (Chrome 69+, Firefox 96+) provide the Web Locks API that serialises refreshes across tabs.
+// Node 22 lacks navigator.locks, so give the tests the same exclusive, FIFO behaviour (Task1106).
+if (!globalThis.navigator?.locks) {
+  const queues = new Map();
+  const locks = {request(name, callback) {
+    const previous = queues.get(name) || Promise.resolve();
+    const run = previous.then(() => callback());
+    const settled = run.catch(() => {});
+    queues.set(name, settled);
+    settled.then(() => { if (queues.get(name) === settled) queues.delete(name); });
+    return run;
+  }};
+  if (globalThis.navigator) Object.defineProperty(globalThis.navigator, 'locks', {value: locks, configurable: true});
+  else globalThis.navigator = {locks};
+}
+
 const cfg = {clientId: 'test_client-1', redirectUri: 'http://127.0.0.1:48765/callback'};
 const required = 'tweet.read users.read media.write tweet.write';
 // Issue disposable token pairs for these simulated OAuth exchanges.

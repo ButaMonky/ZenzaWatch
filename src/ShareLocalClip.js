@@ -618,7 +618,9 @@ const ShareLocalClip = {
         updatePostLink();
         result.hidden = false;
         showAttachmentOptions();
-        status.textContent = label + (task.hls ? ' の選択区間からMP4' : ' の元ファイルからMP4') + 'を作成しました。';
+        const kind = outputFile.type.startsWith('video/webm') ? 'WebM' : 'MP4';
+        status.textContent = label + (task.hls ? ' の選択区間から' : ' の元ファイルから') + kind + 'を作成しました。'
+          + (kind === 'WebM' ? 'このブラウザーはH.264/AACで書き出せないため、WebMにしました。' : '');
         return;
       }
       if (task.state === 'cancelled') {

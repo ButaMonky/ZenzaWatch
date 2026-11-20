@@ -42,7 +42,9 @@ test('start immediately when painting already happened, takeover is enabled or i
   for (const configure of [
     h=>{h.w.performance.getEntriesByName=()=>[{}];}, h=>{h.w.document.visibilityState='hidden';},
     h=>{h.w.top={};}, h=>{h.w.location=new URL('https://www.google.com/search');},
-    h=>{h.storage.set('ZenzaWatch_overrideGinza','true');}, h=>{h.storage.set('ZenzaWatch_overrideWatchLink','true');},
+    h=>{h.storage.set('ZenzaWatch_overrideGinza','true');h.w.location=new URL('https://www.nicovideo.jp/watch/sm9');},
+    h=>{h.storage.set('ZenzaWatch_overrideGinza','true');h.w.location=new URL('https://www.nicovideo.jp/shorts/sm9');},
+    h=>{h.storage.set('ZenzaWatch_overrideWatchLink','true');},
     h=>{h.w.navigator.userAgent='Mozilla CriOS';}, h=>{h.w.sessionStorage.getItem=()=>'saved';},
     h=>{h.w.name='watchGinza';}, h=>{h.w.location=new URL('https://www.nicovideo.jp/watch/sm9?from=21');},
     h=>{h.w.location.hash='#play';}, h=>{h.w.location.search='?continuous=1';},
@@ -68,5 +70,17 @@ test('search can start after first paint even when there are no result cards', (
     h.timeout();
     assert.equal(h.count(), 1);
     assert.equal(h.input.size, 0);
+  }
+});
+
+test('the official-player takeover does not hold back the first paint outside watch pages (Task1108)', () => {
+  for (const page of ['/tag/test', '/search/test', '/ranking', '/']) {
+    const h = fixture();
+    h.w.location = new URL('https://www.nicovideo.jp' + page);
+    h.storage.set('ZenzaWatch_overrideGinza', 'true');
+    h.start();
+    assert.equal(h.count(), 0, page);
+    h.paint('first-contentful-paint');
+    assert.equal(h.count(), 1, page);
   }
 });

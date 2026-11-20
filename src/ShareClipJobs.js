@@ -62,7 +62,8 @@ const ShareClipJobs = (() => {
           }});
         signal.throwIfAborted();
         const base = (name || 'clip').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0,100);
-        const file = new File([output], base + '_' + from + '-' + to + '.mp4', {type:'video/mp4'});
+        const webm = String(output.type).startsWith('video/webm');
+        const file = new File([output], base + '_' + from + '-' + to + (webm ? '.webm' : '.mp4'), {type:webm ? 'video/webm' : 'video/mp4'});
         setStage('checking');
         await checkOutput(file, to-from, signal);
         signal.throwIfAborted();

@@ -4,6 +4,7 @@ class AdvancedSettingsController {
     panel;
     pending;
     disposed = false;
+    openRequest = 0;
     entry;
     entryHost;
     entryAnchor;
@@ -14,7 +15,9 @@ class AdvancedSettingsController {
         if (this.disposed || !host || !doc.body) {
             return;
         }
-        host.hidden = !/^\/my(?:\/|$)/.test(doc.location.pathname);
+        const hidden = !/^\/my(?:\/|$)/.test(doc.location.pathname);
+        if (host.hidden !== hidden)
+            host.hidden = hidden;
         if (host.hidden) {
             return;
         }
@@ -60,11 +63,16 @@ class AdvancedSettingsController {
         if (this.disposed) {
             return;
         }
+        const request = ++this.openRequest;
         if (!this.pending) {
             this.pending = (async () => {
                 await this.options.config.promise('restore');
                 if (!this.disposed && !this.panel) {
-                    this.panel = this.options.createPanel(this.options.config);
+                    const panel = await this.options.createPanel(this.options.config);
+                    if (this.disposed)
+                        panel.dispose();
+                    else
+                        this.panel = panel;
                 }
             })().catch(error => { this.pending = undefined; throw error; });
         }
@@ -76,7 +84,7 @@ class AdvancedSettingsController {
         for (const key of Object.keys(this.options.config.default || {}).filter(key => key.startsWith('externalLinks.'))) {
             await this.options.config.refresh?.(key);
         }
-        if (this.disposed) {
+        if (this.disposed || request !== this.openRequest) {
             return;
         }
         try {
@@ -89,7 +97,7 @@ class AdvancedSettingsController {
             throw error;
         }
     }
-    close() { this.panel?.hide(); }
+    close() { this.openRequest++; this.panel?.hide(); }
     mountEntry() {
         if (this.disposed) {
             return;

@@ -120,6 +120,12 @@ class NicoVideoPlayer extends Emitter {
         sharedNgLevel: conf.props.sharedNgLevel
       },
       showComment: conf.props.showComment,
+      isMediaPlaying: () => {
+        const media = this.drawableVideoElement;
+        // Credits and YouTube supply separate clocks without native readiness.
+        return !this.isSupporterCreditActive && !this._creditCommentHold &&
+          media?.readyState >= 3 && !media.paused && !media.seeking && !media.ended;
+      },
       debug: conf.props.debug,
       playbackRate,
     });

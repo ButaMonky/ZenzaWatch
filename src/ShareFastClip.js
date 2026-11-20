@@ -69,76 +69,117 @@ const ShareFastClip = (() => {
     const media = await getLibrary();
     signal?.throwIfAborted();
     onStage?.('source');
-    const input = hls ? await ShareHlsClipSource.create(media, hls, from, to, signal) :
+    let openAlternative;
+    const input = hls ? await ShareHlsClipSource.create(media, hls, from, to, signal, open => { openAlternative = open; }) :
       new media.Input({source:new media.BlobSource(blob), formats:[media.MP4, media.QTFF, media.MATROSKA, media.WEBM]});
-    let conversion, cancellation;
-    const cancel = () => {
-      if (conversion && !cancellation) cancellation = conversion.cancel().catch(() => {});
-      return cancellation;
-    };
-    try {
-      const [video, audio] = await Promise.all([input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack()]);
-      if (!video) throw Error('元ファイルに映像がありません。');
-      let parts = [];
-      const videoOptions = {};
-      if (maxHeight && !drawFrame && await video.getDisplayHeight() > maxHeight) videoOptions.height = maxHeight;
-      if (drawFrame) {
-        const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
-        // The overlay moves independently of the number of distinct source pictures.
-        if (comments && (await video.computePacketStats(32)).averagePacketRate < 29.9) videoOptions.frameRate = 30;
-        const scale = Math.min(1, (maxHeight || h)/h, 1920 / Math.max(w,h), 1080 / Math.min(w,h));
-        const width = Math.max(2, 2 * Math.round(w * scale / 2));
-        const height = Math.max(2, 2 * Math.round(h * scale / 2));
-        const image = document.createElement('canvas'), frame = document.createElement('canvas');
-        image.width = frame.width = width;
-        image.height = frame.height = height;
-        const sourceCtx = image.getContext('2d'), frameCtx = frame.getContext('2d');
-        Object.assign(videoOptions, {processedWidth:width, processedHeight:height, allowTransformationMetadata:false,
-          process(sample) {
-            signal?.throwIfAborted();
-            sample.draw(sourceCtx, 0, 0, width, height);
-            if (drawFrame(frameCtx, width, height, image, from + sample.timestamp) !== true) throw Error('フレームを合成できません。');
-            return frame;
-          }});
-      }
-      // H.264/AAC MP4 is preferred for X. Browsers without an AAC or H.264 encoder (Linux Chrome, some Firefox builds)
-      // get a WebM from the same fast path instead of falling back to real-time recording.
-      let type = 'video/mp4';
-      for (const plan of [{type:'video/mp4', video:'avc', audio:'aac'}, {type:'video/webm', video:'vp9', audio:'opus'}, {type:'video/webm', video:'vp8', audio:'opus'}]) {
-        signal?.throwIfAborted();
-        const chunks = [], mp4 = plan.type === 'video/mp4';
-        // WebM is buffered so the muxer can write its duration and cues; an append-only WebM has no duration.
-        const target = mp4 ? new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { chunks.push(new Blob([chunk])); }}))
-          : new media.BufferTarget();
-        if (!mp4) chunks.target = target;
-        const format = mp4 ? new media.Mp4OutputFormat({fastStart:'fragmented'}) : new media.WebMOutputFormat();
-        const output = new media.Output({format, target});
-        const candidate = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
-          copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
-          video:{...videoOptions, codec:plan.video}, audio:{codec:plan.audio}, tags:{}, showWarnings:false});
-        if (candidate.isValid && candidate.utilizedTracks.includes(video) && (!audio || candidate.utilizedTracks.includes(audio))) {
-          conversion = candidate;
-          parts = chunks;
-          type = plan.type;
-          break;
+    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('clip-conversion', hls ? 'hls' : 'file', 'session', () => !signal?.aborted);
+    let step = 'input.tracks';
+    async function encode(input) {
+      step = 'input.tracks';
+      let conversion, cancellation;
+      const cancel = () => {
+        if (conversion && !cancellation) cancellation = conversion.cancel().catch(() => {});
+        return cancellation;
+      };
+      try {
+        const [video, audio] = await Promise.all([input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack()]);
+        if (!video) throw Error('元ファイルに映像がありません。');
+        let parts = [];
+        const videoOptions = {};
+        if (maxHeight && !drawFrame && await video.getDisplayHeight() > maxHeight) videoOptions.height = maxHeight;
+        if (drawFrame) {
+          const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
+          // The overlay moves independently of the number of distinct source pictures.
+          if (comments && (await video.computePacketStats(32)).averagePacketRate < 29.9) videoOptions.frameRate = 30;
+          const scale = Math.min(1, (maxHeight || h)/h, 1920 / Math.max(w,h), 1080 / Math.min(w,h));
+          const width = Math.max(2, 2 * Math.round(w * scale / 2));
+          const height = Math.max(2, 2 * Math.round(h * scale / 2));
+          const image = document.createElement('canvas'), frame = document.createElement('canvas');
+          image.width = frame.width = width;
+          image.height = frame.height = height;
+          const sourceCtx = image.getContext('2d'), frameCtx = frame.getContext('2d');
+          Object.assign(videoOptions, {processedWidth:width, processedHeight:height, allowTransformationMetadata:false,
+            process(sample) {
+              signal?.throwIfAborted();
+              sample.draw(sourceCtx, 0, 0, width, height);
+              if (drawFrame(frameCtx, width, height, image, from + sample.timestamp) !== true) throw Error('フレームを合成できません。');
+              return frame;
+            }});
         }
+        // H.264/AAC MP4 is preferred for X. Browsers without an AAC or H.264 encoder (Linux Chrome, some Firefox builds)
+        // get a WebM from the same fast path instead of falling back to real-time recording.
+        step = 'output.codecs';
+        let type = 'video/mp4';
+        for (const plan of [{type:'video/mp4', video:'avc', audio:'aac'}, {type:'video/webm', video:'vp9', audio:'opus'}, {type:'video/webm', video:'vp8', audio:'opus'}]) {
+          signal?.throwIfAborted();
+          const chunks = [], mp4 = plan.type === 'video/mp4';
+          // WebM is buffered so the muxer can write its duration and cues; an append-only WebM has no duration.
+          const target = mp4 ? new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { chunks.push(new Blob([chunk])); }}))
+            : new media.BufferTarget();
+          if (!mp4) chunks.target = target;
+          const format = mp4 ? new media.Mp4OutputFormat({fastStart:'fragmented'}) : new media.WebMOutputFormat();
+          const output = new media.Output({format, target});
+          const candidate = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
+            copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
+            video:{...videoOptions, codec:plan.video}, audio:{codec:plan.audio}, tags:{}, showWarnings:false});
+          if (candidate.isValid && candidate.utilizedTracks.includes(video) && (!audio || candidate.utilizedTracks.includes(audio))) {
+            conversion = candidate;
+            parts = chunks;
+            type = plan.type;
+            break;
+          }
+        }
+        if (!conversion) throw Error('この端末で元の映像・音声を変換できません。');
+        signal?.throwIfAborted();
+        signal?.addEventListener('abort', cancel, {once:true});
+        conversion.onProgress = onProgress;
+        step = 'output.encode';
+        onStage?.('encoding');
+        await conversion.execute();
+        signal?.throwIfAborted();
+        const result = new Blob(parts.target ? [parts.target.buffer] : parts, {type});
+        if (!result.size) throw Error('映像を書き出せませんでした。');
+        diagnostic?.success();
+        return result;
+      } catch (error) {
+        await cancel();
+        throw error;
+      } finally {
+        signal?.removeEventListener('abort', cancel);
+        input.dispose();
       }
-      if (!conversion) throw Error('この端末で元の映像・音声を変換できません。');
-      signal?.throwIfAborted();
-      signal?.addEventListener('abort', cancel, {once:true});
-      conversion.onProgress = onProgress;
-      onStage?.('encoding');
-      await conversion.execute();
-      signal?.throwIfAborted();
-      const result = new Blob(parts.target ? [parts.target.buffer] : parts, {type});
-      if (!result.size) throw Error('映像を書き出せませんでした。');
-      return result;
+    }
+    try {
+      try {
+        return await encode(input);
+      } catch (error) {
+        if (!openAlternative || error.name !== 'UnsupportedInputFormatError') throw error;
+        signal?.throwIfAborted();
+        // Try a distinct stream pair at the same resolution from this master.
+        onStage?.('source');
+        return await encode(await openAlternative());
+      }
     } catch (error) {
-      await cancel();
-      throw error;
-    } finally {
-      signal?.removeEventListener('abort', cancel);
-      input.dispose();
+      if (signal?.aborted || error.name === 'AbortError') throw error;
+      // Segment/playlist requests emit a separate failure with their HTTP status.
+      if (error.kind === 'network' || error.status || error.name === 'TimeoutError' || error.clipProtected) throw error;
+      // HLS can advertise the codecs in its master playlist. The converter only
+      // inspects the actual segment format later, while initializing or encoding.
+      if (error.name === 'UnsupportedInputFormatError') step = hls ? 'input.segmentFormat' : 'input.tracks';
+      const invalidSegment = hls && error.message === 'Invalid PKCS#7 padding. Incorrect key or corrupted data.';
+      if (invalidSegment) step = 'input.segmentIntegrity';
+      diagnostic?.failure(invalidSegment ? {kind:'integrity', missing:step} : {reason:'not supported', missing:step});
+      const explanation = {
+        'input.tracks':'元の映像・音声の形式を変換ライブラリで読み取れませんでした。',
+        'input.segmentFormat':'配信一覧を取得しましたが、選択区間の映像・音声データを変換ライブラリで読み取れませんでした。',
+        'input.segmentIntegrity':'選択区間の配信データを検証できなかったため、直接書き出しを中止しました。',
+        'output.codecs':'この端末で利用できる映像・音声の書き出し形式が見つかりませんでした。',
+        'output.encode':'選択区間の映像・音声を書き出している途中で変換に失敗しました。'
+      };
+      const message = new Error(explanation[step] + ' 通知履歴の「クリップの映像・音声変換」で修正箇所を確認できます。');
+      if (step === 'input.segmentFormat') message.clipInputUnsupported = true;
+      throw message;
     }
   }
   return {convert, makeThumbnails, acceptsHls:url => ShareHlsClipSource.accepts(url)};

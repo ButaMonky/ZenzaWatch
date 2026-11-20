@@ -28,6 +28,7 @@ test('generated five-module graph performs actual separate bookmark writes and s
  });
  const btn=name=>dock.element.querySelector('[data-bookmark-action="'+name+'"]');
  await dock.activate(active,300);
+ dock.toggle(doc.body);
  // The actual generated runtime must isolate all dock keydown/keyup actions
  // from player-wide shortcuts without preventing native seek keyboard input.
  let globalKeydown=0,globalKeyup=0;
@@ -85,6 +86,7 @@ test('generated runtime preserves manual data while another video becomes active
   newId:()=> 'B1',seek:()=>{}
  });
  await dock.activate('sm1',200);
+ dock.toggle(doc.body);
  dock.element.querySelector('[data-bookmark-action="add"]').click();await settle();
  active='sm2';
  dock.element.querySelector('[data-bookmark-action="remove"]').click();await settle();

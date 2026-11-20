@@ -89,14 +89,18 @@ class NicoChatGroupViewModel {
   }
   async addChatArray(nicoChatArray) {
     const members = this._members;
+    // A cache miss measures styled text synchronously. Leave room for video frames
+    // even when measuring far fewer than 100 complex comments takes several ms.
+    let sliceEnd = Date.now() + 4;
     for (let i = 0, len = nicoChatArray.length; i < len; i++) {
       if (members !== this._members) { return; }
       const nicoChat = nicoChatArray[i];
       const nc = NicoChatViewModel.create(nicoChat, this._offScreen);
       members.push(nc);
       ++this._lastUpdate;
-      if (i % 100 === 99) {
-        await new Promise(r => setTimeout(r, 10));
+      if (i + 1 < len && (i % 100 === 99 || Date.now() >= sliceEnd)) {
+        await new Promise(r => setTimeout(r, 0));
+        sliceEnd = Date.now() + 4;
       }
     }
 

@@ -18,6 +18,7 @@ async function fixture(){
    currentVideoId:()=>active,currentTime:()=>time,timestamp:()=>clock,
    newId:()=>'B1',seek:target=>seeks.push(target),duration:()=>120,repeatEnabled:()=>true});
  await dock.activate(active,120);
+ dock.toggle(dom.window.document.body);
  const C=loadClass('src/NicoVideoPlayerDialog.js','NicoVideoPlayerDialog',createContext({
    Emitter:class{},MediaSessionApi:{updatePositionStateByMedia(){events.push('media');}}}));
  const dialog=Object.create(C.prototype);

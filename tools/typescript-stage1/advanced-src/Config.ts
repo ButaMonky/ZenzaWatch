@@ -2,6 +2,10 @@
 export type AdvancedSettingsStorageKey = string;
 export type AdvancedSettingsStoredValue = string | number | boolean | null | unknown[] | Record<string, unknown>;
 export type AdvancedSettingsDefaultMap = Record<string, AdvancedSettingsStoredValue>;
+declare const ShareClipPreferences: {
+  defaults: Record<string, string | number | boolean>;
+  accepts(id: string, value: unknown): boolean;
+};
 const PRODUCT: string = 'ZenzaWatch';
 import { DataStorage } from '../packages/lib/src/infra/DataStorage';
 import { buildDefaultKeyConfig } from '../packages/zenza/src/ShortcutActions';
@@ -32,6 +36,7 @@ const window = {console: console} as unknown as Window;
 //@require SceneSearchPreferences
 //@require UiVisibilityRegistry
 //@require NgCompositeRules
+//@require ShareClipPreferences
 const Config = (() => {
   const DEFAULT_CONFIG: AdvancedSettingsDefaultMap = {
 "externalLinks.enabled":true,"externalLinks.siteMode":"all","externalLinks.sites":"","externalLinks.excludedSites":"","externalLinks.displayMode":"inline","externalLinks.size":"small","externalLinks.redirects":false,"externalLinks.textIds":false,"externalLinks.prefixes":"sm\nnm\nso\nss","externalLinks.preflight":"off","externalLinks.consoleLog":false,
@@ -257,6 +262,8 @@ const Config = (() => {
     // Task 206: 同時に表示を開始できるコメント数（取得件数とは別。表示中は寿命まで消さない）
     'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
     'commentLayer.protectCA': true,
+    'commentLayer.motionFrameRate': 'auto',
+    'commentLayer.denseFrameRate': '30',
     'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
     'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
     'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
@@ -265,9 +272,7 @@ const Config = (() => {
     'officialLaunch.side': 'left',
     'officialLaunch.continueTime': true,
     'officialLaunch.restoreOnFailure': true,
-    'shareClip.previewQuality': 'low',
-    'shareClip.sceneQuality': 'low',
-    'shareClip.exportQuality': 'source',
+    ...ShareClipPreferences.defaults,
     overrideGinza: false,     // 視聴ページでも公式プレイヤーの代わりに起動する（Task1030 で復活。任意）
     // Task1077: 「公式の視聴ページでZenzaWatchを優先」の下の設定（nico-src/initializer.ts の createOfficialPlaybackGuard）
     'overrideGinza.officialPlayer': 'manual', // manual: 開いた時に止め、公式の再生ボタンを押した時だけ再生 / block: 押しても再生しない
@@ -557,6 +562,7 @@ const Config = (() => {
         return value;
       },
       validateImport: (key, value) => {
+        if (key.startsWith('shareClip.')) { return ShareClipPreferences.accepts(key, value); }
         if (key === 'storyboardCacheMaxMB') { return [0,32,64,128,256,512].includes(value as number); }
         if (key === 'storyboardCacheDays') { return [1,3,7,14,30].includes(value as number); }
         if (key === 'savedSceneFetch') { return typeof value === 'boolean'; }
@@ -635,6 +641,8 @@ const Config = (() => {
           pipPageThumbnailSource: ['smart', 'legacy'],
           'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
           'commentPanel.nicoruStyle': ['dark', 'light', 'legacy'],
+          'commentLayer.motionFrameRate': ['auto', 'adaptive', '15', '30', '60', '120'],
+          'commentLayer.denseFrameRate': ['15', '30', '60'],
           'videoInfo.ownerVideoKindsStyle': ['row', 'stack', 'square', 'shape', 'below', 'off'],
           'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
           'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],

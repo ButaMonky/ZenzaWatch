@@ -193,16 +193,18 @@ class NicoChatCss3View {
     const top = isAlignMiddle ? '50%' : `${ypos}px`;
     const isScaled = scale !== 1.0 || scaleY !== 1.0;
 
+    // Outside the active interval the zero-size transform hides the entire glyph box,
+    // including outlines and fork comments whose configured opacity is !important.
     const inline = `
       --chat-trans-x: -${outerScreenWidth + chat.width * scale}px;
       ${isAlignMiddle ? '--chat-trans-y: -50%' : ''};
-      ${isScaled ?
+      ${isScaled || isAlignMiddle ?
         `--chat-scale-x: ${scale};--chat-scale-y: ${scaleY};` : ''}
       display: inline-block;
       position: absolute;
       will-change: transform;
       contain: layout style paint;
-      visibility: hidden;
+      visibility: visible;
       line-height: 1.235;
       z-index: ${zIndex};
       top: ${top};
@@ -215,9 +217,7 @@ class NicoChatCss3View {
       animation-duration: ${duration}s;
       animation-delay: ${delay}s;
       ${reverse}
-      transform:
-        translateX(0)
-        ;
+      transform: scale(0);
       content-visibility: hidden;
     `;
 

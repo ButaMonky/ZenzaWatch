@@ -68,6 +68,20 @@ describe('current player MP4 source', () => {
       assert.strictEqual(await api.get({...video(''),srcObject:blob}, blob, accepted), null);
     }
   });
+  it('keeps only the selected export bytes when playback moves on', async () => {
+    const original = file();
+    const el = video(url);
+    let selected = true;
+    const {api, calls} = setup(() => {
+      selected = false;
+      el.currentSrc = objectUrl;
+      return reply(original);
+    });
+    const blob = await api.get(el, url, {keepOriginal:true,isCurrent:() => selected});
+    assert.strictEqual(blob.size, original.size);
+    assert.deepStrictEqual(calls.map(call => call.path), [url]);
+    assert.strictEqual(await api.get(el, url, {keepOriginal:true,isCurrent:() => selected}), null);
+  });
   it('rechecks the session, original source and abort signal while loading', async () => {
     const controller = new AbortController();
     let current = false;

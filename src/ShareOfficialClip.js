@@ -47,7 +47,7 @@ const ShareOfficialClip = (() => {
     }
   }
 
-  function mount(container, {info, startTime, endTime, autoPreview = false, text, officialUrl, onUseLocal}) {
+  function mount(container, {info, startTime, endTime, text, officialUrl, onUseLocal}) {
     const win = container.ownerDocument.defaultView;
     const duration = Number(info.duration);
     const videoId = String(info.videoId || info.watchId || '');
@@ -60,7 +60,6 @@ const ShareOfficialClip = (() => {
     let deadline;
     let account;
     let recordKey;
-    let createRequested = false;
     let retryAt = 0, retryTimer;
 
     container.innerHTML = `
@@ -300,7 +299,6 @@ const ShareOfficialClip = (() => {
         // selected range otherwise starts a fresh draft, even if an old preview exists.
         const sameRange = previous && seconds(Number(previous.start)) === initialStart && seconds(Number(previous.end)) === initialEnd;
         if (previous && (!hasEnd || sameRange || previous.kind === 'post')) {
-          createRequested = true;
           clipId = previous.id;
           start.value = String(seconds(Number(previous.start)));
           end.value = String(seconds(Number(previous.end)));
@@ -319,7 +317,6 @@ const ShareOfficialClip = (() => {
         note.hidden = licensed === false;
         note.textContent = licensed === true ? '権利楽曲利用の可能性があるため、クリップは映像のみになります。' :
           '音声の利用可否は、作成したクリップのプレビューで確認してください。';
-        if (autoPreview && !createRequested && !createNotice() && licensed === false && phase === 'edit' && validRange()) create.click();
       } catch (_) {
         state('denied', 'ニコニコの公式投稿を利用できるか確認できません。');
       }
@@ -366,7 +363,6 @@ const ShareOfficialClip = (() => {
     }
     create.onclick = async () => {
       if (phase !== 'edit' || !validRange() || pendingCreations.has(recordKey)) return;
-      createRequested = true;
       state('creating', 'クリップの作成をリクエストしています…');
       setCreateNotice('unconfirmed');
       const creation = request('clip-create', source + '/clips', 'POST', {

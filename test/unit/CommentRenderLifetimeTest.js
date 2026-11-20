@@ -39,13 +39,63 @@ describe('Task158 描画の寿命',function(){
   old();await flush();assert.equal(calls,0);assert.equal(h.frames.size,1);h.r.disable();
  });
 });
-function view() {
+function view(params = {}, runtime = {}) {
  const handlers={};const document={visibilityState:'visible',addEventListener:(type,f)=>handlers[type]=f};
- const c=createContext({document,Emitter:class{},Config:{namespace:()=>({})},throttle:{raf:f=>f},global:{debug:{}},console:{log(){}}});
+ const c=createContext({document,Emitter:class{},Config:{namespace:()=>({})},throttle:{raf:f=>f},global:{debug:{}},console:{log(){}},...runtime});
  const View=loadClass('packages/zenza/src/commentLayer/NicoCommentCss3PlayerView.js','NicoCommentCss3PlayerView',c);
  View.prototype._initializeView=function(){};View.prototype.refresh=function(){this.refreshCount=(this.refreshCount||0)+1;};
- const v=new View({viewModel:{on(){}}});return {v,document,show:handlers.visibilitychange};
+ const v=new View({viewModel:{on(){}},...params});return {v,document,show:handlers.visibilitychange};
 }
+describe('通常再生のコメントアニメーション', () => {
+ it('初めから非表示のときは時刻だけを追い、表示を戻した位置から再開する', () => {
+   const {v} = view({show:false,isMediaPlaying:()=>true}, {performance:{now:()=>50}});
+   let scans=0, stalls=0;
+   v._updateInviewElements=()=>scans++;
+   v._setStall=()=>stalls++;
+   v._onCurrentTime(1);
+   v._onCurrentTime(1);
+   v._onCurrentTime(22);
+   assert.equal(v._isShow,false);
+   assert.equal(v._currentTime,22);
+   assert.equal(scans,0);
+   assert.equal(stalls,0);
+   assert.equal(v.refreshCount||0,0);
+   v.show();
+   assert.equal(v.refreshCount,1);
+   v._onCurrentTime(22.1);
+   assert.equal(scans,1);
+ });
+ function playback(rate) {
+  let now = 0, playing = true;
+  const {v} = view({playbackRate:rate, isMediaPlaying:() => playing}, {performance:{now:() => now}});
+  return {view:v, stop:() => {playing = false;}, tick(ms, sec) { now = ms; v._onCurrentTime(sec); }};
+ }
+ it('時刻の精度が100msでも、低速再生中の流れるコメントを途中で止めない', () => {
+  for (const rate of [1, 0.5, 0.25]) {
+   const h = playback(rate);
+   for (let ms = 0; ms <= 1200; ms += 100) {
+    h.tick(ms, 1 + Math.floor(ms * rate / 100) / 10);
+    assert.strictEqual(h.view.isStalled, false);
+   }
+  }
+ });
+ it('一時停止やバッファ待ちで同じ時刻なら、次の確認でコメントも止める', () => {
+  const h = playback(0.5);
+  h.tick(0, 1);
+  h.stop();
+  h.tick(100, 1);
+  assert.strictEqual(h.view.isStalled, true);
+ });
+ it('再生中と報告されても時刻が長く止まれば停止し、シーク先で再描画する', () => {
+  const h = playback(1);
+  h.tick(0, 4);
+  h.tick(900, 4);
+  assert.strictEqual(h.view.isStalled, true);
+  h.tick(1000, 2);
+  assert.strictEqual(h.view.isStalled, false);
+  assert.equal(h.view.refreshCount, 1);
+ });
+});
 describe('Task158 タブ復帰',()=>{
  it('iframe初期化前の復帰で例外を出さない',()=>{const h=view();h.show();assert.equal(h.v.refreshCount,1);});
  it('準備後はresizeし、非表示への変更では処理しない',()=>{

@@ -62,6 +62,7 @@ export interface ZenzaRootPlayerPort {
     };
     readonly drawableVideoElement?: (HTMLVideoElement & {
       readonly clipFragmentCache?: {get:(url:string)=>Blob|undefined; put:(url:string,bytes:ArrayBuffer)=>void};
+      readonly hls?: {readonly currentLevel:number; readonly levels:ReadonlyArray<{readonly height:number; readonly uri:string}>} | null;
     }) | null;
     readonly commentViewModel?: unknown;
   };

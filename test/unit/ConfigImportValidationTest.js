@@ -42,9 +42,29 @@ describe('Config import validation',()=>{
  it('validates key-specific ranges and choices from actual Config',()=>{
   const {options}=configSchema();assert.strictEqual(typeof options.validateImport,'function');
   for(const [key,bad,good] of [['volume',1.1,0.5],['playbackRate',0,1],['commentSpeedRate',-1,1],['sharedNgLevel','oops','MID'],['screenMode','oops','normal'],['search.limit',5001,5000],['KEY_PLAY_PAUSE',-1,32],
-    ['commentLayer.maxDisplayComment',150,200],['commentLayer.maxDisplayComment','200',800],['commentLayer.maxDisplayComment',20000,40],['commentLayer.protectCA','true',true]]) {
+    ['commentLayer.maxDisplayComment',150,200],['commentLayer.maxDisplayComment','200',800],['commentLayer.maxDisplayComment',20000,40],['commentLayer.protectCA','true',true],['commentLayer.motionFrameRate','144','adaptive'],['commentLayer.motionFrameRate',30,'30'],['commentLayer.denseFrameRate','120','15']]) {
    assert.strictEqual(options.validateImport(key,bad),false,key);assert.strictEqual(options.validateImport(key,good),true,key);
   }
+ });
+ it('registers clip defaults and validates imported qualities, ranges and layers', () => {
+   const {default:defaults, options} = configSchema();
+   const cases = [
+     ['previewQuality', 'source', 'low', 720],
+     ['sceneQuality', 'low', '480', 'unknown'],
+     ['exportQuality', 'source', '720', '1440'],
+     ['initialDurationSeconds', 30, 1, 0],
+     ['initialDurationSeconds', 30, 600, 601],
+     ['initialDurationSeconds', 30, 25, 1.5],
+     ['includeComments', false, true, 'true'],
+     ['includeEffects', false, false, 0],
+     ['openXDraft', true, false, 'true']
+   ];
+   for (const [name, initial, good, bad] of cases) {
+     const id = 'shareClip.' + name;
+     assert.strictEqual(defaults[id], initial, id);
+     assert.strictEqual(options.validateImport(id, good), true, id);
+     assert.strictEqual(options.validateImport(id, bad), false, id);
+   }
  });
  it('validates the Task936 toolbar pause toggles and bounded seconds',()=>{
   const {options,default:d}=configSchema();

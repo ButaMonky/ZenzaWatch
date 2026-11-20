@@ -49,7 +49,7 @@ function harness(setup=()=>{}){
  let active='sm1',now=120,time=65,next=0;
  const seeks=[];
  const dock=ManualBookmarkDock.mount(doc.body,session,{
-   currentVideoId:()=>active,currentTime:()=>time,timestamp:()=>now,
+   currentVideoId:()=>active,currentTime:()=>time,timestamp:()=>now,duration:()=>200,
    newId:()=>('B'+(++next)),seek:t=>seeks.push(t)
  });
  const click=action=>dock.element.querySelector(
@@ -63,7 +63,7 @@ test('closed-by-default dock mounts only inside information tab, before series',
  const details=h.dock.element;
  assert.equal(details.tagName,'SECTION');
  assert.equal(details.hidden,true);
- assert.equal(details.querySelector('.zw-points-heading').textContent,'しおり・ABリピート');
+ assert.equal(details.childElementCount,0,'an unused dock owns only its empty mount point');
  assert.equal(details.dataset.bookmarkOwner,'manual');
  assert.equal(details.nextElementSibling.className,'seriesList');
  assert.equal(h.native.querySelector('#native-seek'),h.seek);
@@ -76,6 +76,31 @@ test('closed-by-default dock mounts only inside information tab, before series',
  h.close();assert.equal(h.repo.closed,1);
  assert.equal(h.doc.querySelector('.zenzaManualBookmarkDock'),null);
  assert.equal(h.native.querySelector('.resumePointer'),h.marker);
+});
+test('player ticks and preference updates stay lightweight; an explicit saved AB range works before the panel is opened',async()=>{
+ let resizeObservers=0;
+ const listeners=[];
+ const h=harness(win=>{
+   win.ResizeObserver=class{constructor(){resizeObservers++;}observe(){}disconnect(){}};
+   const add=win.document.addEventListener.bind(win.document);
+   win.document.addEventListener=(name,...args)=>{listeners.push(name);return add(name,...args);};
+ });
+ await h.dock.activate('sm1',200);
+ h.dock.refreshPreferences();
+ assert.equal(h.dock.tick(10,false,false),false);
+ assert.equal(h.dock.repeatAtEnd(),false);
+ assert.equal(h.dock.element.childElementCount,0);
+ assert.equal(resizeObservers,0);
+ assert(!listeners.includes('scroll')&&!listeners.includes('pointerdown'));
+ assert(h.dock.setRepeatRange(5,9,true));
+ assert.equal(h.dock.isRepeating,true);
+ assert.deepEqual(h.seeks,[5]);
+ assert.equal(h.dock.element.hidden,true);
+ assert.equal(resizeObservers,0);
+ h.dock.toggle(h.doc.querySelector('.zenzaPlayerContainer'));
+ assert.equal(resizeObservers,1);assert(listeners.includes('pointerdown'));
+ h.dock.close();assert(h.dock.isRepeating);
+ h.close();
 });
 test('add, rename, seek and remove use independent manual bookmark storage',async()=>{
  const h=harness();
@@ -99,6 +124,7 @@ test('add, rename, seek and remove use independent manual bookmark storage',asyn
 test('input shortcuts stay in manual dock, native range keys still bubble',async()=>{
  const h=harness();
  await h.dock.activate('sm1',200);
+ h.dock.toggle(h.doc.querySelector('.zenzaPlayerContainer'));
  let bubbled=0;
  h.doc.body.addEventListener('keydown',()=>bubbled++);
  const entry=h.dock.element.querySelector('input[data-bookmark-label]');
@@ -115,6 +141,7 @@ test('input shortcuts stay in manual dock, native range keys still bubble',async
 test('bookmark summary and action keyboard events cannot trigger player shortcuts',async()=>{
  const h=harness();
  await h.dock.activate('sm1',200);
+ h.dock.toggle(h.doc.querySelector('.zenzaPlayerContainer'));
  let down=0,up=0;
  h.doc.body.addEventListener('keydown',()=>down++);
  h.doc.body.addEventListener('keyup',()=>up++);
@@ -141,6 +168,7 @@ test('bookmark summary and action keyboard events cannot trigger player shortcut
 test('stale video cannot seek, remove or rename after switch',async()=>{
  const h=harness();
  await h.dock.activate('sm1',200);
+ h.dock.toggle(h.doc.querySelector('.zenzaPlayerContainer'));
  h.click('add').click();await step();
  const before=JSON.stringify(h.repo.rows.get('sm1'));
  h.active('sm2');
@@ -156,6 +184,7 @@ test('stale video cannot seek, remove or rename after switch',async()=>{
 test('deactivation and dispose revoke listeners without modifying neighbor DOM',async()=>{
  const h=harness();
  await h.dock.activate('sm1',200);
+ h.dock.toggle(h.doc.querySelector('.zenzaPlayerContainer'));
  h.click('add').click();await step();
  h.dock.deactivate();
  assert.equal(h.session.snapshot.videoId,null);
@@ -183,12 +212,12 @@ test('floating editor keeps native details and checkbox actions away from player
  const h=harness();
  try{
   await h.dock.activate('sm1',200);
-  h.click('add').click();await step();
   const player=h.doc.querySelector('.zenzaPlayerContainer');
   let playerClicks=0;
   // NicoVideoPlayerDialogView cancels bubbled clicks on the video container.
   player.addEventListener('click',event=>{playerClicks++;event.preventDefault();});
   h.dock.toggle(player);await step();
+  h.click('add').click();await step();
   const editor=h.dock.element.querySelector('.zw-bookmark-edit');
   editor.querySelector('summary').click();
   assert.equal(editor.open,true,'native editor disclosure must open inside the player');

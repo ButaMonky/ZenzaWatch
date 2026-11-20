@@ -6,7 +6,7 @@ interface AdvancedPanel {
 interface AdvancedConfig { promise(event: string): Promise<unknown>; default?: Record<string, unknown>; refresh?(key: string): Promise<unknown>; }
 interface AdvancedSettingsOptions {
   config: AdvancedConfig;
-  createPanel(config: AdvancedConfig): AdvancedPanel;
+  createPanel(config: AdvancedConfig): AdvancedPanel | Promise<AdvancedPanel>;
   document: Document;
   onError?: () => void;
 }
@@ -15,6 +15,7 @@ class AdvancedSettingsController {
   private panel?: AdvancedPanel;
   private pending?: Promise<void>;
   private disposed = false;
+  private openRequest = 0;
   private entry?: HTMLButtonElement;
   private entryHost?: HTMLElement;
   private entryAnchor?: Element;
@@ -23,7 +24,8 @@ class AdvancedSettingsController {
   private readonly relocateEntry = (): void => {
     const doc = this.options.document, host = this.entryHost;
     if (this.disposed || !host || !doc.body) { return; }
-    host.hidden = !/^\/my(?:\/|$)/.test(doc.location.pathname);
+    const hidden = !/^\/my(?:\/|$)/.test(doc.location.pathname);
+    if (host.hidden !== hidden) host.hidden = hidden;
     if (host.hidden) { return; }
     const anchor = this.entryAnchor;
     if (anchor?.isConnected && host.isConnected && host.parentElement === anchor.parentElement &&
@@ -52,10 +54,15 @@ class AdvancedSettingsController {
   }
   async open(): Promise<void> {
     if (this.disposed) { return; }
+    const request = ++this.openRequest;
     if (!this.pending) {
       this.pending = (async () => {
         await this.options.config.promise('restore');
-        if (!this.disposed && !this.panel) { this.panel = this.options.createPanel(this.options.config); }
+        if (!this.disposed && !this.panel) {
+          const panel = await this.options.createPanel(this.options.config);
+          if (this.disposed) panel.dispose();
+          else this.panel = panel;
+        }
       })().catch(error => { this.pending = undefined; throw error; });
     }
     await this.pending;
@@ -64,14 +71,14 @@ class AdvancedSettingsController {
     for (const key of Object.keys(this.options.config.default || {}).filter(key => key.startsWith('externalLinks.'))) {
       await this.options.config.refresh?.(key);
     }
-    if (this.disposed) { return; }
+    if (this.disposed || request !== this.openRequest) { return; }
     try { this.panel?.show(); }
     catch (error) {
       this.panel?.dispose(); this.panel = undefined; this.pending = undefined;
       throw error;
     }
   }
-  close(): void { this.panel?.hide(); }
+  close(): void { this.openRequest++; this.panel?.hide(); }
   mountEntry(): void {
     if (this.disposed) { return; }
     if (this.entry) { this.relocateEntry(); return; }

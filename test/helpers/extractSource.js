@@ -166,7 +166,12 @@ function createContext(extra = {}) {
   }, extra);
   c.window = c.window || c;
   c.self = c.self || c;
-  return vm.createContext(c);
+  const context = vm.createContext(c);
+  // Config extraction omits its userscript dependency directives.
+  if ((extra.DataStorage || extra.buildDefaultKeyConfig) && !extra.ShareClipPreferences) {
+    context.ShareClipPreferences = loadClass('src/ShareClipPreferences.js', 'ShareClipPreferences', context);
+  }
+  return context;
 }
 
 // UI fixture boot creates many isolated VM contexts from identical source.
@@ -204,6 +209,9 @@ function loadSearchDependencies(rel, context) {
 }
 
 function loadClass(rel, name, context) {
+  if (name === 'ModernAdvancedSettingsModel' && !context.ShareClipPreferences) {
+    context.ShareClipPreferences = loadClass('src/ShareClipPreferences.js', 'ShareClipPreferences', context);
+  }
   if (name === 'HoverMenu' && !context.WatchClickNavigation) {
     run(beginSection('packages/zenza/src/menu/WatchClickNavigation.js') + '\nglobalThis.WatchClickNavigation = WatchClickNavigation;', context);
   }

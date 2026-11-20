@@ -198,12 +198,6 @@
     "id": "",
     "len": 25436,
     "hash": "f79bb514"
-   },
-   {
-    "cls": "",
-    "id": "",
-    "len": 9932,
-    "hash": "e567ba70"
    }
   ],
   "shadows": [
@@ -362,7 +356,7 @@
     ]
    }
   ],
-  "sheets": 34
+  "sheets": 33
  },
  "wide:player-styles": {
   "doc": [
@@ -593,12 +587,6 @@
     "id": "",
     "len": 2095,
     "hash": "b17c4763"
-   },
-   {
-    "cls": "",
-    "id": "",
-    "len": 9932,
-    "hash": "e567ba70"
    }
   ],
   "shadows": [
@@ -779,7 +767,7 @@
     ]
    }
   ],
-  "sheets": 39
+  "sheets": 38
  },
  "wide:player-layout": [
   "div.is-open.zen-family.zen-root.zenzaVideoPlayerDialog|0|0|1280|800|flex|fixed|6000002|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",
@@ -1095,12 +1083,6 @@
     "id": "",
     "len": 25436,
     "hash": "f79bb514"
-   },
-   {
-    "cls": "",
-    "id": "",
-    "len": 9932,
-    "hash": "e567ba70"
    }
   ],
   "shadows": [
@@ -1259,7 +1241,7 @@
     ]
    }
   ],
-  "sheets": 34
+  "sheets": 33
  },
  "narrow:player-styles": {
   "doc": [
@@ -1490,12 +1472,6 @@
     "id": "",
     "len": 2095,
     "hash": "b17c4763"
-   },
-   {
-    "cls": "",
-    "id": "",
-    "len": 9932,
-    "hash": "e567ba70"
    }
   ],
   "shadows": [
@@ -1676,7 +1652,7 @@
     ]
    }
   ],
-  "sheets": 39
+  "sheets": 38
  },
  "narrow:player-layout": [
   "div.is-open.zen-family.zen-root.zenzaVideoPlayerDialog|0|0|900|560|flex|fixed|6000002|rgb(0, 0, 0)|rgba(0, 0, 0, 0)|13px|400|1|visible|0px|0px|none|none",

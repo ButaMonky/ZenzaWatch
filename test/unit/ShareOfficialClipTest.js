@@ -34,7 +34,7 @@ describe('official NicoNico clip sharing', () => {
   afterEach(() => { cleanup?.(); page?.window.close(); });
   it('joins an in-flight creation after closing and reuses the same millisecond range', async () => {
     let acknowledge;
-    const settings = {autoPreview:true,startTime:6.00011,endTime:9.00014};
+    const settings = {startTime:6.00011,endTime:9.00014};
     mount(({path}) => {
       if (path.endsWith('/tweet-possibility')) return allowed;
       if (path.endsWith('/license')) return {isUseLicensedMusic:false};
@@ -44,6 +44,8 @@ describe('official NicoNico clip sharing', () => {
     await flush();
     assert.strictEqual(find('clipStart').value,'6');
     assert.strictEqual(find('clipEnd').value,'9');
+    assert(calls.every(call => call.options.method === 'GET'));
+    find('create').click(); await flush();
     assert.strictEqual(root.querySelector('[role=status]').dataset.busy,'true');
     const posted = calls.find(r => r.path.endsWith('/clips'));
     assert.strictEqual(posted.options.body.get('endTime'),'9000');
@@ -61,7 +63,7 @@ describe('official NicoNico clip sharing', () => {
       if (path.endsWith('/tweet-possibility')) return allowed;
       if (path.endsWith('/license')) return new Promise(resolve => { license = resolve; });
       if (path.endsWith('/clips')) { attempts++; return {httpStatus:429,retryAfter:'45'}; }
-    }, undefined, {autoPreview:true});
+    });
     await flush(); find('create').click(); await flush();
     assert.match(root.querySelector('[role=status]').textContent,/あと4[45]秒/);
     assert.strictEqual(find('create').disabled,true);
@@ -75,8 +77,8 @@ describe('official NicoNico clip sharing', () => {
       if (path.endsWith('/tweet-possibility')) return allowed;
       if (path.endsWith('/license')) return {isUseLicensedMusic:false};
       if (path.endsWith('/clips')) throw Error('connection interrupted');
-    }, undefined, {autoPreview:true});
-    await flush(); cleanup(); reopen(); await flush();
+    });
+    await flush(); find('create').click(); await flush(); cleanup(); reopen(); await flush();
     assert.match(root.querySelector('[role=status]').textContent,/前回の作成/);
     assert.strictEqual(find('create').disabled,false);
     assert.strictEqual(calls.filter(r => r.options.method === 'POST').length,1);
@@ -88,8 +90,8 @@ describe('official NicoNico clip sharing', () => {
       if (path.endsWith('/license')) return {isUseLicensedMusic:false};
       if (path.endsWith('/clips')) return {clipId:'expires'};
       return expired ? {httpStatus:404} : {status:'DONE',clipUri:'https://media.example/clip.mp4'};
-    }, undefined, {autoPreview:true});
-    await flush(); cleanup(); expired=true; reopen(); await flush();
+    });
+    await flush(); find('create').click(); await flush(); cleanup(); expired=true; reopen(); await flush();
     assert.match(root.querySelector('[role=status]').textContent,/利用できなく/);
     assert.strictEqual(find('create').disabled,false);
     assert.strictEqual(calls.filter(r => r.options.method === 'POST').length,1);
@@ -166,9 +168,12 @@ describe('official NicoNico clip sharing', () => {
         if (path.endsWith('/license')) return {isUseLicensedMusic:licensed};
         if (path.endsWith('/clips')) return {clipId:'new-clip'};
         return {status:'DONE', clipUri:'https://media.example/preview.mp4'};
-      }, undefined, {startTime:5, endTime:14, autoPreview:true});
+      }, undefined, {startTime:5, endTime:14});
       await flush();
-      assert.strictEqual(calls.filter(call => call.path.endsWith('/clips') && call.options.method === 'POST').length, licensed ? 0 : 1);
+      cleanup(); reopen(); await flush();
+      assert(calls.every(call => call.options.method === 'GET'));
+      find('create').click(); await flush();
+      assert.strictEqual(calls.filter(call => call.path.endsWith('/clips') && call.options.method === 'POST').length, 1);
       assert(!calls.some(call => call.path.endsWith('/x-post')));
     });
   }
@@ -304,7 +309,9 @@ describe('official X posting from the clip editor', () => {
     w.textUtil = {secToTime:String};
     w.ShareClipJobs = {busy:false};
     w.ShareLocalClip = {mount(host, options) {
-      host.innerHTML = '<div data-provider-slot></div><button data-action=create></button>';
+      host.innerHTML = '<div data-provider-slot></div><button data-action=create></button><button data-action=provider-fallback></button>';
+      const fallback = host.querySelector('[data-action=provider-fallback]');
+      fallback.onclick = () => options.onOpenOfficial(fallback);
       options.onSelectionChange(selection);
       host.querySelector('button').onclick = () => { localCreates++; };
       return () => {};
@@ -328,11 +335,23 @@ describe('official X posting from the clip editor', () => {
     root = w.document.querySelector('dialog');
   }
   afterEach(() => { panel?.close(); page?.window.close(); });
+  it('only checks provider availability when invoked from a failed local conversion', async () => {
+    open({isCurrent:true,start:965.45,end:995.45});
+    root.querySelector('[data-action=provider-fallback]').click(); await flush();
+    assert.equal(tab().getAttribute('aria-pressed'),'true');
+    assert(calls.length && calls.every(call => call.options.method === 'GET'));
+    assert.equal(localCreates,0);
+  });
   it('prepares the chosen original interval from the first screen and posts only on confirmation', async () => {
     open({isCurrent:true,start:8.25,end:18.5});
     assert(tab() && !tab().closest('[hidden]'));
     assert.equal(calls.length,0);
     tab().click(); await flush();
+    assert(calls.every(call => call.options.method === 'GET'));
+    root.querySelector('[data-action=back]').click();
+    tab().click(); await flush();
+    assert(calls.every(call => call.options.method === 'GET'));
+    find('create').click(); await flush();
     const create = calls.find(call => call.path.endsWith('/clips'));
     assert.deepEqual([...create.options.body], [['startTime','8250'],['endTime','18500']]);
     assert.equal(localCreates,0);

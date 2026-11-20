@@ -2,12 +2,11 @@
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const mountXClipAttachment = require('./x-clip-attachment.cjs');
-const {createXRequest,mountXPostingBridge} = require('./x-direct-bridge.cjs');
-const {createXMediaPublisher} = require('./x-media-publish.cjs');
-const {createXUserAuth} = require('./x-user-auth.cjs');
-const mountXDirectDialog = require('./x-direct-dialog.cjs');
+const {createXDraftTransfer,mountXDraftSender} = require('./x-draft-transfer.cjs');
 const {startOrdinaryRuntime} = require('./ordinary-startup.cjs');
+const {splitOptionalPanels,panelLoader,providePanels} = require('./optional-panels.cjs');
 module.exports=function buildShells({base,legacyBlog,header,runtime,externalModules,launcher,transport,network,closeRuntime,host,display,panelObserver,preferenceNames}) {
+ const panels = splitOptionalPanels(runtime);
  const shared=`
  const official=/(^|\\.)nicovideo\\.jp$/.test(location.hostname);
  const playerFrame=window!==window.top&&window.name==='ZenzaWatchExternalTrialPlayer'&&location.hostname==='www.nicovideo.jp'&&location.pathname==='/robots.txt';
@@ -59,40 +58,50 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
 // @grant          GM_deleteValue
 // @grant          GM_addValueChangeListener
 // @grant          GM_removeValueChangeListener
+// @grant          GM_openInTab
+// @grant          GM_getTab
+// @grant          GM_saveTab
+// @grant          GM_getTabs
 // @grant          GM_xmlhttpRequest
 // @sandbox        DOM
 // @connect        nicovideo.jp
 // @connect        nimg.jp
 // @connect        dmc.nico
-// @connect        api.x.com
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js`);
  const main=mainHeader+'\n'+(/^\/\/ build: .*$/m.exec(base)?.[0]||'// build: external-playback')+`
 (() => {
+ let draftTransfer;
+ function getDraftTransfer() {
+   if(typeof GM_openInTab!=='function')return null;
+   if(draftTransfer)return draftTransfer;
+   const hasDraftTabData=typeof GM_getTab==='function' && typeof GM_saveTab==='function' && typeof GM_getTabs==='function';
+   return draftTransfer=(${createXDraftTransfer.toString()})({
+     open:url=>GM_openInTab(url,{active:true,insert:true}),tab:()=>new Promise(resolve=>GM_getTab(resolve)),
+     save:tab=>new Promise(resolve=>GM_saveTab(tab,resolve)),tabs:hasDraftTabData ? ()=>new Promise(resolve=>GM_getTabs(resolve)) : null,
+     get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key),
+     listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:id=>GM_removeValueChangeListener(id)
+   });
+ }
  if (location.hostname==='x.com') {
    ${clipClipboard}
-   (${mountXClipAttachment.toString()})(ShareClipClipboard);
+   (${mountXClipAttachment.toString()})(ShareClipClipboard,getDraftTransfer);
    return;
- }
- if (location.origin === 'https://www.nicovideo.jp' && window === window.top &&
-     typeof GM_xmlhttpRequest === 'function' && typeof GM_getValue === 'function' &&
-     typeof GM_setValue === 'function' && typeof GM_deleteValue === 'function') {
-   const request=(${createXRequest.toString()})(options=>GM_xmlhttpRequest(options));
-   const prefix='zenza-x-user:';
-   const auth=(${createXUserAuth.toString()})({request,get:key=>GM_getValue(prefix+key),
-     set:(key,value)=>GM_setValue(prefix+key,value),remove:key=>GM_deleteValue(prefix+key)});
-   (${mountXPostingBridge.toString()})({request,auth,createPublisher:${createXMediaPublisher.toString()},showDialog:${mountXDirectDialog.toString()}});
  }
  ${externalModules}
  ${shared}
+ if(typeof GM_openInTab==='function' && official && location.protocol==='https:' && (window===window.top || playerFrame)) {
+   window.addEventListener('zenza-share-panel-open',()=>{(${mountXDraftSender.toString()})(getDraftTransfer);},{once:true});
+ }
  ${launcher}
  ${transport}
  ${network}
  ${closeRuntime}
  ${panelObserver}
- async function runRuntime(window,externalTrial=null) {
+ const packagedPanels = ${panels.factories};
+ async function runRuntime(window,externalTrial=null,loadOptionalPanel=name=>Promise.resolve(packagedPanels[name])) {
    const {displaySettings,externalSettingsHost,writeExternal,readExternalValues,externalSlot,installInteractionGuard,frameTopologyChanged}=externalTrial||{};
-   ${runtime}
+   ${panels.runtime}
  }
  // Task1032: 再生用の枠・API用の枠の中だけは、設定に関係なく記録する（本体の設定は接続後にしか届かず、
  // 「本体が枠で動いていない」のか「動いて落ちた」のかを区別できなかったため）。枠は利用者の画面に出ない。
@@ -114,7 +123,10 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
      const dependency=GM_getResourceText('zenzaLodash');
      if(!dependency)throw Error('ZenzaWatch lodash resource unavailable');
      // Task1036: sourceURL を付けて、ZenzaWatch 自身のエラーをページのエラーと区別できるようにする（通知履歴のスクリプトエラー記録）。
-     const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\\n;const _=module.exports;('+runRuntime.toString()+')(window).catch(error=>{if(error?.name==="ZenzaWatchStartupError")throw error;console.error("ZenzaWatch initialization failed",error);});})();\\n//# sourceURL=ZenzaWatchRuntime.js';
+     const namespace='zenza-optional-'+crypto.getRandomValues(new Uint32Array(2)).join('-')+'-';
+     (${providePanels.toString()})(document,namespace,packagedPanels,GM_addElement);
+     const pageLoader=${JSON.stringify(panelLoader.toString())};
+     const source='(function(){const module={exports:{}},exports=module.exports;'+dependency+'\\n;const _=module.exports;('+runRuntime.toString()+')(window,null,('+pageLoader+')(document,'+JSON.stringify(namespace)+')).catch(error=>{if(error?.name==="ZenzaWatchStartupError")throw error;console.error("ZenzaWatch initialization failed",error);});})();\\n//# sourceURL=ZenzaWatchRuntime.js';
      // Task1059: 本文を Blob の <script src> で入れる。インラインの <script> はメインスレッドで約3MBを
      // コンパイルするため起動時に画面が固まっていた（手元の計測で長いタスク合計 約290ms → 約110ms）。
      // 外部スクリプト扱いならブラウザが裏のスレッドでコンパイルできる。sourceURL はそのまま効く。

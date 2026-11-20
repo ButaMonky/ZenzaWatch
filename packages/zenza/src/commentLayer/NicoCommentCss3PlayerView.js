@@ -29,12 +29,13 @@ class NicoCommentCss3PlayerView extends Emitter {
     super();
 
     this._viewModel = params.viewModel;
+    this._isMediaPlaying = params.isMediaPlaying;
 
     this._viewModel.on('setData', this._onSetData.bind(this));
     this._viewModel.on('currentTime', this._onCurrentTime.bind(this));
 
     this._lastCurrentTime = 0;
-    this._isShow = true;
+    this._isShow = params.show !== false;
 
     this._aspectRatio = 9 / 16;
 
@@ -49,6 +50,8 @@ class NicoCommentCss3PlayerView extends Emitter {
     this._budgetTable = new Set();
     this._suppressedTable = new Set();
     this._historyClassifier = null;
+    this._motionFps = 0;
+    this._denseMotion = false;
     this._resetDisplayStats();
     this._playbackRate = params.playbackRate || 1.0;
 
@@ -178,6 +181,10 @@ class NicoCommentCss3PlayerView extends Emitter {
         types.forEach(t => cl.toggle(t, t === type));
       };
       updateTextShadow(this._config.props.textShadowType);
+      const updateMotion = () => this._updateMotionFrameRate();
+      updateMotion();
+      this._config.onkey('motionFrameRate', updateMotion);
+      this._config.onkey('denseFrameRate', updateMotion);
       this._config.onkey('textShadowType', _.debounce(updateTextShadow, 100));
       this._config.onkey('easyCommentOpacity',
         _.debounce(
@@ -285,6 +292,36 @@ class NicoCommentCss3PlayerView extends Emitter {
     const props = this._config && this._config.props;
     return CommentDisplayBudget.normalizeLimit(props ? props.maxDisplayComment : undefined);
   }
+  _updateMotionFrameRate () {
+    const {motionFrameRate, denseFrameRate} = this._config.props;
+    let fps = 0;
+    if (motionFrameRate === 'adaptive') {
+      let active = 0;
+      const time = this._currentTime;
+      for (const chat of this._inSlotTable) {
+        if (chat.type === NicoChat.TYPE.NAKA && chat.beginLeftTiming <= time && time < chat.endRightTiming) {
+          if (++active >= 60) { break; }
+        }
+      }
+      if (active >= 60) { this._denseMotion = true; }
+      if (active <= 40) { this._denseMotion = false; }
+      if (this._denseMotion) { fps = ['15','30','60'].includes(denseFrameRate) ? Number(denseFrameRate) : 30; }
+    } else {
+      this._denseMotion = false;
+      if (['15','30','60','120'].includes(motionFrameRate)) { fps = Number(motionFrameRate); }
+    }
+    if (fps === this._motionFps) { return; }
+    this._motionFps = fps;
+    for (const [chat, element] of this._domTable) {
+      if (chat.type === NicoChat.TYPE.NAKA) { this._setMotionEasing(element, fps); }
+    }
+  }
+  _setMotionEasing (element, fps) {
+    // The inline duration already includes playback speed and both widescreen margins.
+    const seconds = parseFloat(element.style.animationDuration);
+    element.style.animationTimingFunction = fps && Number.isFinite(seconds) && seconds > 0 ?
+      `steps(${Math.max(1, Math.round(seconds * fps))}, end)` : '';
+  }
   /** 診断用: 取得数ではなく「描画側」の数と、見送り・終了の理由別の累計 */
   get displayStats () {
     const s = this._displayStats;
@@ -303,16 +340,23 @@ class NicoCommentCss3PlayerView extends Emitter {
     const REFRESH_THRESHOLD = 1;
     this._lastCurrentTime = this._currentTime;
     this._currentTime = sec;
+    if (!this._isShow) { return; }
 
-    if (this._lastCurrentTime === this._currentTime) {
-      // pauseでもないのにcurrentTimeの更新が途絶えたらロードが詰まった扱い
-      if (!this._isPaused) {
-        // this._currentTime && console.warn('stalled', this._currentTime);
+    if (this._lastCurrentTime === sec) {
+      // currentTime can be rounded to 100 ms of media time. Allow that interval
+      // at the current speed plus one poll, only while the source can play.
+      const graceMs = 100 / this._playbackRate + 100;
+      if (!this._isPaused && (!this._isMediaPlaying?.() ||
+          performance.now() - this._lastProgressAt >= graceMs)) {
         this._setStall(true);
       }
-    } else if (this._currentTime < this._lastCurrentTime ||
+      return;
+    }
+    this._lastProgressAt = performance.now();
+    if (this._currentTime < this._lastCurrentTime ||
       Math.abs(this._currentTime - this._lastCurrentTime) > REFRESH_THRESHOLD) {
       // 後方へのシーク、または 境界値以上の前方シーク時は全体を再描画
+      if (this.isStalled && this._isMediaPlaying?.()) { this._setStall(false); }
       this.refresh();
     } else {
       this._setStall(false);
@@ -368,6 +412,7 @@ class NicoCommentCss3PlayerView extends Emitter {
     this._domTable.clear();
     this._budgetTable.clear();
     this._suppressedTable.clear();
+    this._denseMotion = false;
     if (this.removingElements) {
       // textContent=''で既に外れているので、古い削除予約を次の世代へ持ち越さない
       this.removingElements.length = 0;
@@ -434,6 +479,7 @@ class NicoCommentCss3PlayerView extends Emitter {
       const size = nicoChat.size;
       const cssText = NicoChatCss3View.buildChatCss(nicoChat, type, ct, playbackRate);
       const element = NicoChatCss3View.buildChatDom(nicoChat, type, size, cssText, doc);
+      if (this._motionFps && type === NicoChat.TYPE.NAKA) { this._setMotionEasing(element, this._motionFps); }
       inViewTable.add(nicoChat);
       inSlotTable.add(nicoChat);
       domTable.set(nicoChat, element);
@@ -446,6 +492,7 @@ class NicoCommentCss3PlayerView extends Emitter {
       (nicoChat.isSubThread ? subDom : dom).push(element);
     }
 
+    if (this._config.props.motionFrameRate === 'adaptive') { this._updateMotionFrameRate(); }
     if (!admitted.length && !this.removingElements.length) {
       return;
     }
@@ -557,6 +604,8 @@ class NicoCommentCss3PlayerView extends Emitter {
   show () {
     if (!this._isShow) {
       this._isShow = true;
+      this._lastProgressAt = performance.now();
+      this._setStall(!!this._isMediaPlaying && !this._isMediaPlaying());
       this.refresh();
     }
   }
@@ -747,25 +796,22 @@ body.in-capture .commentLayer {
   }
 }
 
+/* Only animate transform so scrolling can continue on the compositor. */
 @keyframes idou-props {
   0%   {
-    visibility: visible;
     transform: translateX(0);
   }
   100% {
-    visibility: hidden;
     transform: translateX(var(--chat-trans-x));
   }
 }
 @keyframes idou-props-scaled {
   0%   {
-    visibility: visible;
     transform:
       translateX(0)
       scale(var(--chat-scale-x), var(--chat-scale-y));
   }
   100% {
-    visibility: hidden;
     transform:
       translateX(var(--chat-trans-x))
       scale(var(--chat-scale-x), var(--chat-scale-y));
@@ -773,14 +819,12 @@ body.in-capture .commentLayer {
 }
 @keyframes idou-props-scaled-middle {
   0%   {
-    visibility: visible;
     transform:
       translateX(0)
       scale(var(--chat-scale-x), var(--chat-scale-y))
       translateY(-50%);
   }
   100% {
-    visibility: hidden;
     transform:
       translateX(var(--chat-trans-x))
       scale(var(--chat-scale-x), var(--chat-scale-y))

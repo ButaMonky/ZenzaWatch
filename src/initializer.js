@@ -49,20 +49,20 @@ const { initialize } = (() => {
      * 同じエラー（種類＋場所）は1件にまとめて回数を数える。メッセージは記録時に URL・トークンを伏せる。
      */
     // Task1059: 本体（boot が読み込む monkey）は ZenzaWatchMain.js という名前で動く。
-    const ZENZA_SOURCE = /ZenzaWatch(?:Runtime|Main)\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
-    const scriptErrorWhere = (stack) => {
-        if (typeof stack !== 'string') {
-            return '';
-        }
-        for (const line of stack.split('\n').slice(1, 8)) {
-            if (!ZENZA_SOURCE.test(line)) {
+    const ZENZA_SOURCE = /ZenzaWatch(?:Runtime|Main|-createAdvancedSettingsPanel|-createVideoSharePanel)\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
+    const scriptErrorWhere = (stack, filename, lineno) => {
+        // V8 starts with the exception message; Firefox and Safari can start with a frame.
+        for (const frame of stack.split('\n').slice(0, 12)) {
+            const line = frame.trim();
+            const pos = /:(\d{1,8}):(\d{1,8})\)?$/.exec(line);
+            if (!pos || !/^(?:at\s|[^\s]*@)/.test(line) || !ZENZA_SOURCE.test(line))
                 continue;
-            }
-            const fn = /at (?:async )?([A-Za-z_$][\w$.<>]*) /.exec(line);
-            const pos = /:(\d+):\d+\)?\s*$/.exec(line);
-            return (fn ? fn[1] : 'anonymous') + (pos ? '@' + pos[1] : '');
+            const fn = /^(?:at (?:async )?)?([A-Za-z_$][\w$.<>]*)(?:[ @])/.exec(line);
+            return { where: (fn?.[1] || 'anonymous').slice(0, 70) + '@' + pos[1], source: line };
         }
-        return '';
+        if (typeof filename !== 'string' || !ZENZA_SOURCE.test(filename))
+            return;
+        return { where: typeof lineno === 'number' && Number.isSafeInteger(lineno) && lineno > 0 && lineno < 100000000 ? 'anonymous@' + lineno : '', source: filename };
     };
     let scriptErrorInstalled = false;
     const installScriptErrorJournal = () => {
@@ -70,31 +70,32 @@ const { initialize } = (() => {
             return;
         }
         scriptErrorInstalled = true;
-        const recordError = (error, filename) => {
+        const recordError = (error, filename, phase, lineno) => {
             try {
                 const stack = typeof error?.stack === 'string' ? error.stack : '';
-                if (!ZENZA_SOURCE.test(String(filename || '')) && !ZENZA_SOURCE.test(stack)) {
+                const frame = scriptErrorWhere(stack, filename, lineno);
+                if (!frame)
                     return;
-                }
+                const bundle = /ZenzaWatch(?:Runtime|Main|-createAdvancedSettingsPanel|-createVideoSharePanel)\.js/.exec(frame.source)?.[0] || 'ZenzaWatch-dev.user.js';
                 const name = typeof error?.name === 'string' && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'Error';
                 const message = String(error?.message ?? error ?? '').slice(0, 300);
-                const where = scriptErrorWhere(stack).replace(/[^A-Za-z0-9_.$@<>-]/g, '').slice(0, 100);
+                const where = frame.where;
                 const missing = RequestDiagnostics?.missingFromMessage?.(message);
                 const locationKey = (where || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 90);
                 NotificationJournal.recordDiagnostic('diag-script-' + name.toLowerCase() + '-' + locationKey, {
                     category: 'system', source: 'script-error', level: 'error',
                     message: 'ZenzaWatch のスクリプトエラー（' + name + '）',
-                    details: { operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name,
+                    details: { operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name, phase, event: bundle,
                         ...(where ? { where } : {}), ...(missing ? { missing } : {}) }
                 });
             }
             catch (_) { /* 記録の失敗で本体を止めない */ }
         };
-        window.addEventListener('error', (e) => recordError(e.error || { message: e.message, name: 'Error' }, e.filename));
+        window.addEventListener('error', (e) => recordError(e.error || { message: e.message, name: 'Error' }, e.filename, 'script', e.lineno));
         window.addEventListener('unhandledrejection', (e) => {
             const reason = e.reason;
-            if (reason instanceof Error) {
-                recordError(reason, '');
+            if (reason && typeof reason === 'object') {
+                recordError(reason, '', 'script-promise');
             }
         });
     };

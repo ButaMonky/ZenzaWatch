@@ -1,8 +1,10 @@
 // Task318: source-of-truth descriptors and transactional settings drafts.
 // A standalone domain model; no userscript behavior changes until the new UI is approved.
 import { UiVisibilityRegistry } from './UiVisibilityRegistry';
+import { ShareClipPreferences } from './ShareClipPreferences';
 //===BEGIN===
 //@require UiVisibilityRegistry
+//@require ShareClipPreferences
 class ModernAdvancedSettingsModel {
     static get CATEGORIES() {
         return [
@@ -553,8 +555,20 @@ class ModernAdvancedSettingsModel {
                 ['backComment', 'コメントを画面全体に流す', {
                         description: '全画面・ワイド表示時に、動画を縮小せず画面全体へコメントを重ねます。通常表示では従来どおりです。'
                     }],
-                ['commentSpeedRate', 'コメントの移動速度', { type: 'number' }],
-                ['autoCommentSpeedRate', 'コメント速度を自動調整'],
+                ['commentSpeedRate', 'コメントの移動速度', { type: 'number', unit: '倍',
+                        description: 'コメントが画面を横切る速さです。標準は1倍です。値を小さくすると、同じコメントを長く読めます。' }],
+                ['autoCommentSpeedRate', '倍速再生時もコメントの速さを保つ', { type: 'boolean',
+                        description: 'オンにすると、動画を1.5倍速や2倍速で見ているときも、流れるコメントをおおむね通常再生時の速さで読めます。初期値はオフです。' }],
+                ['commentLayer.motionFrameRate', '流れるコメントのフレームレート', {
+                        ...select([['auto', '自動（画面に合わせる・初期値）'], ['adaptive', '自動（コメントの密度に合わせる）'],
+                            ['15', '15 fps'], ['30', '30 fps'], ['60', '60 fps'], ['120', '120 fps']]),
+                        description: '通常プレイヤーで横に流れるコメントの位置を、1秒に何回変えるかを選びます。「画面に合わせる」はブラウザーの描画周期に任せます。「密度に合わせる」は同時に流れるコメントが60件以上で下の設定に切り替え、40件以下で元に戻ります。固定値が低いほど動きの刻みが見えやすくなります。画面のリフレッシュレートを超える回数は表示できません。PiPや保存するクリップにはそれぞれ専用の描画処理があります。'
+                    }],
+                ['commentLayer.denseFrameRate', 'コメントが多い場面のフレームレート', {
+                        ...select([['15', '15 fps'], ['30', '30 fps（初期値）'], ['60', '60 fps']]),
+                        dependsOn: 'commentLayer.motionFrameRate', dependsOnValue: 'adaptive',
+                        description: '「密度に合わせる」でコメントが集中したときの更新頻度です。動きの滑らかさを優先するなら60 fps、位置を変える回数を抑えたいなら15または30 fpsを選びます。同時に表示する件数は「同時表示するコメント数」で調整できます。'
+                    }],
                 ['commentLayerOpacity', 'コメントの透明度', slider(0, 1)],
                 ['commentLayer.easyCommentOpacity', 'かんたんコメントの透明度', slider(0, 1)],
                 ['commentLayer.aiCommentOpacity', 'AIコメントの透明度', slider(0, 1)],
@@ -917,8 +931,11 @@ class ModernAdvancedSettingsModel {
         this._historyParams = new Map((Array.isArray(historySchema) ? historySchema : [])
             .filter(p => p && typeof p.key === 'string')
             .map(p => [p.key, p]));
+        const clipSettings = Object.hasOwn(config.default, 'shareClip.previewQuality') ? ShareClipPreferences.fields.map(field => ({
+            ...field, category: '外部連携', subcategory: '動画クリップ・X共有', aliases: ['Twitter', '動画共有']
+        })) : [];
         this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings()
-            .map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
+            .concat(clipSettings).map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
         this._historyOrder = new Map((Array.isArray(historySchema) ? historySchema : [])
             .map((entry, index) => [entry.key, index + 1]));
         this._screenOrder = new Map((Array.isArray(screenFilterParams) ? screenFilterParams : [])

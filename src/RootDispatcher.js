@@ -208,6 +208,12 @@ const RootDispatcher = (() => {
                             const displayed = currentPlayer()?.drawableVideoElement;
                             return displayed?.src;
                         },
+                        getCurrentHlsRendition(video) {
+                            if (getCurrentVideo() !== video)
+                                return undefined;
+                            const hls = currentPlayer()?.drawableVideoElement?.hls;
+                            return hls?.levels[hls.currentLevel];
+                        },
                         getCurrentFileSource(video) {
                             // HLS wrappers display a different, MediaSource-backed element.
                             const displayed = currentPlayer()?.drawableVideoElement;

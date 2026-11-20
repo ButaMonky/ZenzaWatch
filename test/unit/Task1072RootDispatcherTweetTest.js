@@ -80,6 +80,25 @@ describe('Task1072 RootDispatcher tweet', () => {
     assert.equal(context.seekCurrentVideo(env.video, 0), false);
     assert.equal(env.displayed.currentTime, 12);
   });
+  it('自動画質は再生中の配信を返し、次に読み込む画質や別の動画を参照しない', () => {
+    const env = setup({watchId:'sm9'}, 'sm9', 'hls');
+    const levels = [{height:360,uri:'https://delivery.domand.nicovideo.jp/360.m3u8'},
+      {height:720,uri:'https://delivery.domand.nicovideo.jp/720.m3u8'}];
+    env.displayed.hls = {levels,currentLevel:1,loadLevel:0,autoLevelEnabled:true};
+    env.video.videoHeight = 360;
+    env.ctx.dispatcher.execCommand('tweet');
+    const {getCurrentHlsRendition} = env.capture().context;
+    assert.equal(getCurrentHlsRendition(env.video).uri, levels[1].uri);
+    assert.equal(getCurrentHlsRendition(env.video).height, 720);
+    env.displayed.hls.currentLevel = 0;
+    assert.equal(getCurrentHlsRendition(env.video).height, 360);
+    env.displayed.hls.currentLevel = -1;
+    assert.equal(getCurrentHlsRendition(env.video), undefined);
+    env.displayed.hls.currentLevel = 1;
+    assert.equal(getCurrentHlsRendition({}), undefined);
+    env.handlers.open();
+    assert.equal(getCurrentHlsRendition(env.video), undefined);
+  });
   it('外部埋め込みのダミー動画を録画対象にしない', () => {
     const env = setup({watchId:'sm9'}, 'sm9', 'iframe');
     env.ctx.dispatcher.execCommand('tweet');

@@ -239,9 +239,11 @@ describe('P12 real compiled toolbar command to dock integration (#214)',()=>{
     const saved=Object.freeze({id:'B1',videoId:'sm9',time:25,label:'保存済み',createdAt:1,updatedAt:1});
     h.session.publish({status:'ready',videoId:'sm9',bookmarks:[saved]});
     assert.equal(host.querySelectorAll('.manualBookmarkMarker').length,1);
+    assert.equal(h.view.manualBookmarkDock.element.childElementCount,0,'saved markers do not create the panel or its styles');
     h.session.publish({status:'error',videoId:'sm9',bookmarks:[saved]});
     assert.equal(host.querySelectorAll('.manualBookmarkMarker').length,1,
       'a failed write does not erase already committed markers');
+    h.click();
     assert.match(h.container.querySelector('[data-bookmark-status="error"]').textContent,/失敗/);
     h.session.publish({status:'loading',videoId:'sm10',bookmarks:[]});
     assert.equal(host.querySelectorAll('.manualBookmarkMarker').length,0,

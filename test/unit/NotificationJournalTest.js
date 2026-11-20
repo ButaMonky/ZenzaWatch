@@ -39,6 +39,15 @@ describe('NotificationJournal source-only, no network', () => {
     assert.equal(entries[0].source, 'script-error');
     assert.equal(entries[0].details.count, 3);
     assert(!JSON.stringify(entries).includes('private fixture text'));
+    handlers.get('error')({filename:'ZenzaWatchRuntime.js', lineno:107, message:'sensitive'});
+    handlers.get('unhandledrejection')({reason:{name:'TypeError', message:'sensitive',
+      stack:'ShareHlsPreview.attach@moz-extension://private/userscript.html?name=ZenzaWatch&private=query:995:7'}});
+    handlers.get('unhandledrejection')({reason:{name:'Error', stack:'Error: ZenzaWatchRuntime.js:995:7'}});
+    const extra = (await journal.list()).map(entry => entry.details);
+    assert(extra.some(d => d.where === 'anonymous@107' && d.event === 'ZenzaWatchRuntime.js' && d.phase === 'script'));
+    assert(extra.some(d => d.where === 'ShareHlsPreview.attach@995' && d.phase === 'script-promise'));
+    assert.equal(extra.length,3);
+    assert(!JSON.stringify(extra).includes('private'));
   });
   it('captures occurrence build and separates first/last failure from recovery time', () => {
     let now=1800000000000;const journal=harness({Date:class extends Date {static now(){return now;}}});

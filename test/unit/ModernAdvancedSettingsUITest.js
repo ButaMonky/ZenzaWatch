@@ -72,7 +72,7 @@ function boot(saved={},storageValues={}) {
     'ui.hover.watchLater':true,'ui.hover.comments':true,'ui.hover.ngFilter':true,
     'ui.relatedMenu':true,'ui.commentInput':true,
     KEY_CUSTOM_SEEK_1:0,PARAM_CUSTOM_SEEK_1:0,'relatedMenu.customLinks':[],
-    ...ctx.UiVisibilityRegistry.defaults()};
+    ...ctx.UiVisibilityRegistry.defaults(), ...ctx.ShareClipPreferences.defaults};
   const config={default:defaults,values:{...defaults,...saved},writes:[],listeners:new Map(),
     getValue(k){return this.values[k]},
     onkey(k,fn){if(!this.listeners.has(k)){this.listeners.set(k,new Set());}this.listeners.get(k).add(fn);},
@@ -118,6 +118,56 @@ function boot(saved={},storageValues={}) {
     closes(){return closed},confirms(){return confirmCalls},allowConfirm(v){confirms=v},
     destroy(){ui.dispose();relatedEditor.dispose();dom.window.close()}};
 }
+describe('Clip and X sharing preferences', () => {
+  it('finds all seven settings, preserves saved choices, and applies edits and resets on save', () => {
+    const h = boot({'shareClip.previewQuality':'low'});
+    const select = key => h.q('select[data-setting-name="shareClip.' + key + 'Quality"]');
+    try {
+      h.click('[data-zw-major="外部連携"]');
+      h.click('[data-zw-sub="外部連携|動画クリップ・X共有"]');
+      assert.strictEqual(h.all('[data-zw-id^="shareClip."]').length, 7);
+      assert.strictEqual(select('preview').value, 'low');
+      assert.strictEqual(select('scene').value, 'low');
+      assert.strictEqual(select('export').value, 'source');
+      assert.deepStrictEqual(Array.from(select('preview').options, option => option.value),
+        ['low','source','144','240','360','480','720','1080']);
+      const search = h.q('[data-zw-search]');
+      search.value = 'Twitter';
+      h.dispatch(search, 'input');
+      assert.strictEqual(h.all('[data-zw-id^="shareClip."]').length, 7);
+      assert.deepStrictEqual(h.config.writes, []);
+      const quality = select('export');
+      quality.value = '720';
+      h.dispatch(quality);
+      const seconds = h.q('input[type=number][data-setting-name="shareClip.initialDurationSeconds"]');
+      assert.strictEqual(seconds.value, '30');
+      seconds.value = '18';
+      h.dispatch(seconds, 'input');
+      for (const key of ['includeComments','includeEffects']) {
+        const box = h.q('input[data-setting-name="shareClip.' + key + '"]');
+        assert.strictEqual(box.checked, false);
+        box.click();
+      }
+      const api = h.q('input[data-setting-name="shareClip.openXDraft"]');
+      assert.strictEqual(api.checked, true);
+      api.click();
+      h.click('[data-zw-reset-item="shareClip.previewQuality"]');
+      assert.deepStrictEqual(h.config.writes, []);
+      assert.strictEqual(select('preview').value, 'source');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['shareClip.previewQuality'], 'source');
+      assert.strictEqual(h.config.values['shareClip.sceneQuality'], 'low');
+      assert.strictEqual(h.config.values['shareClip.exportQuality'], '720');
+      assert.strictEqual(h.config.values['shareClip.initialDurationSeconds'], 18);
+      assert.strictEqual(h.config.values['shareClip.includeComments'], true);
+      assert.strictEqual(h.config.values['shareClip.includeEffects'], true);
+      assert.strictEqual(h.config.values['shareClip.openXDraft'], false);
+    } finally {
+      h.destroy();
+    }
+  });
+});
+
 describe('Task402 B2 global settings lifecycle',()=>{
   const openNg=h=>{
     h.click('[data-zw-major="NG・表示対象"]');

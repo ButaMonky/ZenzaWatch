@@ -10,6 +10,19 @@ function harness(){
  const events=[];ctx.diag.setSink(event=>events.push(event));return {diag:ctx.diag,events};
 }
 describe('Request diagnostics boundaries',()=>{
+ it('identifies the repair module and stage for a clip preview or conversion failure',()=>{
+  const {diag,events}=harness();
+  for(const [operation,module,missing] of [
+   ['clip-preview','src/ShareHlsPreview.js','fragment'],
+   ['clip-conversion','src/ShareFastClip.js','input.tracks']
+  ]){
+   diag.begin(operation,'same-video','response').failure({kind:'schema',missing});
+   const event=events.at(-1);
+   assert.equal(event.operation,operation);
+   assert.equal(event.module,module);
+   assert.equal(event.missing,missing);
+  }
+ });
  it('keeps pending failures and recovery despite unrelated successful traffic',()=>{
   const {diag,events}=harness();
   const pending=diag.begin('video-info','pending','response');

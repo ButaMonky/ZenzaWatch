@@ -5,7 +5,7 @@ export type DiagnosticOperation = 'video-info' | 'comment-read' | 'comment-histo
   'tag-add' | 'tag-remove' | 'playlist' | 'like' | 'tags' | 'nico-api' | 'tag-suggest' | 'tag-key' |
   'advertising' | 'ad-decoration' | 'supporters' | 'gifts' | 'dictionary' | 'recommend' | 'owner' | 'owner-videos' |
   'comment-post' | 'nicoru' | 'comment-delete' | 'nicoad-end' |
-  'clip-permission' | 'clip-license' | 'clip-create' | 'clip-status' | 'clip-post' | 'clip-post-status' | 'clip-delete' | 'clip-library' | 'clip-playlist' | 'clip-segment';
+  'clip-permission' | 'clip-license' | 'clip-create' | 'clip-status' | 'clip-post' | 'clip-post-status' | 'clip-delete' | 'clip-library' | 'clip-playlist' | 'clip-segment' | 'clip-conversion' | 'clip-preview';
 export type DiagnosticPhase = 'transport' | 'response' | 'session';
 export interface DiagnosticEvent {
   key: string;
@@ -48,6 +48,7 @@ const RequestDiagnostics = (() => {
     dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報', 'owner-videos': '投稿者の動画一覧',
     'comment-post': 'コメント投稿', nicoru: 'ニコる', 'comment-delete': 'コメント削除',
     'nicoad-end': '動画の最後のニコニ広告',
+    'clip-conversion': 'クリップの映像・音声変換', 'clip-preview': 'クリップの区間プレビュー',
     'clip-library': 'クリップ変換ライブラリ',
     'clip-playlist':'クリップ区間の配信一覧', 'clip-segment':'クリップ区間の映像・音声データ',
     'clip-permission': 'クリップ投稿の利用確認', 'clip-license': 'クリップの音声利用確認',
@@ -74,6 +75,7 @@ const RequestDiagnostics = (() => {
     dictionary: 'nico-src/NicodicArticleLoader.ts', recommend: 'nico-src/RecommendAPILoader.ts', owner: 'nico-src/OwnerSupplement.ts', 'owner-videos': 'nico-src/VideoSearch.ts',
     'comment-post': 'nico-src/CommentPostWire.ts', nicoru: 'nico-src/ThreadLoader.ts', 'comment-delete': 'nico-src/ThreadLoader.ts',
     'nicoad-end': 'nico-src/NicoVideoPlayerDialog.ts',
+    'clip-conversion': 'src/ShareFastClip.js', 'clip-preview': 'src/ShareHlsPreview.js',
     'clip-library': 'src/ShareFastClip.js',
     'clip-playlist':'src/ShareHlsClipSource.js', 'clip-segment':'src/ShareHlsClipSource.js',
     'clip-permission': 'src/ShareOfficialClip.js', 'clip-license': 'src/ShareOfficialClip.js',
@@ -205,7 +207,7 @@ const RequestDiagnostics = (() => {
       const where = missingFromMessage(e.message);
       return {reason: 'script', errorName: String(e.name), ...(where ? {missing: where} : {})};
     }
-    if (e.kind === 'integrity') return {reason:'integrity'};
+    if (e.kind === 'integrity') return {reason:'integrity', ...fields};
     if (e.kind === 'module-load') return {reason:'module-load'};
     if (e.reason === 'session-closed') { return {reason: 'session-closed'}; }
     if (e.kind === 'service') { return {reason: 'service', ...fields}; }
@@ -313,7 +315,7 @@ const RequestDiagnostics = (() => {
           while (failures.size > 100) { failures.delete(failures.keys().next().value!); }
         }
         const reasonLabels: Record<string, string> = {
-          integrity:'配布ファイルの照合に失敗しました', 'module-load':'変換ライブラリを読み込めません',
+          integrity:'読み込んだデータの整合性を確認できませんでした', 'module-load':'変換ライブラリを読み込めません',
           timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
           schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
           'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です',

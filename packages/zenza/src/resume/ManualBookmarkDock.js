@@ -12,22 +12,18 @@ const {ManualBookmarkDock} = (() => {
 const contentSelector = '.zenzaWatchVideoInfoPanel .tabs.videoInfoTab .zenzaWatchVideoInfoPanelContent';
 class ManualBookmarkDock {
     node;
-    root;
     panel;
     session;
-    keyHandler;
-    clickHandler;
-    visibilityHandler;
-    outsideHandler;
+    deps;
+    unsubscribeMarkers;
+    panelEvents;
+    openEvents;
     disposed = false;
     host = null;
     home;
-    resizeHandler;
     resizeObserver = null;
     layoutObserver = null;
     bottomReference = null;
-    scrollHandler;
-    transitionHandler;
     observedLayout = new Set();
     observeLayoutChain(start) {
         for (let node = start; node; node = node.parentElement)
@@ -104,7 +100,6 @@ class ManualBookmarkDock {
             done();
         }
     }
-    style;
     toggle(host, trigger) {
         if (this.disposed)
             return;
@@ -112,6 +107,7 @@ class ManualBookmarkDock {
             this.close();
             return;
         }
+        const panel = this.ensurePanel();
         this.cancelAnimation();
         this.closing = false;
         this.node.inert = false;
@@ -122,6 +118,7 @@ class ManualBookmarkDock {
         this.host = host;
         this.trigger = trigger || null;
         this.floating = true;
+        this.watchOpenPanel();
         this.resizeObserver?.observe(this.node);
         this.resizeObserver?.observe(host);
         if (this.trigger)
@@ -131,8 +128,8 @@ class ManualBookmarkDock {
         host.append(this.node);
         this.node.hidden = false;
         this.node.classList.add('zw-points-floating');
-        this.panel.refreshPreferences();
-        this.panel.setVisible(true);
+        panel.refreshPreferences();
+        panel.setVisible(true);
         this.trigger?.setAttribute('aria-expanded', 'true');
         this.position();
         // Refresh shared IndexedDB only on explicit reopen, without polling.
@@ -143,7 +140,8 @@ class ManualBookmarkDock {
     close(restoreFocus = true) {
         if (this.disposed || this.closing)
             return;
-        this.panel.setVisible(false);
+        this.panel?.setVisible(false);
+        this.openEvents?.abort();
         if (this.floating) {
             this.closing = true;
             this.node.inert = true;
@@ -169,18 +167,19 @@ class ManualBookmarkDock {
     }
     get bookmarkStatus() { return this.session.snapshot.status; }
     get bookmarkNeedsReload() { return this.session.needsLoadRetry; }
-    get isRepeating() { return this.panel.isRepeating; }
-    setRepeatRange(a, b, activate = true) { return this.panel.setRepeatRange(a, b, activate); }
-    repeatAtEnd() { return this.panel.repeatAtEnd(); }
-    stopUnresponsiveRepeat() { this.panel.stopUnresponsiveRepeat(); }
-    acknowledgeLoopSeek(time) { this.panel.acknowledgeLoopSeek(time); }
-    refreshPreferences() { this.panel.refreshPreferences(); }
+    get isRepeating() { return this.panel?.isRepeating ?? false; }
+    setRepeatRange(a, b, activate = true) { return !this.disposed && this.ensurePanel().setRepeatRange(a, b, activate); }
+    repeatAtEnd() { return this.panel?.repeatAtEnd() ?? false; }
+    stopUnresponsiveRepeat() { this.panel?.stopUnresponsiveRepeat(); }
+    acknowledgeLoopSeek(time) { this.panel?.acknowledgeLoopSeek(time); }
+    refreshPreferences() { this.panel?.refreshPreferences(); }
     tick(time, paused, seeking) {
-        return this.panel.tick(time, paused, seeking);
+        return this.panel?.tick(time, paused, seeking) ?? false;
     }
     constructor(target, session, deps) {
         this.session = session;
         this.home = target;
+        this.deps = deps;
         const doc = target.ownerDocument;
         const node = this.node = doc.createElement('section');
         node.setAttribute('role', 'dialog');
@@ -188,63 +187,97 @@ class ManualBookmarkDock {
         node.className = 'zenzaManualBookmarkDock';
         node.hidden = true;
         node.dataset.bookmarkOwner = 'manual';
+        const series = target.querySelector(':scope > .seriesList');
+        target.insertBefore(node, series || null);
+        try {
+            if (deps.onBookmarksChange)
+                this.unsubscribeMarkers = session.subscribe(deps.onBookmarksChange);
+        }
+        catch (error) {
+            node.remove();
+            throw error;
+        }
+    }
+    ensurePanel() {
+        if (this.panel)
+            return this.panel;
+        const node = this.node, doc = node.ownerDocument;
         const summary = doc.createElement('h2');
         summary.className = 'zw-points-heading';
         summary.tabIndex = -1;
         summary.textContent = 'しおり・ABリピート';
         node.append(summary);
-        const root = this.root = doc.createElement('section');
+        const root = doc.createElement('section');
         root.className = 'zenzaManualBookmarkDockContent';
         node.append(root);
-        this.style = doc.createElement('style');
-        this.style.textContent = ManualBookmarkDock.styles;
-        node.append(this.style);
-        this.resizeHandler = () => this.position();
-        this.scrollHandler = event => { if (event.target instanceof doc.defaultView.Node && this.node.contains(event.target))
-            return; this.position(); };
-        this.transitionHandler = event => { if (this.observedLayout.has(event.target))
-            this.position(); };
-        doc.addEventListener('scroll', this.scrollHandler, true);
-        doc.addEventListener('fullscreenchange', this.resizeHandler);
-        doc.addEventListener('webkitfullscreenchange', this.resizeHandler);
-        doc.addEventListener('transitionend', this.transitionHandler, true);
-        const MutationObserver = doc.defaultView?.MutationObserver;
-        if (MutationObserver)
-            this.layoutObserver = new MutationObserver(this.resizeHandler);
-        doc.defaultView?.addEventListener('resize', this.resizeHandler);
-        const Observer = doc.defaultView?.ResizeObserver;
-        if (Observer) {
-            this.resizeObserver = new Observer(this.resizeHandler);
-            this.resizeObserver.observe(node);
+        const style = doc.createElement('style');
+        style.textContent = ManualBookmarkDock.styles;
+        node.append(style);
+        this.unsubscribeMarkers?.();
+        this.unsubscribeMarkers = undefined;
+        try {
+            this.panel = new ManualBookmarkPanel(root, this.session, this.deps);
+            this.panel.setVisible(false);
         }
-        const series = target.querySelector(':scope > .seriesList');
-        target.insertBefore(node, series || null);
+        catch (error) {
+            this.panel?.dispose();
+            this.panel = undefined;
+            node.replaceChildren();
+            if (this.deps.onBookmarksChange)
+                this.unsubscribeMarkers = this.session.subscribe(this.deps.onBookmarksChange);
+            throw error;
+        }
+        this.panelEvents = new doc.defaultView.AbortController();
+        const options = { signal: this.panelEvents.signal };
         // All keyboard interaction within this dedicated dock belongs to its
         // summary, buttons and text fields, not the video's global shortcuts.
         // Stop bubbling (never preventDefault) without touching native seek keys.
-        this.keyHandler = event => {
+        const keyHandler = (event) => {
             event.stopPropagation();
             if (event.type === 'keydown' && event.key === 'Escape') {
                 event.preventDefault();
                 this.close();
             }
         };
-        node.addEventListener('keydown', this.keyHandler);
-        node.addEventListener('keyup', this.keyHandler);
+        node.addEventListener('keydown', keyHandler, options);
+        node.addEventListener('keyup', keyHandler, options);
         // Floating placement makes the player container an ancestor. Its click
         // handler cancels default actions, including details/summary and checkboxes.
         // Keep dock clicks here without cancelling their native default actions.
-        this.clickHandler = event => event.stopPropagation();
-        node.addEventListener('click', this.clickHandler);
+        node.addEventListener('click', event => event.stopPropagation(), options);
+        return this.panel;
+    }
+    watchOpenPanel() {
+        this.openEvents?.abort();
+        const doc = this.node.ownerDocument, win = doc.defaultView;
+        this.openEvents = new win.AbortController();
+        const options = { signal: this.openEvents.signal }, capture = { ...options, capture: true };
+        const position = () => this.position();
+        doc.addEventListener('scroll', event => {
+            if (event.target instanceof win.Node && this.node.contains(event.target))
+                return;
+            position();
+        }, capture);
+        doc.addEventListener('fullscreenchange', position, options);
+        doc.addEventListener('webkitfullscreenchange', position, options);
+        doc.addEventListener('transitionend', event => {
+            if (this.observedLayout.has(event.target))
+                position();
+        }, capture);
+        win.addEventListener('resize', position, options);
+        if (win.MutationObserver)
+            this.layoutObserver ??= new win.MutationObserver(position);
+        if (win.ResizeObserver)
+            this.resizeObserver ??= new win.ResizeObserver(position);
         // When another tab was editing the same video, a visible open Dock
         // checks the latest record. Broadcast no video IDs or bookmark content.
-        this.visibilityHandler = () => {
+        doc.addEventListener('visibilitychange', () => {
             if (this.disposed || this.node.hidden ||
                 doc.visibilityState !== 'visible')
                 return;
             void this.session.refreshIfIdle();
-        };
-        this.outsideHandler = event => {
+        }, options);
+        const outside = (event) => {
             if (this.disposed || this.node.hidden)
                 return;
             const path = event.composedPath();
@@ -252,29 +285,8 @@ class ManualBookmarkDock {
                 return;
             this.close(false);
         };
-        try {
-            this.panel = new ManualBookmarkPanel(root, session, deps);
-            this.panel.setVisible(false);
-            doc.addEventListener('visibilitychange', this.visibilityHandler);
-            doc.addEventListener('pointerdown', this.outsideHandler, true);
-            doc.addEventListener('click', this.outsideHandler, true);
-        }
-        catch (error) {
-            node.removeEventListener('keydown', this.keyHandler);
-            node.removeEventListener('keyup', this.keyHandler);
-            node.removeEventListener('click', this.clickHandler);
-            node.remove();
-            this.resizeObserver?.disconnect();
-            this.layoutObserver?.disconnect();
-            this.observedLayout.clear();
-            this.bottomReference = null;
-            doc.defaultView?.removeEventListener('resize', this.resizeHandler);
-            doc.removeEventListener('scroll', this.scrollHandler, true);
-            doc.removeEventListener('fullscreenchange', this.resizeHandler);
-            doc.removeEventListener('webkitfullscreenchange', this.resizeHandler);
-            doc.removeEventListener('transitionend', this.transitionHandler, true);
-            throw error;
-        }
+        doc.addEventListener('pointerdown', outside, capture);
+        doc.addEventListener('click', outside, capture);
     }
     static mount(host, session, deps) {
         const target = host?.querySelector(contentSelector);
@@ -303,12 +315,13 @@ class ManualBookmarkDock {
             this.home.append(this.node);
             this.floating = false;
         }
+        this.openEvents?.abort();
         this.resizeObserver?.disconnect();
         this.layoutObserver?.disconnect();
         this.observedLayout.clear();
         this.bottomReference = null;
         this.trigger?.setAttribute('aria-expanded', 'false');
-        this.panel.setVisible(false);
+        this.panel?.setVisible(false);
         this.session.deactivate();
     }
     static styles = `
@@ -403,22 +416,14 @@ class ManualBookmarkDock {
             return;
         this.disposed = true;
         this.cancelAnimation();
-        this.node.removeEventListener('keydown', this.keyHandler);
-        this.node.removeEventListener('keyup', this.keyHandler);
-        this.node.removeEventListener('click', this.clickHandler);
-        this.node.ownerDocument.removeEventListener('visibilitychange', this.visibilityHandler);
-        this.node.ownerDocument.removeEventListener('pointerdown', this.outsideHandler, true);
-        this.node.ownerDocument.removeEventListener('click', this.outsideHandler, true);
+        this.openEvents?.abort();
+        this.panelEvents?.abort();
+        this.unsubscribeMarkers?.();
         this.resizeObserver?.disconnect();
         this.layoutObserver?.disconnect();
         this.observedLayout.clear();
         this.bottomReference = null;
-        this.node.ownerDocument.defaultView?.removeEventListener('resize', this.resizeHandler);
-        this.node.ownerDocument.removeEventListener('scroll', this.scrollHandler, true);
-        this.node.ownerDocument.removeEventListener('fullscreenchange', this.resizeHandler);
-        this.node.ownerDocument.removeEventListener('webkitfullscreenchange', this.resizeHandler);
-        this.node.ownerDocument.removeEventListener('transitionend', this.transitionHandler, true);
-        this.panel.dispose();
+        this.panel?.dispose();
         this.session.dispose();
         this.node.remove();
     }

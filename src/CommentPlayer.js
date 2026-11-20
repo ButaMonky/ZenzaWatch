@@ -37,6 +37,7 @@ class NicoCommentPlayer extends Emitter {
         this._viewModel = new NicoCommentViewModel(this._model);
         this._view = new NicoCommentCss3PlayerView({
             viewModel: this._viewModel,
+            isMediaPlaying: params.isMediaPlaying,
             playbackRate: params.playbackRate,
             show: params.showComment,
             opacity: _.isNumber(params.commentOpacity) ? params.commentOpacity : 1.0

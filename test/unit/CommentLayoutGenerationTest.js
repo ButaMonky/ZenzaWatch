@@ -1,7 +1,7 @@
 import assert from 'power-assert';
 const {createContext, loadClass} = require('../helpers/extractSource');
 const flush = async () => { for(let i=0;i<8;i++) await Promise.resolve(); };
-function subject() {
+function subject(now=()=>123) {
   const requests=[], timers=[];
   const worker={post({params}) { return new Promise((resolve,reject)=>requests.push({params,resolve,reject})); }};
   const VM={prepareCommentArt(){},SPEED_RATE:1,emitter:{on(){}},create(chat) {
@@ -12,7 +12,7 @@ function subject() {
       recalcBeginEndTiming(rate){this.endRightTiming=4/rate;}};
   }};
   const quiet={log(){},warn(){},time(){},timeEnd(){}};
-  const c=createContext({console:quiet,Date:{now:()=>123},setTimeout:f=>timers.push(f),
+  const c=createContext({console:quiet,Date:{now},setTimeout:f=>timers.push(f),
     NicoChatViewModel:VM,NicoChat:{SORT_FUNCTION:(a,b)=>a.vpos-b.vpos},
     CommentLayoutWorker:{getInstance:()=>worker}});
   const Group=loadClass('packages/zenza/src/commentLayer/NicoChatGroupViewModel.js','NicoChatGroupViewModel',c);
@@ -26,6 +26,18 @@ function subject() {
 }
 const chats=(prefix,n)=>Array.from({length:n},(_,i)=>({id:prefix+i,vpos:i*100}));
 describe('非同期コメント配置の世代（H-01 / Task109）',function(){
+  it('文字測定に時間がかかるときは100件未満でも動画の描画に処理を譲る', async function() {
+    let time=0;
+    const h=subject(()=>time), create=h.VM.create;
+    h.VM.create=chat=>{time+=3;return create(chat);};
+    const adding=h.g.addChatArray(chats('slow',12));
+    assert(h.g.members.length>0 && h.g.members.length<12);
+    assert.equal(h.requests.length,0);
+    while(h.timers.length){h.timers.shift()();await flush();}
+    await adding;
+    assert.equal(h.g.members.length,12);
+    assert.equal(h.requests.length,1);
+  });
   it('同じミリ秒に追加しても遅れて届く古い結果を採用しない',async function(){
     const h=subject();h.g.addChat({id:'a'});h.g.addChat({id:'b'});
     await h.finish(1,20);await h.finish(0,90);

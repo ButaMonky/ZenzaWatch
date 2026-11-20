@@ -73,13 +73,17 @@ const SharePlaybackFile = (() => {
     }
     return media && movie && current();
   }
-  async function get(video, assigned, {signal, isCurrent} = {}) {
+  async function get(video, assigned, {signal, isCurrent, keepOriginal = false} = {}) {
     if (!video || !assigned || typeof isCurrent !== 'function') return null;
     const object = video.srcObject;
     const selected = video.currentSrc;
-    const current = () => !signal?.aborted && isCurrent() && !video.mediaKeys &&
-      video.srcObject === object && video.currentSrc === selected;
-    if (!current()) return null;
+    const sameSource = () => video.srcObject === object && video.currentSrc === selected;
+    if (!isCurrent() || signal?.aborted || video.mediaKeys) return null;
+    // The export owns the initially selected URL/Blob. Never look up a replacement
+    // after a navigation. The bytes themselves still undergo the full format check.
+    const current = () => !signal?.aborted && (keepOriginal
+      ? !sameSource() || !video.mediaKeys
+      : isCurrent() && sameSource() && !video.mediaKeys);
     try {
       let blob;
       if (object) {

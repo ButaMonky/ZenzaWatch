@@ -31,6 +31,8 @@ declare class NicoCommentCss3PlayerView extends Emitter {
     setHistoryClassifier(fn: any): void;
     _isHistoryChat(nicoChat: any): boolean;
     get displayLimit(): number;
+    _updateMotionFrameRate(): void;
+    _setMotionEasing(element: any, fps: any): void;
     /** 診断用: 取得数ではなく「描画側」の数と、見送り・終了の理由別の累計 */
     get displayStats(): {
         limit: number;

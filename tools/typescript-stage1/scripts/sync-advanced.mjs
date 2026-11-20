@@ -33,6 +33,8 @@ export function restoreLegacyRequires(spec,compiled){
 // The TS sources keep a typed `declare` boundary (their strict checks cannot resolve the runtime paths),
 // so the import is added to the generated JS before //===BEGIN=== (build.js ignores import lines).
 export const ADVANCED_ESM_IMPORTS={
+  Config:["import { ShareClipPreferences } from './ShareClipPreferences';"],
+  ModernAdvancedSettingsModel:["import { ShareClipPreferences } from './ShareClipPreferences';"],
   UiVisibilityRegistry:["import { SHORTCUT_ACTIONS, formatKeyCombo } from '../packages/zenza/src/ShortcutActions';"],
   ModernAdvancedSettingsUI:["import { NgCompositeRuleEditor } from './NgCompositeRuleEditor';"],
   _setting:["import { StoryboardCacheDb } from '../packages/lib/src/nico/StoryboardCacheDb';"]
@@ -79,7 +81,10 @@ export function prepareAdvanced(spec,root,mode,allowCodeChange=false){
     JSON.stringify(compDirectives) === JSON.stringify(['//===BEGIN===', ...currentDirectives.filter(x => !['//@require Config','//@require ZenzaDetector','//@require Emitter'].includes(x)), '//===END===']);
   const emitterMigration = spec.name === '_setting' && mode === '--write' && allowCodeChange &&
       JSON.stringify(compDirectives) === JSON.stringify(currentDirectives.filter(x => x !== '//@require Emitter'));
-    if(JSON.stringify(compDirectives)!==JSON.stringify(currentDirectives) && !panelMigration && !emitterMigration){
+  const clipPreferencesMigration = ['Config','ModernAdvancedSettingsModel'].includes(spec.name) &&
+    mode === '--write' && allowCodeChange && !currentDirectives.includes('//@require ShareClipPreferences') &&
+    JSON.stringify(compDirectives.filter(line => line !== '//@require ShareClipPreferences')) === JSON.stringify(currentDirectives);
+  if(JSON.stringify(compDirectives)!==JSON.stringify(currentDirectives) && !panelMigration && !emitterMigration && !clipPreferencesMigration){
     err('ADVANCED_LEGACY_BUILD_DIRECTIVE_MISMATCH');
   }
   const differs=desiredSemantic!==currentSemantic || JSON.stringify(compDirectives)!==JSON.stringify(currentDirectives);

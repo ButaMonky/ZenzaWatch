@@ -3,17 +3,20 @@ import {ShareOfficialClip} from './ShareOfficialClip';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {ShareClipRenderer} from './ShareClipRenderer';
 import {ShareLocalClip} from './ShareLocalClip';
-import {ShareClipJobs} from './ShareClipJobs';
 import {SharePlaybackFile} from './SharePlaybackFile';
+import {HlsLibrary} from '../packages/zenza/src/hls/HlsLibrary';
 //===BEGIN===
 //@require PopupMessage
-//@require ShareOfficialClip
-//@require ShareLocalClip
-//@require ShareClipJobs
-//@require SharePlaybackFile
-//@require ShareClipRenderer
-const VideoSharePanel = (() => {
-  let activeClose;
+//@require HlsLibrary
+function createVideoSharePanel() {
+  //@require ShareLocalClip
+  //@require SharePlaybackFile
+  //@require ShareClipRenderer
+  function createOfficialClipService() {
+    //@require ShareOfficialClip
+    return ShareOfficialClip;
+  }
+  let activeClose, officialClipService;
   const css = `
 .zenzaShare {color-scheme:dark;box-sizing:border-box;width:min(64rem,calc(100vw - 24px));max-width:none;
   max-height:100dvh;margin:auto;padding:0;color:#f2f5f8;background:#1b2027;border:1px solid #526175;
@@ -68,7 +71,7 @@ const VideoSharePanel = (() => {
 .zenzaShare [role=status] {overflow-wrap:anywhere}
 .zenzaShare [data-role=result] {grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:6px 18px}
 .zenzaShare [data-role=result] video {grid-row:span 2;max-height:clamp(80px,calc(100dvh - 240px),420px)}
-.zenzaShare [data-page=result] [data-role=timeline],.zenzaShare .zenzaLocalClip:not([data-page=result]) [data-role=result] {display:none}
+.zenzaShare .zenzaLocalClip:not([data-page=range]) [data-role=timeline],.zenzaShare .zenzaLocalClip:not([data-page=result]) [data-role=result] {display:none}
 .zenzaShare .clipSourceName {max-width:100%}
 .zenzaShare #zenzaShareLink {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
 .zenzaShare #zenzaShareLink > :not(details) {grid-column:1}
@@ -82,8 +85,8 @@ const VideoSharePanel = (() => {
   .zenzaShare {width:calc(100vw - 12px)}
   .zenzaShare .clipWorkspace,.zenzaShare [data-role=result],.zenzaShare #zenzaShareLink,.zenzaShare [data-official-editor] {display:block}
   .zenzaShare .clipWorkspace [data-role=timeline] {margin-bottom:6px}
-  .zenzaShare .zenzaLocalClip:not([data-page=range]) [data-role=timeline] {display:none}
-  .zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(50px,calc(100dvh - 430px),340px)}
+  .zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(36px,calc(100dvh - 430px),340px)}
+  .zenzaShare .zenzaLocalClip[data-page=range] .zwClipScreen {max-height:clamp(34px,calc(100dvh - 456px),340px)}
   .zenzaShare #zenzaShareLink:has(details[open]) > :not(details,.shareStatus) {display:none}
   .zenzaShare [data-official-editor]:has([name=composer]:not([hidden])) > :is(p:not([role=status]),.shareRow:first-of-type) {display:none}
   .zenzaShare [name=composer] video {max-height:clamp(56px,calc(100dvh - 425px),240px)}
@@ -94,7 +97,6 @@ const VideoSharePanel = (() => {
   .zenzaShare > nav {grid-column:2;align-self:center;border:none}
   .zenzaShare > section {grid-column:1/-1}
   .zenzaShare .zenzaLocalClip[data-page=sources] .clipWorkspace {display:block}
-  .zenzaShare .zenzaLocalClip[data-page=sources] [data-role=timeline] {display:none}
 }
 @media(max-height:550px),(max-width:500px) {
   .zenzaShare {font-size:13px}
@@ -107,7 +109,6 @@ const VideoSharePanel = (() => {
   .zenzaShare .clipFooter {margin-top:4px;padding-top:4px}
   .zenzaShare .clipRange,.zenzaShare .clipLayers,.zenzaShare .clipActions {margin:4px 0}
   .zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:clamp(64px,calc(100dvh - 365px),210px)}
-  .zenzaShare .zenzaLocalClip[data-page=result] .clipFooter .clipActions {display:none}
 }
 @media(min-width:560px) and (max-height:470px) {
   .zenzaShare .zenzaLocalClip[data-page=result] [data-role=result] {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -139,7 +140,7 @@ const VideoSharePanel = (() => {
 <label><input type="number" name="start" min="0" step="0.01" inputmode="decimal"> 秒から</label></div>
 <label>共有リンク<input readonly name="link" aria-label="共有リンク"></label>
 <label>投稿本文<textarea rows="2"></textarea></label>
-<div class="shareRow"><a class="shareAction" data-action="x" rel="noopener noreferrer">このタブでXの下書きを開く</a>
+<div class="shareRow"><a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">別タブでXの下書きを開く</a>
 <button type="button" data-copy="link">リンクをコピー</button>
 <button type="button" data-copy="text">本文とリンクをコピー</button>
 <button type="button" data-action="system" hidden>端末で共有</button></div>
@@ -151,7 +152,7 @@ const VideoSharePanel = (() => {
 <button type="button" data-copy="thumb">動画情報のコードをコピー</button></details>
 <p class="shareStatus" role="status"></p></section>
 <section id="zenzaShareLocal" hidden><div data-clip-editor></div>
-<div class="shareProvider"><button type="button" data-action="official">ニコニコでX用プレビューを作成</button>
+<div class="shareProvider"><button type="button" data-action="official">Xに直接投稿する画面へ</button>
 <p>ニコニコが元動画から3〜30秒の映像を作成します。確認してからXに投稿できます。</p>
 <p data-provider-range hidden></p><p data-provider-layers hidden>ここで選んだコメント・画面エフェクトは、端末で作成するファイルに反映されます。</p>
 </div></section>
@@ -201,9 +202,6 @@ const VideoSharePanel = (() => {
         '" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="' + attr(watch.href) + '">' +
         title + '</a></iframe>';
       const draftLink = find('[data-action=x]');
-      const separate = window !== window.top || ShareClipJobs.busy;
-      draftLink.target = separate ? '_blank' : '_self';
-      draftLink.textContent = separate ? '別タブでXの下書きを開く' : 'このタブでXの下書きを開く';
       const intent = new URL('https://x.com/intent/tweet');
       intent.searchParams.set('text', message.value);
       intent.searchParams.set('url', url.href);
@@ -250,7 +248,7 @@ const VideoSharePanel = (() => {
       find('[data-view=official]').disabled = prepare.disabled = next.recording;
       find('[data-view=link]').disabled = next.recording;
       const length = next.end - next.start;
-      prepare.textContent = length > 30 ? 'ニコニコで先頭30秒のX用プレビューを作成' : 'ニコニコでX用プレビューを作成';
+      prepare.textContent = length > 30 ? '先頭30秒をXに直接投稿する画面へ' : 'Xに直接投稿する画面へ';
       rangeNote.hidden = !(length > 30 || length < 3);
       rangeNote.textContent = length > 30 ? 'ニコニコには選択範囲の先頭30秒を渡します。' :
         'ニコニコでの投稿には3秒以上の範囲を指定してください。';
@@ -305,8 +303,9 @@ const VideoSharePanel = (() => {
         if (lengthMs > 30000 || selection.comments || selection.effects) differences.push('元の編集内容を使うには、クリップ編集に戻ってください。');
         note.textContent = differences.join('');
         note.hidden = !differences.length;
-        mounted.set(view, ShareOfficialClip.mount(find('[data-official-editor]'), {
-          info, startTime:start, endTime:end, autoPreview:selection.isCurrent && Number.isFinite(lengthMs) && !differences.length,
+        officialClipService ||= createOfficialClipService();
+        mounted.set(view, officialClipService.mount(find('[data-official-editor]'), {
+          info, startTime:start, endTime:end,
           text:() => message.value, officialUrl:official.href,
           onUseLocal(range) {
             select('local');
@@ -325,15 +324,17 @@ const VideoSharePanel = (() => {
         mounted.set(view, ShareLocalClip.mount(find('[data-clip-editor]'), {
           qualityConfig:playerContext?.config,
           onBackgroundFinish:message => PopupMessage.notify(message),
+          onOpenOfficial:button => openOfficial(button),
           title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
           getThumbnail:playerContext?.getThumbnail, clipSession:playerContext?.clipSession, onSelectionChange:showSelection,
           getCurrentHlsSource:playerContext?.getCurrentHlsSource, getFragmentCache:playerContext?.getFragmentCache,
+          getCurrentHlsRendition:playerContext?.getCurrentHlsRendition,
           getStoryboardInterval:playerContext?.getStoryboardInterval,
           getCurrentFile(video, signal) {
             const src = playerContext?.getCurrentFileSource?.(video);
             if (!src) return Promise.resolve(null);
             return SharePlaybackFile.get(video, src, {
-              signal, isCurrent:() => playerContext.getCurrentFileSource(video) === src
+              signal, keepOriginal:true, isCurrent:() => playerContext.getCurrentFileSource(video) === src
             });
           },
           createFrameRenderer: options => ShareClipRenderer.create({...playerContext, ...options}),
@@ -374,9 +375,40 @@ const VideoSharePanel = (() => {
     (document.fullscreenElement || document.body).append(dialog);
     update();
     dialog.showModal();
+    window.dispatchEvent(new Event('zenza-share-panel-open'));
     select('local');
   }
   return {open, close() { if (activeClose) { activeClose(); } }};
+}
+
+const VideoSharePanel = (() => {
+  let panel, loading, requested;
+  function ready(instance) {
+    loading = null;
+    panel = instance;
+    const args = requested;
+    requested = null;
+    if (args) panel.open(...args);
+  }
+  return {
+    open(...args) {
+      if (panel) return panel.open(...args);
+      requested = args;
+      if (loading) return;
+      const instance = createVideoSharePanel();
+      if (typeof instance?.then !== 'function') return ready(instance);
+      loading = instance.then(ready,() => {
+        loading = null;
+        const showError = !!requested;
+        requested = null;
+        if (showError) PopupMessage.alert('共有画面を読み込めませんでした。もう一度開いてください。');
+      });
+    },
+    close() {
+      requested = null;
+      panel?.close();
+    }
+  };
 })();
 //===END===
 export {VideoSharePanel};

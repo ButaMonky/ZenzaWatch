@@ -92,7 +92,7 @@ const NotificationHistoryPanel = (() => {
     entry.details?.reason === 'not-found' ? '対象なし・要確認' :
     entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
   const phaseLabels = new Map<string,string>([
-    ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認'], ['startup','再生開始'], ['playback','再生途中'], ['render','表示準備']
+    ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認'], ['startup','再生開始'], ['playback','再生途中'], ['render','表示準備'], ['script','スクリプト実行'], ['script-promise','非同期処理']
   ]);
   const explanations: Record<string,string> = {
       schema:'受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
@@ -120,7 +120,7 @@ const NotificationHistoryPanel = (() => {
       script:'ZenzaWatch のプログラム内で想定外のエラーが起きました。通信の問題ではありません。「エラーの種類」「発生箇所」「読めなかった項目」が手がかりになります。',
       'session-closed':'再生セッションが終了しました。',
       unavailable:'この動画の再生方式には未対応です。', service:'サービス側の処理に失敗しました。',
-      integrity:'配布ファイルの照合に失敗しました。', 'module-load':'変換ライブラリを読み込めませんでした。',
+      integrity:'読み込んだデータの整合性を確認できませんでした。', 'module-load':'変換ライブラリを読み込めませんでした。',
       external:'外部サイトからの再生に失敗しました。'
   };
   const reasonText = (reason: unknown): string | undefined =>
@@ -151,6 +151,9 @@ const NotificationHistoryPanel = (() => {
     typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
   const commentDisplayFile = 'tools/typescript-stage1/nico-src/CommentPlayer.ts';
   const repairGuide = 'docs/maintenance/REPAIR_GUIDE.md';
+  // A stored function name may be arbitrary. Copy only registered components and numeric lines.
+  const scriptComponents = new Set(['ShareLocalClip','ShareClipTimeline','ShareClipJobs','ShareFastClip',
+    'ShareHlsClipSource','ShareHlsPreview','ShareOfficialClip','VideoSharePanel','ShareClipRenderer']);
   const repairReport = (entry: JournalEntry): string => {
     const d = entry.details || {};
     const unknown = '記録なし（旧版・未分類など）';
@@ -161,6 +164,10 @@ const NotificationHistoryPanel = (() => {
     const playbackTrace = (d.phase === 'startup' || d.phase === 'playback') && typeof PlaybackStartupTrace !== 'undefined';
     const lastStage = playbackTrace && PlaybackStartupTrace.describe(d.lastStage);
     const nextStage = playbackTrace && PlaybackStartupTrace.describe(d.nextStage);
+    const script = operation === 'script-error';
+    const frame = script && typeof d.where === 'string' ? /^([A-Za-z_$][\w$.<>-]{0,99})@(\d{1,8})$/.exec(d.where) : null;
+    const component = frame?.[1]?.split('.')[0];
+    const bundle = ['ZenzaWatchRuntime.js','ZenzaWatchMain.js','ZenzaWatch-dev.user.js','ZenzaWatch-createAdvancedSettingsPanel.js','ZenzaWatch-createVideoSharePanel.js'].includes(String(d.event)) ? String(d.event) : '';
     if (playbackTrace) {
       feature = d.phase === 'playback' ? '動画の再生途中' : '動画の再生開始';
       if (nextStage) location = nextStage.file;
@@ -170,8 +177,12 @@ const NotificationHistoryPanel = (() => {
     } else if (operation === 'comment-display') {
       feature = 'コメントの表示準備';
       location = commentDisplayFile;
-    } else if (operation === 'script-error') {
+    } else if (script) {
       feature = 'スクリプトエラー（script-error）';
+      location = component && scriptComponents.has(component) ? 'src/' + component + '.js' :
+        bundle === 'ZenzaWatch-createAdvancedSettingsPanel.js' ? 'tools/typescript-stage1/advanced-src/_setting.ts' :
+        bundle === 'ZenzaWatch-createVideoSharePanel.js' ? 'src/VideoSharePanel.js' :
+        frame ? '発生時の版の配布スクリプトで発生行を確認' : 'ブラウザーの開発者ツールで最初の ZenzaWatch のスタックフレームを確認';
     } else if (operation === 'external-playback') {
       feature = '外部サイトからの再生（external-playback）';
       location = 'packages/external-playback/launcher.cjs';
@@ -181,13 +192,17 @@ const NotificationHistoryPanel = (() => {
     const version = typeof entry.version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,5}(?:-task\d{1,6})?$/.test(entry.version) ? entry.version : unknown;
     const reason = reasonText(d.reason);
     const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
-      '段階　' + (phaseLabels.get(String(d.phase)) || unknown),
+      '段階　' + (phaseLabels.get(String(d.phase)) || (script ? 'スクリプト実行' : unknown)),
       '理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
     if (playbackTrace) {
       lines.push('最後に成功した処理　' + (lastStage ? lastStage.label : unknown),
         '次に待っていた処理　' + (nextStage ? nextStage.label : unknown));
       if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
         lines.push((d.phase === 'playback' ? '待機からの経過　' : '操作からの経過　') + (d.elapsedMs / 1000).toFixed(1) + '秒');
+    }
+    if (script) {
+      const source = bundle || '配布スクリプト';
+      lines.push('発生箇所　' + (frame ? source + ' の ' + frame[2] + ' 行目' : source + '（発生行の記録なし）'));
     }
     if (d.outcome === 'recovered') lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
     if (validStatus(d.statusCode)) lines.push('HTTP状態　' + d.statusCode);

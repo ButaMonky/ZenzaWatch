@@ -1,5 +1,5 @@
 //===BEGIN===
-// Both origins share this clipboard format. Only an explicit user gesture copies or reads it.
+// Both origins share this format. The X tab reads the clipboard only on a trusted click.
 const ShareClipClipboard = (() => {
   const type = 'application/x-zenzawatch-clip';
   const format = 'web ' + type;
@@ -57,7 +57,61 @@ const ShareClipClipboard = (() => {
     const stem = info.name.replace(/\.(mp4|webm)$/i,'').replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_').slice(0,160);
     return new File([blob.slice(4+length)],(stem || 'clip') + extension,{type:info.type});
   }
-  return {supported, copyUnavailableReason, copy, read};
+  async function copyIfGranted(file) {
+    try {
+      if (!document.hasFocus() || copyUnavailableReason(file) || !navigator.permissions?.query) return;
+      const permission = await navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true});
+      if (permission.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
+    } catch (_) { /* Clipboard support is optional for direct attachment. */ }
+  }
+  function reserveDraft() {
+    const ticket = document.documentElement.dataset.zenzaDraftTicket;
+    if (!ticket) return null;
+    const channel = new MessageChannel();
+    const port = channel.port1;
+    window.postMessage({type:'zenza-reserve-x-draft',ticket}, location.origin, [channel.port2]);
+    let pending, timer, closed = false;
+    const stop = () => {
+      if (closed) return;
+      closed = true;
+      clearTimeout(timer);
+      pending = null;
+      port.onmessage = null;
+      port.postMessage({type:'cancel'});
+      port.close();
+    };
+    return {
+      complete(file, text) {
+        if (closed || pending) return Promise.reject(Error('Xの自動添付を終了しました。完成画面から手動で添付できます。'));
+        return new Promise((resolve,reject) => {
+          pending = reject;
+          const settle = message => {
+            stop();
+            if (message?.attached === true) resolve();
+            else reject(Error(message?.error || 'Xへの自動添付を確認できませんでした。完成画面から手動で添付できます。'));
+          };
+          const refreshTimeout = () => {
+            clearTimeout(timer);
+            timer = setTimeout(settle,180000);
+          };
+          port.onmessage = event => event.data?.progress === true ? refreshTimeout() : settle(event.data);
+          refreshTimeout();
+          // Start an already-permitted write while the source still has focus.
+          // Opening X must not wait for clipboard serialization of the entire MP4.
+          copyIfGranted(file).then(() => {
+            if (!closed) port.postMessage({type:'complete',file,text});
+          }).catch(() => settle());
+        });
+      },
+      cancel() {
+        if (closed) return;
+        const reject = pending;
+        stop();
+        reject?.(Error('Xへの自動添付を中止しました。'));
+      }
+    };
+  }
+  return {supported, copyUnavailableReason, copy, read, reserveDraft};
 })();
 //===END===
 export {ShareClipClipboard};

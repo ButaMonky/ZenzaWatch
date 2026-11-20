@@ -1,6 +1,8 @@
 import {ShareHlsPreview} from './ShareHlsPreview';
+import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 //===BEGIN===
 //@require ShareHlsPreview
+//@require RequestDiagnostics
 const ShareClipTimeline = (() => {
   const previewInterval = 1000 / 30;
   const sessionFrames = new WeakMap();
@@ -30,7 +32,7 @@ const ShareClipTimeline = (() => {
   const panel = `
     <style>
     .zwClipTimeline {min-width:0;color:#eaf0f7;--clip-blue:#429aff}
-    .zwClipTimeline .zwClipScreen {position:relative;background:#0c1015;aspect-ratio:16/9;width:100%;max-height:38vh;overflow:hidden;border-radius:5px}
+    .zwClipTimeline .zwClipScreen {display:block;position:relative;padding:0;border:0;color:inherit;cursor:pointer;background:#0c1015;aspect-ratio:16/9;width:100%;max-height:38vh;overflow:hidden;border-radius:5px}
     .zwClipScreen>canvas,.zwClipScreen>.zwClipScene {display:block;width:100%;height:100%;object-fit:contain}
     .zwClipScreen>.zwClipScene {position:absolute!important;inset:0;background:#0c1015}
     .zwClipScene>canvas {display:block;width:100%;height:100%;object-fit:contain!important}
@@ -38,7 +40,9 @@ const ShareClipTimeline = (() => {
     .zwClipTimeline [hidden] {display:none!important}
     .zwClipTimeline .zwClipReadout,.zwClipTimeline .zwClipTools {display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0}
     .zwClipTimeline output {font-variant-numeric:tabular-nums}
-    .zwClipReadout .zwClipLength {margin-left:auto;color:#c1d0df}
+    .zwClipReadout .zwClipLength {margin-left:auto;color:#c1d0df;white-space:nowrap}
+    .zwClipLength input {width:8ch;font:inherit;font-variant-numeric:tabular-nums}
+    .zwClipReadout .zwClipRangeError {width:100%;color:#ffc9b5}
     .zwClipTimeline .zwClipRailWrap {padding:0 12px;margin:8px 0}
     .zwClipTimeline .zwClipTicks {display:flex;justify-content:space-between;font-size:11px;color:#b7c6d6;font-variant-numeric:tabular-nums;line-height:1.4}
     .zwClipTimeline .zwClipRail {position:relative;height:clamp(38px,6vw,60px);margin-top:5px;touch-action:none;user-select:none;cursor:crosshair;isolation:isolate}
@@ -53,8 +57,8 @@ const ShareClipTimeline = (() => {
     .zwClipTimeline .zwClipTools {font-size:12px}
     .zwClipTimeline .zwClipTools button {font:inherit;padding:3px 8px}
     </style>
-    <div class="zwClipScreen"><canvas aria-label="選択した場面"></canvas><div class="zwClipScene" hidden></div><span class="zwClipMessage" hidden></span></div>
-    <div class="zwClipReadout"><button type="button" data-clip="play" aria-pressed="false">区間を再生</button><output class="zwClipTime" aria-label="プレビュー時刻"></output><output class="zwClipLength" aria-label="選択した区間の長さ"></output></div>
+    <button type="button" class="zwClipScreen" aria-label="区間を再生" aria-pressed="false"><canvas aria-label="選択した場面"></canvas><span class="zwClipScene" hidden></span><span class="zwClipMessage" hidden></span></button>
+    <div class="zwClipReadout"><button type="button" data-clip="play" aria-pressed="false">区間を再生</button><output class="zwClipTime" aria-label="プレビュー時刻"></output><label class="zwClipLength">選択 <input type="number" name="length" min="0" step="any" aria-label="選択した区間の長さ（秒）"> 秒</label><span class="zwClipRangeError" aria-live="polite" hidden></span></div>
     <div class="zwClipRailWrap"><div class="zwClipTicks" aria-hidden="true"></div>
       <div class="zwClipRail"><div class="zwClipFrames" aria-hidden="true"></div><div class="zwClipMask"></div><div class="zwClipMask"></div><div class="zwClipRange"></div>
         <button type="button" data-edge="start" role="slider" aria-label="開始位置"></button>
@@ -66,33 +70,44 @@ const ShareClipTimeline = (() => {
 
   function waitForFrame(video, time, signal, request, timeoutMs = 6000) {
     return new Promise((resolve, reject) => {
+      const events = ['loadedmetadata','loadeddata','seeked','canplay'];
+      let requested = false;
       const done = error => {
         clearTimeout(timeout);
-        for (const event of ['loadeddata', 'seeked']) video.removeEventListener(event, check);
+        for (const event of events) video.removeEventListener(event, check);
         video.removeEventListener('error', failed);
         signal.removeEventListener('abort', abort);
         if (error) reject(error); else resolve();
       };
       const check = event => {
         const tolerance = event?.type === 'seeked' ? 0.12 : 0.002;
+        // An HLS preview can buffer only the selected section. Seek as soon as
+        // metadata is ready, even when there is no decodable frame at time zero.
+        if (video.readyState >= 1 && request && !requested) {
+          requested = true;
+          try {
+            if (Math.abs(video.currentTime - time) > tolerance && request() === false) return failed();
+          } catch (error) { return done(error); }
+        }
         if (video.readyState >= 2 && !video.seeking && (time == null || Math.abs(video.currentTime - time) <= tolerance)) done();
       };
       const failed = () => done(Error('この場面を読み込めませんでした。'));
       const abort = () => done(new DOMException('中断', 'AbortError'));
-      const timeout = setTimeout(failed, timeoutMs);
+      const timeout = setTimeout(() => done(new DOMException('選んだ区間の映像を時間内に読み込めませんでした。','TimeoutError')), timeoutMs);
       if (signal.aborted) return abort();
       signal.addEventListener('abort', abort, {once:true});
-      for (const event of ['loadeddata', 'seeked']) video.addEventListener(event, check);
+      for (const event of events) video.addEventListener(event, check);
       video.addEventListener('error', failed, {once:true});
-      try {
-        if (request && request() === false) return failed();
-        check();
-      } catch (error) { done(error); }
+      check();
     });
   }
 
+  async function prepareHlsPreview(media, url, position, signal, height, onFailure) {
+    await ShareHlsPreview.attach(media,url,position,signal,height,onFailure);
+    await waitForFrame(media,position,signal,() => { media.currentTime = position; },15000);
+  }
   function mount(container, {startInput, endInput, getSource, getThumbnail, getHlsSource, getDetailedFrames, getStoryboardInterval,
-    getPreviewRenderer, getPreviewHeight, getSceneHeight, clipSession,
+    getPreviewRenderer, getPreviewHeight, getSceneHeight, clipSession, isPreviewActive = () => true, onLengthValidityChange,
     isLocalSource = video => video.matches('[data-role=source]'), maxLength = Infinity}) {
     const root = document.createElement('div');
     root.className = 'zwClipTimeline';
@@ -104,11 +119,13 @@ const ShareClipTimeline = (() => {
     const range = find('.zwClipRange'), masks = root.querySelectorAll('.zwClipMask');
     const handles = [...root.querySelectorAll('[data-edge]')];
     const canvas = find('.zwClipScreen canvas'), scene = find('.zwClipScene'), message = find('.zwClipMessage');
-    const timeDisplay = find('.zwClipTime'), lengthDisplay = find('.zwClipLength');
+    const screen = find('.zwClipScreen'), timeDisplay = find('.zwClipTime');
+    const lengthInput = find('.zwClipLength input'), rangeError = find('.zwClipRangeError');
     const listeners = new AbortController();
     let source, sourceUrl, sourceObject, decoder, thumbVideo, renderer, session, thumbnails, releaseScene;
     let windowStart = 0, span = 0, initialSpan = 0, duration = 0, time = 0, drag, disposed = false, writing = false;
     let thumbKey, rendererError, dragTimer, thumbReport = '';
+    let resumeTime = null, editingLength = false;
     const thumbReleases = new Map();
     let capturedFrames = new Map();
     let detailRequest, detailTimer;
@@ -141,9 +158,9 @@ const ShareClipTimeline = (() => {
     const draw = media => {
       if (media.seeking || media.readyState < 2 || !media.videoWidth) return false;
       // The recorder has its own full-resolution canvas. Only scale the interactive preview.
-      const maxHeight = Number(getPreviewHeight?.(source)) || 270;
-      const scale = Math.min(1, maxHeight * 16/9 / Math.max(media.videoWidth, media.videoHeight),
-        maxHeight / Math.min(media.videoWidth, media.videoHeight));
+      const targetHeight = Number(getPreviewHeight?.(source));
+      const scale = targetHeight > 0 ? Math.min(1, targetHeight / media.videoHeight)
+        : Math.min(1, 480 / Math.max(media.videoWidth, media.videoHeight), 270 / Math.min(media.videoWidth, media.videoHeight));
       const width = Math.max(1, Math.round(media.videoWidth * scale)), height = Math.max(1, Math.round(media.videoHeight * scale));
       if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
       const ctx = canvas.getContext('2d');
@@ -190,7 +207,14 @@ const ShareClipTimeline = (() => {
       if (source.crossOrigin !== null) media.crossOrigin = source.crossOrigin;
       media.src = file.href;
     }
+    function showPlaying(playing) {
+      const label = playing ? '一時停止' : '区間を再生';
+      action('play').textContent = label;
+      screen.setAttribute('aria-label', label);
+      for (const button of [screen, action('play')]) button.setAttribute('aria-pressed', String(playing));
+    }
     function stopPreview() {
+      resumeTime = null;
       clearTimeout(dragTimer); dragTimer = null;
       clearScene();
       const active = session;
@@ -206,8 +230,7 @@ const ShareClipTimeline = (() => {
         updateThumbHint();
         if (focused && thumbButton.hidden) thumbStatus.focus({preventScroll:true});
       }
-      action('play').setAttribute('aria-pressed', 'false');
-      action('play').textContent = '区間を再生';
+      showPlaying(false);
       return null;
     }
     function beginSession() {
@@ -216,23 +239,27 @@ const ShareClipTimeline = (() => {
       media.playsInline = true;
       media.muted = true;
       const active = session = {media, controller:new AbortController()};
-      media.addEventListener('error', () => {
-        if (session !== active) return;
-        stopPreview();
-        showMessage('この場面を読み込めませんでした。タイムラインで区間を選べます。');
-      }, {signal:active.controller.signal});
+      media.addEventListener('error', () => previewFailed(active, {message:'この場面の映像・音声を再生できませんでした。',
+        missing:'decoder', ...(media.error?.code === 2 ? {kind:'network'} : {reason:'not supported'})}), {signal:active.controller.signal});
       return active;
+    }
+    const previewDiagnostic = () => typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('clip-preview', (clipSession ?? 0) + (decoder ? ':file' : ':stream'), 'response');
+    function previewFailed(active, failure) {
+      if (session !== active) return;
+      previewDiagnostic()?.failure(failure);
+      stopPreview();
+      showMessage(failure.message + (failure.status ? '（HTTP ' + failure.status + '）' : '') + ' タイムラインで区間を選べます。');
     }
     async function prepare(active, position) {
       const {media,controller} = active;
       if (media !== decoder) {
         const url = previewUrl();
-        if (url) await ShareHlsPreview.attach(media,url,position,controller.signal,
-          active.collecting ? getSceneHeight?.(source) : getPreviewHeight?.(source));
+        if (url) return prepareHlsPreview(media,url,position,controller.signal,
+          active.collecting ? getSceneHeight?.(source) : getPreviewHeight?.(source), failure => previewFailed(active, failure));
         else await attachFile(media,fileForPreview(),controller.signal);
       }
-      await waitForFrame(media,null,controller.signal,undefined,15000);
-      await waitForFrame(media,position,controller.signal,() => { media.currentTime = position; });
+      await waitForFrame(media,position,controller.signal,() => { media.currentTime = position; },15000);
     }
     async function preview(seconds, play = false) {
       if (locked()) { stopPreview(); return; }
@@ -240,23 +267,27 @@ const ShareClipTimeline = (() => {
       const active = beginSession(), media = active.media;
       try {
         if (play) {
-          action('play').setAttribute('aria-pressed','true');
-          action('play').textContent = '確認再生を停止';
+          active.playing = true;
+          setTime(position);
+          showPlaying(true);
           media.playbackRate = 1;
         }
         await prepare(active, position);
         if (session !== active) return;
         if (!draw(media)) throw Error('選択した場面を読み込めませんでした。');
+        previewDiagnostic()?.success();
         if (!play) { stopPreview(); return; }
+        if (!canPreviewNow()) { stopPreview(); return; }
         media.volume = source.volume;
         media.muted = source.muted;
         let drawnTime = media.currentTime;
         let lastPaint = performance.now();
         await media.play();
+        if (session !== active) return;
         const step = now => {
           if (session !== active) return;
           const secondsLeft = endInput.valueAsNumber - media.currentTime;
-          if (locked() || secondsLeft <= 0 || media.ended || media.paused) { stopPreview(); return; }
+          if (!canPreviewNow() || secondsLeft <= 0 || media.ended || media.paused) { stopPreview(); return; }
           try {
             const elapsed = now - lastPaint;
             if (elapsed >= previewInterval) {
@@ -269,6 +300,10 @@ const ShareClipTimeline = (() => {
         active.frameRequest = requestAnimationFrame(step);
       } catch (error) {
         if (session === active) {
+          if (error.name === 'TimeoutError') {
+            previewFailed(active, {kind:'timeout', missing:'firstFrame', message:error.message});
+            return;
+          }
           stopPreview();
           showMessage(error.name === 'NotAllowedError' ? '「区間を再生」を押すと、この場面から再生します。' :
             error.message || '選択した場面を表示できません。');
@@ -438,11 +473,28 @@ const ShareClipTimeline = (() => {
         }
       })();
     }
+    // Timeline positions can include a fractional final millisecond. Drop
+    // subtraction noise from their difference without rounding short clips to zero.
+    function secondsBetween(from,to) {
+      const seconds = to-from;
+      return Number(seconds.toFixed(9)) || seconds;
+    }
     function render() {
       const [a,b] = values();
       const disabled = locked();
       const valid = Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b <= duration && b > a && b - a <= maxLength + 0.0001;
-      lengthDisplay.textContent = valid ? '選択 ' + Number((b - a).toFixed(2)) + '秒' : '開始・終了を確認してください';
+      lengthInput.disabled = disabled || !Number.isFinite(a) || a < 0 || a >= duration;
+      const limit = Math.min(maxLength, secondsBetween(a,duration));
+      lengthInput.max = Number.isFinite(limit) ? String(limit) : '';
+      if (!editingLength) lengthInput.value = valid ? String(secondsBetween(a,b)) : '';
+      const invalidLength = editingLength && !(lengthInput.valueAsNumber > 0 && lengthInput.valueAsNumber <= limit);
+      if (lengthInput.getAttribute('aria-invalid') !== String(invalidLength)) {
+        lengthInput.setAttribute('aria-invalid', String(invalidLength));
+        onLengthValidityChange?.(!invalidLength);
+      }
+      rangeError.textContent = invalidLength ? '選択の長さは0秒より長く、' + limit + '秒以内で指定してください。' :
+        valid ? '' : '開始・終了を確認してください。';
+      rangeError.hidden = !rangeError.textContent;
       const left = clamp((a-windowStart)/span,0,1)*100, right = clamp((b-windowStart)/span,0,1)*100;
       range.hidden = !Number.isFinite(left + right) || right <= left;
       range.style.left = left + '%'; range.style.width = (right-left) + '%';
@@ -459,7 +511,7 @@ const ShareClipTimeline = (() => {
         handle.setAttribute('aria-valuetext', clock(value,true));
       });
       const canPlay = !!(decoder || previewUrl() || fileForPreview());
-      action('play').disabled = disabled || !valid || !canPlay;
+      screen.disabled = action('play').disabled = disabled || !valid || invalidLength || !canPlay;
       action('play').title = canPlay ? '選んだ区間をプレビューで再生' : 'この配信では場面画像と時刻で区間を選べます';
       action('prev').disabled = disabled || windowStart <= 0;
       action('next').disabled = disabled || windowStart + span >= duration - 0.001;
@@ -483,7 +535,7 @@ const ShareClipTimeline = (() => {
         stopPreview(); clearThumbs(); clearScene();
         unload(decoder); unload(thumbVideo); decoder = thumbVideo = null;
         renderer?.dispose(); renderer = null;
-        capturedFrames = new Map(); thumbReport = ''; thumbKey = null; drag = null;
+        capturedFrames = new Map(); thumbReport = ''; thumbKey = null; drag = null; editingLength = false;
         source = selected; sourceUrl = selected?.currentSrc; sourceObject = selected?.srcObject;
         if (!available) { duration = 0; return; }
         if (isLocalSource(source)) { decoder = newDecoder(); thumbVideo = newDecoder(); }
@@ -527,6 +579,7 @@ const ShareClipTimeline = (() => {
       return clamp(Math.round(value * 1000),first,last)/1000;
     };
     function write(a,b) {
+      editingLength = false;
       writing = true;
       try {
         const changed = [[startInput,a],[endInput,b]].filter(([input,value]) => input.valueAsNumber !== value);
@@ -615,7 +668,7 @@ const ShareClipTimeline = (() => {
       drag = null;
       if (rail.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId);
       clearTimeout(dragTimer); dragTimer = null;
-      if (event.type !== 'pointercancel' && Number.isFinite(selected)) showSelection(selected); else stopPreview();
+      if (event.type === 'pointerup' && Number.isFinite(selected)) previewSelection(selected); else stopPreview();
     };
     on(rail,'pointerup', endDrag); on(rail,'pointercancel',endDrag);
     for (const handle of handles) on(handle,'keydown',event => {
@@ -630,23 +683,74 @@ const ShareClipTimeline = (() => {
       stopPreview();
       const next = moveEdge(edge,keys[event.key]);
       if (next < windowStart || next > windowStart+span) viewport(next-span/2,span);
-      setTime(next);
-      showSelection(next);
+      previewSelection(next);
     });
     for (const input of [startInput,endInput]) {
       on(input,'input',() => {
-        if (writing || !sameSource() || !Number.isFinite(input.valueAsNumber)) return;
+        if (writing || !sameSource()) return;
+        editingLength = false;
         stopPreview();
         const value = input.valueAsNumber;
+        if (!Number.isFinite(value)) { render(); return; }
         if (value < windowStart || value > windowStart+span) viewport(value-span/2,span); else render();
         setTime(value);
       });
-      on(input,'change',() => { if (!writing && Number.isFinite(input.valueAsNumber)) showSelection(input.valueAsNumber); });
+      on(input,'change',() => {
+        if (writing || !sameSource()) return;
+        editingLength = false;
+        render();
+        previewSelection(input.valueAsNumber);
+      });
     }
-    on(action('play'),'click',() => {
-      if (action('play').getAttribute('aria-pressed') === 'true') stopPreview();
-      else preview(startInput.valueAsNumber, true);
+    on(lengthInput,'input',() => {
+      editingLength = true;
+      stopPreview();
+      render();
     });
+    function commitLength() {
+      if (locked() || lengthInput.disabled) return;
+      if (!editingLength && lengthInput.valueAsNumber === secondsBetween(...values())) return;
+      editingLength = true;
+      render();
+      if (lengthInput.getAttribute('aria-invalid') === 'true') return;
+      const start = startInput.valueAsNumber;
+      const end = Math.min(duration, Number((start + lengthInput.valueAsNumber).toPrecision(15)));
+      write(start,end);
+      if (end < windowStart || end > windowStart+span) viewport(end-span/2,span);
+      previewSelection(start);
+    }
+    on(lengthInput,'change',commitLength);
+    on(lengthInput,'keydown',event => {
+      if (event.key === 'Enter') {
+        event.preventDefault(); event.stopPropagation();
+        commitLength();
+      } else if (event.key === 'Escape' && editingLength) {
+        event.preventDefault(); event.stopPropagation();
+        editingLength = false; render();
+      }
+    });
+    function canPreviewNow() {
+      return !locked() && !document.hidden && !root.closest('[hidden]') && isPreviewActive();
+    }
+    function previewSelection(editedTime) {
+      stopPreview();
+      if (!canPreviewNow()) return;
+      if (!action('play').disabled) preview(startInput.valueAsNumber,true);
+      else if (Number.isFinite(editedTime)) showSelection(editedTime);
+    }
+    function togglePreview() {
+      if (!canPreviewNow() || action('play').disabled) return;
+      if (session?.playing) {
+        const position = session.media.paused ? time : session.media.currentTime;
+        stopPreview();
+        resumeTime = position;
+      } else {
+        const [start,end] = values();
+        preview(resumeTime != null && resumeTime >= start && resumeTime < end ? resumeTime : start,true);
+      }
+    }
+    on(action('play'),'click',togglePreview);
+    on(screen,'click',togglePreview);
     on(action('prev'),'click',() => viewport(windowStart-span/2,span));
     on(action('next'),'click',() => viewport(windowStart+span/2,span));
     const zoom = factor => {
@@ -671,7 +775,7 @@ const ShareClipTimeline = (() => {
       }
     }
     function startPreview() {
-      if (session || document.hidden || locked() || action('play').disabled || source.readyState < 2) return false;
+      if (session || !canPreviewNow() || action('play').disabled || source.readyState < 2) return false;
       void preview(startInput.valueAsNumber,true);
       return true;
     }
@@ -682,7 +786,7 @@ const ShareClipTimeline = (() => {
       renderer?.dispose(); capturedFrames = new Map(); unload(decoder); unload(thumbVideo); root.remove();
     }};
   }
-  return {mount};
+  return {mount, prepareHlsPreview};
 })();
 //===END===
 export {ShareClipTimeline};

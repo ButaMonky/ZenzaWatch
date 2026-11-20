@@ -252,7 +252,7 @@ function requireFile(srcDir, file, params, parent = '') {
         lines.push(line.replace(/^[\s]+/g, '').replace(/([ ]+)/g, ' ')
         );
       } else {
-        lines.push(line.replace(/^([\s+]+)/, g => '\t'.repeat(g.length / 2)));
+        lines.push(line.replace(/^\s+/, g => '\t'.repeat(g.length / 2)));
       }
     }
   });

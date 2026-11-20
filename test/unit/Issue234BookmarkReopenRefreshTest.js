@@ -122,6 +122,7 @@ describe('#234 shared manual bookmark refresh on Dock reopen',()=>{
   it('reloads cross-tab additions on explicit reopen and updates the list',async()=>{
     const s=shared(),a=new Session(s.factory()),b=dockFixture(s);
     await a.activate('sm9',120);await b.dock.activate('sm9',120);
+    b.dock.toggle(b.host);await step();b.dock.close();
     assert.equal(b.content().querySelectorAll('li').length,1);
     await a.add('B2',40,200,'Tab A');
     assert.equal(b.content().querySelectorAll('li').length,1);
@@ -134,12 +135,14 @@ describe('#234 shared manual bookmark refresh on Dock reopen',()=>{
   it('does not rerender unchanged snapshots or discard unsaved rename drafts',async()=>{
     const s=shared(),a=new Session(s.factory()),b=dockFixture(s);
     await a.activate('sm9',120);await b.dock.activate('sm9',120);
+    b.dock.toggle(b.host);await step();
     const field=b.content().querySelector('input[data-bookmark-rename-id="B1"]');
     field.value='Not submitted';
     const oldSnapshot=b.session.snapshot;
     await b.session.refreshIfIdle();
     assert.strictEqual(b.session.snapshot,oldSnapshot,'unchanged row must not publish');
     assert.strictEqual(b.content().querySelector('input[data-bookmark-rename-id="B1"]'),field);
+    b.dock.close();
     await a.add('B2',40,200,'Tab A');
     b.dock.toggle(b.host);await step();
     assert.equal(b.content().querySelector('input[data-bookmark-rename-id="B1"]').value,'Not submitted');
@@ -147,6 +150,7 @@ describe('#234 shared manual bookmark refresh on Dock reopen',()=>{
   });
   it('a transient refresh failure preserves existing markers and ready state',async()=>{
     const s=shared(),b=dockFixture(s);await b.dock.activate('sm9',120);
+    b.dock.toggle(b.host);await step();
     const before=b.session.snapshot;
     s.failReads(true);
     const result=await b.session.refreshIfIdle();

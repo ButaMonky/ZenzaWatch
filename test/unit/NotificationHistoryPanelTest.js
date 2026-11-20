@@ -65,6 +65,28 @@ describe('NotificationHistoryPanel (synthetic DOM)', () => {
     } finally { h.dom.window.close(); }
   });
 
+  it('copies safe bundle lines from new and legacy script errors without sharing arbitrary function names', async () => {
+    for (const [details,phase,bundle,line,repair] of [
+      [{where:'ShareHlsPreview.attach@915',phase:'script-promise',event:'ZenzaWatchRuntime.js'}, '非同期処理','ZenzaWatchRuntime.js',915,'src/ShareHlsPreview.js'],
+      [{where:'PrivateFunctionName@14',event:'https://private.invalid/?secret'}, 'スクリプト実行','配布スクリプト',14,'発生行を確認'],
+      [{where:'buildCard@12',event:'ZenzaWatch-createAdvancedSettingsPanel.js'}, 'スクリプト実行','ZenzaWatch-createAdvancedSettingsPanel.js',12,'advanced-src/_setting.ts'],
+      [{where:'PrivateFunctionName@leak'}, 'スクリプト実行','配布スクリプト',0,'開発者ツール']
+    ]) {
+      const h=setup([{id:'sample',timestamp:1,category:'system',level:'error',source:'script-error',
+        details:{...details,errorName:'TypeError',reason:'script'}}]);
+      try {
+        await flush();
+        h.root.querySelector('[data-entry-id]').click();
+        const detail=h.root.querySelector('.znh-detail');
+        detail.querySelector('[data-history-action="copy"]').click(); await flush();
+        const report=detail.querySelector('textarea').value;
+        assert(report.includes('段階　'+phase));
+        assert(report.includes('発生箇所　'+bundle+(line ? ' の '+line+' 行目' : '（発生行の記録なし）')));
+        assert(report.includes(repair));
+        assert(!/PrivateFunctionName|leak|private\.invalid|secret/.test(report));
+      } finally { h.dom.window.close(); }
+    }
+  });
   it('shows and copies the stalled stage and its canonical repair file', async () => {
     const h = setup([{id:'startup', timestamp:1, category:'player', level:'warning', source:'playback-start',
       details:{operation:'playback-start',phase:'startup',reason:'startup-wait',lastStage:'manifest',

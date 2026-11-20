@@ -48,7 +48,7 @@ function setup({limit = 200, history = new Set()} = {}) {
     document, Emitter: class {}, NicoChat, NicoChatViewModel: {SPEED_RATE: 1},
     NicoChatCss3View: {
       buildChatCss() { return ''; },
-      buildChatDom(chat) { const e = new FakeElement('nicoChat hidden fork' + chat.fork); e.chatId = chat.id; return e; }
+      buildChatDom(chat) { const e = new FakeElement('nicoChat hidden fork' + chat.fork); e.chatId = chat.id; e.style.animationDuration='4.5s'; return e; }
     },
     Config: {namespace: () => ({props, onkey() {}}), props: {}},
     throttle: {raf: f => f}, global: {debug: {}}, console: {log() {}, warn() {}}
@@ -84,6 +84,35 @@ let seq = 0;
 const make = (begin = 40, end = 44, fork = 0, extra = {}) =>
   Object.assign({id: ++seq, beginLeftTiming: begin, endRightTiming: end, fork, type: 'naka', size: 'medium', isSubThread: fork === 2}, extra);
 const many = (n, ...args) => Array.from({length: n}, () => make(...args));
+
+describe('流れるコメントのフレームレート', () => {
+  it('表示中と新規の流れるコメントを変更し、固定コメントのタイミングを保つ', () => {
+    const h = setup();
+    const [moving,fixed] = h.add([make(),make(40,44,0,{type:'ue'})]);
+    h.at(40);
+    const span = h.player._domTable.get(moving);
+    h.props.motionFrameRate = '30';
+    h.player._updateMotionFrameRate();
+    assert.equal(span.style.animationTimingFunction,'steps(135, end)');
+    assert.equal(h.player._domTable.get(fixed).style.animationTimingFunction,undefined);
+    const [later] = h.add([make(40.2,44.2)]);
+    h.at(40.2);
+    assert.equal(h.player._domTable.get(later).style.animationTimingFunction,'steps(135, end)');
+    h.props.motionFrameRate = 'auto';
+    h.player._updateMotionFrameRate();
+    assert.strictEqual(h.player._domTable.get(moving),span);
+    assert.equal(span.style.animationTimingFunction,'');
+  });
+  it('上限で見送ったコメントや固定コメントを密度に加えない', () => {
+    const h = setup({limit:40});
+    h.props.motionFrameRate = 'adaptive';
+    h.add(many(90,40,44));
+    h.add(many(30,40,44,1,{type:'ue'}));
+    h.at(40);
+    assert.equal(h.player.displayStats.suppressed.limit,50);
+    assert.equal(h.player._motionFps,0);
+  });
+});
 
 function assertConsistent(h) {
   const p = h.player;

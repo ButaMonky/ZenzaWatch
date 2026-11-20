@@ -24,6 +24,7 @@ declare const VideoSharePanel: {
       getStoryboardInterval: () => number | undefined;
       getFragmentCache: (video: HTMLVideoElement) => {get:(url:string)=>Blob|undefined; put:(url:string,bytes:ArrayBuffer)=>void}|undefined;
       getCurrentHlsSource: (video: HTMLVideoElement) => string | undefined;
+      getCurrentHlsRendition: (video: HTMLVideoElement) => {readonly height:number; readonly uri:string} | undefined;
       getCurrentFileSource: (video: HTMLVideoElement) => string | Blob | undefined;
       clipSession: number;
       getThumbnail: (host: HTMLElement, seconds: number) => (() => void) | undefined;
@@ -191,6 +192,11 @@ const RootDispatcher = (() => {
               if (getCurrentVideo() !== video || video.mediaKeys) return undefined;
               const displayed = currentPlayer()?.drawableVideoElement;
               return displayed?.src;
+            },
+            getCurrentHlsRendition(video) {
+              if (getCurrentVideo() !== video) return undefined;
+              const hls = currentPlayer()?.drawableVideoElement?.hls;
+              return hls?.levels[hls.currentLevel];
             },
             getCurrentFileSource(video) {
               // HLS wrappers display a different, MediaSource-backed element.

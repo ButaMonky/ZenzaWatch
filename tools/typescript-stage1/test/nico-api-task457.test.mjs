@@ -235,8 +235,11 @@ test('legacy build directives are preserved in each runtime',()=>{
     if (spec.name === 'RootDispatcher') {
       const oldTweet = expected.indexOf("import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';");
       assert.notEqual(oldTweet, -1);
-      expected.splice(oldTweet, 1, "import {VideoSharePanel} from './VideoSharePanel';");
-      expected.splice(expected.indexOf('//@require RelatedMenuActions') + 1, 0, '//@require VideoSharePanel');
+      expected.splice(oldTweet, 1, "import {VideoSharePanel} from './VideoSharePanel';",
+        "import {ShortcutKeyEmitter} from '../packages/zenza/src/ShortcutKeyEmitter';",
+        "import {VideoHoverMenu} from './VideoHoverMenu';");
+      expected.splice(expected.indexOf('//@require RelatedMenuActions') + 1, 0,
+        '//@require ShortcutKeyEmitter', '//@require VideoHoverMenu', '//@require VideoSharePanel');
     }
     // Task1064: ES モジュールとして読めるように、本文で使う名前の import を足した（ビルドの //@require は変えない）。
     // 足した import は registry の ESM_ADDED_IMPORTS に記録したものだけを許す。

@@ -251,14 +251,15 @@ const MylistApiLoader = (() => {
                 throw staleError();
             }
             const scope = JSON.stringify([watchId, groupId === null ? null : String(groupId)]);
-            const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-                RequestDiagnostics.begin(operation, scope, 'response', active, watchId);
             const adding = body !== undefined;
+            const method = adding ? 'POST' : 'DELETE';
+            const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+                RequestDiagnostics.begin(operation, scope, 'response', active, watchId, { url, method });
             let response;
             let result;
             try {
                 response = await netUtil.fetch(url, {
-                    method: adding ? 'POST' : 'DELETE',
+                    method,
                     ...(adding ? { body } : {}),
                     headers: {
                         ...(adding ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),

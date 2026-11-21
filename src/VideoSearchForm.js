@@ -1,3 +1,4 @@
+import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 import {startup} from './ZenzaContext';
 import {ZenzaWatch, global} from './ZenzaContext';
 import {CONSTANT} from './constant';
@@ -28,6 +29,7 @@ const VideoItemObserver = {
 };
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoSearchForm.ts (Task1063). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 class VideoSearchForm extends Emitter {
     constructor(...args) {
         super();
@@ -1031,15 +1033,22 @@ class VideoSearchForm extends Emitter {
             sortKey: 'hot', sortOrder: 'none', sensitiveContents: 'mask'
         };
         const q = new URLSearchParams(Object.assign(base, { pageSize: 1, page: 1 }));
-        const res = await fetch(`https://nvapi.nicovideo.jp/v2/search/video?${q}`, {
+        const url = `https://nvapi.nicovideo.jp/v2/search/video?${q}`;
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('search-count', url, 'response', undefined, undefined, { url, method: 'GET' });
+        const res = await fetch(url, {
             credentials: 'include',
             headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }
-        });
-        const json = await res.json();
-        if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+        }).catch(error => { ticket?.failure(error); throw error; });
+        const json = await res.json().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(res, error)); throw error; });
+        const raw = json?.data?.totalCount;
+        const count = (typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw))) ? Number(raw) : NaN;
+        if (res.ok === false || json?.meta?.status !== 200 || !Number.isSafeInteger(count) || count < 0) {
+            ticket?.failure(RequestDiagnostics.responseFailure(res, json?.meta, json?.meta?.status === 200 ? 'data.totalCount' : undefined) || { kind: 'schema' });
             throw new Error('count failed');
         }
-        return json.data.totalCount * 1 || 0;
+        ticket?.success();
+        return count;
     }
     _submitVideoIdAsWord() {
         this._videoIdDismissedKey = this._videoIdKey;

@@ -12,6 +12,7 @@ declare const startup: import('../../../src/ZenzaContext').ZenzaStartup;
 declare const Config: import('./shared-types/ZenzaConfig').ZenzaConfig;
 declare const Emitter: typeof import('./Emitter').Emitter;
 declare const NicoSearchApiV2Loader: typeof import('./VideoSearch').NicoSearchApiV2Loader;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 declare const TagListView: typeof import('./TagListView').TagListView;
 declare const TagSuggestLoader: typeof import('./TagSuggestLoader').TagSuggestLoader;
 declare const ThumbInfoLoader: typeof import('./ThumbInfoLoader').ThumbInfoLoader;
@@ -1048,15 +1049,22 @@ class VideoSearchForm extends Emitter {
       sortKey: 'hot', sortOrder: 'none', sensitiveContents: 'mask'
     };
     const q = new URLSearchParams(Object.assign(base, {pageSize: 1, page: 1}) as Loose);
-    const res = await fetch(`https://nvapi.nicovideo.jp/v2/search/video?${q}`, {
+    const url = `https://nvapi.nicovideo.jp/v2/search/video?${q}`;
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('search-count',url,'response',undefined,undefined,{url,method:'GET'});
+    const res = await fetch(url, {
       credentials: 'include',
       headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
-    });
-    const json = await res.json();
-    if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+    }).catch(error => { ticket?.failure(error); throw error; });
+    const json = await res.json().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(res,error)); throw error; });
+    const raw = json?.data?.totalCount;
+    const count = (typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw))) ? Number(raw) : NaN;
+    if (res.ok === false || json?.meta?.status !== 200 || !Number.isSafeInteger(count) || count < 0) {
+      ticket?.failure(RequestDiagnostics.responseFailure(res,json?.meta,json?.meta?.status === 200 ? 'data.totalCount' : undefined) || {kind:'schema'});
       throw new Error('count failed');
     }
-    return json.data.totalCount * 1 || 0;
+    ticket?.success();
+    return count;
   }
 
   _submitVideoIdAsWord() {

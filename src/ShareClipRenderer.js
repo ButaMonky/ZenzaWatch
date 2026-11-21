@@ -109,7 +109,7 @@ const ShareClipRenderer = {
     }) : drawing(savedComments);
   },
   createDrawing({video, comments, effects, config, getViewModel, savedComments, savedStyle}) {
-    let renderer = comments ? new CommentPictureInPicture.CommentRenderer({config}) : null;
+    let renderer = comments ? new CommentPictureInPicture.CommentRenderer({config, smoothSmallText:!!savedComments}) : null;
     let disposed = false;
     function drawFrame(ctx, width, height, image, sec) {
       if (disposed || !image || !(width > 0 && height > 0)) return false;

@@ -55,42 +55,54 @@ const {initialize} = (() => {
    */
   // Task1059: 本体（boot が読み込む monkey）は ZenzaWatchMain.js という名前で動く。
   const ZENZA_SOURCE = /ZenzaWatch(?:Runtime|Main|-createAdvancedSettingsPanel|-createVideoSharePanel)\.js|userscript\.html\?name=ZenzaWatch|ZenzaWatch[^/\s]*\.user\.js/;
-  const scriptErrorWhere = (stack: string, filename: unknown, lineno?: number) => {
+  const scriptErrorWhere = (stack: string, filename: unknown, lineno?: number, colno?: number) => {
     // V8 starts with the exception message; Firefox and Safari can start with a frame.
     for (const frame of stack.split('\n').slice(0, 12)) {
       const line = frame.trim();
       const pos = /:(\d{1,8}):(\d{1,8})\)?$/.exec(line);
       if (!pos || !/^(?:at\s|[^\s]*@)/.test(line) || !ZENZA_SOURCE.test(line)) continue;
       const fn = /^(?:at (?:async )?)?([A-Za-z_$][\w$.<>]*)(?:[ @])/.exec(line);
-      return {where: (fn?.[1] || 'anonymous').slice(0, 70) + '@' + pos[1], source: line};
+      return {where: (fn?.[1] || 'anonymous').slice(0, 70) + '@' + pos[1], column: Number(pos[2]), source: line};
     }
     if (typeof filename !== 'string' || !ZENZA_SOURCE.test(filename)) return;
-    return {where: typeof lineno === 'number' && Number.isSafeInteger(lineno) && lineno > 0 && lineno < 100000000 ? 'anonymous@' + lineno : '', source: filename};
+    return {where: typeof lineno === 'number' && Number.isSafeInteger(lineno) && lineno > 0 && lineno < 100000000 ? 'anonymous@' + lineno : '', column: colno, source: filename};
+  };
+  // Report the engine's failure category, never the exception text or values it quotes.
+  const scriptErrorCause = (message: string): string | undefined => {
+    if (/is not a function\b|is not callable\b/i.test(message)) return 'non-function';
+    if (/cannot (?:read|set) propert(?:y|ies) of null\b|null is not an object/i.test(message)) return 'null-property';
+    if (/cannot (?:read|set) propert(?:y|ies) of undefined\b|undefined is not an object/i.test(message)) return 'undefined-property';
+    if (/is not defined\b/i.test(message)) return 'undefined-name';
+    if (/is not iterable\b/i.test(message)) return 'not-iterable';
+    return undefined;
   };
   let scriptErrorInstalled = false;
   const installScriptErrorJournal = () => {
     if (scriptErrorInstalled) { return; }
     scriptErrorInstalled = true;
-    const recordError = (error: Loose, filename: unknown, phase: string, lineno?: number) => {
+    const recordError = (error: Loose, filename: unknown, phase: string, lineno?: number, colno?: number) => {
       try {
         const stack = typeof error?.stack === 'string' ? error.stack : '';
-        const frame = scriptErrorWhere(stack, filename, lineno);
+        const frame = scriptErrorWhere(stack, filename, lineno, colno);
         if (!frame) return;
         const bundle = /ZenzaWatch(?:Runtime|Main|-createAdvancedSettingsPanel|-createVideoSharePanel)\.js/.exec(frame.source)?.[0] || 'ZenzaWatch-dev.user.js';
         const name = typeof error?.name === 'string' && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'Error';
         const message = String(error?.message ?? error ?? '').slice(0, 300);
         const where = frame.where;
+        const column = frame.column;
+        const scriptCause = scriptErrorCause(message);
         const missing = (RequestDiagnostics as Loose)?.missingFromMessage?.(message);
         const locationKey = (where || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 90);
         NotificationJournal.recordDiagnostic('diag-script-' + name.toLowerCase() + '-' + locationKey, {
           category: 'system', source: 'script-error', level: 'error',
           message: 'ZenzaWatch のスクリプトエラー（' + name + '）',
           details: {operation: 'script-error', outcome: 'failed', reason: 'script', errorName: name, phase, event: bundle,
-            ...(where ? {where} : {}), ...(missing ? {missing} : {})}
+            ...(where ? {where} : {}), ...(missing ? {missing} : {}), ...(scriptCause ? {scriptCause} : {}),
+            ...(typeof column === 'number' && Number.isSafeInteger(column) && column > 0 && column <= 10000000 ? {column} : {})}
         });
       } catch (_) { /* 記録の失敗で本体を止めない */ }
     };
-    window.addEventListener('error', (e: ErrorEvent) => recordError(e.error || {message: e.message, name: 'Error'}, e.filename, 'script', e.lineno));
+    window.addEventListener('error', (e: ErrorEvent) => recordError(e.error || {message: e.message, name: 'Error'}, e.filename, 'script', e.lineno, e.colno));
     window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
       const reason = (e as Loose).reason;
       if (reason && typeof reason === 'object') { recordError(reason, '', 'script-promise'); }
@@ -573,7 +585,8 @@ const {initialize} = (() => {
           ['spec-change', 'script'].includes(event.reason) ? 'error' :
           ['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
         details: {operation: event.operation, phase: event.phase, outcome: event.outcome,
-          reason: event.reason, elapsedMs: event.elapsedMs,
+          reason: event.reason, ...(event.outcome === 'failed' ? {elapsedMs:event.elapsedMs} : {}),
+          ...RequestDiagnostics.projectEvidence({...event}),
           ...(event.statusCode === undefined ? {} : {statusCode: event.statusCode}),
           ...(event.apiStatus === undefined ? {} : {apiStatus: event.apiStatus}),
           ...(event.errorCode === undefined ? {} : {errorCode: event.errorCode}),

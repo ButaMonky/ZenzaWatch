@@ -21,6 +21,7 @@ describe('official clip diagnostics', () => {
     page = new JSDOM('<section></section>',{url:'https://www.nicovideo.jp',runScripts:'outside-only'});
     win = page.window;
     root = win.document.querySelector('section');
+    win.ShareClipQueue = win.eval(beginSection('src/ShareClipQueue.js') + '\nShareClipQueue');
     const source = win.eval(diagnostics+'\n'+beginSection('src/ShareOfficialClip.js')+'\n;({api:ShareOfficialClip,diag:RequestDiagnostics})');
     api = source.api; events = []; calls = [];
     source.diag.setSink(event => events.push(event));
@@ -81,6 +82,9 @@ describe('official clip diagnostics', () => {
       if (['create','status','post-status'].includes(stage)) await click('create');
       if (stage === 'post-status') await click('post');
       const event = events.at(-1);
+      assert.equal(event.statusCode,200);
+      assert.equal(event.method,stage==='create'?'POST':'GET');
+      assert(event.endpoint);
       assert.deepEqual([event.operation,event.reason,event.missing,event.module],['clip-'+stage,'schema',field,'src/ShareOfficialClip.js']);
     }
     assert.doesNotMatch(JSON.stringify(events),/sm\d+|private-body|private-clip|privateAccount|unrecognized-sensitive|secret-|https?:/);

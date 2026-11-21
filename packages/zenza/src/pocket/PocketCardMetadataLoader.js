@@ -1,5 +1,5 @@
 // GENERATED FROM packages/zenza/src/pocket/PocketCardMetadataLoader.ts (Task210). Do not edit this JS.
-// SOURCE_SHA256 ecf29e19d1070b7aa1b6a10795673ee94f8f101be56047f2f66331516528bc4e
+// SOURCE_SHA256 c46333c69e7f01b75fb919e7f18471e514ec966a8845621c8eccd51df406aff4
 //===BEGIN===
 const PocketCardMetadataLoader = (() => {
     const API = 'https://nvapi.nicovideo.jp/v1/videos?watchIds=';
@@ -82,14 +82,31 @@ const PocketCardMetadataLoader = (() => {
     };
     const query = async (watchId, fetcher) => {
         const fetchApi = fetcher || (typeof netUtil !== 'undefined' ? netUtil.fetch.bind(netUtil) : fetch);
-        const response = await fetchApi(API + encodeURIComponent(watchId), {
-            credentials: 'omit', timeout: 6000,
-            headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }
-        });
-        if (!response || !response.ok) {
-            return null;
+        const url = API + encodeURIComponent(watchId);
+        const diagnostics = typeof window === 'undefined' ? undefined :
+            window.ZenzaLib?.RequestDiagnostics;
+        const ticket = typeof diagnostics?.readFailure === 'function' && typeof diagnostics.responseFailure === 'function'
+            ? diagnostics.begin('pocket-metadata', watchId, 'response', undefined, undefined, { url, method: 'GET' }) : undefined;
+        let response;
+        try {
+            response = await fetchApi(url, { credentials: 'omit', timeout: 6000, headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' } });
+            if (!response?.ok) {
+                ticket?.failure({ httpStatus: response?.status });
+                return null;
+            }
+            const payload = await response.json();
+            const outer = asRecord(payload), items = asRecord(outer?.data)?.items;
+            const failure = diagnostics?.responseFailure?.(response, outer?.meta, Array.isArray(items) ? undefined : 'data.items');
+            if (failure)
+                ticket?.failure(failure);
+            else
+                ticket?.success();
+            return parse(payload, watchId);
         }
-        return parse(await response.json(), watchId);
+        catch (error) {
+            ticket?.failure(diagnostics?.readFailure(response, error));
+            throw error;
+        }
     };
     const load = (watchId, fetcher) => {
         if (!safeId(watchId)) {

@@ -1,5 +1,18 @@
 //===BEGIN===
 class ShareClipPreferences {
+  static outputDimensions(width, height, maxHeight) {
+    const scale = Math.min(1, (maxHeight || height) / height);
+    return {width:Math.max(2, 2 * Math.floor(width * scale / 2)), height:Math.max(2, 2 * Math.floor(height * scale / 2))};
+  }
+
+  static compositeVideoBitrate(width, height, fps, seconds) {
+    // Fine, moving text needs more bits per frame. Reserve room for sound, the muxer and
+    // encoder variation within the 256 MiB draft transfer for the usual clips of up to 2 min.
+    const detailRate = Math.max(500_000, width * height * fps * 0.6);
+    const transferRate = 224 * 1024 ** 2 * 8 / Math.min(seconds, 120);
+    return Math.round(Math.min(detailRate, transferRate, 32_000_000));
+  }
+
   static qualityOptions = [
     {value: 'low', label: '通信量優先'},
     {value: 'source', label: '再生中の画質'},
@@ -24,6 +37,10 @@ class ShareClipPreferences {
       type: 'boolean', description: '新しいクリップの「コメント」をオンにします。表示中のコメントを映像に重ねて書き出すか、クリップごとに変更できます。'},
     {id: 'shareClip.includeEffects', defaultValue: false, label: '最初から画面エフェクトを含める',
       type: 'boolean', description: '新しいクリップの「画面エフェクト」をオンにします。プレイヤーで設定した効果を映像に重ねて書き出すか、クリップごとに変更できます。'},
+    {id: 'shareClip.quickMenu', defaultValue: true, label: '共有ボタンの下に投稿メニューを表示する',
+      type: 'boolean', description: '動画上の共有ボタンにマウスを重ねるか、キーボードでフォーカスすると、2つの操作を選べます。「今から30秒」はニコニコの連携先に自動投稿します。「全範囲」はZenzaでMP4を作成し、Xの下書きに添付します。通常のクリックでは共有画面を開きます。各操作のキーは「ショートカットキー」で登録できます。'},
+    {id: 'shareClip.backgroundTab', defaultValue: true, label: 'Xの下書きを背面のタブで開く',
+      type: 'boolean', description: '対応するユーザースクリプト管理拡張で、視聴中のタブを表示したままXへの動画添付を進めます。添付完了後、Xのタブで内容を確認して投稿してください。Xの準備表示が続く場合、タブを手前に出すとChromeが動画の読み込みを再開することがあります。オフにすると新しい下書きに切り替わります。'},
     {id: 'shareClip.openXDraft', defaultValue: true, label: 'クリップ完成後にXの下書きを開く',
       type: 'boolean', description: 'MP4が完成したら別タブでXを開き、作成した動画を下書きに添付します。元のタブを表示中でクリップボードへの書き込みが許可済みなら、動画をクリップボードにもコピーします。投稿はXで確認してから行います。クリップ編集画面でも変更できます。'}
   ];

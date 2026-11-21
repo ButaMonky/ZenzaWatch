@@ -72,40 +72,54 @@ const ShareClipClipboard = (() => {
   // A waiting tab is used only if the script manager cannot accept this click.
   // Never navigate a tab that the viewer closed or navigated elsewhere.
   function reserveBrowserTab() {
-    let tab;
+    let tab, waitingDocument;
     const ownsTab = () => {
-      try { return !!tab && !tab.closed && tab.location.href === 'about:blank'; }
+      try { return !!tab && !tab.closed && tab.location.href === 'about:blank' && tab.document === waitingDocument; }
       catch (_) { return false; }
     };
     try {
       tab = window.open('about:blank','_blank');
       if (tab) {
+        waitingDocument = tab.document;
         tab.opener = null;
         tab.document.title = 'ZenzaWatch ｜ Xの下書き';
-        tab.document.body.textContent = 'クリップの完成後、ここにXの下書きを開きます。元のタブで視聴を続けられます。';
+        tab.document.body.textContent = '準備ができたら、ここにXの下書きを開きます。';
       }
     } catch (_) { /* Report the browser result when the MP4 is ready. */ }
+    const fail = (message,stage) => { throw Object.assign(Error(message),{stage}); };
+    function openText(text) {
+      if (!tab) fail('別タブを開けませんでした。ポップアップの許可を確認してください。','draft-popup');
+      if (!ownsTab()) fail('待機タブが閉じられたか、別のページに移動しました。','draft-tab-closed');
+      const url = new URL('https://x.com/intent/tweet');
+      if (text) url.searchParams.set('text',text);
+      const link = tab.document.createElement('a');
+      link.href = url.href;
+      link.rel = 'noreferrer';
+      link.click();
+      tab = null;
+    }
     return {
+      openText,
       complete(file,text) {
-        const fail = (message,stage) => { throw Object.assign(Error(message),{stage}); };
-        if (!tab) fail('MP4は完成しました。別タブを開けませんでした。完成画面からXを開いてください。','draft-popup');
-        if (!ownsTab()) fail('MP4は完成しました。待機タブが閉じられたか、別のページに移動しました。','draft-tab-closed');
-        const url = new URL('https://x.com/intent/tweet');
-        if (text) url.searchParams.set('text',text);
         void copyIfGranted(file);
-        const link = tab.document.createElement('a');
-        link.href = url.href;
-        link.rel = 'noreferrer';
-        link.click();
-        tab = null;
+        openText(text);
         fail('Xの下書きを別タブで開きました。自動添付を開始できなかったため、完成画面から動画をコピーまたは保存して添付してください。','draft-native');
       },
       cancel() { if (ownsTab()) tab.close(); tab = null; }
     };
   }
-  function reserveDraft(trustedClick = false) {
+  function reserveDraft(trustedClick = false,background = true) {
+    if (trustedClick && !document.documentElement.dataset.zenzaDraftTicket) {
+      window.dispatchEvent(new Event('zenza-request-key-draft'));
+    }
+    const unavailable = () => {
+      throw Object.assign(Error('スクリプト管理拡張によるバックグラウンドタブの作成を確認できませんでした。Xの下書きを手動で開いてください。'),{stage:'draft-reserve',reason:'draft-background-unavailable'});
+    };
     const ticket = document.documentElement.dataset.zenzaDraftTicket;
-    if (!ticket) return trustedClick ? reserveBrowserTab() : null;
+    if (!ticket) {
+      if (!trustedClick) return null;
+      return background ? {complete:unavailable,openText:unavailable,cancel(){}} : reserveBrowserTab();
+    }
     const channel = new MessageChannel();
     const port = channel.port1;
     let timer, stopped = false, pending, browserTab, acknowledge;
@@ -116,49 +130,98 @@ const ShareClipClipboard = (() => {
       stopped = true;
       clearTimeout(timer);
       acknowledge(false);
-      port.onmessage = null;
+      port.onmessage = port.onmessageerror = null;
       port.postMessage({type:'cancel'});
       port.close();
     };
     port.onmessage = ({data}) => {
-      if (data?.reserved) {
+      if (data?.reserved && stage === 'draft-reserve') {
         clearTimeout(timer);
         stage = 'draft-open';
         acknowledge(true);
       } else if (data?.error) {
         if (data.stage === 'draft-format') stage = data.stage;
         pending?.settle(data);
-      } else if (['draft-open','draft-receive','draft-attach'].includes(data?.stage)) {
-        stage = data.stage;
-        pending?.refresh();
-      } else if (data?.attached) pending?.settle(data);
+      } else if (['draft-open','draft-receive','draft-attach','draft-received','draft-prepare'].includes(data?.stage)) {
+        pending?.progress?.(data.stage,data.percent);
+      } else if (data?.attached || data?.opened) pending?.settle(data);
+    };
+    port.onmessageerror = () => {
+      if (pending) pending.settle({error:'管理拡張から転送結果を読み取れませんでした。Xの添付欄を確認してください。'});
+      else stop();
     };
     // A late receiver must never open a second tab. The file is sent only after acknowledgement.
     timer = setTimeout(() => {
-      if (trustedClick) browserTab = reserveBrowserTab();
+      if (trustedClick && !background) browserTab = reserveBrowserTab();
       stop();
     },350);
-    window.postMessage({type:'zenza-reserve-x-draft',ticket},location.origin,[channel.port2]);
+    window.postMessage({type:'zenza-reserve-x-draft',ticket,background},location.origin,[channel.port2]);
     return {
-      async complete(file,text) {
+      async openText(text) {
+        if (!await ready) {
+          if (browserTab) return browserTab.openText(text);
+          if (background) return unavailable();
+          throw Error('Xを開くための受付を確認できませんでした。');
+        }
+        if (stopped || pending) throw Error('Xの下書きを開くための受付を終了しました。');
+        return new Promise((resolve,reject) => {
+          const settle = message => {
+            stop();
+            pending = null;
+            if (message?.opened) resolve();
+            else reject(Error(message?.error || 'Xの下書きを開いたことを確認できませんでした。'));
+          };
+          pending = {settle};
+          timer = setTimeout(settle,10000);
+          try { port.postMessage({type:'open-text',text}); }
+          catch (_) { settle(); }
+        });
+      },
+      async complete(file,text,onProgress = () => {}) {
         if (!await ready) {
           if (browserTab) return browserTab.complete(file,text);
+          if (background) return unavailable();
           throw Object.assign(Error('Xを開くための受付を確認できませんでした。完成画面からXを開いてください。'),{stage});
         }
         if (stopped || pending) throw Object.assign(Error('Xの自動添付を終了しました。'),{stage});
         return new Promise((resolve,reject) => {
+          let mediaDeadline, uploadPercent = -1;
           const settle = message => {
             stop();
             pending = null;
             if (message?.attached === true) resolve();
             else {
-              const known = ['draft-open-failed','draft-manager','draft-size','draft-transfer-timeout','draft-no-receiver','draft-input','draft-closed'];
+              const known = ['draft-open-failed','draft-manager','draft-size','draft-storage-busy','draft-transfer-timeout','draft-no-receiver','draft-input','draft-closed',
+                'draft-media-rejected','draft-media-unknown','draft-media-timeout','draft-media-limit','draft-media-hidden'];
               const reason = known.includes(message?.reason) ? message.reason : stage;
+              // A suspended source can miss a progress message before the final receipt.
+              if (['draft-media-timeout','draft-media-limit','draft-media-hidden'].includes(reason)) stage = 'draft-prepare';
+              else if (['draft-media-unknown','draft-media-rejected'].includes(reason) && stage !== 'draft-prepare') stage = 'draft-received';
               reject(Object.assign(Error(message?.error || 'Xへの自動添付の応答を確認できませんでした。完成画面から手動で添付できます。'),{stage,reason}));
             }
           };
-          const refresh = () => { clearTimeout(timer); timer = setTimeout(settle,180000); };
-          pending = {refresh,settle};
+          const refresh = () => {
+            clearTimeout(timer);
+            if (mediaDeadline !== undefined) {
+              const delay = Math.max(0,Math.min(330000,mediaDeadline - Date.now()));
+              timer = setTimeout(() => settle({reason:Date.now() >= mediaDeadline ? 'draft-media-limit' :
+                stage === 'draft-prepare' ? 'draft-media-timeout' : 'draft-media-unknown',
+                error:'Xの添付欄にMP4を渡しましたが、投稿できる状態を確認できませんでした。開いている下書きを確認してください。'}),delay);
+            } else timer = setTimeout(settle,180000);
+          };
+          pending = {settle,progress(nextStage,value) {
+            const percent = Number.isInteger(value) && value >= 0 && value <= 100 ? value : undefined;
+            if (mediaDeadline !== undefined && nextStage !== 'draft-prepare') return;
+            if (nextStage === 'draft-prepare') {
+              if (stage === nextStage && (percent === undefined || percent <= uploadPercent)) return;
+              if (percent !== undefined) uploadPercent = percent;
+            }
+            stage = nextStage;
+            if (stage === 'draft-received' || stage === 'draft-prepare') mediaDeadline ??= Date.now() + 1230000;
+            refresh();
+            onProgress(stage,percent);
+          }};
+          onProgress(stage);
           refresh();
           // Clipboard permission is optional. Its response must never delay opening X.
           void copyIfGranted(file);

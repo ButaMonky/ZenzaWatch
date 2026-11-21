@@ -6,6 +6,7 @@
 import type {NetUtilFetcher} from './NicoApiTypes';
 
 declare const netUtil: NetUtilFetcher;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 
 export type CommonsTreeKind = 'parents' | 'children';
 
@@ -274,13 +275,31 @@ const CommonsTreeLoader: CommonsTreeLoaderClient = (() => {
 
   // Task180 (F03): an HTTP 200 with an API failure, a missing box, a non-numeric total
   // or non-array contents is an error, not an empty tree.
-  const pageError = (message: string, extra: object = {}): Error => Object.assign(new Error(message), extra);
+  const diagnosticEvidence = new WeakMap<object,unknown>();
+  const pageError = (message: string, extra: object = {}, evidence?: object): Error => {
+    const error = Object.assign(new Error(message),extra);
+    if (evidence) diagnosticEvidence.set(error,evidence);
+    return error;
+  };
 
   // Task192 (COM-04): with_meta=1 adds display fields (title, thumbnailURL, ...). It was
   // observed on the official commons page (20-slot, logged in); a www-origin request with
   // credentials:'omit' and 100-slot pages are not verified yet, so it stays off by default.
   // The fields are optional display hints only: never full video information.
   const WITH_META_DEFAULT = false;
+  const observePage = async <T>(id: string, kind: CommonsTreeKind, execute: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.begin(
+      kind === 'parents' ? 'commons-parents' : 'commons-children',id,'response',() => !signal?.aborted,undefined,
+      {url:`${API_BASE}/${id}/relatives/${kind}`,method:'GET'});
+    try {
+      const value = await execute();
+      ticket?.success();
+      return value;
+    } catch (error) {
+      ticket?.failure(error && typeof error === 'object' ? diagnosticEvidence.get(error) ?? error : error);
+      throw error;
+    }
+  };
   const fetchPage = async (globalId: string, kind: CommonsTreeKind, offset: number, limit: number, withMeta: boolean = WITH_META_DEFAULT): Promise<CommonsPage> => {
     // _sort=-id はコモンズのページ自身が使っているのと同じ並び順
     const url = `${API_BASE}/${globalId}/relatives/${kind}` +
@@ -299,15 +318,21 @@ const CommonsTreeLoader: CommonsTreeLoaderClient = (() => {
     if (!res.ok) {
       throw pageError(`コンテンツツリーの取得に失敗 (${kind}: ${res.status})`, {status: res.status});
     }
-    const json: CommonsEnvelopeProbe | null = await res.json();
+    const json: CommonsEnvelopeProbe | null = await res.json().catch(error => {
+      if (typeof RequestDiagnostics !== 'undefined' && error && typeof error === 'object') {
+        diagnosticEvidence.set(error,RequestDiagnostics.readFailure(res,error));
+      }
+      throw error;
+    });
     const metaStatus = json && json.meta ? json.meta.status : undefined;
     // Comparisons keep the legacy loose coercion of the raw server value.
     if (metaStatus !== undefined && !((metaStatus as number) >= 200 && (metaStatus as number) <= 299)) {
-      throw pageError(`コンテンツツリーの取得に失敗 (${kind}: meta ${metaStatus})`, {status: metaStatus});
+      throw pageError(`コンテンツツリーの取得に失敗 (${kind}: meta ${metaStatus})`, {status:metaStatus},{httpStatus:res.status,apiStatus:metaStatus});
     }
     const box = (json && json.data ? json.data[kind] : undefined) as CommonsBoxProbe | undefined;
     if (!box || typeof box !== 'object' || typeof box.total !== 'number' || !Array.isArray(box.contents)) {
-      throw pageError(`コンテンツツリーの応答形式が不正 (${kind})`, {reason: 'schema'});
+      throw pageError(`コンテンツツリーの応答形式が不正 (${kind})`, {reason:'schema'},{kind:'schema',httpStatus:res.status,apiStatus:metaStatus,
+        missing:'data.' + kind + (Array.isArray(box?.contents) ? '.total' : '.contents')});
     }
     return {total: box.total, contents: box.contents as CommonsContentRow[]};
   };
@@ -355,7 +380,7 @@ const CommonsTreeLoader: CommonsTreeLoaderClient = (() => {
       const limit = Math.min(pageSize, end - offset);
       let page: CommonsPage;
       try {
-        page = await fetchPage(globalId, kind, offset, limit, withMeta);
+        page = await observePage(globalId,kind,() => fetchPage(globalId,kind,offset,limit,withMeta));
       } catch (e) {
         // Task180 (COM-02): nothing fetched yet -> the side failed as before;
         // otherwise keep the pages already fetched and report a partial failure.
@@ -556,19 +581,19 @@ const CommonsTreeLoader: CommonsTreeLoaderClient = (() => {
         throw scanError(`コンテンツツリーの取得に失敗 (${kind}: ${r.status} at ${offset})`, {kind: 'http', status: r.status, offset});
       }
       if (r.invalidJson) {
-        throw scanError(`コンテンツツリーの応答が読めません (${kind} at ${offset})`, {kind: 'schema', offset});
+        throw scanError(`コンテンツツリーの応答が読めません (${kind} at ${offset})`, {kind:'schema',httpStatus:r.status,missing:'json',offset});
       }
       const json = r.json;
       const metaStatus = json && json.meta ? json.meta.status : undefined;
       if (metaStatus !== undefined && !((metaStatus as number) >= 200 && (metaStatus as number) <= 299)) {
-        throw scanError(`コンテンツツリーの取得に失敗 (${kind}: meta ${metaStatus})`, {kind: 'api', status: metaStatus, offset});
+        throw scanError(`コンテンツツリーの取得に失敗 (${kind}: meta ${metaStatus})`, {kind:'api',status:metaStatus,httpStatus:r.status,apiStatus:metaStatus,offset});
       }
       const box = (json && json.data ? json.data[kind] : undefined) as CommonsBoxProbe | undefined;
       if (!box || typeof box !== 'object' || !Array.isArray(box.contents)) {
-        throw scanError(`コンテンツツリーの応答形式が不正 (${kind})`, {kind: 'schema', offset});
+        throw scanError(`コンテンツツリーの応答形式が不正 (${kind})`, {kind:'schema',httpStatus:r.status,missing:'data.'+kind+'.contents',offset});
       }
       if (!(Number.isInteger(box.total) && (box.total as number) >= 0)) {
-        throw scanError(`コンテンツツリーの総数が不正 (${kind})`, {kind: 'invalid-total', offset});
+        throw scanError(`コンテンツツリーの総数が不正 (${kind})`, {kind:'invalid-total',httpStatus:r.status,missing:'data.'+kind+'.total',errorCode:'RESPONSE_SCHEMA',offset});
       }
       return {total: box.total as number, contents: box.contents as CommonsContentRow[]};
     }
@@ -602,10 +627,10 @@ const CommonsTreeLoader: CommonsTreeLoaderClient = (() => {
     while (true) {
       if (initialTotal !== null && offset >= initialTotal) { stopReason = 'end-of-range'; break; }
       if (offset - startOffset >= maxRows) { stopReason = 'job-cap'; break; }
-      const limit = initialTotal === null ? pageSize : Math.min(pageSize, initialTotal - offset);
+      const limit: number = initialTotal === null ? pageSize : Math.min(pageSize, initialTotal - offset);
       let page: CommonsScanPage;
       try {
-        page = await fetchScanPage(globalId, kind, offset, limit, {signal, timeoutMs, onRetry});
+        page = await observePage(globalId,kind,() => fetchScanPage(globalId,kind,offset,limit,{signal,timeoutMs,onRetry}),signal);
         requests++;
       } catch (e) {
         if (isAbort(e)) { stopReason = 'cancelled'; break; }
@@ -723,7 +748,7 @@ const CommonsTreeLoader: CommonsTreeLoaderClient = (() => {
       const limit = Math.min(pageSize, end - offset);
       let page: CommonsScanPage;
       try {
-        page = await fetchScanPage(globalId, kind, offset, limit, {signal, withMeta: true, timeoutMs});
+        page = await observePage(globalId,kind,() => fetchScanPage(globalId,kind,offset,limit,{signal,withMeta:true,timeoutMs}),signal);
         requests++;
       } catch (e) {
         stopReason = isAbort(e) ? 'cancelled' : 'failed';

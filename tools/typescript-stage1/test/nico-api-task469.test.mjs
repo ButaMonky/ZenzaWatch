@@ -59,12 +59,20 @@ test('ThumbInfoLoader: remote failures and malformed responses preserve original
     ['empty text',{reply:{status:'ok',data:''}}],
     ['transport reject',{reject:Error('offline')}],
     ['message empty',{reject:{message:''}}],
-    ['message numeric',{reject:{message:17}}],
-    ['reject null',{reject:null}],
-    ['reply null',{reply:null}]
+    ['message numeric',{reject:{message:17}}]
   ];
   for(const [label,scenario] of cases){
     await parity(label,scenario,[load('sm9'),load(undefined)]);
+  }
+});
+
+test('ThumbInfoLoader: a null gateway failure is reported through its normal failure contract',async()=>{
+  for (const [scenario,failure] of [
+    [{reject:null},{status:'fail',message:"gate.fetch('sm9') failed"}],
+    [{reply:null},{status:'fail',code:'INVALID_RESPONSE'}]
+  ]) {
+    const api=loadLegacy(after,'ThumbInfoLoader',makeWorld(scenario).globals);
+    await assert.rejects(api.load('sm9'),error=>{assert.deepEqual(snapshot(error),failure); return true;});
   }
 });
 

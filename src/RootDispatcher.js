@@ -4,6 +4,8 @@ import {PopupMessage} from './util';
 import {PlayerConfig} from './NicoVideoPlayerDialog';
 import {Clipboard} from '../packages/lib/src/dom/Clipboard';
 import {VideoSharePanel} from './VideoSharePanel';
+import {ShortcutKeyEmitter} from '../packages/zenza/src/ShortcutKeyEmitter';
+import {VideoHoverMenu} from './VideoHoverMenu';
 import {CommentPictureInPicture} from '../packages/zenza/src/commentLayer/CommentPictureInPicture';
 import {PipPageThumbnail} from '../packages/zenza/src/videoPlayer/PipPageThumbnail';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
@@ -15,6 +17,8 @@ import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions'
 //@require PipPageThumbnail
 //@require RelatedMenuOrder
 //@require RelatedMenuActions
+//@require ShortcutKeyEmitter
+//@require VideoHoverMenu
 //@require VideoSharePanel
 const RootDispatcher = (() => {
     let config;
@@ -179,7 +183,17 @@ const RootDispatcher = (() => {
                     }
                     break;
                 }
+                case 'shareNicoNext30':
+                case 'shareZenzaFull':
                 case 'tweet': {
+                    if (command !== 'tweet') {
+                        if (!params?.isTrusted || !params.eventPhase)
+                            break;
+                        const authorized = params instanceof MouseEvent ? VideoHoverMenu.consumeShareClick(params, command) :
+                            params instanceof KeyboardEvent && ShortcutKeyEmitter.consumeSharePress(params, command);
+                        if (!authorized)
+                            break;
+                    }
                     const info = playerState.videoInfo;
                     if (!info || !info.watchId || info.watchId !== player.watchId) {
                         break;
@@ -192,7 +206,8 @@ const RootDispatcher = (() => {
                         const frame = displayed && 'drawableElement' in displayed ? displayed.drawableElement : displayed;
                         return frame instanceof HTMLVideoElement ? frame : null;
                     };
-                    VideoSharePanel.open(info, player.currentTime || 0, getCurrentVideo, {
+                    const share = command === 'tweet' ? VideoSharePanel.open : VideoSharePanel.quick.bind(VideoSharePanel, command);
+                    share(info, player.currentTime || 0, getCurrentVideo, {
                         clipSession: session,
                         config, getViewModel: () => currentPlayer()?.commentViewModel ?? null,
                         getStoryboardInterval() {

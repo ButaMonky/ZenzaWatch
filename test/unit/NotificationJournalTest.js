@@ -20,7 +20,7 @@ describe('NotificationJournal source-only, no network', () => {
     const ctx = createContext({NotificationJournal: journal, RequestDiagnostics: {},
       addEventListener(type, handler) { handlers.set(type, handler); }});
     const file = 'src/initializer.js';
-    for (const name of ['ZENZA_SOURCE', 'scriptErrorWhere', 'installScriptErrorJournal']) {
+    for (const name of ['ZENZA_SOURCE', 'scriptErrorWhere', 'scriptErrorCause', 'installScriptErrorJournal']) {
       run('const ' + name + ' = ' + extract(file, name, 'var') + ';', ctx);
     }
     run('let scriptErrorInstalled = false; installScriptErrorJournal();', ctx);
@@ -48,6 +48,12 @@ describe('NotificationJournal source-only, no network', () => {
     assert(extra.some(d => d.where === 'ShareHlsPreview.attach@995' && d.phase === 'script-promise'));
     assert.equal(extra.length,3);
     assert(!JSON.stringify(extra).includes('private'));
+    handlers.get('unhandledrejection')({reason:{name:'TypeError', message:'PrivateTitle is not a function',
+      stack:'TypeError: PrivateTitle is not a function\n    at showTask (ZenzaWatchRuntime.js:65028:6)'}});
+    const detail = (await journal.list()).find(entry => entry.details.where === 'showTask@65028').details;
+    assert.equal(detail.column,6);
+    assert.equal(detail.scriptCause,'non-function');
+    assert(!JSON.stringify(detail).includes('PrivateTitle'));
   });
   it('captures occurrence build and separates first/last failure from recovery time', () => {
     let now=1800000000000;const journal=harness({Date:class extends Date {static now(){return now;}}});
@@ -62,6 +68,18 @@ describe('NotificationJournal source-only, no network', () => {
     assert(!JSON.stringify(journal.record({message:'new'})).includes('secret'));
   });
 
+  it('keeps the numeric MP4 byte count only for X draft diagnostics',()=>{
+    const journal=harness();
+    const fields=(operation,fileBytes)=>journal.record({message:'test',details:{operation,fileBytes}}).details;
+    assert.equal(fields('x-draft',1572864).fileBytes,1572864);
+    assert.equal(fields('x-draft','private.mp4').fileBytes,undefined);
+    assert.equal(fields('x-draft',-1).fileBytes,undefined);
+    assert.equal(fields('playlist',1572864).fileBytes,undefined);
+    const percent=(operation,uploadPercent)=>journal.record({message:'test',details:{operation,uploadPercent}}).details.uploadPercent;
+    for (const value of [0,26,100]) assert.equal(percent('x-draft',value),value);
+    for (const value of [-1,101,0.3,'26%']) assert.equal(percent('x-draft',value),undefined);
+    assert.equal(percent('playlist',26),undefined);
+  });
   it('stores entries in session when IndexedDB is unavailable', async () => {
     const journal = harness();
     let updates = 0;

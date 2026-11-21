@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/SupporterCredit.ts",
   "runtime": "packages/zenza/src/videoPlayer/SupporterCredit.js",
-  "sourceSha256": "9f8fb7063668ee079de0d5ea5154fa7ad7fb40f463dca4ba9d85abf9f01f021e",
-  "runtimeSha256": "738bca2c32a72b51fa47e36ebd088ac7cf674296e114221d8a77271a75709064"
+  "sourceSha256": "19bd0cc761e64cffd7cef8c641b25f06943d4a491b9da74768a2272b8f5ab39a",
+  "runtimeSha256": "cc326509f8179cf097e4101624bb251ff67704089d672602399b4e3ea68fcece"
 }

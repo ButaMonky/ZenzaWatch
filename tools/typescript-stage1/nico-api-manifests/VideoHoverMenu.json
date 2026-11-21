@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/VideoHoverMenu.ts",
   "runtime": "src/VideoHoverMenu.js",
-  "sourceSha256": "06d316acdadaf9ea4f83703609b7c36aa37cc25fc8ed0f70e90f04bd700ab567",
-  "runtimeSha256": "7889962e429cca9fc6ddaa4318b5614a310158c7236104e971b1630776a5b520"
+  "sourceSha256": "c7bcd6ccd92e5419b7e3df7b51fa8cac6a425dc6d9d1e1ba62ab18de08c4dc04",
+  "runtimeSha256": "37fb47a59651569b971363d0f73ad0b5740e040695d825182800e93c32dc70c5"
 }

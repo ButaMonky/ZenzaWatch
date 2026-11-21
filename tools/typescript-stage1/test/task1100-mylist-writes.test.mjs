@@ -45,6 +45,7 @@ for (const [operation, act] of Object.entries(operations)) {
       assert.equal(h.writes.length,index+1);
       assert.equal(h.events.at(-1)?.operation,operation);
       assert.equal(h.events.at(-1).reason,reason);
+      assert.equal(h.events.at(-1).method,operation.endsWith('-add') ? 'POST' : 'DELETE');
       assert.deepEqual(h.changes,[]);
     }
     assert.deepEqual(h.events.slice(0,2).map(e => [e.statusCode,e.apiStatus,e.missing]),

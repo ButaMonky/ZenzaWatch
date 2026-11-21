@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/NicoVideoPlayerDialogNicoadEnd.ts",
   "runtime": "src/NicoVideoPlayerDialogNicoadEnd.js",
-  "sourceSha256": "ffe1168e2f1da136dc196049c891b635e026156591a6da806d5187b768b29c07",
-  "runtimeSha256": "460d7d0c03f31bb2c2c5e0db71a15245b17830434918289a4cbf0d5e3d93aef6"
+  "sourceSha256": "63f2a1ce43e84998ac614734269cd712fc350ffd9501a9c997e37b412cd36bf6",
+  "runtimeSha256": "60aaec7b264cd510c66630846a3b2eeb065f23e7d3d6fda34775dc83f51aa3c8"
 }

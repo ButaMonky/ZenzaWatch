@@ -40,6 +40,29 @@ describe('Task926 PopupMessage colors from Config',()=>{
       assert.equal(h.journal.length,1);
     } finally {h.dom.window.close();}
   });
+  it('shows a confirmed share next to playlist notices and records its success level',()=>{
+    const h=boot();
+    try {
+      const doc=h.dom.window.document;
+      Object.defineProperty(doc,'hidden',{value:false});
+      const player=doc.createElement('div');
+      player.className='zenzaVideoPlayerDialog is-open';
+      doc.body.append(player);
+      player.append(h.root);
+      h.root.getClientRects=()=>[{}];
+      h.Popup.notify('プレイリストに追加しました');
+      h.Popup.notify('X にクリップをポストしました。',false,{source:'official-share',level:'success'});
+      assert.deepEqual([...h.root.children].map(el=>el.textContent),['X にクリップをポストしました。','プレイリストに追加しました']);
+      assert.deepEqual(h.journal.map(entry=>entry.level),['info','success']);
+      const dialog=doc.createElement('dialog');
+      dialog.className='zenzaShare';
+      dialog.setAttribute('open','');
+      doc.body.append(dialog);
+      h.Popup.warning('結果を確認できません',false,{source:'official-share'});
+      assert.equal(dialog.querySelector('.zenzaShareNoticeHost .warning').textContent,'結果を確認できません');
+      assert.equal(h.journal[2].level,'warning');
+    } finally {h.dom.window.close();}
+  });
   it('keeps original notify/error colors and the existing white text by default',()=>{
     const h=boot();
     try{

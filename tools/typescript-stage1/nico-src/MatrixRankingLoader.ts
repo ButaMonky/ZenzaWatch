@@ -6,6 +6,7 @@
 import type {NetUtilFetcher} from './NicoApiTypes';
 
 declare const netUtil: NetUtilFetcher;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 
 export interface MatrixRankingLoaderClient {
   /**
@@ -18,11 +19,21 @@ export interface MatrixRankingLoaderClient {
 
 const MatrixRankingLoader: MatrixRankingLoaderClient = {
   load: async (): Promise<unknown> => {
-    const htmlText = await netUtil.fetch(
-      'https://www.nicovideo.jp/ranking', {credentials: 'include'}
-      ).then((r: Response): Promise<string> => r.text());
+    const url = 'https://www.nicovideo.jp/ranking';
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('ranking-page',url,'response',undefined,undefined,{url,method:'GET'});
+    const response = await netUtil.fetch(url,{credentials:'include'}).catch(error => { ticket?.failure(error); throw error; });
+    const htmlText = await response.text().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(response,error)); throw error; });
     const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-    return JSON.parse((doc.getElementById('MatrixRanking-app') as HTMLElement).dataset.app as string) as unknown;
+    try {
+      const ranking = JSON.parse((doc.getElementById('MatrixRanking-app') as HTMLElement).dataset.app as string) as unknown;
+      if (response.status >= 400) ticket?.failure({httpStatus:response.status}); else ticket?.success();
+      return ranking;
+    } catch (error) {
+      ticket?.failure(response.status >= 400 ? {httpStatus:response.status} :
+        {...RequestDiagnostics.responseEvidence(response),httpStatus:response.status,kind:'schema',missing:'ranking.dataApp'});
+      throw error;
+    }
   }
 };
 

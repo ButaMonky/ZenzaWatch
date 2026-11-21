@@ -74,7 +74,7 @@ class TagEditApi {
     async _requestOnce({ url, options }, label) {
         const diag = typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics;
         const operation = options.method === 'POST' ? 'tag-add' : options.method === 'DELETE' ? 'tag-remove' : 'tags';
-        const ticket = diag?.begin(operation, url.split('?')[0], 'response');
+        const ticket = diag?.begin(operation, url.split('?')[0], 'response', undefined, undefined, { url, method: options.method });
         let res;
         let json;
         try {
@@ -140,7 +140,7 @@ class TagEditApi {
         });
         const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
         const diag = typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics;
-        const ticket = diag?.begin('tag-key', videoId, 'response');
+        const ticket = diag?.begin('tag-key', videoId, 'response', undefined, undefined, { url, method: 'GET' });
         let res;
         let json;
         try {

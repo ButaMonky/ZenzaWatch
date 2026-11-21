@@ -88,6 +88,7 @@ const SHORTCUT_ACTIONS = [
   // と同じ)。動画を閉じている間だけ、最後に見ていた動画を開き直す特殊処理が
   // 別途ある(NicoVideoPlayerDialog._onKeyEvent参照)。
   {id: 'OPEN_OFFICIAL_WATCH', category: 'プレイヤー全般', label: '公式プレイヤーからこの動画をZenzaWatchで開く',
+    description: '通常の公式視聴ページで、その動画をZenzaWatchへ切り替えます。初期値は Alt + Shift + Z。コメントなどの文字入力中は働きません。割り当てを消すとボタンだけ使えます。「公式プレイヤー連携」と同じキー設定です。',
     defaultKey: KEY_MOD.ALT + KEY_MOD.SHIFT + 90, command: 'openOfficialWatch'},
   {id: 'RE_OPEN', legacy: true, category: 'プレイヤー全般',
     label: '今見ている動画を再読み込み(閉じている時は直前に見ていた動画を開く)',
@@ -155,6 +156,13 @@ const SHORTCUT_ACTIONS = [
   // Use an unassigned key by default; the advanced settings editor owns bindings.
   {id: 'TOGGLE_NOTIFICATION_HISTORY', category: 'その他', label: '通知・エラー履歴を開く/閉じる',
     defaultKey: 0, command: 'toggle-notificationHistory'},
+
+  {id: 'SHARE_NICO_NEXT30', category: '共有', label: '今から30秒をニコニコ経由でXに自動投稿',
+    description: '押した位置から最大30秒を切り抜き、確認画面を開かずに投稿します。ほかの操作と重複しないキーを割り当ててください。',
+    shareShortcut: true, defaultKey: 0, command: 'shareNicoNext30'},
+  {id: 'SHARE_ZENZA_FULL', category: '共有', label: '全編をZenzaでMP4にしてXの下書きに添付',
+    description: '動画の先頭から最後までをMP4作成キューに追加します。完成後にXで添付を確認し、自分で「ポスト」を押します。ほかの操作と重複しないキーを割り当ててください。',
+    shareShortcut: true, defaultKey: 0, command: 'shareZenzaFull'},
 
   // ---- ここから新規(Task 059)。既定キーは全て未設定(0)。 ----
   // execCommandのswitch文で直接処理されており、追加の配線が不要な6件。

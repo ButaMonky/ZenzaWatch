@@ -75,8 +75,11 @@ describe('Task318 real source setting inventory',()=>{
     assert.deepStrictEqual(missing,[]);
     assert.deepStrictEqual(ignored,[]);
     // Task396 adds the previously absent original-video action, unbound by default.
-    assert.strictEqual(ctx.actions.filter(a=>!a.id.startsWith('SCENE_')).length,128,
+    assert.strictEqual(ctx.actions.filter(a=>!a.id.startsWith('SCENE_') && !a.shareShortcut).length,128,
       'keep existing actions and the official-page launcher');
+    const share = model.sectionDescriptors('ショートカット','共有');
+    assert.deepStrictEqual(Array.from(share, row=>row.id), ['KEY_SHARE_NICO_NEXT30','KEY_SHARE_ZENZA_FULL']);
+    assert(share.every(row=>row.defaultKey===0 && row.description));
     const sceneActions=ctx.actions.filter(a=>a.id.startsWith('SCENE_'));
     assert.strictEqual(sceneActions.length,12,'register all twelve new scene actions');
     assert(sceneActions.every(a=>a.defaultKey===0),

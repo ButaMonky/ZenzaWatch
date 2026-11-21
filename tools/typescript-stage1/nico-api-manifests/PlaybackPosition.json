@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/PlaybackPosition.ts",
   "runtime": "packages/lib/src/nico/PlaybackPosition.js",
-  "sourceSha256": "b598c2d7abdcc0f12f2dbca2c611791446b8020fe58fb3e7945e3ae42f8626b9",
-  "runtimeSha256": "96bbc1d5e24d0ec44b4339da52e8d00538caf5caec6538aa079ac5219c0664c4"
+  "sourceSha256": "cfcefcabad49e1fdc60f32d6bb9bd0954211db563414f305f2ab9daafd76010a",
+  "runtimeSha256": "f73e4e07f7b13056bb5d51d1e05719ec83eee5c725722cf61abd437eb6108158"
 }

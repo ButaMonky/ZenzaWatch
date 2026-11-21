@@ -129,14 +129,16 @@ const CommentPictureInPicture = (() => {
   };
 
   class CommentRenderer {
-    constructor({config}) {
+    constructor({config, smoothSmallText = false}) {
       this.config = config;
+      this.smoothSmallText = smoothSmallText;
       this.bitmaps = new Map();
       this.snapshot = {key: '', list: [], maxSpan: 10, updatedAt: 0};
     }
 
     clearCache() {
       this.bitmaps.clear();
+      this.textScratch = null;
     }
 
     _getLineHeight(chat) {
@@ -174,7 +176,18 @@ const CommentPictureInPicture = (() => {
       const width = Math.min(8192, Math.ceil(layerWidth * scale) + margin * 2);
       const height = Math.min(4096, Math.ceil(layerHeight * scale) + margin * 2);
       const canvas = createCanvas(width, height);
-      const ctx = canvas.getContext('2d');
+      // Avoid jagged small strokes by rasterizing at twice the export density once.
+      // Cache only the final-size bitmap, with at most 1 megapixel of temporary pixels.
+      const supersample = this.smoothSmallText && chat.fontSizePixel * scaleY * scale <= 36 &&
+        width <= 4096 && height <= 2048 && width * height <= 262144;
+      const density = supersample ? 2 : 1;
+      let target = canvas;
+      if (supersample) {
+        target = this.textScratch ||= createCanvas(1, 1);
+        target.width = width * density;
+        target.height = height * density;
+      }
+      const ctx = target.getContext('2d');
       const font = this._getFont(chat);
       ctx.font = font;
       if ('letterSpacing' in ctx) {
@@ -188,7 +201,7 @@ const CommentPictureInPicture = (() => {
       const fitX = Math.max(0.5, Math.min(2, layerWidth / Math.max(1, measured * scaleX)));
       const color = chat.color || '#FFFFFF';
       const isBlack = /^#0{3,6}$/i.test(color) || color === 'black';
-      ctx.setTransform(scale * scaleX * fitX, 0, 0, scale * scaleY, margin, margin);
+      ctx.setTransform(density * scale * scaleX * fitX, 0, 0, density * scale * scaleY, density * margin, density * margin);
       ctx.font = font;
       if ('letterSpacing' in ctx) {
         ctx.letterSpacing = '1px';
@@ -205,6 +218,11 @@ const CommentPictureInPicture = (() => {
         ctx.strokeText(line, 0, y);
         ctx.fillText(line, 0, y);
       });
+      if (supersample) {
+        const result = canvas.getContext('2d');
+        result.imageSmoothingQuality = 'high';
+        result.drawImage(target, 0, 0, width, height);
+      }
       const bitmap = {canvas, scale, layerWidth, layerHeight, margin, lastUsed: this.frame};
       this.bitmaps.set(chat, bitmap);
       return bitmap;

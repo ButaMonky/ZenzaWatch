@@ -44,10 +44,10 @@ export interface LikeApiClient {
 const LikeApi: LikeApiClient = {
   call: async (videoId: string, method: NvapiWriteMethod = 'POST'): Promise<LikeApiResult> => {
 
+    const api = 'https://nvapi.nicovideo.jp/v1/users/me/likes/items';
     const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-      RequestDiagnostics.begin('like', method + ':' + videoId, 'response');
+      RequestDiagnostics.begin('like', method + ':' + videoId, 'response', undefined, undefined, {url:api, method});
     const execute = async () => {
-      const api = 'https://nvapi.nicovideo.jp/v1/users/me/likes/items';
       const url = `${api}?videoId=${videoId}`;
       const label = method === 'DELETE' ? 'いいね！の解除' : 'いいね！';
       const res = await NVApi.call(url, {method, ...(ticket ? {diagnosticActive:()=>false} : {})});

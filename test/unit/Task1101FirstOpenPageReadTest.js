@@ -5,7 +5,7 @@ const {beginSection, createContext, run} = require('../helpers/extractSource');
 const fixture = require('../fixtures/watch-legacy-darasan.sanitized.json');
 const id = fixture.data.response.video.id;
 
-function setup(extra = {}) {
+function setup(extra = {}, diagnosticEvents) {
   const requests = [], events = [];
   const context = createContext({
     AbortController, CacheStorage: class {setItem() {}}, sessionStorage: {},
@@ -22,6 +22,10 @@ function setup(extra = {}) {
     }},
     ...extra
   });
+  if (diagnosticEvents) {
+    const diagnostics = run(beginSection('packages/lib/src/infra/RequestDiagnostics.js') + ';RequestDiagnostics', context);
+    diagnostics.setSink(event => diagnosticEvents.push(event));
+  }
   run(beginSection('packages/lib/src/nico/VideoInfoLoader.js') + '\nglobalThis.loader = VideoInfoLoader;', context);
   return {loader: context.loader, requests, events};
 }
@@ -55,9 +59,10 @@ describe('Task1101 first local open watch-page read', () => {
 
   it('continues with the embedded owner when an optional HTTP body stalls after headers', async () => {
     let deadline, cancelled = false;
+    const diagnosticEvents = [];
     const {loader, requests} = setup({Response, TransformStream, AbortController,
       setTimeout(fn, ms) { if (ms > 0 && ms <= 5000) deadline = fn; return 1; },
-      clearTimeout() {}});
+      clearTimeout() {}}, diagnosticEvents);
     const load = loader.load(id, {});
     requests[0].respond(watchWithLazyOwner());
     await new Promise(resolve => setImmediate(resolve));
@@ -70,10 +75,13 @@ describe('Task1101 first local open watch-page read', () => {
     assert.equal(String(result.watchApiData.uploaderInfo.id), '123');
     assert.equal(cancelled, true);
     assert.equal(requests.length, 2);
+    assert.deepStrictEqual(diagnosticEvents.filter(e => e.operation === 'watch-lazy').map(e => [e.reason,e.statusCode]),
+      [['timeout',200]]);
   });
 
   it('cancels a partially received optional body when the first click is superseded', async () => {
-    const {loader, requests, events} = setup({Response, TransformStream, setTimeout, clearTimeout});
+    const diagnosticEvents = [];
+    const {loader, requests, events} = setup({Response, TransformStream, setTimeout, clearTimeout}, diagnosticEvents);
     const abandon = loader.beginFirstOpenPageRead(id, {});
     requests[0].respond(watchWithLazyOwner());
     await new Promise(resolve => setImmediate(resolve));
@@ -86,6 +94,7 @@ describe('Task1101 first local open watch-page read', () => {
     assert.equal(cancelled, true);
     assert.equal(requests.length, 3);
     assert.deepEqual(events, []);
+    assert.deepEqual(diagnosticEvents, []);
   });
 
   it('uses the owner lookup fallback if the optional nicoad body never finishes', async () => {

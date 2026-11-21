@@ -1,8 +1,10 @@
 import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 import {ShareHlsClipSource} from './ShareHlsClipSource';
+import {ShareClipPreferences} from './ShareClipPreferences';
 //===BEGIN===
 //@require RequestDiagnostics
 //@require ShareHlsClipSource
+//@require ShareClipPreferences
 const ShareFastClip = (() => {
   // Mediabunny 1.66.1, MPL-2.0. https://github.com/Vanilagy/mediabunny/tree/v1.66.1
   const moduleUrl = 'https://cdn.jsdelivr.net/npm/mediabunny@1.66.1/dist/bundles/mediabunny.min.mjs';
@@ -43,6 +45,51 @@ const ShareFastClip = (() => {
   function getLibrary() {
     if (!library) library = load().catch(error => { library = null; throw error; });
     return library;
+  }
+  // A regular fast-start MP4 patches the reserved index after encoding. Keep seekable
+  // Blob parts so this last write does not require a second full-size JS buffer.
+  function mp4Destination(media) {
+    const pageSize = 2 ** 20, pages = [];
+    const emptyPage = new Blob([new Uint8Array(pageSize)]);
+    let length = 0;
+    const stream = new WritableStream({write({position,data}) {
+      length = Math.max(length,position+data.byteLength);
+      for (let i = 0; i < data.byteLength;) {
+        const index = Math.floor((position+i)/pageSize), offset = (position+i) % pageSize;
+        const count = Math.min(pageSize-offset,data.byteLength-i);
+        const page = pages[index] || emptyPage;
+        pages[index] = new Blob([page.slice(0,offset), data.subarray(i,i+count), page.slice(offset+count)]);
+        i += count;
+      }
+    }});
+    return {target:new media.StreamTarget(stream,{chunked:true,chunkSize:pageSize}),
+      finish:() => new Blob(Array.from(pages,page => page || emptyPage)).slice(0,length,'video/mp4')};
+  }
+  async function checkOutput(file,duration,signal) {
+    signal.throwIfAborted();
+    const invalid = new Error('作成した動画の映像と長さを確認できませんでした。');
+    if (!file.size || !Number.isFinite(duration) || duration <= 0) throw invalid;
+    const media = await getLibrary();
+    signal.throwIfAborted();
+    const input = new media.Input({source:new media.BlobSource(file),formats:[file.type === 'video/mp4' ? media.MP4 : media.WEBM]});
+    const dispose = () => input.dispose();
+    signal.addEventListener('abort',dispose,{once:true});
+    try {
+      const video = await input.getPrimaryVideoTrack();
+      if (!video) throw invalid;
+      // Inspect the exported bytes directly. Hidden tabs can defer HTMLVideoElement metadata
+      // indefinitely even when the muxed file, its video packets and timestamps are valid.
+      const [width,height,packet,end] = await Promise.all([video.getDisplayWidth(),video.getDisplayHeight(),
+        new media.EncodedPacketSink(video).getFirstPacket(),input.computeDuration()]);
+      if (!(width > 0 && height > 0 && packet?.data.byteLength > 0 && Number.isFinite(end) && end > 0 &&
+            Math.abs(end-duration) <= 0.15)) throw invalid;
+    } catch (_) {
+      signal.throwIfAborted();
+      throw invalid;
+    } finally {
+      signal.removeEventListener('abort',dispose);
+      dispose();
+    }
   }
   async function makeThumbnails(hls, times, signal) {
     if (!times.length || !times.every(t => Number.isFinite(t) && t >= 0)) return [];
@@ -85,16 +132,17 @@ const ShareFastClip = (() => {
       try {
         const [video, audio] = await Promise.all([input.getPrimaryVideoTrack(), input.getPrimaryAudioTrack()]);
         if (!video) throw Error('元ファイルに映像がありません。');
-        let parts = [];
+        let finish;
         const videoOptions = {};
         if (maxHeight && !drawFrame && await video.getDisplayHeight() > maxHeight) videoOptions.height = maxHeight;
         if (drawFrame) {
           const [w, h] = await Promise.all([video.getDisplayWidth(), video.getDisplayHeight()]);
           // The overlay moves independently of the number of distinct source pictures.
-          if (comments && (await video.computePacketStats(32)).averagePacketRate < 29.9) videoOptions.frameRate = 30;
-          const scale = Math.min(1, (maxHeight || h)/h, 1920 / Math.max(w,h), 1080 / Math.min(w,h));
-          const width = Math.max(2, 2 * Math.round(w * scale / 2));
-          const height = Math.max(2, 2 * Math.round(h * scale / 2));
+          const {averagePacketRate} = await video.computePacketStats(32);
+          if (comments && averagePacketRate < 29.9) videoOptions.frameRate = 30;
+          const {width,height} = ShareClipPreferences.outputDimensions(w,h,maxHeight);
+          const fps = videoOptions.frameRate || (Number.isFinite(averagePacketRate) && averagePacketRate > 0 ? averagePacketRate : 30);
+          videoOptions.quality = new media.Quality({bitrate:ShareClipPreferences.compositeVideoBitrate(width,height,fps,to-from)});
           const image = document.createElement('canvas'), frame = document.createElement('canvas');
           image.width = frame.width = width;
           image.height = frame.height = height;
@@ -110,23 +158,20 @@ const ShareFastClip = (() => {
         // H.264/AAC MP4 is preferred for X. Browsers without an AAC or H.264 encoder (Linux Chrome, some Firefox builds)
         // get a WebM from the same fast path instead of falling back to real-time recording.
         step = 'output.codecs';
-        let type = 'video/mp4';
         for (const plan of [{type:'video/mp4', video:'avc', audio:'aac'}, {type:'video/webm', video:'vp9', audio:'opus'}, {type:'video/webm', video:'vp8', audio:'opus'}]) {
           signal?.throwIfAborted();
-          const chunks = [], mp4 = plan.type === 'video/mp4';
+          const mp4 = plan.type === 'video/mp4';
           // WebM is buffered so the muxer can write its duration and cues; an append-only WebM has no duration.
-          const target = mp4 ? new media.AppendOnlyStreamTarget(new WritableStream({write(chunk) { chunks.push(new Blob([chunk])); }}))
-            : new media.BufferTarget();
-          if (!mp4) chunks.target = target;
-          const format = mp4 ? new media.Mp4OutputFormat({fastStart:'fragmented'}) : new media.WebMOutputFormat();
+          const destination = mp4 ? mp4Destination(media) : null;
+          const target = destination?.target || new media.BufferTarget();
+          const format = mp4 ? new media.Mp4OutputFormat({fastStart:'reserve'}) : new media.WebMOutputFormat();
           const output = new media.Output({format, target});
           const candidate = await media.Conversion.init({input, output, tracks:'primary', trim:{start:from, end:to},
             copy:{mode:'preferred', shiftTolerance:0, boundaryTolerance:0, boundaryPolicy:'shrink'},
             video:{...videoOptions, codec:plan.video}, audio:{codec:plan.audio}, tags:{}, showWarnings:false});
           if (candidate.isValid && candidate.utilizedTracks.includes(video) && (!audio || candidate.utilizedTracks.includes(audio))) {
             conversion = candidate;
-            parts = chunks;
-            type = plan.type;
+            finish = destination?.finish || (() => new Blob([target.buffer],{type:plan.type}));
             break;
           }
         }
@@ -138,7 +183,7 @@ const ShareFastClip = (() => {
         onStage?.('encoding');
         await conversion.execute();
         signal?.throwIfAborted();
-        const result = new Blob(parts.target ? [parts.target.buffer] : parts, {type});
+        const result = finish();
         if (!result.size) throw Error('映像を書き出せませんでした。');
         diagnostic?.success();
         return result;
@@ -182,7 +227,7 @@ const ShareFastClip = (() => {
       throw message;
     }
   }
-  return {convert, makeThumbnails, acceptsHls:url => ShareHlsClipSource.accepts(url)};
+  return {convert, checkOutput, makeThumbnails, acceptsHls:url => ShareHlsClipSource.accepts(url)};
 })();
 //===END===
 export {ShareFastClip};

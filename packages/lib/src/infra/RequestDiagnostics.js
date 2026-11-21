@@ -2,6 +2,9 @@
 //===BEGIN===
 const RequestDiagnostics = (() => {
     const labels = {
+        'search-count': '検索候補の件数', 'legacy-query': '旧形式の一覧取得', 'watch-tracking': '視聴の記録',
+        'ranking-page': 'ランキングページのデータ', 'channel-rss': 'チャンネルの動画RSS', 'watch-owner': '視聴ページの投稿者補完', 'watch-lazy': '視聴ページの追加情報', 'thumb-info': '動画のサムネイル情報', 'commons-parents': 'コンテンツツリーの親作品', 'commons-children': 'コンテンツツリーの子作品',
+        'ranking-rss': 'ランキングRSS', 'linked-channel': 'チャンネル連動動画', 'pocket-metadata': 'ポケットの動画情報',
         'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-history-read': 'コメント増量（過去のコメントを追加取得）', 'comment-key': 'コメント取得キーの更新',
         'video-session': '再生セッション（映像の配信URL取得）', 'session-state': '再生セッションの維持',
         storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
@@ -27,6 +30,9 @@ const RequestDiagnostics = (() => {
      * ニコニコ側の仕様変更で壊れたとき、どこを直せばよいかを通知履歴に出すため。
      */
     const modules = {
+        'search-count': 'nico-src/VideoSearchForm.ts', 'legacy-query': 'nico-src/NicoQuery.ts', 'watch-tracking': 'nico-src/NVWatchCaller.ts',
+        'ranking-page': 'nico-src/MatrixRankingLoader.ts', 'channel-rss': 'nico-src/NicoRssLoader.ts', 'watch-owner': 'nico-src/VideoInfoLoader.ts', 'watch-lazy': 'nico-src/VideoInfoLoader.ts', 'thumb-info': 'nico-src/ThumbInfoLoader.ts', 'commons-parents': 'nico-src/CommonsTreeLoader.ts', 'commons-children': 'nico-src/CommonsTreeLoader.ts',
+        'ranking-rss': 'nico-src/NicoRssLoader.ts', 'linked-channel': 'nico-src/VideoInfoLoader.ts', 'pocket-metadata': 'packages/zenza/src/pocket/PocketCardMetadataLoader.ts',
         'video-info': 'nico-src/VideoInfoLoader.ts', 'comment-read': 'packages/comment-history/src/core.mjs',
         'comment-history-read': 'packages/comment-history/src/core.mjs',
         'comment-key': 'packages/comment-history/src/core.mjs', 'video-session': 'nico-src/VideoSessionWorker.ts',
@@ -50,14 +56,27 @@ const RequestDiagnostics = (() => {
         'clip-post': 'src/ShareOfficialClip.js', 'clip-post-status': 'src/ShareOfficialClip.js', 'clip-delete': 'src/ShareOfficialClip.js'
     };
     const moduleFor = (operation) => modules[operation] || 'nico-src/RequestDiagnostics.ts';
-    /** 項目名として安全な文字だけにする（値は持たない）。 */
-    const fieldName = (value) => {
-        if (typeof value !== 'string') {
-            return undefined;
-        }
-        const cleaned = value.replace(/[^A-Za-z0-9_.$:\[\]-]/g, '').slice(0, 100);
-        return cleaned ? cleaned : undefined;
-    };
+    // Protocol and source field names are constants. Never persist arbitrary server property names.
+    const reportFields = new Set([
+        'input.segmentFormat', 'input.segmentIntegrity', 'output.codecs', 'output.encode', 'playlist', 'playlist.encryptionMethod',
+        'hlsLibrary', 'mediaSource', 'levels', 'manifest', 'rendition', 'key', 'decoder', 'firstFrame',
+        'recording.encrypted', 'recording.decoder', 'recording.firstFrame', 'playlist.segment', 'nicopedia_article_body links',
+        'nicopedia_from=nicopedia_article_body', 'items', 'length', 'map', 'filter', 'forEach',
+        'ranking.dataApp', 'rss.channel', 'rss.item', 'thumb.status', 'data.parents.contents', 'data.children.contents', 'data.parents.total', 'data.children.total',
+        'data.sponsors', 'data.effects', 'data.id', 'data.contents', 'data.supporters', 'fragment', 'input.tracks', 'data.items[].id',
+        'meta.status', 'data.threads', 'data.threadKey', 'data.contentUrl', 'data.session.content_uri', 'missing-thread-key', 'invalid-thread-envelope', 'invalid-global-count',
+        'invalid-thread-target', 'invalid-api-meta', 'msgInfo.threadInfo', 'threadInfo', 'videoId', 'data', 'data.client',
+        'data.client.watchId', 'data.client.watchTrackId', 'data.video', 'data.video.id', 'data.video.title',
+        'data.video.duration', 'data.video.count', 'data.video.thumbnail', 'data.player', 'data.genre', 'data.tags',
+        'data.tags.items', 'data.nicoads', 'data.isLogin', 'data.twitterLinkage.isLinked', 'data.isClipTweetAllowed',
+        'data.isUseLicensedMusic', 'data.clipId', 'data.status', 'data.clipUri', 'json', 'response.json',
+        'data.items', 'data.totalCount', 'data.items.essential', 'data.items.id', 'data.contentId', 'meta.totalCount', 'last_modified',
+        'data.items.content', 'data.items[].watchId', 'data.items[].essential.id', 'data.watchLater.items', 'data.mylist.items',
+        'data.mylists', 'data.hasNext', 'data.watchLater.hasNext', 'data.mylist.hasNext', 'data.additionals', 'storyboard',
+        'articles', 'articles[].request_title', 'articles[].title', 'data.tags', 'data.tags[].name', 'data.tag.edit.editKey', 'candidates', 'candidates[]',
+        'meta.errorCode', 'data.postKey', 'data.no', 'data.challenge', 'data.nicoruKey', 'data.deleteKey', 'data.nicoruId'
+    ]);
+    const fieldName = (value) => typeof value === 'string' && reportFields.has(value) ? value : undefined;
     /** エラーメッセージから、undefined だった場所を取り出す（JavaScript の定型文のみ）。 */
     const missingFromMessage = (message) => {
         if (typeof message !== 'string') {
@@ -67,7 +86,8 @@ const RequestDiagnostics = (() => {
             /Cannot read properties of (?:undefined|null) \(reading '([^']{1,100})'\)/.exec(message) ||
             /^([A-Za-z_$][\w$.]{0,99}) is not defined/.exec(message) ||
             /^([A-Za-z_$][\w$.]{0,99}) is not a function/.exec(message);
-        return m ? fieldName(m[1]) : undefined;
+        // A JS exception may quote a dynamic property (even a title or a key).
+        return m?.[1] && ['msgInfo.threadInfo', 'threadInfo', 'videoId', 'data', 'items', 'length', 'map', 'filter', 'forEach'].includes(m[1]) ? m[1] : undefined;
     };
     const activeTickets = new Map();
     /**
@@ -83,10 +103,8 @@ const RequestDiagnostics = (() => {
         (failure.reason === 'service' && [400, 410, 422].includes(Number(failure.apiStatus))) ||
         ['BAD_REQUEST', 'INVALID_PARAMETER'].includes(String(failure.errorCode));
     const noteSuspect = (operation, key, failure, now) => {
-        const group = operation + '|' + failure.reason + '|' + (failure.errorCode || (failure.reason === 'service' ? failure.apiStatus : undefined) || failure.statusCode || '') +
-            (operation.startsWith('clip-') || operation === 'comment-history-read' || operation === 'comment-read' || operation === 'comment-key' ||
-                ['dictionary', 'tags', 'tag-key', 'tag-suggest', 'tag-add', 'tag-remove', 'playback-position',
-                    'watch-later-add', 'watch-later-remove', 'mylist-add', 'mylist-remove'].includes(operation) ? '|' + (failure.missing || '') : '');
+        const group = [operation, failure.endpoint, failure.method, failure.reason, failure.errorCode,
+            failure.statusCode, failure.apiStatus, failure.missing, failure.bodyFormat].join('|');
         const seen = suspects.get(group) || new Map();
         seen.set(key, now);
         for (const [k, at] of seen) {
@@ -107,7 +125,7 @@ const RequestDiagnostics = (() => {
     };
     const failures = new Map();
     let sink;
-    const noop = { success() { }, failure() { }, response() { } };
+    const noop = { success() { }, failure() { }, response() { }, decoded() { } };
     // Only this ephemeral scope digest is retained. URLs, queries and bodies are
     // never forwarded to the sink, used in messages, or saved by the journal.
     const scopeId = (value) => {
@@ -118,16 +136,123 @@ const RequestDiagnostics = (() => {
         }
         return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
     };
+    // Match fixed hosts and path shapes. Query parameters and captured segments never enter an event.
+    const routes = [
+        ['legacy-mylist', 'flapi', '/api/watch/mylistvideo'], ['legacy-uploaded', 'flapi', '/api/watch/uploadedvideo'],
+        ['legacy-mylist-items', 'www', '/api/mylist/list'], ['legacy-deflist', 'www', '/api/deflist/list'],
+        ['legacy-nicorepo', 'www', '/api/nicorepo/timeline/my/all'], ['watch-tracking', 'nvapi', '/v1/2ab0cbaa/watch'],
+        ['ranking-page', 'www', '/ranking'], ['channel-rss', 'ch', '/{channelId}/video'],
+        ['nicodic.batch', 'api.dic', '/v1/articles/article'],
+        ['video.nicoad-decoration', 'api.nicoad', '/v1/contents/video/decoration'],
+        ['ad-frame', 'api.nicoad', '/v1/nicoad'],
+        ['ad-thanks', 'api.nicoad', '/v1/contents/video/{videoId}/thanks'],
+        ['video.owner.nicoad', 'api.nicoad', '/v1/contents/video/{watchId}'],
+        ['gifts', 'api.nicoad', '/v1/nage_video/{videoId}/gift/effects'],
+        ['supporters', 'api.nicoad', '/v2/contents/video/{videoId}/pickup_supporters'],
+        ['dictionary-article', 'dic', '/a/{word}'],
+        ['video.thumbinfo', 'ext', '/api/getthumbinfo/{watchId}'],
+        ['comment.delete-key', 'nvapi', '/v1/comment/keys/delete'],
+        ['comment.nicoru-key', 'nvapi', '/v1/comment/keys/nicoru'],
+        ['comment.post-key', 'nvapi', '/v1/comment/keys/post'],
+        ['comment.read-key', 'nvapi', '/v1/comment/keys/thread'],
+        ['search.playlist', 'nvapi', '/v1/playlist/search'],
+        ['playlist.watchlater', 'nvapi', '/v1/playlist/watch-later'],
+        ['recommend', 'nvapi', '/v1/recommend'],
+        ['like.add', 'nvapi', '/v1/users/me/likes/items'],
+        ['mylist.groups', 'nvapi', '/v1/users/me/mylists'],
+        ['watchlater.items', 'nvapi', '/v1/users/me/watch-later'],
+        ['video.likes-and-owner', 'nvapi', '/v1/videos'],
+        ['search.video', 'nvapi', '/v2/search/video'],
+        ['watch.playback-position', 'nvapi', '/v2/users/me/watch/history/playback-position'],
+        ['clip', 'nvapi', '/v1/clips/{clipId}'],
+        ['clip-post', 'nvapi', '/v1/clips/{clipId}/x-post'],
+        ['playlist.mylist', 'nvapi', '/v1/playlist/mylist/{mylistId}'],
+        ['playlist.series', 'nvapi', '/v1/playlist/series/{seriesId}'],
+        ['playlist.uploaded', 'nvapi', '/v1/playlist/user-uploaded/{userId}'],
+        ['mylist.items', 'nvapi', '/v1/users/me/mylists/{groupId}'],
+        ['mylist.add', 'nvapi', '/v1/users/me/mylists/{groupId}/items'],
+        ['clip-create', 'nvapi', '/v1/videos/{videoId}/clips'],
+        ['clip-license', 'nvapi', '/v1/videos/{videoId}/license'],
+        ['clip-permission', 'nvapi', '/v1/videos/{videoId}/tweet-possibility'],
+        ['playback-grant', 'nvapi', '/v1/watch/{watchId}/access-rights/hls'],
+        ['storyboard-grant', 'nvapi', '/v1/watch/{watchId}/access-rights/storyboard'],
+        ['tags.list', 'nvapi', '/v2/videos/{videoId}/tags'],
+        ['search.by-owner', 'nvapi', '/v3/users/{userId}/videos'],
+        ['video.watch-lazy', 'nvapi', '/v4/watch/lazy/{watchId}'],
+        ['watch.linked-channel', 'public-api.ch', '/v1/user/channelVideoDAnimeLinks'],
+        ['commons.children', 'public-api.commons', '/v1/tree/{globalId}/relatives/children'],
+        ['commons.parents', 'public-api.commons', '/v1/tree/{globalId}/relatives/parents'],
+        ['comment.read', 'public.nvcomment', '/v1/threads'],
+        ['comment.delete', 'public.nvcomment', '/v1/threads/{threadId}/comment-comment-owner-deletions'],
+        ['comment.post', 'public.nvcomment', '/v1/threads/{threadId}/comments'],
+        ['comment.nicoru', 'public.nvcomment', '/v1/threads/{threadId}/nicorus'],
+        ['snapshot-version', 'snapshot.search', '/api/v2/snapshot/version'],
+        ['search.snapshot', 'snapshot.search', '/api/v2/snapshot/video/contents/search'],
+        ['search.suggest', 'sug.search', '/suggestion/expand/{encodedWord}'],
+        ['tags.edit-key', 'www', '/api/watch/v3/{videoId}'],
+        ['ranking.rss', 'www', '/ranking/genre/{genre}'],
+        ['video.watch', 'www', '/watch/{watchId}'],
+    ];
+    const paths = new Map();
+    const routesByHost = new Map();
+    for (const [id, host, template] of routes) {
+        paths.set(id, template);
+        const hostname = host + '.nicovideo.jp';
+        const group = routesByHost.get(hostname) || [];
+        group.push({ id, path: new RegExp('^' + template.replace(/\{[^}]+\}/g, '[^/]+') + '/?$') });
+        routesByHost.set(hostname, group);
+    }
+    const pathFor = (id) => typeof id === 'string' ? paths.get(id) : undefined;
+    const endpointFor = (input) => {
+        if (!input)
+            return;
+        try {
+            const url = new URL(String(input), 'https://www.nicovideo.jp');
+            return routesByHost.get(url.hostname)?.find(route => route.path.test(url.pathname))?.id;
+        }
+        catch (_) {
+            return;
+        }
+    };
+    const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+    const responseTypes = new Set(['json', 'html', 'xml', 'text', 'media', 'other']);
+    const bodyFormats = new Set(['empty', 'html', 'json-like', 'xml-like', 'text', 'invalid-json']);
+    const projectEvidence = (fields) => ({
+        ...(pathFor(fields.endpoint) ? { endpoint: String(fields.endpoint) } : {}),
+        ...(typeof fields.method === 'string' && methods.has(fields.method) ? { method: fields.method } : {}),
+        ...(typeof fields.responseType === 'string' && responseTypes.has(fields.responseType) ? { responseType: fields.responseType } : {}),
+        ...(typeof fields.bodyFormat === 'string' && bodyFormats.has(fields.bodyFormat) ? { bodyFormat: fields.bodyFormat } : {}),
+        ...(typeof fields.lastSuccessAt === 'number' && Number.isSafeInteger(fields.lastSuccessAt) &&
+            fields.lastSuccessAt > 0 && fields.lastSuccessAt <= 8640000000000000 ? { lastSuccessAt: fields.lastSuccessAt } : {})
+    });
+    const responseEvidence = (input) => {
+        if (!input)
+            return {};
+        try {
+            const res = input;
+            const endpoint = !res.redirected && endpointFor(res.url);
+            const mime = res.headers?.get?.('content-type')?.split(';')[0]?.trim().toLowerCase();
+            const responseType = !mime ? undefined : /(?:\/|\+)json$/.test(mime) ? 'json' :
+                ['text/html', 'application/xhtml+xml'].includes(mime) ? 'html' : /(?:\/|\+)xml$/.test(mime) ? 'xml' :
+                    /^(?:audio|video|image)\//.test(mime) ? 'media' : mime.startsWith('text/') ? 'text' : 'other';
+            return { ...(endpoint ? { endpoint } : {}), ...(responseType ? { responseType } : {}) };
+        }
+        catch (_) {
+            return {};
+        }
+    };
+    const successes = new Map();
     const knownErrorCodes = new Set(['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
         'SEARCH_SCHEMA', 'KEY_EXPIRED', 'INVALID_CHALLENGE_TOKEN', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'INVALID_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND']);
     const isKnownErrorCode = (value) => typeof value === 'string' && knownErrorCodes.has(value);
     const validStatus = (value) => typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
     // Only project protocol facts. Each caller owns body validation, fallback and retries.
-    const responseFailure = (response, meta, missing) => {
+    const responseFailure = (response, meta, missing, requireMeta = true) => {
         const wire = response?.status;
         const header = meta;
         const api = header?.status;
         const statuses = {
+            ...responseEvidence(response),
             ...(validStatus(wire) ? { httpStatus: wire } : {}),
             ...(validStatus(api) ? { apiStatus: api } : {})
         };
@@ -137,15 +262,20 @@ const RequestDiagnostics = (() => {
             return { ...statuses, ...code };
         if (code.errorCode)
             return { ...statuses, ...code, kind: 'service' };
-        if (missing || !validStatus(api) || api < 200) {
+        if (missing || ((requireMeta || meta != null) && (!validStatus(api) || api < 200))) {
             return { ...statuses, kind: 'schema', errorCode: 'RESPONSE_SCHEMA', missing: missing || 'meta.status' };
         }
         return null;
     };
-    const readFailure = (response, cause) => {
+    const readFailure = (response, cause, bodyText) => {
         const error = cause;
         const wire = response?.status;
-        const statuses = validStatus(wire) ? { httpStatus: wire } : {};
+        // Classify only text the caller already consumed. Never clone a stream or parse a second body.
+        const prefix = typeof bodyText === 'string' ? bodyText.trimStart().slice(0, 100) : undefined;
+        const bodyFormat = prefix === undefined ? (response && error?.name === 'SyntaxError' ? 'invalid-json' : undefined) :
+            prefix === '' ? 'empty' : /^<(?:!doctype\s+html|html|head|body)(?:\s|>|$)/i.test(prefix) ? 'html' :
+                /^[{[]/.test(prefix) ? 'json-like' : /^</.test(prefix) ? 'xml-like' : 'text';
+        const statuses = { ...responseEvidence(response), ...(bodyFormat ? { bodyFormat } : {}), ...(validStatus(wire) ? { httpStatus: wire } : {}) };
         if (error?.name === 'AbortError')
             return { name: 'AbortError' };
         if (validStatus(wire) && wire >= 300)
@@ -168,6 +298,7 @@ const RequestDiagnostics = (() => {
             !(validStatus(httpStatus) && httpStatus >= 300);
         const status = apiRejected ? apiStatus : httpStatus;
         const fields = {
+            ...projectEvidence(e),
             ...(validStatus(httpStatus) ? { statusCode: httpStatus } : {}),
             ...(apiStatus !== undefined ? { apiStatus } : {}),
             ...(typeof e.errorCode === 'string' ? { errorCode: isKnownErrorCode(e.errorCode) ? e.errorCode : 'OTHER' } : {})
@@ -229,7 +360,7 @@ const RequestDiagnostics = (() => {
         if (apiStatus !== undefined && fields.errorCode) {
             return { reason: 'service', ...fields };
         }
-        return { reason: 'network' };
+        return { reason: 'network', ...fields };
     };
     // Only fixed protocol field names, allowlisted API codes and HTTP status reach the journal.
     const classifyHistoryRead = (error, key = false) => {
@@ -305,7 +436,7 @@ const RequestDiagnostics = (() => {
         }
         return classify(result ?? error);
     };
-    const begin = (operation, scope, phase, active = () => true, suspectTarget) => {
+    const begin = (operation, scope, phase, active = () => true, suspectTarget, request) => {
         if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
             return noop;
         }
@@ -331,6 +462,10 @@ const RequestDiagnostics = (() => {
                     return;
                 }
                 if (outcome === 'recovered') {
+                    successes.delete(key);
+                    successes.set(key, Date.now());
+                    if (successes.size > 100)
+                        successes.delete(successes.keys().next().value);
                     const seen = failures.get(key);
                     failures.delete(key);
                     if (seen === undefined || started - seen >= 600000) {
@@ -338,6 +473,9 @@ const RequestDiagnostics = (() => {
                     }
                 }
                 else {
+                    const endpoint = endpointFor(request?.url || (scope.startsWith('https://') ? scope : undefined));
+                    const previousSuccess = successes.get(key);
+                    failure = { ...failure, ...projectEvidence({ endpoint, method: request?.method?.toUpperCase(), lastSuccessAt: previousSuccess }) };
                     failures.delete(key);
                     failures.set(key, Date.now());
                     while (failures.size > 100) {
@@ -371,18 +509,26 @@ const RequestDiagnostics = (() => {
         };
         const failure = (error) => {
             try {
-                const result = operation === 'comment-history-read' ? classifyHistoryRead(error) :
-                    operation === 'comment-key' ? classifyCommentKey(error) :
-                        ['comment-post', 'nicoru', 'comment-delete'].includes(operation) ? classifyCommentAction(error) : classify(error);
+                const result = phase === 'transport' && error?.name === 'TypeError' ? { reason: 'network' } :
+                    operation === 'comment-history-read' ? classifyHistoryRead(error) :
+                        operation === 'comment-key' ? classifyCommentKey(error) :
+                            ['comment-post', 'nicoru', 'comment-delete'].includes(operation) ? classifyCommentAction(error) : classify(error);
                 emit('failed', result);
             }
             catch (_) { /* untrusted error properties */ }
         };
         return {
             success: () => emit('recovered', { reason: 'recovered' }), failure,
+            decoded: (response, meta, missing, requireMeta) => {
+                const issue = responseFailure(response, meta, missing, requireMeta);
+                if (issue)
+                    failure(issue);
+                else
+                    emit('recovered', { reason: 'recovered' });
+            },
             response: response => {
-                if (typeof response?.status === 'number' && response.status >= 400) {
-                    failure({ status: response.status });
+                if (validStatus(response?.status) && response.status >= 300) {
+                    failure({ ...responseEvidence(response), status: response.status });
                 }
                 else {
                     emit('recovered', { reason: 'recovered' });
@@ -390,7 +536,7 @@ const RequestDiagnostics = (() => {
             }
         };
     };
-    const operationFor = (value) => {
+    const operationFor = (value, method) => {
         try {
             const url = new URL(String(value), 'https://www.nicovideo.jp');
             if (!/(^|\.)nicovideo\.jp$/.test(url.hostname)) {
@@ -402,6 +548,27 @@ const RequestDiagnostics = (() => {
                 /^\/v1\/(?:videos\/[^/]+\/(?:tweet-possibility|license|clips)|clips\/[^/]+(?:\/x-post)?)\/?$/.test(p)) {
                 return null;
             }
+            const endpoint = endpointFor(url);
+            // The paged Commons reader treats a first-page 404 as an empty tree.
+            if (endpoint === 'commons.parents' || endpoint === 'commons.children')
+                return null;
+            const specific = {
+                'legacy-mylist': 'legacy-query', 'legacy-uploaded': 'legacy-query', 'legacy-mylist-items': 'legacy-query',
+                'legacy-deflist': 'legacy-query', 'legacy-nicorepo': 'legacy-query', 'watch-tracking': 'watch-tracking',
+                'ranking-page': 'ranking-page', 'channel-rss': 'channel-rss', 'video.thumbinfo': 'thumb-info',
+                'ranking.rss': 'ranking-rss', 'watch.linked-channel': 'linked-channel', 'video.likes-and-owner': 'pocket-metadata',
+                'video.owner.nicoad': 'owner', 'nicodic.batch': 'dictionary', 'tags.edit-key': 'tag-key',
+                'comment.post-key': 'comment-post', 'comment.post': 'comment-post', 'comment.delete-key': 'comment-delete',
+                'comment.delete': 'comment-delete', 'comment.nicoru-key': 'nicoru', 'comment.nicoru': 'nicoru'
+            };
+            if (endpoint && specific[endpoint])
+                return specific[endpoint];
+            if (endpoint === 'tags.list')
+                return method === 'POST' ? 'tag-add' : method === 'DELETE' ? 'tag-remove' : 'tags';
+            if (endpoint === 'mylist.add')
+                return method === 'POST' ? 'mylist-add' : method === 'DELETE' ? 'mylist-remove' : 'mylist';
+            if (endpoint === 'watchlater.items')
+                return method === 'POST' ? 'watch-later-add' : method === 'DELETE' ? 'watch-later-remove' : 'mylist';
             if (url.hostname === 'sug.search.nicovideo.jp') {
                 return 'tag-suggest';
             }
@@ -476,9 +643,9 @@ const RequestDiagnostics = (() => {
             return null;
         }
     };
-    const startRequest = (url, signal, active = () => true) => {
-        const operation = operationFor(url);
-        return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
+    const startRequest = (url, signal, active = () => true, method = 'GET') => {
+        const operation = operationFor(url, method.toUpperCase());
+        return operation ? begin(operation, method.toUpperCase() + ' ' + String(url), 'transport', () => !signal?.aborted && active(), undefined, { url, method }) : noop;
     };
     // Observe a caller-owned operation without changing its value, error or retry policy.
     const observe = async (operation, scope, execute, validate = () => true, active = () => true) => {
@@ -495,7 +662,7 @@ const RequestDiagnostics = (() => {
             const meta = value && typeof value === 'object' ?
                 value.meta : undefined;
             if (typeof meta?.status === 'number' && (meta.status < 200 || meta.status >= 300)) {
-                ticket.failure({ status: meta.status, errorCode: meta.errorCode });
+                ticket.failure({ apiStatus: meta.status, errorCode: meta.errorCode });
             }
             else {
                 const checked = validate(value);
@@ -517,7 +684,7 @@ const RequestDiagnostics = (() => {
     };
     const setSink = (next) => { sink = next; };
     const labelFor = (operation) => Object.prototype.hasOwnProperty.call(labels, operation) ? labels[operation] : undefined;
-    return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode, responseFailure, readFailure };
+    return { begin, startRequest, observe, setSink, moduleFor, missingFromMessage, labelFor, isKnownErrorCode, responseFailure, readFailure, responseEvidence, projectEvidence, pathFor, fieldName };
 })();
 //===END===
 export {RequestDiagnostics};

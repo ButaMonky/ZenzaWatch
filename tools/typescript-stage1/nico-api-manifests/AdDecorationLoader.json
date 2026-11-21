@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/AdDecorationLoader.ts",
   "runtime": "packages/lib/src/nico/AdDecorationLoader.js",
-  "sourceSha256": "fccdc04db0e6e46b17ea95807cabb6308ea262c98eac8e8d7acd01c3d250056e",
-  "runtimeSha256": "fde4abb832bc303c1fa3c8921919c5f62632b6319c15b62d3883403aa37393a8"
+  "sourceSha256": "d677c2551091f23f10dd0024f88177d619c3b0a61783250c211ace7242f162c6",
+  "runtimeSha256": "7d5214ac61da3e2053fa530d111899af75fb423011ccda3e1d14667ebd1eddb4"
 }

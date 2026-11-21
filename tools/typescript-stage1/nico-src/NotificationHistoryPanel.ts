@@ -101,7 +101,7 @@ const NotificationHistoryPanel = (() => {
     ['export-library','変換ライブラリの準備'], ['export-ready','動画の作成完了'], ['export-source','元動画の取得'], ['export-comments','区間のコメント準備'],
     ['export-encoding','動画の書き出し'], ['export-checking','完成動画の検査'], ['export-recording','区間の録画'],
     ['draft-reserve','タブ連携の受付'], ['draft-open','Xタブの起動要求'], ['draft-receive','Xの受け取り待ち'],
-    ['draft-attach','MP4の受け渡し・添付確認'], ['draft-attached','添付完了'], ['draft-format','動画形式の確認'],
+    ['draft-attach','MP4データの転送'], ['draft-received','Xの添付欄でMP4を受領'], ['draft-prepare','Xが動画を準備中'], ['draft-attached','添付完了'], ['draft-format','動画形式の確認'],
     ['draft-popup','待機タブを開く'], ['draft-tab-closed','待機タブの確認'], ['draft-native','通常のブラウザータブで下書きを開く'],
     ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認'], ['startup','再生開始'], ['playback','再生途中'], ['render','表示準備'], ['script','スクリプト実行'], ['script-promise','非同期処理']
   ]);
@@ -132,9 +132,16 @@ const NotificationHistoryPanel = (() => {
       'draft-size':'この経路で自動添付できるMP4の上限は256 MiBです。区間を短くするか、完成画面から保存できます。',
       'draft-manager':'Xの下書きは開きましたが、管理拡張に動画をタブ間で渡す機能がありません。',
       'draft-closed':'Xの下書きタブが添付完了前に閉じられました。',
+      'draft-storage-busy':'管理拡張が前の動画のタブ内データを処理中のため、次の自動添付を開始できませんでした。',
       'draft-no-receiver':'Xタブの起動要求後、X側から最初の受け取り要求が届きませんでした。',
       'draft-transfer-timeout':'Xから受け取り要求が届きましたが、データ転送または添付完了の応答が途切れました。',
       'draft-input':'X側で動画を受け取れないか、投稿画面の添付欄に設定できませんでした。',
+      'draft-media-rejected':'Xの投稿画面が動画の添付エラーを表示しました。',
+      'draft-media-unknown':'Xの添付欄にMP4を渡した後、動画の準備状態を確認できませんでした。',
+      'draft-media-hidden':'背面のXで動画の準備が続き、アップロードの進捗を確認できませんでした。開いているXの下書きタブを一度表示してください。',
+      'draft-media-timeout':'Xの動画が準備中のまま、5分間、進捗の更新や投稿できる状態を確認できませんでした。',
+      'draft-media-limit':'Xへの引き渡し後に20分の確認上限に達し、投稿できる状態を確認できませんでした。',
+      'draft-background-unavailable':'ユーザースクリプト管理拡張で背面タブを作成できませんでした。完成した動画は共有画面から保存できます。',
       'draft-reserve':'MP4は完成しましたが、ユーザースクリプト管理拡張から受付を確認できませんでした。',
       'draft-open':'MP4は完成しましたが、Xタブの起動要求が完了したことを確認できませんでした。',
       'draft-receive':'Xタブの起動を要求しましたが、X側から動画の受け取りを確認できませんでした。',
@@ -183,19 +190,8 @@ const NotificationHistoryPanel = (() => {
   };
   // Stored notification text and arbitrary identifiers are for local viewing only.
   // Reports can quote a field name or code only when the entire value is known.
-  const reportFields = new Set([
-    'meta.status','data.threads','data.threadKey','data.contentUrl','data.session.content_uri','missing-thread-key','invalid-thread-envelope','invalid-global-count',
-    'invalid-thread-target','invalid-api-meta','msgInfo.threadInfo','threadInfo','videoId','data','data.client',
-    'data.client.watchId','data.client.watchTrackId','data.video','data.video.id','data.video.title',
-    'data.video.duration','data.video.count','data.video.thumbnail','data.player','data.genre','data.tags',
-    'data.tags.items','data.nicoads','data.isLogin','data.twitterLinkage.isLinked','data.isClipTweetAllowed',
-    'data.isUseLicensedMusic','data.clipId','data.status','data.clipUri','json','response.json',
-    'data.items','data.totalCount','data.items.essential','data.items.id','data.contentId','meta.totalCount','last_modified',
-    'data.items.content','data.items[].watchId','data.items[].essential.id','data.watchLater.items','data.mylist.items',
-    'data.mylists','data.hasNext','data.watchLater.hasNext','data.mylist.hasNext','data.additionals','storyboard',
-    'articles','articles[].request_title','articles[].title','data.tags','data.tags[].name','data.tag.edit.editKey','candidates','candidates[]',
-    'meta.errorCode','data.postKey','data.no','data.challenge','data.nicoruKey','data.deleteKey','data.nicoruId'
-  ]);
+  const reportField = (value: unknown): string | undefined =>
+    typeof RequestDiagnostics === 'undefined' ? undefined : RequestDiagnostics.fieldName(value);
   const validStatus = (value: unknown): value is number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599;
   const commentDisplayFile = 'tools/typescript-stage1/nico-src/CommentPlayer.ts';
@@ -203,6 +199,17 @@ const NotificationHistoryPanel = (() => {
   // A stored function name may be arbitrary. Copy only registered components and numeric lines.
   const scriptComponents = new Set(['ShareLocalClip','ShareClipTimeline','ShareClipJobs','ShareFastClip',
     'ShareHlsClipSource','ShareHlsPreview','ShareOfficialClip','VideoSharePanel','ShareClipRenderer']);
+  const apiClue = (d: JournalEntry['details']): string => {
+    if (d.statusCode === 429 || d.apiStatus === 429) return '取得間隔と回数制限を確認してください。';
+    if (d.reason === 'permission') return '対象の公開範囲、ログイン状態、この操作に必要な権限を確認してください。';
+    if (d.reason === 'not-found') return '対象が現在利用できるか、修正箇所の要求先が現行のものかを確認してください。';
+    if (d.bodyFormat === 'html' || d.responseType === 'html' && (d.missing === 'json' || d.missing === 'response.json'))
+      return '応答がログイン画面やエラーページへ切り替わっていないか、開発者ツールのネットワークで確認してください。';
+    if (d.reason === 'schema' || d.reason === 'spec-change') return '修正箇所の応答検証と、記録された項目・応答形式を照合してください。';
+    if (d.reason === 'timeout' || d.reason === 'network') return '同じ時刻の通信記録で、要求の送信、応答ヘッダー、本文のどこまで届いたか確認してください。';
+    if (d.reason === 'http' || d.reason === 'service') return 'HTTP状態とAPI状態を照合し、同じ機能の復旧記録とサービス側のお知らせを確認してください。';
+    return '修正箇所の該当する処理と、同じ時刻の通知を照合してください。';
+  };
   const repairReport = (entry: JournalEntry): string => {
     const d = entry.details || {};
     const unknown = '記録なし（旧版・未分類など）';
@@ -227,7 +234,8 @@ const NotificationHistoryPanel = (() => {
         d.phase === 'export-checking' ? 'src/ShareClipJobs.js' : 'src/ShareFastClip.js';
     } else if (operation === 'x-draft') {
       feature = 'クリップをXの下書きに添付';
-      location = ['draft-receive','draft-attach'].includes(String(d.phase)) ?
+      location = ['draft-received','draft-prepare'].includes(String(d.phase)) ? 'packages/external-playback/x-clip-attachment.cjs' :
+        ['draft-receive','draft-attach'].includes(String(d.phase)) ?
         'packages/external-playback/x-draft-transfer.cjs' : 'src/ShareClipClipboard.js';
     } else if (registeredLabel) {
       feature = registeredLabel + '（' + operation + '）';
@@ -237,7 +245,8 @@ const NotificationHistoryPanel = (() => {
       location = commentDisplayFile;
     } else if (script) {
       feature = 'スクリプトエラー（script-error）';
-      location = component && scriptComponents.has(component) ? 'src/' + component + '.js' :
+      location = frame?.[1] && ['showTask','openResult'].includes(frame[1]) ? 'src/ShareLocalClip.js' :
+        component && scriptComponents.has(component) ? 'src/' + component + '.js' :
         bundle === 'ZenzaWatch-createAdvancedSettingsPanel.js' ? 'tools/typescript-stage1/advanced-src/_setting.ts' :
         bundle === 'ZenzaWatch-createVideoSharePanel.js' ? 'src/VideoSharePanel.js' :
         frame ? '発生時の版の配布スクリプトで発生行を確認' : 'ブラウザーの開発者ツールで最初の ZenzaWatch のスタックフレームを確認';
@@ -252,6 +261,34 @@ const NotificationHistoryPanel = (() => {
     const lines = ['ZenzaWatch 修復レポート', '発生時の版　' + version, '機能　' + feature,
       '段階　' + (phaseLabels.get(String(d.phase)) || (script ? 'スクリプト実行' : unknown)),
       '理由　' + (reason ? reason + '（' + d.reason + '）' : unknown)];
+    if (typeof entry.build === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}Z [a-f0-9]{7,40}$/i.test(entry.build))
+      lines.push('発生時のビルド　' + entry.build);
+    if (registeredLabel || script) {
+      const times: [string,unknown][] = [
+        ['最初の失敗',entry.firstOccurredAt], ['最後の失敗',entry.lastOccurredAt], ['復旧確認',entry.recoveredAt]
+      ];
+      if (entry.firstOccurredAt === undefined && entry.lastOccurredAt === undefined) times.push(['記録時刻',entry.timestamp]);
+      for (const [label,value] of times) {
+        if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 8640000000000000)
+          lines.push(label + '　' + new Date(value).toISOString());
+      }
+      if (typeof d.count === 'number' && Number.isSafeInteger(d.count) && d.count > 0) lines.push('失敗回数　' + d.count + '回');
+    }
+    if (registeredLabel) {
+      const evidence = RequestDiagnostics.projectEvidence(d);
+      const path = RequestDiagnostics.pathFor(evidence.endpoint);
+      if (path || evidence.method) lines.push('要求　' + [evidence.method,path].filter(Boolean).join(' '));
+      const formats: Record<string,string> = {json:'JSON',html:'HTML',xml:'XML',text:'テキスト',media:'メディア',other:'その他',
+        empty:'空の本文','json-like':'JSONの先頭記号','xml-like':'マークアップの先頭記号','invalid-json':'JSONとして解析できず'};
+      if (evidence.responseType) lines.push('応答ヘッダーの形式　' + formats[evidence.responseType]);
+      if (evidence.bodyFormat) lines.push('本文の観測　' + formats[evidence.bodyFormat]);
+      if (evidence.lastSuccessAt) lines.push('同じ要求の直前の最終成功　' + new Date(evidence.lastSuccessAt).toISOString());
+      if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0 && d.elapsedMs <= 86400000)
+        lines.push('処理時間　' + d.elapsedMs + ' ms');
+      if (typeof d.distinctTargets === 'number' && Number.isSafeInteger(d.distinctTargets) && d.distinctTargets > 0)
+        lines.push('同じ失敗が起きた対象　' + d.distinctTargets + '件（30分以内）');
+      lines.push('次に確認すること　' + apiClue(d));
+    }
     if (playbackTrace) {
       lines.push('最後に成功した処理　' + (lastStage ? lastStage.label : unknown),
         '次に待っていた処理　' + (nextStage ? nextStage.label : unknown));
@@ -277,11 +314,26 @@ const NotificationHistoryPanel = (() => {
       }
     }
     if (operation === 'x-draft') {
+      if (typeof d.fileBytes === 'number' && Number.isSafeInteger(d.fileBytes) && d.fileBytes > 0) {
+        const mib = d.fileBytes / 1024 ** 2;
+        lines.push('完成したMP4の容量　' + (mib < 0.1 ? '0.1 MiB未満' : mib.toFixed(1) + ' MiB'));
+      }
+      if (typeof d.uploadPercent === 'number' && Number.isInteger(d.uploadPercent) && d.uploadPercent >= 0 && d.uploadPercent <= 100) {
+        lines.push('最後に確認したXのアップロード　' + d.uploadPercent + '%');
+      }
+      if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0 &&
+          ['draft-received','draft-prepare','draft-reserve'].includes(String(d.lastStage))) {
+        const origin = d.lastStage === 'draft-received' ? 'Xの添付欄に渡してから　' :
+          d.lastStage === 'draft-prepare' ? 'Xの動画準備を確認してから　' : '自動添付の開始から　';
+        lines.push(origin + (d.elapsedMs / 1000).toFixed(1) + '秒');
+      }
       const progress = new Map<string,[string,string]>([
         ['draft-reserve',['MP4の生成','完成画面からXを開いてください。']],
         ['draft-open',['管理拡張でタブ連携を受付','完成画面からXを開いてください。']],
         ['draft-receive',['管理拡張にXタブの起動を要求','Xタブの有無、Xへのログイン、x.comで管理拡張が有効かを確認してください。']],
         ['draft-attach',['MP4の受け渡しを開始','Xに添付済みか確認し、必要なら完成画面からコピーまたは保存してください。']],
+        ['draft-received',['Xの添付欄にMP4を渡した','開いているXの下書きで動画の表示を確認してください。完成したMP4はZenzaの完成画面で保存できます。']],
+        ['draft-prepare',['Xの投稿画面で動画の準備中を確認','Xの下書きで動画の処理状況と投稿ボタンを確認してください。完成したMP4はZenzaの完成画面で保存できます。']],
         ['draft-attached',['X側でMP4の添付を確認','Xの下書きで内容を確認して投稿できます。']],
         ['draft-format',['動画の生成','完成動画を保存して形式を確認してください。']],
         ['draft-popup',['MP4の生成','完成画面の「Xの下書きを別タブで開く」を押してください。']],
@@ -289,11 +341,20 @@ const NotificationHistoryPanel = (() => {
         ['draft-native',['通常のタブでXの下書きへの移動を要求','完成画面から動画をコピーまたは保存し、Xに添付してください。']]
       ]);
       const step = progress.get(String(d.phase));
-      if (step) lines.push('最後に確認できた処理　' + step[0], '次に確認すること　' + step[1]);
+      if (step) {
+        const next = d.reason === 'draft-media-rejected' ? 'Xの下書きに表示されたエラーを確認してください。完成したMP4はZenzaの完成画面で保存できます。' : step[1];
+        lines.push('最後に確認できた処理　' + step[0], '次に確認すること　' + next);
+      }
     }
     if (script) {
       const source = bundle || '配布スクリプト';
-      lines.push('発生箇所　' + (frame ? source + ' の ' + frame[2] + ' 行目' : source + '（発生行の記録なし）'));
+      const column = typeof d.column === 'number' && Number.isInteger(d.column) && d.column > 0 && d.column <= 10000000 ? ' ' + d.column + ' 列目' : '';
+      lines.push('発生箇所　' + (frame ? source + ' の ' + frame[2] + ' 行目' + column : source + '（発生行の記録なし）'));
+      if (frame?.[1] && ['showTask','openResult','ShareHlsPreview.attach'].includes(frame[1])) lines.push('関数　' + frame[1]);
+      const causes = new Map([['non-function','関数として呼べない値を呼び出した'],['null-property','nullのプロパティを参照した'],
+        ['undefined-property','undefinedのプロパティを参照した'],['undefined-name','未定義の名前を参照した'],['not-iterable','反復できない値を処理した']]);
+      const cause = causes.get(String(d.scriptCause));
+      if (cause) lines.push('エラーの内容　' + cause);
     }
     if (d.outcome === 'recovered') lines.push('状態　復旧済み（理由は最後の失敗時の記録）');
     if (validStatus(d.statusCode)) lines.push('HTTP状態　' + d.statusCode);
@@ -302,7 +363,8 @@ const NotificationHistoryPanel = (() => {
     if (typeof d.errorName === 'string' && ['TypeError','ReferenceError','RangeError','SyntaxError','Error'].includes(d.errorName))
       lines.push('エラーの種類　' + d.errorName);
     const sharing = ['x-draft','official-share','clip-export'].includes(operation);
-    if (!sharing || (typeof d.missing === 'string' && reportFields.has(d.missing))) lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown));
+    const missing = reportField(d.missing);
+    if (!sharing || missing) lines.push('読めなかった項目　' + (missing || unknown));
     lines.push('修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
     return lines.join('\n');
   };

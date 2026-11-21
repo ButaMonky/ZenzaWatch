@@ -12,6 +12,7 @@
 /** Options accepted by the legacy `netUtil.fetch` wrapper (fetch + timeout). */
 export interface NetFetchOptions {
   mode?: RequestMode;
+  cache?: RequestCache;
   credentials?: RequestCredentials;
   /** Milliseconds; `netUtil.abortableFetch` defaults to 30 seconds. */
   timeout?: number;

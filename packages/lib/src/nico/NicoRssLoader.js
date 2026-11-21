@@ -1,7 +1,9 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {textUtil} from '../text/textUtil';
 import {netUtil} from '../infra/netUtil';
 // GENERATED FROM tools/typescript-stage1/nico-src/NicoRssLoader.ts (Task465). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const NicoRssLoader = (() => {
     const parseItem = (item) => {
         const id = item.querySelector('link').textContent.replace(/^.+\//, '');
@@ -37,7 +39,10 @@ const NicoRssLoader = (() => {
         return result;
     };
     const load = async (url) => {
-        const rssText = await netUtil.fetch(url).then(r => r.text());
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin(url.startsWith('https://ch.nicovideo.jp/') ? 'channel-rss' : 'ranking-rss', url, 'response', undefined, undefined, { url, method: 'GET' });
+        const response = await netUtil.fetch(url).catch(error => { ticket?.failure(error); throw error; });
+        const rssText = await response.text().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(response, error)); throw error; });
         const xml = new DOMParser().parseFromString(rssText, 'application/xml');
         const entries = Array.from(xml.querySelectorAll('item'));
         const items = [];
@@ -51,11 +56,20 @@ const NicoRssLoader = (() => {
             }
         }
         if (skipped > 0 && items.length === 0) {
+            ticket?.failure({ httpStatus: response.status, kind: 'schema', missing: 'rss.item' });
             throw new Error('RSSの項目を解析できませんでした');
         }
         if (skipped > 0) {
             window.console.warn('RSSの形式不正の項目をスキップしました', skipped);
         }
+        if (response.status >= 400)
+            ticket?.failure({ httpStatus: response.status });
+        else if (ticket && (skipped || !xml.querySelector('rss > channel'))) {
+            ticket?.failure({ ...RequestDiagnostics.responseEvidence(response), httpStatus: response.status,
+                kind: 'schema', missing: skipped ? 'rss.item' : 'rss.channel' });
+        }
+        else
+            ticket?.success();
         return items;
     };
     const loadRanking = ({ genre = 'all', term = 'hour', tag = '' }) => {

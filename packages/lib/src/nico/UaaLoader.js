@@ -5,40 +5,26 @@ import {netUtil} from '../infra/netUtil';
 //@require RequestDiagnostics
 const UaaLoader = {
     load: (videoId, { limit = 50, signal } = {}) => {
+        const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
         const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-            RequestDiagnostics.begin('advertising', videoId, 'response', () => !signal?.aborted);
+            RequestDiagnostics.begin('advertising', videoId, 'response', () => !signal?.aborted, undefined, { url, method: 'GET' });
         return (async () => {
-            const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
+            let res;
             try {
                 // This endpoint owns HTTP + JSON classification together: a generic 404
                 // cannot distinguish an absent sponsor from a changed/missing API route.
                 // Keep all 404s as diagnostic records; report once at this boundary.
-                const res = await netUtil.fetch(url, { credentials: 'include', signal, diagnosticActive: () => false });
-                let body;
-                try {
-                    body = await res.json();
-                }
-                catch (error) {
-                    ticket?.failure({ status: res.status, errorCode: 'RESPONSE_SCHEMA' });
-                    throw error;
-                }
-                const meta = body?.meta;
-                if (res.status >= 400) {
-                    ticket?.failure({ status: res.status, errorCode: meta?.errorCode });
-                }
-                else if (typeof meta?.status === 'number' && (meta.status < 200 || meta.status >= 300)) {
-                    ticket?.failure({ status: meta.status, errorCode: meta.errorCode });
-                }
-                else if (!Array.isArray(body?.data?.sponsors)) {
-                    ticket?.failure({ kind: 'schema' });
-                }
-                else {
-                    ticket?.success();
-                }
+                res = await netUtil.fetch(url, { credentials: 'include', signal, diagnosticActive: () => false });
+                const body = await res.json();
+                ticket?.decoded(res, body?.meta, Array.isArray(body?.data?.sponsors) ? undefined : 'data.sponsors', false);
                 return body;
             }
             catch (error) {
-                ticket?.failure(error);
+                if (ticket) {
+                    const failure = RequestDiagnostics.readFailure(res, error);
+                    ticket.failure(res && res.status >= 300 && error?.name === 'SyntaxError' ?
+                        { ...failure, errorCode: 'RESPONSE_SCHEMA' } : failure);
+                }
                 throw error;
             }
         })();

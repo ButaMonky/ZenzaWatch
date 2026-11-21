@@ -2,6 +2,9 @@ import {PopupMessage} from '../packages/lib/src/ui/PopupMessage';
 import {ShareOfficialClip} from './ShareOfficialClip';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {ShareClipRenderer} from './ShareClipRenderer';
+import {ShareClipQueue} from './ShareClipQueue';
+import {ShareClipClipboard} from './ShareClipClipboard';
+import {ShareClipPreferences} from './ShareClipPreferences';
 import {ShareClipJobs} from './ShareClipJobs';
 import {ShareLocalClip} from './ShareLocalClip';
 import {SharePlaybackFile} from './SharePlaybackFile';
@@ -9,23 +12,32 @@ import {HlsLibrary} from '../packages/zenza/src/hls/HlsLibrary';
 //===BEGIN===
 //@require PopupMessage
 //@require HlsLibrary
+//@require ShareClipClipboard
+//@require ShareClipPreferences
+//@require SharePlaybackFile
+//@require ShareClipRenderer
+function defaultShareText(info) {
+  const tags = [info.videoId, info.isChannel && 'nicoch'].filter(Boolean).map(tag => '#' + tag);
+  const duration = Math.floor(Number(info.duration) || 0);
+  const length = duration > 0 ? '(' + textUtil.secToTime(duration) + ')' : '';
+  return [(info.title || '').replace(/@/g, '@ ') + length, ...tags].join(' ').trim();
+}
 function createVideoSharePanel() {
+  //@require ShareClipQueue
   //@require ShareLocalClip
-  //@require SharePlaybackFile
-  //@require ShareClipRenderer
   function createOfficialClipService() {
     //@require ShareOfficialClip
     return ShareOfficialClip;
   }
   function notify(title, message, level, source, details) {
-    const report = level === 'error' || level === 'warning' ? PopupMessage.warning : PopupMessage.notify;
-    report(title + '：' + message,false,{source,details:{operation:source,
-      outcome:level === 'info' ? 'success' : 'failed',...details}});
+    const report = level === 'error' ? PopupMessage.alert : level === 'warning' ? PopupMessage.warning : PopupMessage.notify;
+    report(title + '：' + message,false,{source,level:level === 'info' ? 'success' : level,details:{operation:source,
+      outcome:level === 'info' ? 'success' : level === 'error' ? 'failed' : 'attention',...details}});
   }
-  const notifyClip = (message,level,stage,reason) => {
+  const notifyClip = (message,level,stage,reason,evidence) => {
     const draft = stage?.startsWith('draft-');
     const phase = stage || (level === 'info' ? 'export-ready' : 'export-recording');
-    notify('動画クリップ',message,level,draft ? 'x-draft' : 'clip-export',{phase,reason:reason || phase});
+    notify('動画クリップ',message,level,draft ? 'x-draft' : 'clip-export',{phase,reason:reason || phase,...evidence});
   };
   const notifyOfficial = (message,level,result) => {
     const details = result ? {phase:'official-' + result.stage,reason:'official-' + result.reason,
@@ -87,6 +99,8 @@ function createVideoSharePanel() {
 .zenzaShare .clipSourceName {max-width:100%}
 .zenzaShare .shareBody {min-width:0}
 .zenzaShare .shareBodyLabel {display:flex;align-items:baseline;gap:5px 8px;flex-wrap:wrap;justify-content:space-between}
+.zenzaShare [name=shareFormat] {font-size:.9em;padding:2px 4px}
+.zenzaShare:has([data-text-composer]:not([hidden])) {width:min(36rem,calc(100vw - 12px))}
 .zenzaShare [data-link-option] {font-size:.9em}
 .zenzaShare [data-action=tools] {font-size:.9em}
 .zenzaShare [data-text-count] {color:#b9c6d5;font-size:.85em}
@@ -129,7 +143,9 @@ function createVideoSharePanel() {
   .zenzaShare input,.zenzaShare select,.zenzaShare textarea {padding:3px}
   .zenzaShare header {gap:6px}
   .zenzaShare .clipPages {margin-bottom:3px;gap:1px}
-  .zenzaShare .zwClipLength input {width:5ch}
+  .zenzaShare .zwClipReadout .zwClipLength input {width:5ch}
+  .zenzaShare .zwClipTimeline .zwClipReadout {gap:3px;font-size:12px}
+  .zenzaShare .zwClipReadout button {padding:3px 5px}
   .zenzaShare .shareBody [name=shareText] {height:2.4em}
   .zenzaShare .shareTime {margin-bottom:3px}
   .zenzaShare .clipWorkspace .clipLayers,.zenzaShare .clipWorkspace .clipRange {margin:3px 0}
@@ -163,9 +179,10 @@ function createVideoSharePanel() {
 <header><h2 id="zenzaShareHeading">動画を共有</h2><p class="shareTitle"></p><button type="button" data-action="tools" aria-controls="zenzaShareTools" aria-expanded="false">リンク・埋め込み</button><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
 <section>
 <div class="shareBody" data-share-body>
-<div class="shareBodyLabel"><label for="zenzaShareText">投稿本文</label><label data-link-option title="MP4とテキストの下書きに視聴ページのリンクを添える"><input type="checkbox" name="includeLink" checked> 下書きに動画リンク</label><span data-text-count></span></div>
+<div class="shareBodyLabel"><label for="zenzaShareText">投稿本文</label><select name="shareFormat" aria-label="投稿形式"><option value="clip">動画付き</option><option value="text">本文のみ</option></select><label data-link-option title="下書きに視聴ページのリンクを添える"><input type="checkbox" name="includeLink" checked> 動画リンク</label><span data-text-count></span></div>
 <textarea id="zenzaShareText" name="shareText" rows="2"></textarea></div>
 <div id="zenzaShareLocal" data-clip-editor></div>
+<div data-text-composer hidden><div data-text-slot></div><p>本文のみの場合は、ニコニコでX連携済みでも、別タブのXで内容を確認して投稿します。</p></div>
 <p id="zenzaShareGuide">3〜30秒の区間を連携先のXへ自動投稿します。元のタブを残せば、投稿中もこの画面を閉じられます。</p>
 <button type="button" data-action="official-submit" disabled aria-describedby="zenzaShareGuide">ニコニコでXに投稿</button>
 <a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">本文でX下書き</a>
@@ -184,9 +201,7 @@ function createVideoSharePanel() {
     let officialState = {enabled:false};
     const duration = Math.max(0, Math.floor(Number(info.duration) || 0));
     const startTime = Math.min(Math.max(0, Math.floor((Number(position) || 0) * 100) / 100), duration || Infinity);
-    const tags = [info.videoId, info.isChannel && 'nicoch'].filter(Boolean).map(tag => '#' + tag);
-    const length = duration ? '(' + textUtil.secToTime(duration) + ')' : '';
-    const defaultText = [(info.title || '').replace(/@/g, '@ ') + length, ...tags].join(' ').trim();
+    const defaultText = defaultShareText(info);
     message.value = defaultText;
     const watch = new URL('https://www.nicovideo.jp/watch/' + info.watchId);
     const official = new URL(watch);
@@ -209,6 +224,16 @@ function createVideoSharePanel() {
       }
       textCount.textContent = Array.from(message.value).length + '文字';
     }
+    draftLink.onclick = async event => {
+      event.preventDefault();
+      if (!event.isTrusted || !draftLink.hasAttribute('href')) return;
+      const background = ShareClipPreferences.get(playerContext?.config,'shareClip.backgroundTab');
+      const draft = ShareClipClipboard.reserveDraft(true,background);
+      if (!draft) return PopupMessage.warning('Xの下書きを開けませんでした。');
+      try { await draft.openText([message.value,includeLink.checked && shareUrl.href].filter(Boolean).join('\n')); }
+      catch (error) { PopupMessage.warning(error.message); }
+      finally { draft.cancel?.(); }
+    };
     includeLink.addEventListener('input', updateDraft);
     message.addEventListener('input', () => {
       textEdited = true;
@@ -217,13 +242,39 @@ function createVideoSharePanel() {
     });
     const toolsButton = find('[data-action=tools]');
     const shareTools = find('[data-share-tools]');
+    const format = find('[name=shareFormat]');
+    const textComposer = find('[data-text-composer]');
+    let clipLink = includeLink.checked, textLink = false;
+    function updateSections() {
+      const textOnly = format.value === 'text';
+      localHost.hidden = !shareTools.hidden || textOnly;
+      find('#zenzaShareOfficial').hidden = localHost.hidden;
+      textComposer.hidden = !shareTools.hidden || !textOnly;
+      if (localHost.hidden) localEditor?.stopPreview?.();
+    }
+    format.onchange = () => {
+      if (format.value === 'text') {
+        clipLink = includeLink.checked;
+        includeLink.checked = textLink;
+        textComposer.querySelector('[data-text-slot]').append(body);
+        textComposer.append(draftLink);
+        draftLink.textContent = 'Xで本文を確認して投稿';
+      } else {
+        textLink = includeLink.checked;
+        includeLink.checked = clipLink;
+        localHost.querySelector('[data-share-composer-slot]').append(body);
+        localHost.querySelector('[data-role=createActions]').after(draftLink);
+        draftLink.textContent = '本文でX下書き';
+      }
+      updateSections();
+      updateDraft();
+      format.focus({preventScroll:true});
+    };
     toolsButton.onclick = () => {
       if (!shareTools.firstChild) mountTools();
       shareTools.hidden = !shareTools.hidden;
       toolsButton.setAttribute('aria-expanded', String(!shareTools.hidden));
-      localHost.hidden = !shareTools.hidden;
-      find('#zenzaShareOfficial').hidden = !shareTools.hidden;
-      if (!shareTools.hidden) localEditor?.stopPreview?.();
+      updateSections();
       dialog.scrollTop = 0;
     };
     function mountTools() {
@@ -319,7 +370,8 @@ function createVideoSharePanel() {
       rangeNote.textContent = notes.join(' ');
       rangeNote.hidden = !notes.length;
       officialAction.disabled = !officialState.enabled || !valid || !!selection.isFile || !!selection.recording;
-      officialAction.textContent = officialState.label === 'このクリップをXに投稿' ? 'ニコニコでこのクリップをXに投稿' : 'ニコニコでXに投稿';
+      officialAction.textContent = officialState.label === 'このクリップをXに投稿' ? 'ニコニコでこのクリップをXに投稿'
+        : ShareClipQueue.items.length && officialState.enabled ? 'ニコニコでXへの投稿を予約' : 'ニコニコでXに投稿';
     }
     function showSelection(next) {
       if (!!selection.isFile !== !!next.isFile) {
@@ -423,31 +475,114 @@ function createVideoSharePanel() {
     window.dispatchEvent(new Event('zenza-share-panel-open'));
     mountEditor();
   }
-  return {open, close() { if (activeClose) { activeClose(); } }};
+  function quick(spec) {
+    if (spec.command === 'shareNicoNext30') {
+      PopupMessage.notify('ニコニコで ' + spec.from + '〜' + spec.to + ' 秒の投稿先を確認しています。');
+      officialClipService ||= createOfficialClipService();
+      return officialClipService.submitQuick(spec,notifyOfficial,ShareClipJobs.keepWatchLinksInNewTabs);
+    }
+    const task = ShareLocalClip.startFull(spec,notifyClip);
+    PopupMessage.notify('動画全体のMP4作成を受け付けました。Xへの添付結果は通知でお知らせします。');
+    return task;
+  }
+  return {open, quick, close() { if (activeClose) { activeClose(); } }};
 }
 
 const VideoSharePanel = (() => {
   let panel, loading, requested;
+  const quickRequests = [];
+  function runQuick(spec) {
+    function failed(error) {
+      spec.cancel?.();
+      PopupMessage.alert(error.message || '共有処理を開始できませんでした。');
+    }
+    try { Promise.resolve(panel.quick(spec)).catch(failed); }
+    catch (error) { failed(error); }
+  }
   function ready(instance) {
     loading = null;
     panel = instance;
     const args = requested;
     requested = null;
+    for (const spec of quickRequests.splice(0)) runQuick(spec);
     if (args) panel.open(...args);
   }
+  function load() {
+    if (loading) return;
+    const failed = () => {
+      loading = null;
+      const showError = !!requested || !!quickRequests.length;
+      requested = null;
+      for (const spec of quickRequests.splice(0)) spec.cancel?.();
+      if (showError) PopupMessage.alert('共有機能を読み込めませんでした。もう一度お試しください。');
+    };
+    try {
+      const instance = createVideoSharePanel();
+      if (typeof instance?.then !== 'function') return ready(instance);
+      loading = instance.then(ready,failed);
+    } catch (_) { failed(); }
+  }
+  function quick(command,info,position,getCurrentVideo,context) {
+    const video = getCurrentVideo();
+    const duration = Number.isFinite(video?.duration) && video.duration > 0 ? video.duration : Number(info.duration);
+    if (!Number.isFinite(duration) || duration <= 0) return PopupMessage.warning('動画の長さを取得できません。読み込み後にお試しください。');
+    const watchId = info.watchId, videoId = info.videoId || watchId;
+    if (![watchId,videoId].every(id => /^(?:[a-z]{2})?\d+$/i.test(id))) return;
+    const name = info.title || watchId, text = defaultShareText(info) || watchId;
+    let spec;
+    if (command === 'shareNicoNext30') {
+      const first = Math.max(0,Math.round(Number(position) * 1000));
+      const last = Math.min(first + 30000,Math.floor(duration * 1000));
+      if (!Number.isSafeInteger(first) || last - first < 3000) {
+        return PopupMessage.warning('ニコニコで投稿するには、現在位置から3秒以上の区間が必要です。');
+      }
+      spec = {command,watchId,videoId,name,text,from:first/1000,to:last/1000};
+    } else if (command === 'shareZenzaFull') {
+      if (!video || video.mediaKeys) return PopupMessage.warning('再生中の動画からMP4を作成できません。');
+      const source = context.getCurrentFileSource?.(video);
+      const url = context.getCurrentHlsSource?.(video);
+      if (!source && !url) return PopupMessage.warning('元の動画ファイルまたは配信を取得できません。');
+      const pref = key => ShareClipPreferences.get(context.config,'shareClip.' + key);
+      const quality = pref('exportQuality'), rendition = context.getCurrentHlsRendition?.(video);
+      const height = quality === 'source' ? rendition?.height || video.videoHeight : quality === 'low' ? 0 : Number(quality);
+      const comments = pref('includeComments'), effects = pref('includeEffects');
+      const controller = new AbortController();
+      const {signal} = controller;
+      const draft = ShareClipClipboard.reserveDraft(true,pref('backgroundTab'));
+      if (!draft) return PopupMessage.warning('Xの下書きタブを予約できませんでした。もう一度お試しください。');
+      let renderer;
+      const cancel = () => {
+        controller.abort();
+        draft.cancel?.();
+        renderer?.then(layer => layer?.dispose(),() => {});
+      };
+      try {
+        // Start capturing bytes and layers while the original player is still current.
+        const blob = source && SharePlaybackFile.get(video,source,{signal,keepOriginal:true,
+          isCurrent:() => context.getCurrentFileSource(video) === source});
+        if (blob) blob.catch(() => {});
+        if (comments || effects) {
+          renderer = Promise.resolve(ShareClipRenderer.create({...context,video,comments,effects,from:0,to:duration,signal,
+            isCurrent:() => getCurrentVideo() === video}));
+          renderer.catch(() => {});
+        }
+        spec = {command,name,from:0,to:duration,comments,draft,cancel,controller,getBlob:() => blob,
+          shareText:text + '\nhttps://www.nicovideo.jp/watch/' + videoId,
+          hls:url && {url,height,cache:context.getFragmentCache?.(video),renditionUrl:quality === 'source' ? rendition?.uri : undefined},
+          maxHeight:quality === 'source' ? undefined : height || (source ? 144 : undefined),
+          prepareRenderer:renderer && (() => renderer)};
+      } catch (error) { cancel(); return PopupMessage.alert(error.message); }
+    } else return;
+    if (panel) return runQuick(spec);
+    quickRequests.push(spec);
+    load();
+  }
   return {
+    quick,
     open(...args) {
       if (panel) return panel.open(...args);
       requested = args;
-      if (loading) return;
-      const instance = createVideoSharePanel();
-      if (typeof instance?.then !== 'function') return ready(instance);
-      loading = instance.then(ready,() => {
-        loading = null;
-        const showError = !!requested;
-        requested = null;
-        if (showError) PopupMessage.alert('共有画面を読み込めませんでした。もう一度開いてください。');
-      });
+      load();
     },
     close() {
       requested = null;

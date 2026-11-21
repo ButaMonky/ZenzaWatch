@@ -1,13 +1,17 @@
+import {ShareClipQueue} from './ShareClipQueue';
 import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 //===BEGIN===
 //@require RequestDiagnostics
+//@require ShareClipQueue
 // The permission, processing and posting decisions belong to NicoNico's clip service.
 const ShareOfficialClip = (() => {
   const base = 'https://nvapi.nicovideo.jp/v1';
   const pollInterval = 5000;
   const recent = new Map();
   const pendingCreations = new Map();
+  const pendingDeletions = new Map();
   const publications = new Map();
+  const receiptObservers = new Set();
   const pollLimit = 30 * 60 * 1000;
   const ignored = {reason:'cancelled'};
   const schema = missing => ({kind:'schema', missing});
@@ -18,6 +22,9 @@ const ShareOfficialClip = (() => {
   };
   function postFailure(code) {
     return Object.hasOwn(postFailures,code) ? postFailures[code] : {reason:'post-failed',message:'X への投稿に失敗しました。'};
+  }
+  function publicationLabel(watchId,from,to) {
+    return '公式クリップ（' + watchId + '、' + from + '〜' + to + '秒）　';
   }
   function publicationDetails(stage, reason, error) {
     const details = {stage,reason,clipReady:['verify','post','receipt'].includes(stage),
@@ -60,8 +67,8 @@ const ShareOfficialClip = (() => {
   }
 
   function transport(win,videoId,signal,expired) {
-    const beginDiagnostic = operation => typeof RequestDiagnostics === 'undefined' ? null :
-      RequestDiagnostics.begin(operation, videoId, 'response', () => !signal.aborted);
+    const beginDiagnostic = (operation, request) => typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin(operation, videoId, 'response', () => !signal.aborted, undefined, request);
     async function request(operation, path, method = 'GET', fields) {
       const abort = new win.AbortController();
       const stop = () => abort.abort();
@@ -69,7 +76,8 @@ const ShareOfficialClip = (() => {
       // Closing the panel cannot revoke a submitted POST. Retain its response
       // long enough to obtain the server ID and resume with a GET on reopen.
       if (operation !== 'clip-create') signal.addEventListener('abort', stop, {once:true});
-      const ticket = beginDiagnostic(operation);
+      const ticket = beginDiagnostic(operation, {url:base + path, method});
+      let wire = {};
       let timedOut = false, diagnostic = {kind:'network'};
       const failure = new Error('request failed');
       const timeout = win.setTimeout(() => { timedOut = true; stop(); }, 20000);
@@ -80,14 +88,16 @@ const ShareOfficialClip = (() => {
         if (fields) options.body = new win.URLSearchParams(fields);
         const response = await win.fetch(base + path, options);
         if (abort.signal.aborted) throw new Error('interrupted');
+        if (ticket) wire = {...RequestDiagnostics.responseEvidence(response), httpStatus:response.status};
         if (response.ok && response.status === 204 && (operation === 'clip-delete' || operation === 'clip-post')) {
           ticket?.success();
           return;
         }
         let envelope;
         try { envelope = await response.json(); }
-        catch (_) { if (response.ok) { diagnostic = schema('json'); throw new Error('invalid response'); } }
+        catch (cause) { if (response.ok) { diagnostic = {...(ticket && RequestDiagnostics.readFailure(response, cause)), ...schema('json')}; throw new Error('invalid response'); } }
         if (abort.signal.aborted) throw new Error('interrupted');
+        if (Number.isInteger(envelope?.meta?.status)) wire.apiStatus = envelope.meta.status;
         if (!response.ok || !Number.isInteger(envelope?.meta?.status) ||
             envelope.meta.status < 200 || envelope.meta.status >= 300) {
           if (envelope?.meta?.errorCode === 'USER_LIMIT_EXCEEDED') failure.message = 'USER_LIMIT_EXCEEDED';
@@ -107,10 +117,10 @@ const ShareOfficialClip = (() => {
         }
         const issue = responseIssue(operation, envelope.data, expired());
         if (issue?.kind === 'schema') { diagnostic = issue; throw new Error('invalid response'); }
-        if (issue) ticket?.failure(issue); else ticket?.success();
+        if (issue) ticket?.failure({...wire, ...issue}); else ticket?.success();
         return envelope.data;
       } catch (_) {
-        ticket?.failure(timedOut ? {kind:'timeout'} : diagnostic);
+        ticket?.failure({...wire, ...(timedOut ? {kind:'timeout'} : diagnostic)});
         const code = failure.httpStatus;
         if (timedOut || code === 408) failure.reason = 'timeout';
         else if (code === 429 || failure.message === 'USER_LIMIT_EXCEEDED') failure.reason = 'rate-limit';
@@ -156,7 +166,44 @@ const ShareOfficialClip = (() => {
       if (value) win.sessionStorage.setItem(key,value); else win.sessionStorage.removeItem(key);
     } catch (_) { /* The tab can continue when session storage is unavailable. */ }
   }
-  function createTracked(win, request, source, key, first, last, text) {
+  function savedScene(win,key) {
+    try {
+      const value = JSON.parse(read(win,key) || 'null');
+      if (value && ['clip','post','posted'].includes(value.kind) && value.id) return value;
+    } catch (_) { /* An unavailable or old record cannot be resumed. */ }
+    return null;
+  }
+  function rangeKey(accountKey,first,last) {
+    return accountKey + ':range:' + first + '-' + last;
+  }
+  function restoreAccount(win,videoId,account) {
+    const prefix = 'zenzaWatch:officialClip:' + videoId + ':';
+    const accountKey = prefix + account.toLowerCase();
+    // Preserve receipts saved under the display casing and the earlier per-account key.
+    if (accountKey !== prefix + account) {
+      for (const suffix of ['',':creation']) {
+        const oldKey = prefix + account + suffix, value = read(win,oldKey);
+        if (!value) continue;
+        if (!read(win,accountKey + suffix)) store(win,accountKey + suffix,value);
+        store(win,oldKey,null);
+      }
+    }
+    const previous = savedScene(win,accountKey);
+    if (previous) {
+      const key = rangeKey(accountKey,Math.round(previous.start * 1000),Math.round(previous.end * 1000));
+      if (!read(win,key)) store(win,key,JSON.stringify(previous));
+      store(win,accountKey,null);
+      if (!read(win,accountKey + ':last')) store(win,accountKey + ':last',key);
+    }
+    return accountKey;
+  }
+  function createTracked(win, request, source, accountKey, key, first, last, text) {
+    const quotaKey = accountKey + ':creation';
+    const retrySeconds = Math.ceil((Number(read(win,quotaKey)) - Date.now()) / 1000);
+    if (retrySeconds > 0) {
+      return Promise.reject(Object.assign(new Error('USER_LIMIT_EXCEEDED'),{reason:'rate-limit',httpStatus:429,retrySeconds}));
+    }
+    store(win,quotaKey,null);
     store(win,key + ':creation','unconfirmed');
     const pending = request('clip-create',source + '/clips','POST',{startTime:String(first),endTime:String(last)})
       .then(({clipId}) => {
@@ -165,7 +212,8 @@ const ShareOfficialClip = (() => {
         return clipId;
       }).catch(error => {
         if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') {
-          store(win,key + ':creation',error.retrySeconds ? String(Date.now()+error.retrySeconds*1000) : 'limited');
+          store(win,key + ':creation',null);
+          store(win,quotaKey,error.retrySeconds ? String(Date.now()+error.retrySeconds*1000) : 'limited');
         } else if (error.httpStatus >= 400 && error.httpStatus < 500 && ![408,409].includes(error.httpStatus)) {
           store(win,key + ':creation',null);
         }
@@ -178,14 +226,14 @@ const ShareOfficialClip = (() => {
   // The publication owns only the submitted values. Editors subscribe while open;
   // switching video or dismissing the dialog cannot replace its target or its text.
   function publish(win,spec,onNotify,holdWatchPage) {
-    const {key,videoId,watchId,source,first,last,text,account} = spec;
+    const {key,accountKey,videoId,watchId,source,first,last,text,account} = spec;
     const existing = publications.get(key);
     if (existing) return existing;
     const controller = new win.AbortController();
     const {signal} = controller;
     let deadline;
     const {request,beginDiagnostic} = transport(win,videoId,signal,() => Date.now() >= deadline);
-    const job = {phase:'creating',message:'クリップを作成しています…',kind:'clip',id:spec.id,
+    const job = {phase:'queued',message:'公式クリップの投稿を予約しました。順番を待っています。',kind:'clip',id:spec.id,
       first,last,text,uri:spec.uri,listeners:new Set()};
     publications.set(key,job);
     let stage = 'create', details;
@@ -199,7 +247,7 @@ const ShareOfficialClip = (() => {
       emit(phase,message);
     }
     const releaseLinks = holdWatchPage?.();
-    const stop = () => controller.abort();
+    const stop = () => { job.ticket?.cancel(); controller.abort(); };
     win.addEventListener('pagehide',stop,{once:true});
     const remember = (kind,failureNotified) => store(win,key,JSON.stringify({kind,id:job.id,start:first/1000,end:last/1000,text,failureNotified}));
     const clipPath = () => '/clips/' + encodeURIComponent(job.id);
@@ -219,7 +267,8 @@ const ShareOfficialClip = (() => {
     }
     async function run() {
       if (!job.id) {
-        job.id = await createTracked(win,request,source,key,first,last,text);
+        emit('creating','クリップを作成しています…');
+        job.id = await createTracked(win,request,source,accountKey,key,first,last,text);
         signal.throwIfAborted();
         stage = 'generate';
         emit('generating','ニコニコでクリップを生成しています…');
@@ -267,7 +316,7 @@ const ShareOfficialClip = (() => {
       remember('posted');
       finish('posted','X にクリップをポストしました。','posted');
     }
-    void run().catch(error => {
+    function failed(error) {
       if (signal.aborted) return;
       details = publicationDetails(stage,error.reason || 'network',error);
       if (job.kind === 'post') emit('postUnknown','投稿結果を確認できません。「状態を再確認」で結果を確認してください。');
@@ -276,13 +325,34 @@ const ShareOfficialClip = (() => {
       else if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') emit('edit','作成回数の制限に達しました。時間をおいてお試しください。');
       else if ([401,403].includes(error.httpStatus)) emit('denied','ニコニコで公式クリップを作成できません。ログイン、X連携、動画の共有設定を確認してください。');
       else emit('createUnknown','クリップの作成結果を確認できません。ニコニコの視聴ページで確認してください。');
-    }).finally(() => {
+    }
+    function release() {
       releaseLinks?.();
       win.removeEventListener('pagehide',stop);
       publications.delete(key);
       for (const fn of job.listeners) fn();
       job.listeners.clear();
-      if (!signal.aborted) onNotify?.('公式クリップ（' + watchId + '）　' + job.message,job.phase === 'posted' ? 'info' : 'warning',details);
+      for (const refresh of receiptObservers) refresh(accountKey);
+    }
+    job.ticket = ShareClipQueue.enqueue({
+      name:spec.name, from:first/1000, to:last/1000, kind:'official',
+      onCancel(reason) {
+        const message = reason === 'failed' ? '予約を開始できませんでした。もう一度予約してください。' : '公式クリップの投稿予約を取り消しました。';
+        emit(spec.id ? 'preview' : 'edit',message);
+        release();
+        if (reason === 'failed') onNotify?.(publicationLabel(watchId,first/1000,last/1000) + message,'warning');
+      },
+      async run() {
+        try { await run(); }
+        catch (error) { failed(error); }
+        finally { release(); }
+        if (!signal.aborted) {
+          const confirmedFailure = job.phase === 'clipError' || (job.phase === 'postFailed' && stage === 'receipt');
+          const level = job.phase === 'posted' ? 'info' : confirmedFailure ? 'error' : 'warning';
+          onNotify?.(publicationLabel(watchId,first/1000,last/1000) + job.message,level,details);
+        }
+        if (job.phase !== 'posted') throw new Error(job.phase);
+      }
     });
     return job;
   }
@@ -299,8 +369,8 @@ const ShareOfficialClip = (() => {
     let task;
     let deadline;
     let account;
-    let recordKey;
-    let selectedRange;
+    let accountKey, recordKey;
+    let selectionVersion = 0;
     let retryAt = 0, retryTimer, unobserve;
 
     container.innerHTML = `
@@ -322,6 +392,8 @@ const ShareOfficialClip = (() => {
 <button type="button" name="discard" hidden>クリップを削除して選び直す</button></div></div>
 </div>
 <p role="status" class="shareStatus"></p>
+<details name="otherReceipts" hidden><summary>ほかの区間の未確認の投稿</summary><div name="receiptActions"></div></details>
+<p name="receiptResult" role="status" hidden></p>
 <div class="shareRow"><button name="useLocal" type="button" hidden>この範囲を端末で作成</button>
 <a class="shareAction" target="_blank" rel="noopener noreferrer">ニコニコの視聴ページで開く</a></div>`;
     const find = name => container.querySelector('[name="' + name + '"]');
@@ -376,20 +448,6 @@ const ShareOfficialClip = (() => {
         last - first >= 3000 && last - first <= 30000 && last <= Math.floor(limit * 1000);
     }
     function update() {
-      // A user can change the shared timeline during a background publication.
-      // Once it settles, offer the visible range for their next explicit action.
-      if (sharedEditor && selectedRange && !publications.has(recordKey) &&
-          ['edit','checking','denied','preview','posted','clipError','postFailed'].includes(phase) &&
-          (start.valueAsNumber !== selectedRange.start || end.valueAsNumber !== selectedRange.end)) {
-        if (clipId) {
-          clipId = null;
-          preview.hidden = true;
-          preview.removeAttribute('src');
-          phase = 'edit';
-        }
-        start.value = String(selectedRange.start);
-        end.value = String(selectedRange.end);
-      }
       const edit = phase === 'edit';
       start.disabled = end.disabled = !['edit','denied','checking'].includes(phase);
       find('composer').hidden = !clipId;
@@ -398,7 +456,7 @@ const ShareOfficialClip = (() => {
       post.disabled = phase !== 'preview' || !draft.value.trim();
       if (sharedEditor) {
         link.hidden = !['denied','postFailed','postUnknown','clipUnknown','clipError','createUnknown'].includes(phase) && !(phase === 'preview' && !account);
-        const busy = ['creating','generating','verifying','posting','discarding'].includes(phase);
+        const busy = ['queued','creating','generating','verifying','posting','discarding'].includes(phase);
         onSubmitState?.({enabled:(phase === 'preview' || (edit && Date.now() >= retryAt && validRange())) && !!String(text() || '').trim(),
           busy,phase,account:account || '',status:status.textContent,
           label:phase === 'preview' ? 'このクリップをXに投稿' : 'クリップを作成してXに投稿'});
@@ -411,7 +469,7 @@ const ShareOfficialClip = (() => {
     function state(value, message) {
       if (lifetime.signal.aborted) return;
       phase = value;
-      const busy = ['checking','creating','generating','verifying','posting','discarding'].includes(phase);
+      const busy = ['checking','queued','creating','generating','verifying','posting','discarding'].includes(phase);
       status.dataset.busy = String(busy);
       container.querySelector('[name=editor]').setAttribute('aria-busy', String(busy));
       status.textContent = message;
@@ -419,8 +477,9 @@ const ShareOfficialClip = (() => {
     }
     start.oninput = end.oninput = () => {
       if (phase !== 'edit') return;
-      update();
-      status.textContent = validRange() ? '' : '動画の範囲内で、3〜30秒の区間を選んでください。';
+      if (accountKey && validRange()) selectScene(); else update();
+      if (phase !== 'edit') return;
+      if (!validRange()) status.textContent = '動画の範囲内で、3〜30秒の区間を選んでください。';
       if (Number.isFinite(start.valueAsNumber) && start.valueAsNumber >= 0) {
         const url = new URL(officialUrl);
         url.searchParams.set('from', String(Math.floor(start.valueAsNumber)));
@@ -435,26 +494,12 @@ const ShareOfficialClip = (() => {
       }
     };
 
-    // One entry per video and linked account. Persist the actual service-issued clip ID
-    // before sending. Reopening can repeat a GET, never a publication request.
-    function remember(kind) {
-      if (!recordKey) return;
-      const value = kind ? JSON.stringify({kind, id:clipId, start:start.value, end:end.value, text:draft.value}) : null;
-      store(win,recordKey,value);
-    }
-    function saved() {
-      try {
-        const value = JSON.parse(read(win,recordKey) || 'null');
-        if (value && ['clip','post','posted'].includes(value.kind) && value.id) return value;
-      } catch (_) { /* An unavailable or old record cannot be resumed. */ }
-      return null;
-    }
-    function setCreateNotice(value) {
-      store(win,recordKey + ':creation',value);
+    function saved(key = recordKey) {
+      return savedScene(win,key);
     }
     function createNotice() {
-      const key = recordKey + ':creation';
-      const value = read(win,key);
+      const key = accountKey + ':creation';
+      const value = read(win,key) || read(win,recordKey + ':creation');
       if (!value) return '';
       if (value === 'unconfirmed') return '前回の作成リクエストが受理されたか確認できません。公式ページで状態を確認してから、必要な場合にもう一度作成してください。';
       if (value === 'limited') return '前回、ニコニコが短時間の作成リクエストを制限しました。時間をおいてから再度作成するか、「この範囲を端末で作成」を選べます。';
@@ -467,7 +512,7 @@ const ShareOfficialClip = (() => {
         }, Math.min(retryAt - Date.now() + 1, 2147483647));
         return 'ニコニコからの再試行の目安はあと' + secondsLeft + '秒です。「この範囲を端末で作成」も選べます。';
       }
-      setCreateNotice('');
+      store(win,key,null);
       return '';
     }
     const {request,beginDiagnostic} = transport(win,videoId,lifetime.signal,() => Date.now() >= deadline);
@@ -485,31 +530,18 @@ const ShareOfficialClip = (() => {
         account = linkedName(permission);
         find('account').textContent = account ? '投稿先　@' + account : '連携した X アカウントに投稿';
         find('editor').hidden = false;
-        const prefix = 'zenzaWatch:officialClip:' + videoId + ':';
-        recordKey = prefix + account.toLowerCase();
-        // Older versions used the display casing. Preserve their in-flight receipts.
-        if (recordKey !== prefix + account) {
-          for (const suffix of ['',':creation']) {
-            const oldKey = prefix + account + suffix, value = read(win,oldKey);
-            if (!value) continue;
-            if (!read(win,recordKey + suffix)) store(win,recordKey + suffix,value);
-            store(win,oldKey,null);
+        accountKey = restoreAccount(win,videoId,account);
+        if (!hasEnd && !sharedEditor) {
+          const lastKey = read(win,accountKey + ':last');
+          const lastRecord = lastKey && saved(lastKey);
+          if (lastRecord) {
+            start.value = String(seconds(Number(lastRecord.start)));
+            end.value = String(seconds(Number(lastRecord.end)));
           }
         }
-        const running = publications.get(recordKey);
-        if (running) { observe(running); return; }
-        if (pendingCreations.has(recordKey)) {
-          state('creating', '先ほどの作成リクエストの結果を確認しています…');
-          await pendingCreations.get(recordKey).catch(() => {});
-          if (lifetime.signal.aborted) return;
-        }
-        const previous = saved();
-        // An unconfirmed publication must always resume its result check. A newly
-        // selected range otherwise starts a fresh draft, even if an old preview exists.
-        const sameRange = previous && seconds(Number(previous.start)) === start.valueAsNumber && seconds(Number(previous.end)) === end.valueAsNumber;
-        if (previous && (!hasEnd || sameRange || previous.kind === 'post')) {
-          restore(previous);
-        } else state('edit', createNotice());
+        refreshReceipts(accountKey);
+        receiptObservers.add(refreshReceipts);
+        selectScene();
         let licensed;
         try { licensed = (await request('clip-license', source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
         if (lifetime.signal.aborted) return;
@@ -520,6 +552,99 @@ const ShareOfficialClip = (() => {
       } catch (_) {
         state('denied', 'ニコニコの公式投稿を利用できるか確認できません。');
       }
+    }
+    // Lost X acknowledgements stay reachable after the timeline moves. A check
+    // reads the original clip's receipt and never submits another publication.
+    let otherReceipts = [];
+    const checkingReceipts = new Set();
+    function refreshReceipts(changedAccount) {
+      if (changedAccount !== accountKey || lifetime.signal.aborted) return;
+      const keys = new Set(recent.keys());
+      try {
+        for (let i = 0; i < win.sessionStorage.length; i++) keys.add(win.sessionStorage.key(i));
+      } catch (_) { /* In-memory records are still available. */ }
+      const prefix = accountKey + ':range:';
+      otherReceipts = [];
+      for (const key of keys) {
+        if (!key?.startsWith(prefix) || publications.has(key)) continue;
+        const record = saved(key);
+        if (record?.kind === 'post' && !record.failureNotified) otherReceipts.push({key,record});
+      }
+      renderReceiptActions();
+    }
+    function renderReceiptActions() {
+      const actions = find('receiptActions');
+      actions.replaceChildren();
+      for (const {key,record} of otherReceipts) {
+        if (key === recordKey) continue;
+        const button = container.ownerDocument.createElement('button');
+        button.type = 'button';
+        button.textContent = record.start + '〜' + record.end + '秒の投稿結果を再確認';
+        button.disabled = checkingReceipts.has(key);
+        button.onclick = async () => {
+          if (checkingReceipts.has(key)) return;
+          checkingReceipts.add(key);
+          button.disabled = true;
+          let message;
+          try {
+            const result = await request('clip-post-status','/clips/' + encodeURIComponent(record.id) + '/x-post');
+            if (lifetime.signal.aborted) return;
+            message = resolveReceipt(key,record.id,result) || 'ニコニコで投稿を処理しています。';
+          } catch (_) { message = '投稿結果を確認できません。時間をおいて再確認してください。'; }
+          finally { checkingReceipts.delete(key); }
+          if (lifetime.signal.aborted) return;
+          const notice = find('receiptResult');
+          notice.hidden = false;
+          notice.textContent = record.start + '〜' + record.end + '秒　' + message;
+          refreshReceipts(accountKey);
+        };
+        actions.append(button);
+      }
+      find('otherReceipts').hidden = !actions.childElementCount;
+    }
+    function resolveReceipt(key,id,result) {
+      const posted = result.status === 'DONE';
+      if (!posted && !['FAILED','ERROR'].includes(result.status)) return;
+      const failure = posted ? null : postFailure(result.failureReason);
+      const message = posted ? 'X にクリップをポストしました。' : failure.message;
+      const previous = saved(key);
+      if (previous?.id !== id || previous.kind !== 'post' || previous.failureNotified) return message;
+      if (posted) beginDiagnostic('clip-post')?.success();
+      store(win,key,JSON.stringify({...previous,kind:posted ? 'posted' : 'post',failureNotified:!posted}));
+      onNotify?.(publicationLabel(info.watchId || videoId,previous.start,previous.end) + message,
+        posted ? 'info' : 'error',publicationDetails('receipt',posted ? 'posted' : failure.reason));
+      for (const refresh of receiptObservers) refresh(accountKey);
+      return message;
+    }
+    function sceneKey(from,to) {
+      return rangeKey(accountKey,Math.round(from * 1000),Math.round(to * 1000));
+    }
+    function selectScene() {
+      unobserve?.();
+      const version = ++selectionVersion;
+      win.clearTimeout(timer);
+      win.clearTimeout(retryTimer);
+      retryAt = 0;
+      clipId = null;
+      preview.hidden = true;
+      preview.removeAttribute('src');
+      recordKey = sceneKey(start.valueAsNumber,end.valueAsNumber);
+      renderReceiptActions();
+      const running = publications.get(recordKey);
+      if (running) { observe(running); return; }
+      function resume() {
+        if (lifetime.signal.aborted || version !== selectionVersion) return;
+        const previous = saved();
+        if (previous) restore(previous);
+        else state('edit',createNotice());
+      }
+      const deleting = pendingDeletions.get(recordKey);
+      const pending = deleting || pendingCreations.get(recordKey);
+      if (pending) {
+        if (deleting) state('discarding','クリップを削除しています…');
+        else state('creating','先ほどの作成リクエストの結果を確認しています…');
+        void pending.then(resume,resume);
+      } else resume();
     }
     const clipPath = () => '/clips/' + encodeURIComponent(clipId);
     function restore(previous) {
@@ -540,19 +665,15 @@ const ShareOfficialClip = (() => {
     }
     async function poll() {
       if (lifetime.signal.aborted) return;
+      const version = selectionVersion;
       const posting = task === 'post';
       state(posting ? 'posting' : 'generating', posting ? 'X への投稿結果を確認しています…' : 'クリップを生成しています…');
       try {
         const result = await request(posting ? 'clip-post-status' : 'clip-status', clipPath() + (posting ? '/x-post' : ''));
-        if (lifetime.signal.aborted) return;
+        if (lifetime.signal.aborted || version !== selectionVersion) return;
         if (result?.status === 'DONE') {
           if (posting) {
-            // A confirmed publication also resolves a lost POST acknowledgement, without resending the body.
-            beginDiagnostic('clip-post')?.success();
-            const recovered = saved()?.kind === 'post';
-            remember('posted');
-            state('posted', 'X にクリップをポストしました。');
-            if (recovered) onNotify?.('公式クリップ（' + (info.watchId || videoId) + '）　X にクリップをポストしました。','info',publicationDetails('receipt','posted'));
+            state('posted',resolveReceipt(recordKey,clipId,result));
             return;
           }
           const uri = new URL(result.clipUri);
@@ -564,13 +685,7 @@ const ShareOfficialClip = (() => {
         }
         if (result?.status === 'FAILED' || result?.status === 'ERROR') {
           if (posting) {
-            const failure = postFailure(result.failureReason);
-            state('postFailed',failure.message);
-            const previous = saved();
-            if (previous?.kind === 'post' && !previous.failureNotified) {
-              store(win,recordKey,JSON.stringify({...previous,failureNotified:true}));
-              onNotify?.('公式クリップ（' + (info.watchId || videoId) + '）　' + failure.message,'warning',publicationDetails('receipt',failure.reason));
-            }
+            state('postFailed',resolveReceipt(recordKey,clipId,result));
           }
           else state('clipError', 'クリップの生成に失敗しました。');
           return;
@@ -579,23 +694,28 @@ const ShareOfficialClip = (() => {
             Date.now() >= deadline) { uncertain(); return; }
         timer = win.setTimeout(poll, pollInterval);
       } catch (error) {
-        if (!lifetime.signal.aborted && !posting && [404,410].includes(error.httpStatus)) {
+        if (lifetime.signal.aborted || version !== selectionVersion) return;
+        if (!posting && [404,410].includes(error.httpStatus)) {
           startAnother();
-          state('edit', '前回のプレビューはニコニコで利用できなくなりました。区間を確認して新しく作成できます。');
+          if (phase === 'edit') state('edit', '前回のプレビューはニコニコで利用できなくなりました。区間を確認して新しく作成できます。');
         } else uncertain();
       }
     }
     create.onclick = async () => {
       if (phase !== 'edit' || !validRange() || pendingCreations.has(recordKey) || publications.has(recordKey)) return;
+      store(win,accountKey + ':last',recordKey);
       state('creating', 'クリップの作成をリクエストしています…');
+      const version = selectionVersion;
       try {
-        clipId = await createTracked(win,request,source,recordKey,Math.round(start.valueAsNumber * 1000),
+        const id = await createTracked(win,request,source,accountKey,recordKey,Math.round(start.valueAsNumber * 1000),
           Math.round(end.valueAsNumber * 1000),draft.value);
-        if (lifetime.signal.aborted) return;
+        if (lifetime.signal.aborted || version !== selectionVersion) return;
+        clipId = id;
         task = 'clip';
         deadline = Date.now() + pollLimit;
         await poll();
       } catch (error) {
+        if (lifetime.signal.aborted || version !== selectionVersion) return;
         if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') state('edit', createNotice());
         else if (error.httpStatus === 401 || error.httpStatus === 403) {
           state('denied', 'ニコニコで公式クリップを作成できません。ログイン、X連携、動画の共有設定を確認してください。');
@@ -627,13 +747,14 @@ const ShareOfficialClip = (() => {
       if (lifetime.signal.aborted || !recordKey || publications.has(recordKey) || pendingCreations.has(recordKey)) return;
       if (phase !== 'preview' && !(sharedEditor && phase === 'edit' && validRange() && Date.now() >= retryAt)) return;
       const previous = saved();
-      if (previous?.kind === 'post' || (previous?.kind === 'posted' && Number(previous.start) === start.valueAsNumber && Number(previous.end) === end.valueAsNumber)) {
+      if (previous?.kind === 'post' || previous?.kind === 'posted') {
         restore(previous);
         return;
       }
       const body = sharedEditor ? String(text() || '') : draft.value;
       if (!body.trim()) return;
-      observe(publish(win,{key:recordKey,account,source,videoId,watchId:String(info.watchId || videoId),
+      store(win,accountKey + ':last',recordKey);
+      observe(publish(win,{key:recordKey,accountKey,account,source,videoId,name:String(info.title || info.watchId || videoId),watchId:String(info.watchId || videoId),
         id:phase === 'preview' ? clipId : null,uri:preview.getAttribute('src'),
         first:Math.round(start.valueAsNumber*1000),last:Math.round(end.valueAsNumber*1000),text:body},onNotify,holdWatchPage));
     }
@@ -644,31 +765,35 @@ const ShareOfficialClip = (() => {
       void poll();
     };
     function startAnother() {
-      remember(null);
-      clipId = null;
-      preview.hidden = true;
-      preview.removeAttribute('src');
-      if (hasEnd) {
+      store(win,recordKey,null);
+      if (hasEnd && !sharedEditor) {
         start.value = String(initialStart);
         end.value = String(initialEnd);
       }
-      state('edit', '新しい区間を選んでください。');
+      selectScene();
+      if (phase === 'edit') state('edit', '新しい区間を選んでください。');
     }
     again.onclick = () => { if (phase === 'posted') startAnother(); };
     discard.onclick = async () => {
       if (!clipId || discard.hidden) return;
-      const previous = phase;
+      const previous = phase, key = recordKey, version = selectionVersion;
       state('discarding', 'クリップを削除しています…');
+      const deleting = request('clip-delete',clipPath(),'DELETE')
+        .then(() => store(win,key,null))
+        .finally(() => pendingDeletions.delete(key));
+      pendingDeletions.set(key,deleting);
       try {
-        await request('clip-delete', clipPath(), 'DELETE');
-        if (lifetime.signal.aborted) return;
-        startAnother();
-      } catch (_) { state(previous, '削除結果を確認できません。公式の視聴ページで確認してください。'); }
+        await deleting;
+        if (!lifetime.signal.aborted && version === selectionVersion) startAnother();
+      } catch (_) {
+        if (version === selectionVersion) state(previous,'削除結果を確認できません。公式の視聴ページで確認してください。');
+      }
     };
     void load();
     const cleanup = () => {
       unobserve?.();
       lifetime.abort();
+      receiptObservers.delete(refreshReceipts);
       win.clearTimeout(timer);
       win.clearTimeout(retryTimer);
       if (!preview.paused) preview.pause();
@@ -677,11 +802,43 @@ const ShareOfficialClip = (() => {
     };
     return Object.assign(cleanup,{submit,refresh:update,setRange(range) {
       if (!range || lifetime.signal.aborted || !Number.isFinite(range.start) || !Number.isFinite(range.end)) return;
-      selectedRange = {start:seconds(range.start),end:seconds(range.end)};
-      update();
+      const from = seconds(range.start), to = seconds(range.end);
+      if (from === start.valueAsNumber && to === end.valueAsNumber) return;
+      start.value = String(from);
+      end.value = String(to);
+      if (accountKey) selectScene(); else update();
     }});
   }
-  return {mount};
+  async function submitQuick({watchId,videoId,name,from,to,text},onNotify,holdWatchPage) {
+    const first = Math.round(from * 1000), last = Math.round(to * 1000);
+    const source = '/videos/' + encodeURIComponent(videoId);
+    const {request} = transport(window,videoId,new AbortController().signal,() => false);
+    let permission;
+    try { permission = await request('clip-permission',source + '/tweet-possibility'); }
+    catch (error) {
+      onNotify('公式投稿の利用状況を確認できませんでした。','warning',publicationDetails('permission',error.reason || 'network',error));
+      return;
+    }
+    const denied = permissionReason(permission), account = linkedName(permission);
+    if (denied || !account) {
+      onNotify(permissionMessages[denied] || '連携先の名前を確認できません。ニコニコの視聴ページで投稿先を確認してください。','warning');
+      return;
+    }
+    const accountKey = restoreAccount(window,videoId,account);
+    const key = rangeKey(accountKey,first,last);
+    const previous = savedScene(window,key);
+    if (publications.has(key) || pendingCreations.has(key) || pendingDeletions.has(key)) {
+      onNotify('この区間は処理中です。','warning');
+      return;
+    }
+    if (previous || read(window,key + ':creation') === 'unconfirmed' || read(window,accountKey + ':creation') === 'unconfirmed') {
+      onNotify(previous?.kind === 'posted' ? 'この区間はすでに投稿済みです。' : 'この区間には前回の作成・投稿記録があります。共有画面で状態を確認してください。','warning');
+      return;
+    }
+    store(window,accountKey + ':last',key);
+    publish(window,{key,accountKey,account,source,videoId,watchId,name,first,last,text},onNotify,holdWatchPage);
+  }
+  return {mount,submitQuick};
 })();
 //===END===
 export {ShareOfficialClip};

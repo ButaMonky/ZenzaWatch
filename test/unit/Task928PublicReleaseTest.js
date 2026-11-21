@@ -8,11 +8,11 @@ const manifest=JSON.parse(read('dist-manifest.json'));
 const prefix='https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/';
 const installers='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
 const expected={
- 'ZenzaWatch-dev.user.js':'2.7.494-task1118',
+ 'ZenzaWatch-dev.user.js':'2.7.501-task1125',
  'ZenzaHLS.user.js':'0.1.0-task997',
- 'MylistPocket.user.js':'0.5.103-task1114',
+ 'MylistPocket.user.js':'0.5.104-task1120',
  'ZenzaAdvancedSettings.user.js':'0.4.0-task993',
- 'ZenzaBlogPartsButton.user.js':'1.1.68-task1118'
+ 'ZenzaBlogPartsButton.user.js':'1.1.75-task1125'
 };
 describe('Public promotion: release channel and installer integrity',function(){
  it('preserves 10 active and 3 frozen distribution files',()=>{

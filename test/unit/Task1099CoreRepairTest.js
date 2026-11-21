@@ -29,6 +29,7 @@ describe('main feature repair reports',()=>{
     run(beginSection('packages/lib/src/nico/LikeApi.js')+';globalThis.likes=LikeApi;',ctx);
     await assert.rejects(ctx.likes.like('sm9'));
     assert.equal(events.length,1);
+    assert.deepEqual([events[0].method,events[0].endpoint],['POST','like.add']);
     assert.deepEqual([events[0].reason,events[0].errorCode,events[0].statusCode,events[0].apiStatus],
       ['service','OTHER',200,200]);
     body={meta:{status:403}};

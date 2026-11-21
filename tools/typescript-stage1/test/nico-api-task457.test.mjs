@@ -88,7 +88,14 @@ test('legacy build directives are preserved in each runtime',()=>{
       MylistApiLoader:'../infra/RequestDiagnostics',
       SupporterCredit:'../../../lib/src/infra/RequestDiagnostics',
       NicodicArticleLoader:'../infra/RequestDiagnostics',
+      NicoQuery:'../infra/RequestDiagnostics',
+      ThumbInfoLoader:'../infra/RequestDiagnostics',
+      NicoRssLoader:'../infra/RequestDiagnostics',
+      MatrixRankingLoader:'../infra/RequestDiagnostics',
+      CommonsTreeLoader:'../infra/RequestDiagnostics',
+      VideoSearchForm:'../packages/lib/src/infra/RequestDiagnostics',
       OwnerSupplement:'../infra/RequestDiagnostics',
+      NotificationJournalPolicy:'../../../lib/src/infra/RequestDiagnostics',
       initializer:'../packages/lib/src/infra/RequestDiagnostics'
     };
     if (spec.name === 'NotificationHistoryPanel') {

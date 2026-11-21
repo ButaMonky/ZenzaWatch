@@ -64,7 +64,7 @@ const PlaybackPosition: PlaybackPositionClient = (() => {
       throw {reason: 'invalid-seconds'};
     }
     const ticket = typeof RequestDiagnostics === 'undefined' ? undefined :
-      RequestDiagnostics.begin('playback-position', videoId, 'response');
+      RequestDiagnostics.begin('playback-position', videoId, 'response', undefined, undefined, {url:URL_V2, method:'PUT'});
     let res: Response | undefined;
     try {
       res = await netUtil.fetch(URL_V2, {

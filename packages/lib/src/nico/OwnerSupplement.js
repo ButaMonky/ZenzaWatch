@@ -6,26 +6,33 @@ import {netUtil} from '../infra/netUtil';
 const OwnerSupplement = (() => {
     const BLANK_ICON = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
     const loadFromNicoad = async (videoId) => {
-        let schemaValid = true, responseStatus = 200;
-        const execute = async () => {
+        const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`;
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('owner', videoId, 'response', undefined, undefined, { url, method: 'GET' });
+        let res;
+        try {
             const net = (typeof netUtil !== 'undefined') ? netUtil :
                 { fetch: (u, o) => fetch(u, o) };
-            const res = await net.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`, { credentials: 'omit', timeout: 5000 });
-            responseStatus = res?.status || 0;
+            res = await net.fetch(url, { credentials: 'omit', timeout: 5000, ...(ticket ? { diagnosticActive: () => false } : {}) });
             if (!res || !res.ok) {
+                ticket?.failure(RequestDiagnostics.readFailure(res, null));
                 return null;
             }
             const json = await res.json();
-            schemaValid = !!json && !!json.data && typeof json.data === 'object';
-            const d = json && json.data;
-            const data = d;
+            const data = json?.data;
+            // ownerId is optional even for a successful matching video.
+            const missing = !data || typeof data !== 'object' || Array.isArray(data) ? 'data' :
+                String(data.id) !== String(videoId) ? 'data.id' : undefined;
+            ticket?.decoded(res, json?.meta, missing, false);
             if (!data || String(data.id) !== String(videoId) || !data.ownerId) {
                 return null;
             }
             return { id: String(data.ownerId), name: data.ownerName || '', icon: data.ownerIcon || '' };
-        };
-        return typeof RequestDiagnostics === 'undefined' ? execute() :
-            RequestDiagnostics.observe('owner', videoId, execute, () => responseStatus >= 400 ? { status: responseStatus } : schemaValid, () => true);
+        }
+        catch (error) {
+            ticket?.failure(RequestDiagnostics.readFailure(res, error));
+            throw error;
+        }
     };
     /** Mutate the supplied thumbInfo as the original JavaScript did. */
     const supplementThumbInfo = async (thumbInfo) => {

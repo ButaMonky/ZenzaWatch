@@ -5,7 +5,7 @@ const settings_1 = require("./settings");
 const targets_1 = require("./targets");
 const excluded = 'input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"],svg';
 // Own only the inserted siblings. Never wrap, rewrite or replace source links.
-function mountInlineButtons(w, s, open, check) {
+function mountInlineButtons(w, s, open, check, ignoreLink) {
     if (s.activation !== 'inline' || !(0, settings_1.siteEnabled)(w.location.href, s))
         return { dispose() { } };
     const d = w.document, owned = new Map(), pending = new Set();
@@ -18,7 +18,7 @@ function mountInlineButtons(w, s, open, check) {
             job?.();
         } }) : null;
     let disposed = false, timer, busy = false;
-    const ids = (a) => a.isConnected && !a.closest(excluded) ? (0, targets_1.linkTargets)(a.getAttribute('href') || '', d.baseURI, s) : [];
+    const ids = (a) => a.isConnected && !a.closest(excluded) && !ignoreLink?.(a) ? (0, targets_1.linkTargets)(a.getAttribute('href') || '', d.baseURI, s) : [];
     function update(a) {
         const old = owned.get(a);
         if (ids(a).length !== 1) {

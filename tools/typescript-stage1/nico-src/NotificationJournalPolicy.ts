@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 export type JournalLevel = 'info' | 'success' | 'warning' | 'error';
 export type JournalCategory = 'general' | 'comment' | 'like' | 'network' | 'player' | 'system';
 export type JournalDetails = Record<string, string | number | boolean>;
@@ -80,6 +81,15 @@ const NotificationJournalPolicy = (() => {
     const result: JournalDetails = {};
     if (!data || typeof data !== 'object' || Array.isArray(data)) { return result; }
     const fields = data as Record<string, unknown>;
+    if (typeof RequestDiagnostics !== 'undefined') Object.assign(result, RequestDiagnostics.projectEvidence(fields));
+    if (fields.operation === 'x-draft' && typeof fields.fileBytes === 'number' &&
+        Number.isSafeInteger(fields.fileBytes) && fields.fileBytes > 0) result.fileBytes = fields.fileBytes;
+    if (fields.operation === 'x-draft' && typeof fields.uploadPercent === 'number' &&
+        Number.isInteger(fields.uploadPercent) && fields.uploadPercent >= 0 && fields.uploadPercent <= 100) result.uploadPercent = fields.uploadPercent;
+    if (typeof fields.column === 'number' && Number.isInteger(fields.column) && fields.column > 0 && fields.column <= 10000000)
+      result.column = fields.column;
+    if (typeof fields.scriptCause === 'string' && ['non-function','null-property','undefined-property','undefined-name','not-iterable'].includes(fields.scriptCause))
+      result.scriptCause = fields.scriptCause;
     for (const key of safeKeys) {
       const value = fields[key];
       if (key === 'apiStatus' || key === 'statusCode') {
@@ -149,6 +159,8 @@ const NotificationJournalPolicy = (() => {
       advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
       // Task1040: 動画の最後のニコニ広告一覧は、広告・ギフト・提供情報とは別にON/OFFする（初期値ON）
       'nicoad-end': 'nicoadEnd',
+      'search-count':'search', 'legacy-query':'related', 'watch-tracking':'player','ranking-page':'related','channel-rss':'related',
+      'watch-owner':'related', 'watch-lazy':'player', 'thumb-info':'player', 'linked-channel':'related', 'commons-parents':'related', 'commons-children':'related', 'ranking-rss':'related', 'pocket-metadata':'related',
       'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
       'comment-read': 'comment', 'comment-history-read': 'comment', 'comment-key': 'comment',
       'comment-post': 'commentAction', nicoru: 'commentAction', 'comment-delete': 'commentAction', 'script-error': 'scriptError',

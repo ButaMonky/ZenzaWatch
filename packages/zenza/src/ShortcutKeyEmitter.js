@@ -4,6 +4,13 @@ import {SHORTCUT_ACTIONS} from './ShortcutActions';
 //===BEGIN===
 //@require SHORTCUT_ACTIONS
 class ShortcutKeyEmitter {
+    static #sharePresses = new WeakMap();
+    static consumeSharePress(event, command) {
+        if (ShortcutKeyEmitter.#sharePresses.get(event) !== command) {
+            return false;
+        }
+        return ShortcutKeyEmitter.#sharePresses.delete(event);
+    }
     static create(config, element, externalEmitter) {
         const emitter = new Emitter();
         let isVerySlow = false;
@@ -77,11 +84,20 @@ class ShortcutKeyEmitter {
         // ページリロード無しで反映できるよう rebuildDynamicMap() として
         // 独立させ、config の 'update' イベントで再構築する。
         let dynamicMap = {};
+        const shareBindings = new Map();
         const rebuildDynamicMap = () => {
             const next = {};
+            shareBindings.clear();
             SHORTCUT_ACTIONS.filter(action => !action.legacy).forEach(action => {
                 const keyValue = parseInt(config.props[`KEY_${action.id}`], 10) || 0;
-                if (keyValue) {
+                if (!keyValue) {
+                    return;
+                }
+                if (action.shareShortcut) {
+                    // Neither sharing action should run if both use the same key.
+                    shareBindings.set(keyValue, shareBindings.has(keyValue) ? null : action);
+                }
+                else {
                     next[keyValue] = action;
                 }
             });
@@ -308,6 +324,19 @@ class ShortcutKeyEmitter {
                     .map(item => item.id);
                 if (ids.length) {
                     emitter.emit('keyDown', 'RELATED_MENU_LINKS', e, ids);
+                }
+                else if (!key && e.isTrusted === true && e.type === 'keydown' && e.eventPhase > 0) {
+                    const action = shareBindings.get(keyCode);
+                    const owner = e.target?.ownerDocument?.defaultView || window;
+                    if (action && e instanceof owner.KeyboardEvent) {
+                        ShortcutKeyEmitter.#sharePresses.set(e, action.command);
+                        try {
+                            emitter.emit('keyDown', action.id, e, e);
+                        }
+                        finally {
+                            ShortcutKeyEmitter.#sharePresses.delete(e);
+                        }
+                    }
                 }
             }
             if (key) {

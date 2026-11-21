@@ -58,7 +58,7 @@ const ShareClipTimeline = (() => {
     .zwClipTimeline .zwClipTools button {font:inherit;padding:3px 8px}
     </style>
     <button type="button" class="zwClipScreen" aria-label="区間を再生" aria-pressed="false"><canvas aria-label="選択した場面"></canvas><span class="zwClipScene" hidden></span><span class="zwClipMessage" hidden></span></button>
-    <div class="zwClipReadout"><button type="button" data-clip="play" aria-pressed="false">区間を再生</button><output class="zwClipTime" aria-label="プレビュー時刻"></output><label class="zwClipLength">選択 <input type="number" name="length" min="0" step="any" aria-label="選択した区間の長さ（秒）"> 秒</label><span class="zwClipRangeError" aria-live="polite" hidden></span></div>
+    <div class="zwClipReadout"><button type="button" data-clip="play" aria-pressed="false">区間を再生</button><output class="zwClipTime" aria-label="プレビュー時刻"></output><label class="zwClipLength">選択 <input type="number" name="length" min="0" step="any" aria-label="選択した区間の長さ（秒）"> 秒</label><button type="button" data-clip="selectAll" aria-label="全区間を選択" title="動画の先頭から末尾までを選択">全選択</button><span class="zwClipRangeError" aria-live="polite" hidden></span></div>
     <div class="zwClipRailWrap"><div class="zwClipTicks" aria-hidden="true"></div>
       <div class="zwClipRail"><div class="zwClipFrames" aria-hidden="true"></div><div class="zwClipMask"></div><div class="zwClipMask"></div><div class="zwClipRange"></div>
         <button type="button" data-edge="start" role="slider" aria-label="開始位置"></button>
@@ -66,7 +66,7 @@ const ShareClipTimeline = (() => {
       </div></div>
     <div class="zwClipThumbHint" hidden><small aria-live="polite" aria-atomic="true" tabindex="-1"></small> <button type="button" data-clip="thumbnails">動画からサムネイルを読み込む</button></div>
     <div class="zwClipTools" aria-label="タイムラインの表示範囲"><button type="button" data-clip="prev" aria-label="前の範囲">←</button><button type="button" data-clip="next" aria-label="次の範囲">→</button>
-    <button type="button" data-clip="zoomIn">拡大</button><button type="button" data-clip="zoomOut">縮小</button><button type="button" data-clip="all">全体</button></div>`;
+    <button type="button" data-clip="zoomIn">拡大</button><button type="button" data-clip="zoomOut">縮小</button><button type="button" data-clip="all">全体を表示</button></div>`;
 
   function waitForFrame(video, time, signal, request, timeoutMs = 6000) {
     return new Promise((resolve, reject) => {
@@ -484,6 +484,7 @@ const ShareClipTimeline = (() => {
       const disabled = locked();
       const valid = Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b <= duration && b > a && b - a <= maxLength + 0.0001;
       lengthInput.disabled = disabled || !Number.isFinite(a) || a < 0 || a >= duration;
+      action('selectAll').disabled = disabled || duration > maxLength;
       const limit = Math.min(maxLength, secondsBetween(a,duration));
       lengthInput.max = Number.isFinite(limit) ? String(limit) : '';
       if (!editingLength) lengthInput.value = valid ? String(secondsBetween(a,b)) : '';
@@ -760,6 +761,14 @@ const ShareClipTimeline = (() => {
     };
     on(action('zoomIn'),'click',() => zoom(0.5)); on(action('zoomOut'),'click',() => zoom(2));
     on(action('all'),'click',() => viewport(0,duration));
+    on(action('selectAll'),'click',() => {
+      if (locked() || duration <= 0 || duration > maxLength) return;
+      stopPreview();
+      windowStart = 0;
+      span = duration;
+      write(0,duration);
+      previewSelection(0);
+    });
     on(document,'visibilitychange',() => { if (document.hidden) stopPreview(); });
     refresh();
     function qualityChanged(kind) {

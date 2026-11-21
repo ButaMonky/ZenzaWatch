@@ -121,7 +121,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:'MatrixRankingLoader',
     runtime:'packages/lib/src/nico/MatrixRankingLoader.js',
     originalSha256:'51e0d563325cc933b22c2bdf3b964c3263d81b3662ae4b675d9d239f73165936',
-    preamble:["import {netUtil} from '../infra/netUtil';"],
+    beginLines:['//@require RequestDiagnostics'],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';"],
     task:'task461'
   }),
   api({
@@ -155,7 +156,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:'ThumbInfoLoader',
     runtime:'packages/lib/src/nico/ThumbInfoLoader.js',
     originalSha256:'8749cbbccd60befada30dd9b15fb490511794f60b07b7a43ec3258e04efd3869',
-    preamble:["import {CrossDomainGate} from '../infra/CrossDomainGate';","import {parseThumbInfo} from './parseThumbInfo';"],
+    beginLines:['//@require RequestDiagnostics'],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {CrossDomainGate} from '../infra/CrossDomainGate';","import {parseThumbInfo} from './parseThumbInfo';"],
     extraExports:['parseThumbInfo'],
     shape:'iife',
     task:'task469'
@@ -201,7 +203,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:'NicoRssLoader',
     runtime:'packages/lib/src/nico/NicoRssLoader.js',
     originalSha256:'dd134cbe40ec9016cf9251aee20fcf12cba5ef6e8b981a835a54aaefbe0a6825',
-    preamble:["import {textUtil} from '../text/textUtil';","import {netUtil} from '../infra/netUtil';"],
+    beginLines:['//@require RequestDiagnostics'],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {textUtil} from '../text/textUtil';","import {netUtil} from '../infra/netUtil';"],
     shape:'iife',
     task:'task465'
   }),
@@ -226,7 +229,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:'CommonsTreeLoader',
     runtime:'packages/lib/src/nico/CommonsTreeLoader.js',
     originalSha256:'84df32912838bf165ae0458aa54e4920ca48302cceb717fcf5af0fb9dc8f7f5b',
-    preamble:["import {netUtil} from '../infra/netUtil';"],
+    beginLines:['//@require RequestDiagnostics'],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';"],
     shape:'iife',
     task:'task479'
   }),
@@ -366,7 +370,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:'NicoQuery',
     runtime:'packages/lib/src/nico/NicoQuery.js',
     originalSha256:'1d162276bcc8ba491cc382f41187c1b41df0571f6a02ad09fdd29a895e6172ea',
-    preamble:["import {textUtil} from '../text/textUtil';","import {netUtil} from '../infra/netUtil';",
+    beginLines:['//@require RequestDiagnostics'],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {textUtil} from '../text/textUtil';","import {netUtil} from '../infra/netUtil';",
       "import {MylistApiLoader} from './MylistApiLoader';","import {RecommendAPILoader} from './RecommendAPILoader';",
       "import {NicoRssLoader} from './NicoRssLoader';","import {NicoSearchApiV2Loader} from './VideoSearch';"],
     shape:'declarations',
@@ -987,7 +992,7 @@ export const NICO_API_MODULES=Object.freeze([
     name:'NotificationJournalPolicy',
     runtime:'packages/zenza/src/notification/NotificationJournalPolicy.js',
     originalSha256:'e7388faf4ee93c27ca8f5cb262719f651d982129a413964d09b5cf5c3ccf96e6',
-    preamble:[], shape:'iife', task:'task990'
+    preamble:["import {RequestDiagnostics} from '../../../lib/src/infra/RequestDiagnostics';"], beginLines:['//@require RequestDiagnostics'], shape:'iife', task:'task990'
   }),
   api({
     name:'NotificationJournalStore',
@@ -1271,7 +1276,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:"VideoSearchForm",
     runtime:"src/VideoSearchForm.js",
     originalSha256:"f743e4fe47d98f94f76e0356c381aaa19b55a1aed3d6795b1e96b6559d9dc19a",
-    preamble:["import {startup} from './ZenzaContext';","import {ZenzaWatch, global} from './ZenzaContext';","import {CONSTANT} from './constant';","import {Config} from './Config';","import {UaaLoader} from '../packages/lib/src/nico/loader';","import {RelatedVideoList} from '../packages/zenza/src/Playlist/RelatedVideoList';","import {TagListView} from './TagListView';","import {parseVideoSearchSortValue, NicoSearchApiV2Loader} from '../packages/lib/src/nico/VideoSearch';","import {TagSuggestLoader} from '../packages/lib/src/nico/TagSuggestLoader';","import {ThumbInfoLoader} from '../packages/lib/src/nico/ThumbInfoLoader';","import {BaseViewComponent} from '../packages/zenza/src/parts/BaseViewComponent';","import {Emitter} from '../packages/lib/src/Emitter';","import {sleep} from '../packages/lib/src/infra/sleep';","import {Fullscreen} from '../packages/lib/src/dom/Fullscreen';","import {textUtil} from '../packages/lib/src/text/textUtil';","import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';","import {css, cssUtil} from '../packages/lib/src/css/css';","import {uq} from '../packages/lib/src/uQuery';","import {domEvent} from '../packages/lib/src/dom/domEvent';","import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';","import {MylistPocketDetector} from '../packages/zenza/src/init/MylistPocketDetector';","import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';","import {RelatedMenuOrder} from './RelatedMenuOrder';","import {UiVisibilityRegistry} from './UiVisibilityRegistry';","import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';","const VideoItemObserver = {","  observe: () => {}","};"],
+    beginLines:['//@require RequestDiagnostics'],
+    preamble:["import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';","import {startup} from './ZenzaContext';","import {ZenzaWatch, global} from './ZenzaContext';","import {CONSTANT} from './constant';","import {Config} from './Config';","import {UaaLoader} from '../packages/lib/src/nico/loader';","import {RelatedVideoList} from '../packages/zenza/src/Playlist/RelatedVideoList';","import {TagListView} from './TagListView';","import {parseVideoSearchSortValue, NicoSearchApiV2Loader} from '../packages/lib/src/nico/VideoSearch';","import {TagSuggestLoader} from '../packages/lib/src/nico/TagSuggestLoader';","import {ThumbInfoLoader} from '../packages/lib/src/nico/ThumbInfoLoader';","import {BaseViewComponent} from '../packages/zenza/src/parts/BaseViewComponent';","import {Emitter} from '../packages/lib/src/Emitter';","import {sleep} from '../packages/lib/src/infra/sleep';","import {Fullscreen} from '../packages/lib/src/dom/Fullscreen';","import {textUtil} from '../packages/lib/src/text/textUtil';","import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';","import {css, cssUtil} from '../packages/lib/src/css/css';","import {uq} from '../packages/lib/src/uQuery';","import {domEvent} from '../packages/lib/src/dom/domEvent';","import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';","import {MylistPocketDetector} from '../packages/zenza/src/init/MylistPocketDetector';","import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';","import {RelatedMenuOrder} from './RelatedMenuOrder';","import {UiVisibilityRegistry} from './UiVisibilityRegistry';","import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';","const VideoItemObserver = {","  observe: () => {}","};"],
     shape:'declarations',
     topLevel:["class VideoSearchForm extends Emitter {","}","VideoSearchForm.UNORDERABLE = ['h', 'p'];","startup.add('VideoSearchForm:style', () => {","`, { className: 'screenMode for-popup videoSearchPanel', disabled: true });","});","VideoSearchForm.VIDEO_ID_REG =","VideoSearchForm.MAX_VIDEO_ID_CARDS = 5;","VideoSearchForm.VIDEO_ID_SUGGEST_MODES = ['merged', 'side', 'delayed'];","VideoSearchForm.MAX_VIDEO_ID_TAGS = 10;","VideoSearchForm.VIDEO_ID_CARD_DELAY_MS = 500;","VideoSearchForm.WORD_COUNT_DELAY_MS = 300;","VideoSearchForm.WORD_COUNT_CACHE_SIZE = 200;","VideoSearchForm.__css__ = (`","VideoSearchForm.__tpl__ = (`"],
     exportNames:["VideoSearchForm"],
@@ -1493,8 +1499,8 @@ export const NICO_API_MODULES=Object.freeze([
     name:"RootDispatcher",
     runtime:"src/RootDispatcher.js",
     originalSha256:"c87ba817c6a4963a653d5ed26eebb958313b7916899c59b937f4c3bb2a2a63c8",
-    preamble:["import {PRODUCT} from './ZenzaContext';","import {ZenzaWatch} from './ZenzaContext';","import {PopupMessage} from './util';","import {PlayerConfig} from './NicoVideoPlayerDialog';","import {Clipboard} from '../packages/lib/src/dom/Clipboard';","import {VideoSharePanel} from './VideoSharePanel';","import {CommentPictureInPicture} from '../packages/zenza/src/commentLayer/CommentPictureInPicture';","import {PipPageThumbnail} from '../packages/zenza/src/videoPlayer/PipPageThumbnail';","import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';","import {RelatedMenuOrder} from './RelatedMenuOrder';","import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';"],
-    beginLines:["//@require CommentPictureInPicture","//@require PipPageThumbnail","//@require RelatedMenuOrder","//@require RelatedMenuActions","//@require VideoSharePanel"],
+    preamble:["import {PRODUCT} from './ZenzaContext';","import {ZenzaWatch} from './ZenzaContext';","import {PopupMessage} from './util';","import {PlayerConfig} from './NicoVideoPlayerDialog';","import {Clipboard} from '../packages/lib/src/dom/Clipboard';","import {VideoSharePanel} from './VideoSharePanel';","import {ShortcutKeyEmitter} from '../packages/zenza/src/ShortcutKeyEmitter';","import {VideoHoverMenu} from './VideoHoverMenu';","import {CommentPictureInPicture} from '../packages/zenza/src/commentLayer/CommentPictureInPicture';","import {PipPageThumbnail} from '../packages/zenza/src/videoPlayer/PipPageThumbnail';","import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';","import {RelatedMenuOrder} from './RelatedMenuOrder';","import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';"],
+    beginLines:["//@require CommentPictureInPicture","//@require PipPageThumbnail","//@require RelatedMenuOrder","//@require RelatedMenuActions","//@require ShortcutKeyEmitter","//@require VideoHoverMenu","//@require VideoSharePanel"],
     shape:'declarations',
     topLevel:["const RootDispatcher = (() => {","})();"],
     exportNames:["RootDispatcher"],

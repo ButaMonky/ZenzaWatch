@@ -9,7 +9,7 @@ declare const NotificationJournal: typeof import('./NotificationJournal').Notifi
 /** Config is supplied by the userscript dependency loader. */
 declare const Config: {getValue?(key: string): unknown};
 
-type PopupJournal = Pick<import('./NotificationJournalPolicy').JournalInput,'source'|'details'>;
+type PopupJournal = Pick<import('./NotificationJournalPolicy').JournalInput,'source'|'details'|'level'>;
 const PopupMessage = (() => {
   const __css__ = `
     .zenzaPopupMessage {
@@ -43,6 +43,9 @@ const PopupMessage = (() => {
       all: initial; position: fixed; inset: max(12px,env(safe-area-inset-top)) 12px auto auto;
       z-index: 2147483647; width: min(28rem,calc(100vw - 24px)); margin: 0; padding: 0;
       background: transparent; border: 0; overflow: visible; pointer-events: none;
+    }
+    .popupMessageContainer .zenzaShareResult {
+      white-space: normal; overflow-wrap: anywhere; max-width: min(28rem,calc(100vw - 64px));
     }
     .zenzaShareNoticeHost::backdrop {background:transparent;pointer-events:none}
     .zenzaShareNoticeHost .zenzaPopupMessage {
@@ -140,6 +143,13 @@ const PopupMessage = (() => {
       document.addEventListener('visibilitychange', showWaiting);
       return;
     }
+    const dialog = document.querySelector('dialog[open]');
+    const player = document.querySelector('.zenzaVideoPlayerDialog.is-open .popupMessageContainer');
+    if (!dialog && player?.getClientRects().length && (!document.fullscreenElement || document.fullscreenElement.contains(player))) {
+      msg.classList.add('zenzaShareResult');
+      player.prepend(msg);
+      return;
+    }
     if (!noticeHost?.isConnected) {
       noticeHost = document.createElement('div');
       noticeHost.className = 'zenzaShareNoticeHost';
@@ -147,12 +157,12 @@ const PopupMessage = (() => {
       noticeHost.setAttribute('aria-live','polite');
       const supportsPopover = typeof noticeHost.showPopover === 'function';
       if (supportsPopover) noticeHost.setAttribute('popover','manual');
-      const parent = supportsPopover ? document.body :
-        document.querySelector('dialog[open].zenzaShare') || document.fullscreenElement || document.body;
+      const fallback = dialog || document.fullscreenElement || document.body;
+      const parent = supportsPopover ? document.body : fallback;
       parent.appendChild(noticeHost);
       if (supportsPopover) {
         try { noticeHost.showPopover(); }
-        catch (_) { noticeHost.removeAttribute('popover'); }
+        catch (_) { noticeHost.removeAttribute('popover'); fallback.appendChild(noticeHost); }
       }
     }
     const host = noticeHost;
@@ -186,7 +196,7 @@ const PopupMessage = (() => {
     try {
       NotificationJournal.record({
         category: 'general',
-        level: type === 'alert' ? 'error' : type === 'warning' ? 'warning' : 'info',
+        level: type === 'alert' ? 'error' : type === 'warning' ? 'warning' : journal?.level || 'info',
         message: allowHtml ? msg.replace(/<[^>]*>/g, ' ') : msg,
         source: journal?.source || 'popup', details: journal?.details
       });
@@ -198,8 +208,8 @@ const PopupMessage = (() => {
   const notify = (msg?: string, allowHtml = false, journal?: PopupJournal) =>
     nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;', journal);
 
-  const alert = (msg?: string, allowHtml = false) =>
-    nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
+  const alert = (msg?: string, allowHtml = false, journal?: PopupJournal) =>
+    nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;', journal);
 
   const warning = (msg?: string, allowHtml = false, journal?: PopupJournal) =>
     nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;', journal);

@@ -19,6 +19,13 @@ declare const SHORTCUT_ACTIONS: Loose[];
 type ShortcutEmitter=Emitter&{releaseTemporaryPlaybackRate():void};
 
 class ShortcutKeyEmitter {
+  static #sharePresses = new WeakMap<KeyboardEvent, string>();
+
+  static consumeSharePress(event: KeyboardEvent, command: string): boolean {
+    if (ShortcutKeyEmitter.#sharePresses.get(event) !== command) { return false; }
+    return ShortcutKeyEmitter.#sharePresses.delete(event);
+  }
+
   static create(config?: Loose, element?: Loose, externalEmitter?: Loose) {
     const emitter = new Emitter() as ShortcutEmitter;
     let isVerySlow = false;
@@ -94,11 +101,19 @@ class ShortcutKeyEmitter {
     // ページリロード無しで反映できるよう rebuildDynamicMap() として
     // 独立させ、config の 'update' イベントで再構築する。
     let dynamicMap: Record<number, Loose> = {};
+    const shareBindings = new Map<number, {id: string; command: string} | null>();
     const rebuildDynamicMap = () => {
       const next: Record<number, Loose> = {};
+      shareBindings.clear();
       SHORTCUT_ACTIONS.filter(action => !action.legacy).forEach(action => {
         const keyValue = parseInt(config.props[`KEY_${action.id}`], 10) || 0;
-        if (keyValue) { next[keyValue] = action; }
+        if (!keyValue) { return; }
+        if (action.shareShortcut) {
+          // Neither sharing action should run if both use the same key.
+          shareBindings.set(keyValue, shareBindings.has(keyValue) ? null : action);
+        } else {
+          next[keyValue] = action;
+        }
       });
       dynamicMap = next;
     };
@@ -311,7 +326,17 @@ class ShortcutKeyEmitter {
           item.enabled !== false && Number.isSafeInteger(item.shortcutKey) &&
           item.shortcutKey > 0 && item.shortcutKey === keyCode)
           .map(item => item.id);
-        if (ids.length) { emitter.emit('keyDown', 'RELATED_MENU_LINKS', e, ids); }
+        if (ids.length) {
+          emitter.emit('keyDown', 'RELATED_MENU_LINKS', e, ids);
+        } else if (!key && e.isTrusted === true && e.type === 'keydown' && e.eventPhase > 0) {
+          const action = shareBindings.get(keyCode);
+          const owner = e.target?.ownerDocument?.defaultView || window;
+          if (action && e instanceof owner.KeyboardEvent) {
+            ShortcutKeyEmitter.#sharePresses.set(e, action.command);
+            try { emitter.emit('keyDown', action.id, e, e); }
+            finally { ShortcutKeyEmitter.#sharePresses.delete(e); }
+          }
+        }
       }
       if (key) {
         emitter.emit('keyDown', key, e, param);

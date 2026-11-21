@@ -17,6 +17,7 @@ export interface AdDecorationEntry {
   decoration: unknown;
 }
 export interface AdDecorationEnvelope {
+  meta?: unknown;
   data?: { contents?: AdDecorationEntry[] };
 }
 export interface AdDecorationClient {
@@ -52,21 +53,23 @@ const AdDecorationLoader: AdDecorationClient = (() => {
 
   class AdDecorationLoader {
     async _fetchChunk(ids: string[]): Promise<AdDecorationEntry[]> {
-      let schemaValid = false;
-      const execute = async () => {
-        const url = `${API_BASE}?ids=${ids.join(',')}`;
-        const res = await netUtil.fetch(url, {credentials: 'omit'});
+      const url = `${API_BASE}?ids=${ids.join(',')}`;
+      const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+        RequestDiagnostics.begin('ad-decoration', ids.join(','), 'response', undefined, undefined, {url, method:'GET'});
+      let res: Response | undefined;
+      try {
+        res = await netUtil.fetch(url, {credentials: 'omit', ...(ticket ? {diagnosticActive: () => false} : {})});
         if (!res.ok) {
           throw new Error(`広告装飾の取得に失敗 (${res.status})`);
         }
-        // No runtime schema normalization: preserve legacy response and failures.
         const json = await res.json() as AdDecorationEnvelope | null;
-        schemaValid = !!json && Array.isArray(json.data?.contents);
-        return (json && json.data && json.data.contents) || [];
-
-      };
-      return typeof RequestDiagnostics === 'undefined' ? execute() :
-        RequestDiagnostics.observe('ad-decoration', ids.join(','), execute, () => schemaValid, () => true);
+        const contents = json?.data?.contents;
+        ticket?.decoded(res, json?.meta, Array.isArray(contents) ? undefined : 'data.contents', false);
+        return contents || [];
+      } catch (error) {
+        ticket?.failure(RequestDiagnostics.readFailure(res, error));
+        throw error;
+      }
     }
 
     async _loadChunked(

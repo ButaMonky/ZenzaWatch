@@ -61,8 +61,9 @@ declare const CommentPictureInPicture: {
     } | null>;
     readonly isActive: boolean;
     CommentRenderer: {
-        new ({ config }: {
+        new ({ config, smoothSmallText }: {
             config: any;
+            smoothSmallText?: boolean | undefined;
         }): {
             clearCache(): void;
             _getLineHeight(chat: any): any;

@@ -8,7 +8,7 @@ const netUtil = {
         params = params || {};
         const options = { ...params };
         const callerSignal = options.signal;
-        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, callerSignal, options.diagnosticActive);
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, callerSignal, options.diagnosticActive, options.method);
         delete options.diagnosticActive;
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
@@ -71,7 +71,7 @@ const netUtil = {
         // so off www it threw a ReferenceError. Without the gate, fetch directly
         // (works where the API allows the page origin, fails normally elsewhere).
         if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {
-            const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, params?.signal, params?.diagnosticActive);
+            const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, params?.signal, params?.diagnosticActive, params?.method);
             const gateOptions = params?.diagnosticActive ? { ...params } : params;
             if (gateOptions?.diagnosticActive) {
                 delete gateOptions.diagnosticActive;

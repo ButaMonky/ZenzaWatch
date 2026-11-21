@@ -64,6 +64,37 @@ describe('NotificationHistoryPanel (synthetic DOM)', () => {
       assert.doesNotMatch(report,/記録なし|個人の動画名/);
     } finally { h.dom.window.close(); }
   });
+  for (const [phase,reason,expected] of [
+    ['draft-received','draft-media-unknown',/添付欄.*準備状態を確認できません/],
+    ['draft-reserve','draft-background-unavailable',/管理拡張で背面タブを作成できません/],
+    ['draft-prepare','draft-media-hidden',/背面のX.*下書きタブを一度表示/],
+    ['draft-prepare','draft-media-timeout',/準備中.*投稿できる状態を確認できません/],
+    ['draft-prepare','draft-media-rejected',/X.*動画.*エラー/],
+    ['draft-prepare','draft-media-limit',/20分.*投稿できる状態を確認できません/]
+  ]) it('explains X composer readiness in the repair report: ' + reason,async()=>{
+    const h=setup([{id:'x',timestamp:1,version:'2.7.497-task1121',category:'general',level:'warning',source:'x-draft',message:'私的な内容',
+      details:{operation:'x-draft',phase,reason,fileBytes:1572864,
+        ...(phase === 'draft-reserve' ? {} : {elapsedMs:16000,lastStage:'draft-received'}),
+        ...(phase === 'draft-prepare' ? {uploadPercent:26} : {})}}]);
+    try {
+      let report;
+      Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{writeText:async text=>{report=text;}}});
+      await flush();h.root.querySelector('[data-entry-id="x"]').click();
+      h.root.querySelector('[data-history-action="copy"]').click();await flush();
+      assert.match(report,expected);
+      assert.match(report,/完成したMP4の容量　1\.5 MiB/);
+      if (phase === 'draft-reserve') {
+        assert.match(report,/最後に確認できた処理　MP4の生成/);
+        assert.doesNotMatch(report,/Xの添付欄に渡してから/);
+      } else {
+        assert.match(report,/最後に確認できた処理　X/);
+        assert.match(report,/Xの添付欄に渡してから　16\.0秒/);
+      }
+      if (phase === 'draft-prepare') assert.match(report,/Xのアップロード　26%/);
+      else assert.doesNotMatch(report,/Xのアップロード　/);
+      assert.doesNotMatch(report,/私的な内容|記録なし/);
+    } finally {h.dom.window.close();}
+  });
   it('copies only the selected problem using registered labels, field names and repair paths', async () => {
     const records = [{id:'sm912345', timestamp:1, category:'network', level:'warning', source:'comment-read',
       version:'2.7.473-task1096', message:'生のエラー文 https://private.invalid/?key=secretValue',

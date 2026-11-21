@@ -51,25 +51,20 @@ const SupporterCredit = (() => {
     const fetchJson = (url, signal) => {
         const isGift = String(url).includes('/gift/');
         const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
-            RequestDiagnostics.begin(isGift ? 'gifts' : 'supporters', String(url), 'response', () => !signal?.aborted);
+            RequestDiagnostics.begin(isGift ? 'gifts' : 'supporters', String(url), 'response', () => !signal?.aborted, undefined, { url, method: 'GET' });
+        let response;
         return withTimeout(fetch(url, { credentials: 'include', signal }).then(async (r) => {
+            response = r;
             if (!r.ok) {
-                diagnostic?.failure({ status: r.status });
+                diagnostic?.response(r);
                 return null;
             }
             const body = await r.json();
-            if (typeof body?.meta?.status === 'number' && body.meta.status >= 400) {
-                diagnostic?.failure({ status: body.meta.status });
-            }
-            else if (isGift ? !Array.isArray(body?.data?.effects) :
-                !body?.data?.supporters || typeof body.data.supporters !== 'object') {
-                diagnostic?.failure({ kind: 'schema' });
-            }
-            else {
-                diagnostic?.success();
-            }
+            const valid = isGift ? Array.isArray(body?.data?.effects) :
+                !!body?.data?.supporters && typeof body.data.supporters === 'object' && !Array.isArray(body.data.supporters);
+            diagnostic?.decoded(r, body?.meta, valid ? undefined : (isGift ? 'data.effects' : 'data.supporters'), false);
             return body;
-        })).catch((error) => { diagnostic?.failure(error); return null; });
+        })).catch((error) => { diagnostic?.failure(RequestDiagnostics.readFailure(response, error)); return null; });
     };
     const loadImage = (url) => withTimeout(new Promise((resolve, reject) => {
         const img = new Image();

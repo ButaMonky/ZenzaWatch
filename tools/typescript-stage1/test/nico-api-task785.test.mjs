@@ -152,8 +152,9 @@ test('PopupMessage: notify/alert/debug, html opt-in, css once, undefined message
   // the two visible animation opacity points intentionally differ from the
   // legacy fixture. Strictly compare all other CSS and effects.
   const normalizeApprovedTheme = css => css
-    // The share result uses its own top-layer host. Keep comparing every rule
-    // that can style the ordinary player popups exercised by this fixture.
+    // Share results wrap inside the player and can also use a separate host.
+    // Ordinary popup rules must still match the legacy fixture.
+    .replace('    .popupMessageContainer .zenzaShareResult {\n      white-space: normal; overflow-wrap: anywhere; max-width: min(28rem,calc(100vw - 64px));\n    }\n', '')
     .replace(/^    \.zenzaShareNoticeHost(?:::backdrop| \.zenzaPopupMessage)? \{[^{}]*\}\r?\n/gm, '')
     .replace('    @media(prefers-reduced-motion:reduce) {\n      .zenzaShareNoticeHost .zenzaPopupMessage {animation:none;opacity:1}\n    }\n', '')
     .replace('color: #fff;', 'color: rgba(255, 255, 255, 0.8);')

@@ -10,14 +10,28 @@ const RecommendAPILoader = (() => {
         const encoded = textUtil.encodeBase64(JSON.stringify(target));
         const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
         const ticket = typeof RequestDiagnostics === 'undefined' ? null :
-            RequestDiagnostics.begin('recommend', JSON.stringify([target.id, target.seriesId, target.videoId]), 'response', isCurrent);
+            RequestDiagnostics.begin('recommend', JSON.stringify([target.id, target.seriesId, target.videoId]), 'response', isCurrent, undefined, { url, method: 'GET' });
+        const options = { credentials: 'include', ...(ticket ? { diagnosticActive: () => false } : {}) };
         let response;
         let body;
+        let bodyText;
         let decoded = false;
         let missing;
         try {
-            response = await netUtil.fetch(url, { credentials: 'include', ...(ticket ? { diagnosticActive: () => false } : {}) });
-            body = await response.json();
+            response = await netUtil.fetch(url, options);
+            try {
+                body = await response.json();
+            }
+            catch (error) {
+                if (response.status !== 200 || error?.name !== 'SyntaxError' ||
+                    (isCurrent && !isCurrent()))
+                    throw error;
+                // Retry only an unreadable HTTP 200. Discard its status before fetching the replacement.
+                response = undefined;
+                response = await netUtil.fetch(url, { ...options, cache: 'no-store' });
+                bodyText = await response.text();
+                body = JSON.parse(bodyText);
+            }
             decoded = true;
             if (response.status >= 300 || !body.meta || body.meta.status !== 200 || body.meta.errorCode) {
                 window.console.warn('load recommend fail', body);
@@ -46,7 +60,7 @@ const RecommendAPILoader = (() => {
         catch (error) {
             if (ticket) {
                 ticket.failure(decoded ? RequestDiagnostics.responseFailure(response, body?.meta, missing) || error :
-                    RequestDiagnostics.readFailure(response, error));
+                    RequestDiagnostics.readFailure(response, error, bodyText));
             }
             throw error;
         }

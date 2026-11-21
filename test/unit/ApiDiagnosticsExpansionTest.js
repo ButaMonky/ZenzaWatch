@@ -7,6 +7,44 @@ function world(extra={}) {
  ctx.diag.setSink(e=>events.push(e)); return {ctx,events};
 }
 describe('API diagnostics expansion (offline)',()=>{
+ it('keeps HTTP, API and missing data facts for optional advertising and owner reads',async()=>{
+  for(const [module, call, endpoint, shape, missing] of [
+   ['UaaLoader', x=>x.load('sm9'), 'ad-thanks', {sponsors:[]}, 'data.sponsors'],
+   ['AdDecorationLoader', x=>x.load(['sm9']), 'video.nicoad-decoration', {contents:[]}, 'data.contents'],
+   ['OwnerSupplement', x=>x.loadFromNicoad('sm9'), 'video.owner.nicoad', {id:'sm9'}, 'data.id']
+  ]) {
+   let body={meta:{status:403,errorCode:'FORBIDDEN'},data:shape};
+   const {ctx,events}=world({location:{host:'www.nicovideo.jp'},fetch:async()=>new Response(JSON.stringify(body),
+     {headers:{'content-type':'application/json'}})});
+   run(beginSection('packages/lib/src/infra/netUtil.js'),ctx);
+   const loader=run(beginSection('packages/lib/src/nico/'+module+'.js')+';'+module,ctx);
+   await call(loader);
+   assert.deepStrictEqual(events.map(e=>[e.endpoint,e.method,e.reason,e.statusCode,e.apiStatus,e.responseType]),
+    [[endpoint,'GET','permission',200,403,'json']],module);
+   body={meta:{status:200},data:{}};await call(loader);
+   assert.equal(events.at(-1).missing,missing,module);
+   body={data:shape};await call(loader);
+   assert.equal(events.at(-1).outcome,'recovered',module);
+  }
+ });
+ it('keeps actual HTTP 200 on JSON errors and API errors from supporters and gifts',async()=>{
+  const {ctx,events}=world({setTimeout:()=>0,fetch:async url=>url.includes('/gift/')?
+   new Response('PRIVATE',{headers:{'content-type':'text/plain'}}):
+   new Response(JSON.stringify({meta:{status:429},data:{supporters:{}}}))});
+  const credit=run(beginSection('packages/zenza/src/videoPlayer/SupporterCredit.js')+';SupporterCredit',ctx);
+  await credit.load({videoId:'sm9'});
+  assert.deepStrictEqual(events.map(e=>[e.endpoint,e.reason,e.statusCode,e.apiStatus,e.missing]).sort(),[
+   ['gifts','schema',200,undefined,'json'],['supporters','service',200,429,undefined]
+  ]);
+ });
+ it('keeps the end-screen frame response separate from the HTTP status',async()=>{
+  const {ctx,events}=world({NicoVideoPlayerDialog:{isExternalPlayback:()=>false,nicoadEndItems:()=>[]},
+   fetch:async()=>new Response(JSON.stringify({meta:{status:403},data:{nicoads:[]}}))});
+  const role=run(beginSection('src/NicoVideoPlayerDialogNicoadEnd.js')+';NicoVideoPlayerDialogNicoadEnd',ctx);
+  await role._showNicoadEndScreen.call({_playerConfig:{props:{'uaa.enable':true}},_videoInfo:{videoId:'sm9'},
+   _nicoVideoPlayer:{_videoPlayer:{_body:{}}}});
+  assert.deepStrictEqual(events.map(e=>[e.endpoint,e.reason,e.statusCode,e.apiStatus]),[['ad-frame','permission',200,403]]);
+ });
  it('retains even no-sponsor 404 responses once, including HTTP and API code',async()=>{
   let response={status:404,json:async()=>({meta:{status:404,errorCode:'RESOURCE_NOT_FOUND',errorMessage:'広告期間内のスポンサーが存在しません'}})};
   const {ctx,events}=world({location:{host:'www.nicovideo.jp'},fetch:async()=>response});

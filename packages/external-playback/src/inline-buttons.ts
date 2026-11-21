@@ -3,13 +3,13 @@ import {ExternalSettings,siteEnabled} from './settings';
 import {linkTargets} from './targets';
 const excluded='input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"],svg';
 // Own only the inserted siblings. Never wrap, rewrite or replace source links.
-export function mountInlineButtons(w:Window & typeof globalThis,s:ExternalSettings,open:(id:string,e:Event)=>Promise<unknown>,check?:CheckVideo):{dispose():void} {
+export function mountInlineButtons(w:Window & typeof globalThis,s:ExternalSettings,open:(id:string,e:Event)=>Promise<unknown>,check?:CheckVideo,ignoreLink?:(link:Element)=>boolean):{dispose():void} {
  if(s.activation!=='inline'||!siteEnabled(w.location.href,s))return {dispose(){}};
  const d=w.document,owned=new Map<Element,HTMLElement>(),pending=new Set<Element>();
  const observed=new Map<Element,()=>void>();
  const visible=typeof w.IntersectionObserver==='function'?new w.IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){visible!.unobserve(entry.target);const job=observed.get(entry.target);observed.delete(entry.target);job?.();}}):null;
  let disposed=false,timer:number|undefined,busy=false;
- const ids=(a:Element)=>a.isConnected&&!a.closest(excluded)?linkTargets(a.getAttribute('href')||'',d.baseURI,s):[];
+ const ids=(a:Element)=>a.isConnected&&!a.closest(excluded)&&!ignoreLink?.(a)?linkTargets(a.getAttribute('href')||'',d.baseURI,s):[];
  function update(a:Element){
   const old=owned.get(a);
   if(ids(a).length!==1){old?.remove();visible?.unobserve(a);observed.delete(a);owned.delete(a);return;}

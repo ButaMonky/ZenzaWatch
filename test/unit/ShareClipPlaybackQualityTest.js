@@ -4,6 +4,26 @@ const {JSDOM} = require('jsdom');
 const {beginSection} = require('../helpers/extractSource');
 
 describe('クリップの保存画質', () => {
+  it('合成の解像度は元の表示サイズと保存上限に合わせ、符号化用の偶数に切り下げる', () => {
+    const prefs = Function(beginSection('src/ShareClipPreferences.js') + '; return ShareClipPreferences')();
+    assert.equal(typeof prefs.outputDimensions,'function');
+    assert.deepEqual(prefs.outputDimensions(3840,2160),{width:3840,height:2160});
+    assert.deepEqual(prefs.outputDimensions(2560,1080,720),{width:1706,height:720});
+    assert.deepEqual(prefs.outputDimensions(641,359,720),{width:640,height:358});
+    assert.deepEqual(prefs.outputDimensions(1080,1920,1080),{width:606,height:1080});
+  });
+
+  it('合成時は細かい文字に画素数・フレーム数に応じて容量を配り、120秒の転送に余裕を残す', () => {
+    const prefs = Function(beginSection('src/ShareClipPreferences.js') + '; return ShareClipPreferences')();
+    assert.equal(typeof prefs.compositeVideoBitrate,'function');
+    const rate = (w,h,fps,sec) => prefs.compositeVideoBitrate(w,h,fps,sec);
+    assert.ok(rate(1280,720,30,30) > 8000000);
+    assert.ok(rate(640,360,30,30) < rate(1280,720,30,30));
+    assert.ok(rate(1280,720,30,30) < rate(1280,720,60,30));
+    assert.ok(rate(1920,1080,60,120) < rate(1920,1080,60,30));
+    assert.ok((rate(1920,1080,60,120) + 192000) * 120 / 8 < 240 * 1024 ** 2);
+  });
+
   it('再生中の配信を選び、保存済みの上限画質・通信量優先も尊重する', async () => {
     const page = new JSDOM('<main></main>', {url:'https://www.nicovideo.jp',runScripts:'outside-only'});
     const w = page.window;
@@ -23,8 +43,8 @@ describe('クリップの保存画質', () => {
     w.ShareClipTimeline = {mount:() => ({stopPreview(){},refresh(){},dispose(){}})};
     w.RequestDiagnostics = {begin:() => ({success(){},failure(){}})};
     let job;
-    w.ShareClipJobs = {subscribe:() => () => {},start:options => { job = options; }};
-    const api = w.eval(['ShareClipPreferences','ShareLocalClip','ShareHlsClipSource'].map(name =>
+    w.ShareClipJobs = {results:[],subscribe:() => () => {},start:options => { job = options; }};
+    const api = w.eval(['ShareClipQueue','ShareClipPreferences','ShareLocalClip','ShareHlsClipSource'].map(name =>
       beginSection('src/'+name+'.js')).join('\n')+'\n;({editor:ShareLocalClip,hls:ShareHlsClipSource})');
     const video = w.document.createElement('video');
     Object.defineProperties(video,{duration:{value:60},videoWidth:{value:640},videoHeight:{value:360}});

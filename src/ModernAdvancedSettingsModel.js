@@ -821,7 +821,7 @@ class ModernAdvancedSettingsModel {
             'プレイリスト・検索': ['プレイリスト', '動画の先読み', '検索', 'リンク・移動',
                 '関連メニュー › カスタムリンク', '診断'],
             'ショートカット': ['プレイヤー全般', '再生', 'シーク', '再生速度', '音量', 'コメント',
-                '画面', '画面フィルター', 'フィルタ/NG', 'プレイリスト', 'マイリスト', 'その他'],
+                '画面', '画面フィルター', 'フィルタ/NG', 'プレイリスト', 'マイリスト', '共有', 'その他'],
             'マウス・タッチ': ['マウス', 'タッチ']
         };
         const index = (order[category] || []).indexOf(subcategory);
@@ -1049,7 +1049,7 @@ class ModernAdvancedSettingsModel {
             const id = 'KEY_' + action.id;
             const [category, subcategory] = ModernAdvancedSettingsModel.categoryFor(id, action);
             add({ id, label: action.label || action.id, category, subcategory, type: 'shortcut',
-                description: action.id === 'OPEN_OFFICIAL_WATCH' ? '通常の公式視聴ページで、その動画をZenzaWatchへ切り替えます。初期値は Alt + Shift + Z。コメントなどの文字入力中は働きません。割り当てを消すとボタンだけ使えます。「公式プレイヤー連携」と同じキー設定です。' : '', actionId: action.id, defaultKey: action.defaultKey });
+                description: action.description || '', actionId: action.id, defaultKey: action.defaultKey });
             if (action.customSeekSlot) {
                 const seek = 'PARAM_' + action.id;
                 add({ id: seek, label: (action.label || action.id) + ' の秒数',

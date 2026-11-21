@@ -23,6 +23,7 @@ describe('official NicoNico clip sharing', () => {
         json:async () => ({meta:{status:data.httpStatus,errorCode:data.errorCode}})};
       return {ok:true, status:200, json:async () => ({meta:{status:200}, data})};
     };
+    page.window.ShareClipQueue = page.window.eval(beginSection('src/ShareClipQueue.js') + '\nShareClipQueue');
     const module = page.window.eval(beginSection('src/ShareOfficialClip.js') + '\nShareOfficialClip');
     reopen = (currentInfo = info) => {
       cleanup = module.mount(root, {info:currentInfo, startTime:39, text:()=>'選んだ場面',
@@ -52,7 +53,7 @@ describe('official NicoNico clip sharing', () => {
     assert.strictEqual(states.at(-1).phase,'edit');
     cleanup.submit(); cleanup.submit(); await flush();
     assert.deepStrictEqual([...calls.find(call => call.path.endsWith('/clips')).options.body],[['startTime','9125'],['endTime','19500']]);
-    cleanup(); reopen(); await flush(); cleanup.submit();
+    cleanup(); reopen(); cleanup.setRange({start:9.125,end:19.5}); await flush(); cleanup.submit();
     assert(states.at(-1).busy);
     assert.strictEqual(states.at(-1).phase,'generating');
     assert.match(states.at(-1).status,/生成/);
@@ -69,6 +70,94 @@ describe('official NicoNico clip sharing', () => {
     assert.match(notices[0][0],/12345.*ポストしました/);
     assert.doesNotMatch(notices[0][0],/本文|LinkedName|private/);
     assert.deepStrictEqual({...notices[0][2]}, {stage:'receipt',reason:'posted',clipReady:true,postAttempted:true});
+  });
+  it('queues two scenes and another video, keeps their original inputs and resumes only the matching receipt', async () => {
+    let finish, count = 0, failReceipt = true, body = 'first text';
+    const states = [];
+    mount(({path,options}) => {
+      if (path.endsWith('/tweet-possibility')) return named('FirstName');
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) return {clipId:'job' + ++count};
+      if (path.endsWith('/job1')) return new Promise(resolve => { finish = resolve; });
+      if (path.endsWith('/x-post')) {
+        if (path.includes('/job1/') && options.method === 'GET' && failReceipt) return {httpStatus:503};
+        return {status:'DONE'};
+      }
+      return {status:'DONE',clipUri:'https://media.example/ready.mp4'};
+    },undefined,{sharedEditor:true,startTime:3,endTime:7,text:() => body,onSubmitState:state => states.push(state)});
+    await flush(); cleanup.submit(); await flush();
+    cleanup.setRange({start:11,end:15}); body = 'second text';
+    assert(states.at(-1).enabled);
+    cleanup.submit(); cleanup.submit();
+    assert.strictEqual(states.at(-1).phase,'queued');
+    cleanup(); reopen({watchId:'sm10',videoId:'sm10',duration:40}); await flush();
+    body = 'third text'; cleanup.submit(); await flush();
+    assert.strictEqual(count,1);
+    body = 'unsubmitted edit';
+    finish({status:'DONE',clipUri:'https://media.example/first.mp4'}); await flush();
+    const created = calls.filter(r => r.path.endsWith('/clips'));
+    assert.deepStrictEqual(created.map(r => [r.path,...r.options.body.values()]),[
+      ['/v1/videos/sm9/clips','3000','7000'],['/v1/videos/sm9/clips','11000','15000'],['/v1/videos/sm10/clips','3000','7000']]);
+    const posts = () => calls.filter(r => r.path.endsWith('/x-post') && r.options.method === 'POST');
+    assert.deepStrictEqual(posts().map(r => r.options.body.get('text')),['first text','second text','third text']);
+    cleanup(); failReceipt = false; reopen();
+    cleanup.setRange({start:11,end:15}); await flush();
+    const recover = find('receiptActions').querySelector('button');
+    assert.match(recover.textContent,/3〜7秒/);
+    recover.click(); await flush();
+    assert.match(find('receiptResult').textContent,/3〜7秒.*ポストしました/);
+    assert(find('otherReceipts').hidden);
+    cleanup.setRange({start:3,end:7}); cleanup.submit();
+    assert.strictEqual(states.at(-1).phase,'posted');
+    cleanup.setRange({start:11,end:15}); cleanup.submit();
+    assert.strictEqual(states.at(-1).phase,'posted');
+    assert.strictEqual(posts().length,3);
+  });
+  it('cancels a waiting reservation without submitting it or losing its editor', async () => {
+    const states = [];
+    let guards = 0, finish;
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return named('owner');
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) return {clipId:'first'};
+      if (path.endsWith('/first')) return new Promise(resolve => { finish = resolve; });
+      return {status:'DONE'};
+    },undefined,{sharedEditor:true,startTime:3,endTime:6,onSubmitState:state => states.push(state),
+      holdWatchPage() { guards++; return () => guards--; }});
+    await flush(); cleanup.submit(); await flush();
+    cleanup.setRange({start:10,end:13}); cleanup.submit();
+    const [active,waiting] = page.window.ShareClipQueue.items;
+    assert.strictEqual(active.cancel(),false);
+    assert.strictEqual(waiting.cancel(),true);
+    assert.strictEqual(states.at(-1).enabled,true);
+    assert.strictEqual(guards,1);
+    finish({status:'DONE',clipUri:'https://media.example/first.mp4'});
+    await active.done;
+    assert.strictEqual(guards,0);
+    assert.strictEqual(calls.filter(r => r.options.method === 'POST').length,2);
+  });
+  it('migrates a legacy receipt and ignores its delayed response after selecting another scene', async () => {
+    let finish;
+    const states = [];
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return named('LinkedName');
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/x-post')) return new Promise(resolve => { finish = resolve; });
+      throw Error(path);
+    },undefined,{sharedEditor:true,startTime:3,endTime:6,onSubmitState:state => states.push(state)});
+    page.window.sessionStorage.setItem('zenzaWatch:officialClip:sm9:LinkedName',
+      JSON.stringify({kind:'post',id:'old',start:3,end:6,text:'original'}));
+    await flush(); assert.strictEqual(states.at(-1).phase,'posting');
+    cleanup.setRange({start:8,end:12});
+    finish({status:'DONE'}); await flush();
+    assert.strictEqual(states.at(-1).phase,'edit');
+    const check = find('receiptActions').querySelector('button');
+    assert.match(check.textContent,/3〜6秒/);
+    check.click(); finish({status:'DONE'}); await flush();
+    assert(find('otherReceipts').hidden);
+    cleanup.setRange({start:3,end:6}); cleanup.submit();
+    assert.strictEqual(states.at(-1).phase,'posted');
+    assert(calls.every(r => r.options.method === 'GET'));
   });
   for (const [label,recheck] of [['renamed',named('AnotherName')],['unlinked',{...allowed,twitterLinkage:{isLinked:false}}]]) {
     it('stops before publication when the linked account is ' + label, async () => {
@@ -117,7 +206,7 @@ describe('official NicoNico clip sharing', () => {
       },undefined,{sharedEditor:true,startTime:3,endTime:6,onNotify:(...args) => notices.push(args)});
       await flush(); cleanup.submit(); await flush();
       assert.strictEqual(notices.length,1);
-      assert.strictEqual(notices[0][1],'warning');
+      assert.strictEqual(notices[0][1],['FAILED','ERROR'].includes(reply.status) ? 'error' : 'warning');
       assert.deepStrictEqual({...notices[0][2]}, {
         stage,reason,clipReady:['verify','post','receipt'].includes(stage),postAttempted:['post','receipt'].includes(stage),...extra
       });
@@ -393,7 +482,7 @@ describe('official NicoNico clip sharing', () => {
     cleanup(); reopen(); await flush();
     assert.strictEqual(statusReads, recovered === 'DONE' ? 2 : 3);
     assert.deepStrictEqual(notices,[unknown,{
-      level:recovered === 'DONE' ? 'info' : 'warning',stage:'receipt',reason:recovered === 'DONE' ? 'posted' : 'clip-missing',
+      level:recovered === 'DONE' ? 'info' : 'error',stage:'receipt',reason:recovered === 'DONE' ? 'posted' : 'clip-missing',
       clipReady:true,postAttempted:true
     }]);
     assert.strictEqual(calls.filter(r => r.path.endsWith('/x-post') && r.options.method === 'POST').length, 1);
@@ -414,14 +503,18 @@ describe('official X posting from the clip editor', () => {
   const flush = () => new Promise(resolve => setImmediate(resolve));
   const submitButton = () => root.querySelector('[data-action=official-submit]');
   const find = name => root.querySelector('#zenzaShareOfficial [name="' + name + '"]');
-  function open(selection) {
+  function open(selection, receipt = {status:'DONE'}) {
     page = new JSDOM('<body></body>', {url:'https://www.nicovideo.jp/watch/sm9', runScripts:'outside-only'});
     const w = page.window;
+    Object.defineProperty(w.document,'hidden',{value:false});
     w.HTMLDialogElement.prototype.showModal = function() { this.open = true; };
     w.HTMLDialogElement.prototype.close = function() { this.open = false; };
     w.textUtil = {secToTime:String};
     w.ShareClipJobs = {busy:false};
-    w.PopupMessage = {notify() {},warning() {}};
+    w.shareEntries = [];
+    w.NotificationJournal = {record:entry => w.shareEntries.push(entry)};
+    w.css = {addStyle() {}};
+    w.PopupMessage = w.eval(beginSection('packages/lib/src/ui/PopupMessage.js') + '\nPopupMessage');
     w.ShareLocalClip = {mount(host, options) {
       host.innerHTML = '<div data-share-composer-slot></div><footer class=clipFooter><div data-role=createActions><button data-action=create></button><button data-action=provider-fallback></button></div></footer>';
       const fallback = host.querySelector('[data-action=provider-fallback]');
@@ -439,16 +532,27 @@ describe('official X posting from the clip editor', () => {
       if (path.endsWith('/tweet-possibility')) data = {isLogin:true, isClipTweetAllowed:true, twitterLinkage:{isLinked:true,screenName:'LinkedName'}};
       else if (path.endsWith('/license')) data = {isUseLicensedMusic:false};
       else if (path.endsWith('/clips')) data = {clipId:'selected-clip'};
-      else if (path.endsWith('/x-post')) data = {status:'DONE'};
+      else if (path.endsWith('/x-post')) data = options.method === 'GET' ? receipt : {};
       else data = {status:'DONE',clipUri:'https://media.example/preview.mp4'};
       return {ok:true,status:200,json:async () => ({meta:{status:200}, data})};
     };
+    w.ShareClipQueue = w.eval(beginSection('src/ShareClipQueue.js') + '\nShareClipQueue');
     w.ShareOfficialClip = w.eval(beginSection('src/ShareOfficialClip.js') + '\nShareOfficialClip');
     panel = w.eval(beginSection('src/VideoSharePanel.js') + '\nVideoSharePanel');
     panel.open({watchId:'sm9', videoId:'sm9', title:'fixture', duration:180}, 0);
     root = w.document.querySelector('dialog');
   }
   afterEach(() => { panel?.close(); page?.window.close(); });
+  it('shows a confirmed service failure as an error with its original repair details', async () => {
+    open({isCurrent:true,start:3,end:6},{status:'FAILED',failureReason:'VIDEO_CLIP_NOT_FOUND'});
+    await flush(); submitButton().click(); await flush();
+    assert.equal(page.window.shareEntries.length,1);
+    const [entry] = page.window.shareEntries;
+    assert.equal(entry.level,'error');
+    assert.equal(entry.source,'official-share');
+    assert.equal(entry.details.reason,'official-clip-missing');
+    assert.match(root.querySelector('.zenzaShareNoticeHost .alert').textContent,/クリップが見つかりません/);
+  });
   it('brings official information into view from a failed local conversion without starting a submission', async () => {
     open({isCurrent:true,start:965.45,end:995.45});
     root.querySelector('[data-action=provider-fallback]').click(); await flush();
@@ -477,6 +581,8 @@ describe('official X posting from the clip editor', () => {
     assert(!submitButton().closest('[hidden]'));
     const post = calls.find(call => call.path.endsWith('/x-post') && call.options.method === 'POST');
     assert.deepEqual([...post.options.body],[['text','画面で指定した本文']]);
+    assert.deepEqual(page.window.shareEntries.map(entry => [entry.source,entry.level,entry.details.lastStage]),
+      [['official-share','success','confirmed']]);
     assert.equal(calls.filter(call => call.options.method === 'POST').length,2);
   });
   for (const [selection, note] of [

@@ -11,6 +11,7 @@ declare const textUtil: {
   parseQuery(query: string): Record<string, unknown>;
 };
 declare const netUtil: NetUtilFetcher;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 declare const MylistApiLoader: {getMylistList(): Promise<object>};
 declare const RecommendAPILoader: {loadSeries(id: string, options: object): Promise<object>};
 declare const NicoRssLoader: {
@@ -331,8 +332,15 @@ class NicoQuery {
       default:
           throw new Error('unknown query: ' + query);
     }
-    result = await netUtil.fetch(_req.url, {credentials: 'include'})
-      .then(res => res.json() as Promise<object>);
+    const url = _req.url;
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('legacy-query',url,'response',undefined,undefined,{url,method:'GET'});
+    const res = await netUtil.fetch(url,{credentials:'include'}).catch(error => { ticket?.failure(error); throw error; });
+    result = await res.json().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(res,error)); throw error; });
+    if (res.status >= 400) ticket?.failure({httpStatus:res.status});
+    else if (!result || typeof result !== 'object') ticket?.failure({httpStatus:res.status,kind:'schema',missing:'json'});
+    else if ((result as {status?:unknown}).status === 'fail') ticket?.failure({httpStatus:res.status,kind:'service'});
+    else ticket?.success();
     return Object.assign(result, {_req});
   }
 

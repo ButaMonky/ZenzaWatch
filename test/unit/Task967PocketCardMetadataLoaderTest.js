@@ -2,8 +2,8 @@
 const assert=require('assert');
 const {extract,createContext,run,read}=require('../helpers/extractSource');
 const SOURCE='packages/zenza/src/pocket/PocketCardMetadataLoader.js';
-function loader(fetcher){
-  const context=createContext();
+function loader(fetcher, globals={}){
+  const context=createContext(globals);
   run('const PocketCardMetadataLoader='+extract(SOURCE,'PocketCardMetadataLoader','var')+
     ';this.CardApi=PocketCardMetadataLoader;',context);
   return {CardApi:context.CardApi,fetcher};
@@ -16,6 +16,18 @@ function response(id='sm46949237',like=95,owner={
    data:{items:[{watchId:id,video:{id,count:{like},owner}}]}})};
 }
 describe('Task967: public Nico video card extras',()=>{
+ it('reports malformed metadata to the running player and permits a valid empty list',async()=>{
+  const seen=[];
+  const ticket={success(){seen.push('ok');},failure(value){seen.push(value);}};
+  const diag={begin:()=>ticket,readFailure:()=>({missing:'json'}),
+    responseFailure:(r,meta,missing)=>missing?{missing,httpStatus:r.status}:null};
+  const h=loader(null,{ZenzaLib:{RequestDiagnostics:diag}});
+  const get=items=>async()=>({ok:true,status:200,json:async()=>({meta:{status:200},data:{items}})});
+  assert.equal(await h.CardApi.load('sm9',get(null)),null);
+  assert.deepEqual(seen,[{missing:'data.items',httpStatus:200}]);
+  assert.equal(await h.CardApi.load('sm10',get([])),null);
+  assert.deepEqual(seen.at(-1),'ok');
+ });
  it('gets a grounded like count and validated owner from the 2026 API shape',async()=>{
   const requests=[];
   const h=loader();

@@ -125,7 +125,7 @@ describe('Clip and X sharing preferences', () => {
     try {
       h.click('[data-zw-major="外部連携"]');
       h.click('[data-zw-sub="外部連携|動画クリップ・X共有"]');
-      assert.strictEqual(h.all('[data-zw-id^="shareClip."]').length, 7);
+      assert.strictEqual(h.all('[data-zw-id^="shareClip."]').length, 9);
       assert.strictEqual(select('preview').value, 'low');
       assert.strictEqual(select('scene').value, 'low');
       assert.strictEqual(select('export').value, 'source');
@@ -134,7 +134,7 @@ describe('Clip and X sharing preferences', () => {
       const search = h.q('[data-zw-search]');
       search.value = 'Twitter';
       h.dispatch(search, 'input');
-      assert.strictEqual(h.all('[data-zw-id^="shareClip."]').length, 7);
+      assert.strictEqual(h.all('[data-zw-id^="shareClip."]').length, 9);
       assert.deepStrictEqual(h.config.writes, []);
       const quality = select('export');
       quality.value = '720';
@@ -147,6 +147,11 @@ describe('Clip and X sharing preferences', () => {
         const box = h.q('input[data-setting-name="shareClip.' + key + '"]');
         assert.strictEqual(box.checked, false);
         box.click();
+      }
+      for (const key of ['quickMenu','backgroundTab']) {
+        const toggle = h.q('input[data-setting-name="shareClip.' + key + '"]');
+        assert.strictEqual(toggle.checked, true);
+        toggle.click();
       }
       const api = h.q('input[data-setting-name="shareClip.openXDraft"]');
       assert.strictEqual(api.checked, true);
@@ -162,6 +167,8 @@ describe('Clip and X sharing preferences', () => {
       assert.strictEqual(h.config.values['shareClip.includeComments'], true);
       assert.strictEqual(h.config.values['shareClip.includeEffects'], true);
       assert.strictEqual(h.config.values['shareClip.openXDraft'], false);
+      assert.strictEqual(h.config.values['shareClip.quickMenu'], false);
+      assert.strictEqual(h.config.values['shareClip.backgroundTab'], false);
     } finally {
       h.destroy();
     }

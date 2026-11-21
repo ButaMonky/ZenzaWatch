@@ -47,6 +47,12 @@ import {NicoVideoPlayerDialog} from './NicoVideoPlayerDialog';
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoHoverMenu.ts (Task1060). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 class VideoHoverMenu {
+    static #shareClicks = new WeakMap();
+    static consumeShareClick(event, command) {
+        if (this.#shareClicks.get(event) !== command)
+            return false;
+        return this.#shareClicks.delete(event);
+    }
     static get VISIBILITY() {
         return UiVisibilityRegistry.list('hover').map((item) => [item.key, item.selector]);
     }
@@ -71,6 +77,26 @@ class VideoHoverMenu {
         }
         const share = container.querySelector('.zenzaTweetButton');
         if (share) {
+            const quick = this._view.querySelector('.shareQuickActions');
+            if (quick) {
+                const key = 'shareClip.quickMenu';
+                const update = () => { quick.hidden = this._config?.getValue?.(key) === false; };
+                this._config?.onkey?.(key, update);
+                update();
+                const reopen = () => { delete quick.dataset.dismissed; };
+                share.addEventListener('pointerenter', reopen);
+                share.addEventListener('focus', reopen);
+                const dismiss = (event) => {
+                    if (event.key !== 'Escape' || quick.hidden)
+                        return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    share.focus();
+                    quick.dataset.dismissed = 'true';
+                };
+                quick.addEventListener('keydown', dismiss);
+                share.addEventListener('keydown', dismiss);
+            }
             for (const type of ['keydown', 'keyup']) {
                 share.addEventListener(type, (event) => {
                     if (event.key !== 'Enter' && event.key !== ' ') {
@@ -212,6 +238,18 @@ class VideoHoverMenu {
                 break;
         }
         switch (command) {
+            case 'shareNicoNext30':
+            case 'shareZenzaFull':
+                if (e.isTrusted && target.classList.contains('shareQuickAction')) {
+                    VideoHoverMenu.#shareClicks.set(e, command);
+                    try {
+                        util.dispatchCommand(target, command, e);
+                    }
+                    finally {
+                        VideoHoverMenu.#shareClicks.delete(e);
+                    }
+                }
+                break;
             case 'deflistAdd':
             case 'mylistAdd':
             case 'mylistOpen':
@@ -630,6 +668,39 @@ startup.add('VideoHoverMenu:style', () => {
       left: 40px;
     }
 
+    .shareQuickActions {
+      position: absolute;
+      z-index: 2;
+      right: 2px;
+      top: 30px;
+      width: min(220px, 100%);
+      box-sizing: border-box;
+      display: none;
+      padding: 4px;
+      border: 1px solid var(--zt-border, #666);
+      border-radius: 5px;
+      background: var(--zt-overlay-dark, #21242a);
+      color: #fff;
+      pointer-events: auto;
+    }
+    .zenzaTweetButton:not([hidden]):is(:hover,:focus-visible) + .shareQuickActions:not([hidden],[data-dismissed]),
+    .zenzaTweetButton:not([hidden]) + .shareQuickActions:not([hidden],[data-dismissed]):is(:hover,:focus-within) {
+      display: grid;
+    }
+    .zenzaTweetButton:has(+ .shareQuickActions:not([hidden])) .tooltip {display:none;}
+    .shareQuickAction {
+      text-align: left;
+      background: transparent;
+      color: inherit;
+      padding: 7px 9px;
+      border: 0;
+      border-radius: 3px;
+      font: 14px/1.35 sans-serif;
+      cursor: pointer;
+    }
+    .shareQuickAction:is(:hover,:focus-visible) {background:#39495a;}
+    .shareQuickAction small {display:block;font-size:11px;color:#dae4ee;}
+
     @keyframes spinX {
       0%   { transform: rotateX(0deg); }
       100% { transform: rotateX(1800deg); }
@@ -930,6 +1001,10 @@ VideoHoverMenu.__tpl__ = (`
           <div role="button" tabindex="0" class="menuButton zenzaTweetButton" style="pointer-events:auto" data-command="tweet" aria-label="動画を共有" aria-haspopup="dialog">
             <div class="tooltip">共有（X・クリップ・リンク）</div>
             <div class="menuButtonInner">t</div>
+          </div>
+          <div class="shareQuickActions" role="group" aria-label="クリップの投稿" hidden>
+            <button type="button" class="shareQuickAction" data-command="shareNicoNext30">今から30秒を自動投稿<small>ニコニコの連携先のXに投稿</small></button>
+            <button type="button" class="shareQuickAction" data-command="shareZenzaFull">全範囲をXの下書きに添付<small>ZenzaでMP4を作成</small></button>
           </div>
           <div class="menuButton mylistButton mylistAddMenu forMember"
             data-command="nop" tabindex="-1" data-has-submenu="1">

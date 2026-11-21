@@ -9,7 +9,7 @@ declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestD
  */
 import type {NetFetchOptions} from './NicoApiTypes';
 
-declare const netUtil: {fetch(url: string, options: NetFetchOptions & {method?: string; body?: string}): Promise<Response>};
+declare const netUtil: {fetch(url: string, options: NetFetchOptions): Promise<Response>};
 declare const nicoUtil: {hasLargeThumbnail(videoId: string): boolean};
 declare const emitter: {emitAsync(...args: unknown[]): unknown};
 declare const debug: Record<string, unknown>;
@@ -76,9 +76,8 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
    * Task1036: 形式が想定と違うとき、最初に食い違った項目の場所を返す（問題なければ null）。
    * ニコニコの仕様変更で壊れたとき、通知履歴に「どの項目が読めなかったか」を出すため。値は返さない。
    */
+  const record = (value: unknown): boolean => value !== null && typeof value === 'object' && !Array.isArray(value);
   const missingWatchV4Field = (data: Loose): string | null => {
-    const record = (value: unknown): boolean => value !== null && typeof value === 'object' &&
-      !Array.isArray(value);
     const checks: [string, () => boolean][] = [
       ['data', () => record(data)],
       ['data.client', () => record(data.client)],
@@ -109,10 +108,12 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     if (!response.body) return response.json() as Promise<Loose>; // Already buffered gate/legacy adapter.
     const controller = new AbortController();
     const abort = () => controller.abort();
+    const timeout = () => controller.abort(Object.assign(new Error('timeout'), {name:'TimeoutError'}));
     const remaining = deadline - Date.now();
-    if (remaining <= 0 || signal?.aborted) abort();
+    if (signal?.aborted) abort();
+    else if (remaining <= 0) timeout();
     else signal?.addEventListener('abort', abort, {once: true});
-    const timer = setTimeout(abort, Math.max(0, remaining));
+    const timer = setTimeout(timeout, Math.max(0, remaining));
     try {
       const stream = response.body.pipeThrough(new TransformStream(), {signal: controller.signal});
       return await new Response(stream).json() as Loose;
@@ -122,8 +123,33 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     }
   };
 
+  const fetchOptionalMetadata = async (
+    operation: 'watch-lazy' | 'watch-owner' | 'linked-channel', watchId: string, url: string,
+    options: NetFetchOptions, isCurrent: () => boolean, missingField: (body: Loose | null) => string | undefined
+  ): Promise<Loose | null> => {
+    const active = () => isCurrent() && !options.signal?.aborted;
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin(operation, watchId, 'response', active, undefined, {url, method:options.method || 'GET'});
+    const deadline = options.timeout ? Date.now() + options.timeout : undefined;
+    let response: Response | undefined;
+    try {
+      response = await netUtil.fetch(url, ticket ? {...options, diagnosticActive: () => false} : options);
+      if (operation === 'watch-owner' && !response?.ok) {
+        ticket?.failure(RequestDiagnostics.readFailure(response, null));
+        return null;
+      }
+      const body = deadline ? await readOptionalJson(response, deadline, options.signal || undefined) : await response.json();
+      ticket?.decoded(response, body?.meta, missingField(body), operation === 'watch-lazy');
+      return body;
+    } catch (error) {
+      ticket?.failure(RequestDiagnostics.readFailure(response, error));
+      throw error;
+    }
+  };
+
   // Task153: adapt watch v4 at the boundary; keep the existing player contract.
-  const normalizeWatchV4 = async (response: Loose | undefined, requestedWatchId: string, signal?: AbortSignal): Promise<Loose | undefined> => {
+  const normalizeWatchV4 = async (response: Loose | undefined, requestedWatchId: string, signal?: AbortSignal,
+    isCurrent: () => boolean = () => true): Promise<Loose | undefined> => {
     const data = response?.$watchV4?.data;
     if (!data || (response as Loose).errorCode) return response;
     if (data.errorCode) return data;
@@ -139,8 +165,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
         !!data.client.watchTrackId) {
       try {
         const timeout = 5000;
-        const deadline = Date.now() + timeout;
-        const result = await netUtil.fetch(
+        const result = await fetchOptionalMetadata('watch-lazy', requestedWatchId,
           `https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
             method: 'POST', credentials: 'include', timeout, ...(signal ? {signal} : {}),
             headers: {
@@ -148,8 +173,8 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
               'X-Frontend-Version': '0', 'X-Request-With': 'https://www.nicovideo.jp'
             },
             body: JSON.stringify({actionTrackId: data.client.watchTrackId, keyToken: data.lazy.authKey})
-          }).then(res => readOptionalJson(res, deadline, signal));
-        if (result.meta?.status === 200) lazy = result.data || {};
+          }, isCurrent, body => record(body?.data) ? undefined : 'data');
+        if (result?.meta?.status === 200) lazy = result.data || {};
       } catch (_) {
         window.console.warn('watch v4 optional metadata unavailable');
       }
@@ -223,8 +248,9 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     };
   };
 
-  const parseWatchApiData = async function (json: Loose | null | undefined, requestedWatchId: string, publishCsrf = true): Promise<Loose | null> {
-    const response = await normalizeWatchV4(json?.data?.response, requestedWatchId);
+  const parseWatchApiData = async function (json: Loose | null | undefined, requestedWatchId: string, publishCsrf = true,
+    isCurrent: () => boolean = () => true, signal?: AbortSignal): Promise<Loose | null> {
+    const response = await normalizeWatchV4(json?.data?.response, requestedWatchId, signal, isCurrent);
     if (!response) {
       return null;
     }
@@ -534,7 +560,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       setTimeout(r, 1000);
     }).then(() => fetchWatchResponse(videoId, {}, isCurrent))
       .then(async json => {
-        const data = await parseWatchApiData(json, videoId) as Loose;
+        const data = await parseWatchApiData(json, videoId, true, isCurrent) as Loose;
         //window.console.info('linkedChannelData', data);
         originalData.dmcInfo = data.dmcInfo;
         originalData.domandInfo = data.domandInfo;
@@ -563,7 +589,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
    * 1で取れなければ2を試す。どちらも駄目なら従来通り（IDなし）のまま。
    * 投稿者の退会/非公開状態そのものは判断しない（名前は分からないので従来の表示のまま）。
    */
-  const resolveMissingOwner = async (data: Loose | null): Promise<void> => {
+  const resolveMissingOwner = async (data: Loose | null, isCurrent: () => boolean = () => true): Promise<void> => {
     const wad = data && data.watchApiData;
     if (!wad || wad.channelInfo || (wad.uploaderInfo && wad.uploaderInfo.id)) {
       return;
@@ -574,20 +600,16 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     }
     let ownerId: unknown = null, ownerName: unknown = null, ownerIcon: unknown = null, source = '';
     try {
-      const timeout = 3000;
-      const deadline = Date.now() + timeout;
-      const res = await netUtil.fetch(
+      const json = await fetchOptionalMetadata('watch-owner', videoId,
         `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`,
-        {credentials: 'omit', timeout});
-      if (res && res.ok) {
-        const json = await readOptionalJson(res, deadline);
-        const d = json && json.data;
-        if (d && String(d.id) === videoId && d.ownerId) {
-          ownerId = d.ownerId;
-          ownerName = d.ownerName || null;
-          ownerIcon = d.ownerIcon || null; // Task 069: 広告APIは投稿者アイコンURLも返す
-          source = 'nicoad';
-        }
+        {credentials: 'omit', timeout:3000}, isCurrent, body =>
+          !record(body?.data) ? 'data' : String(body?.data.id) === videoId ? undefined : 'data.id');
+      const d = json?.data;
+      if (d && String(d.id) === videoId && d.ownerId) {
+        ownerId = d.ownerId;
+        ownerName = d.ownerName || null;
+        ownerIcon = d.ownerIcon || null;
+        source = 'nicoad';
       }
     } catch (e) {
       // 広告履歴の無い動画は404。次の手段へ
@@ -623,7 +645,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
   };
 
   const onLoadPromise = async (watchId: string, options: LoadOptions, isRetry: boolean, isCurrent: () => boolean, resp: Loose): Promise<Loose> => {
-    const data = await parseWatchApiData(resp, watchId);
+    const data = await parseWatchApiData(resp, watchId, true, isCurrent, options.signal);
     requireActive(options);
     if (!data) {
       throw {
@@ -636,7 +658,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       throw data;
     }
 
-    await resolveMissingOwner(data).catch(() => window.console.warn('resolveMissingOwner failed'));
+    await resolveMissingOwner(data, isCurrent).catch(() => window.console.warn('resolveMissingOwner failed'));
     requireActive(options);
 
     if (data.isPlayable) {
@@ -651,10 +673,10 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     if (data.isNeedPayment && data.genreKey === 'anime' && Config.getValue('loadLinkedChannelVideo')) {
       const query = new URLSearchParams({ videoId: data.watchApiData.videoDetail.id, _frontendId: data.msgInfo.frontendId });
       const url = `https://public-api.ch.nicovideo.jp/v1/user/channelVideoDAnimeLinks?${query.toString()}`;
-      const linkedChannelVideos = await netUtil.fetch(url, { credentials: 'include' }).then(r => r.json() as Promise<Loose>).catch(() => ({} as Loose));
-      data.linkedChannelVideo = linkedChannelVideos.data?.items?.find((ch: Loose) => {
-        return !!ch.isChannelMember;
-      });
+      const linkedChannelVideos = await fetchOptionalMetadata('linked-channel', watchId, url, {credentials:'include'},
+        isCurrent, body => Array.isArray(body?.data?.items) ? undefined : 'data.items').catch(() => null);
+      const links = linkedChannelVideos?.data?.items;
+      data.linkedChannelVideo = Array.isArray(links) ? links.find(ch => ch?.isChannelMember && ch.linkedVideoId) : undefined;
       // Task650 (VI-LINKED-REJECT-001): a "linked" video with the same ID used to reject
       // with no reason, which then crashed the retry handler (TypeError) and hid the
       // payment message. Treat it as no linked video and report the payment error below.
@@ -802,7 +824,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       requireActive(options);
       // Owner/series use the selected video's V4 key. Start their normal read while
       // the dialog is being built; only the foreground loader publishes the result.
-      const normalized = await normalizeWatchV4(page.data.response, watchId, controller.signal);
+      const normalized = await normalizeWatchV4(page.data.response, watchId, controller.signal, () => owner.isCurrent?.() ?? true);
       requireActive(options);
       return {...page, data: {...page.data, response: normalized}};
     });
@@ -931,7 +953,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       requireActive(options);
       const payload = await fetchWatchResponse(watchId, options, () => false);
       requireActive(options);
-      const data = await parseWatchApiData(payload, watchId, false);
+      const data = await parseWatchApiData(payload, watchId, false, () => false, options.signal);
       requireActive(options);
       if (!data || data.reject || !data.isPlayable) {
         throw Object.assign(new Error('Video unavailable for prefetch'), {name: 'PrefetchUnavailable'});
@@ -955,7 +977,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
       }
       requireActive(options || {});
       if (data.csrfToken) { emitter.emitAsync('csrfTokenUpdate', data.csrfToken); }
-      await resolveMissingOwner(data).catch(() => window.console.warn('resolveMissingOwner failed'));
+      await resolveMissingOwner(data, isCurrent).catch(() => window.console.warn('resolveMissingOwner failed'));
       requireActive(options || {});
       if (isCurrent()) {
         emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);

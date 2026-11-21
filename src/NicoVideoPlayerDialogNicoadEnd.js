@@ -72,24 +72,24 @@ const NicoVideoPlayerDialogNicoadEnd = {
             '&tags=' + encodeURIComponent(tags.join(',')) + '&excludeVideoIds=' + encodeURIComponent(videoId) +
             '&allowSensitiveContents=true&decoration=video';
         const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
-            RequestDiagnostics.begin('nicoad-end', videoId, 'response', () => this._requestId === requestId);
+            RequestDiagnostics.begin('nicoad-end', videoId, 'response', () => this._requestId === requestId, undefined, { url, method: 'GET' });
         let items = [];
+        let res;
         try {
-            const res = await fetch(url, { credentials: 'include', headers: { 'x-frontend-id': '6', 'x-frontend-version': '0' } });
+            res = await fetch(url, { credentials: 'include', headers: { 'x-frontend-id': '6', 'x-frontend-version': '0' } });
             if (!res.ok) {
-                diagnostic?.failure({ status: res.status });
+                diagnostic?.response(res);
                 return;
             }
             const body = await res.json();
-            if (!Array.isArray(body?.data?.nicoads)) {
-                diagnostic?.failure({ kind: 'schema', missing: 'data.nicoads' });
+            const valid = Array.isArray(body?.data?.nicoads);
+            diagnostic?.decoded(res, body?.meta, valid ? undefined : 'data.nicoads', false);
+            if (!valid)
                 return;
-            }
-            diagnostic?.success();
             items = NicoVideoPlayerDialog.nicoadEndItems(body);
         }
         catch (e) {
-            diagnostic?.failure(e);
+            diagnostic?.failure(RequestDiagnostics.readFailure(res, e));
             return;
         }
         // 待っている間に再生・別の動画・閉じる操作があったら出さない。

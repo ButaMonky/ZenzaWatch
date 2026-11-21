@@ -54,6 +54,7 @@ for (const [method, operation] of [['load','tags'], ['add','tag-add'], ['remove'
     assert.equal((await change(h.api)).error_msg,data.error_msg);
     assert.equal(h.events[0].reason,'service');
     assert.equal(h.events[0].operation,operation);
+    assert.deepEqual([h.events[0].method,h.events[0].endpoint],[{load:'GET',add:'POST',remove:'DELETE'}[method],'tags.list']);
     await change(h.api);
     assert.equal(h.events[1].outcome,'recovered');
     assert(!JSON.stringify(h.events).includes(data.error_msg));

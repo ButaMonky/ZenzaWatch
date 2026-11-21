@@ -2,6 +2,7 @@
 import type {NetUtilFetcher} from './NicoApiTypes';
 
 declare const netUtil: NetUtilFetcher;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 declare const textUtil: {dateToString(date: Date): string};
 
 export interface NicoRssItem {
@@ -65,7 +66,11 @@ const NicoRssLoader: NicoRssLoaderClient = (() => {
   };
 
   const load = async (url: string): Promise<NicoRssItem[]> => {
-    const rssText = await netUtil.fetch(url).then(r => r.text());
+    const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin(url.startsWith('https://ch.nicovideo.jp/') ? 'channel-rss' : 'ranking-rss',
+        url,'response',undefined,undefined,{url,method:'GET'});
+    const response = await netUtil.fetch(url).catch(error => { ticket?.failure(error); throw error; });
+    const rssText = await response.text().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(response,error)); throw error; });
     const xml = new DOMParser().parseFromString(rssText, 'application/xml');
     const entries = Array.from(xml.querySelectorAll('item'));
     const items: NicoRssItem[] = [];
@@ -75,11 +80,17 @@ const NicoRssLoader: NicoRssLoaderClient = (() => {
       catch (_) { skipped++; }
     }
     if (skipped > 0 && items.length === 0) {
+      ticket?.failure({httpStatus:response.status,kind:'schema',missing:'rss.item'});
       throw new Error('RSSの項目を解析できませんでした');
     }
     if (skipped > 0) {
       window.console.warn('RSSの形式不正の項目をスキップしました', skipped);
     }
+    if (response.status >= 400) ticket?.failure({httpStatus:response.status});
+    else if (ticket && (skipped || !xml.querySelector('rss > channel'))) {
+      ticket?.failure({...RequestDiagnostics.responseEvidence(response),httpStatus:response.status,
+        kind:'schema',missing:skipped ? 'rss.item' : 'rss.channel'});
+    } else ticket?.success();
     return items;
   };
 

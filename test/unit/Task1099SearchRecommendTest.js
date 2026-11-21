@@ -148,4 +148,56 @@ describe('Task1099 search and recommendations through their readers', () => {
     assert.equal(h.events.length,n);
     assert(!JSON.stringify(h.events).includes('PRIVATE'));
   });
+  it('loads recommendations after one fresh GET when HTTP 200 contains invalid JSON', async () => {
+    const h = setup(), options = [];
+    h.route((_url, opts) => {
+      options.push(opts);
+      return options.length === 1 ? new Response('') :
+        new Response(JSON.stringify({meta:{status:200},data:{items:[{id:'sm9'}]}}));
+    });
+    const data = await h.recommend.load({videoId:'PRIVATE'});
+    assert.equal(data.items[0].id,'sm9');
+    assert.deepStrictEqual(options.map(opt => [opt.cache,opt.credentials]), [
+      [undefined,'include'], ['no-store','include']
+    ]);
+    assert.equal(h.calls[0],h.calls[1]);
+    assert.equal(h.events.length,0);
+  });
+  it('reports the final unreadable recommendation body once without retaining its text', async () => {
+    const h = setup();
+    h.route(() => new Response('<!doctype html><title>PRIVATE</title>', {headers:{'Content-Type':'text/html'}}));
+    await assert.rejects(h.recommend.loadSeries(4));
+    assert.equal(h.calls.length,2);
+    assert.deepStrictEqual(h.events.map(e => [e.endpoint,e.method,e.reason,e.statusCode,e.missing,e.responseType,e.bodyFormat]),
+      [['recommend','GET','schema',200,'json','html','html']]);
+    assert(!JSON.stringify(h.events).includes('PRIVATE'));
+  });
+  it('retains the final transport failure after an invalid 200 without carrying over its status', async () => {
+    const h = setup();
+    h.route(() => {
+      if (h.calls.length === 1) return new Response('not JSON');
+      throw new TypeError('PRIVATE');
+    });
+    await assert.rejects(h.recommend.load({videoId:'PRIVATE'}));
+    assert.equal(h.calls.length,2);
+    assert.deepStrictEqual(h.events.map(e => [e.reason,e.statusCode]), [['network',undefined]]);
+  });
+  it('does not retry quota, schema, body stream or stale recommendation failures', async () => {
+    for (const response of [
+      () => new Response('',{status:429}),
+      () => new Response(JSON.stringify({meta:{status:200},data:{}})),
+      () => ({status:200,json:async () => {throw new TypeError('PRIVATE');}})
+    ]) {
+      const h = setup();
+      h.route(response);
+      await assert.rejects(h.recommend.load({videoId:'PRIVATE'}));
+      assert.equal(h.calls.length,1);
+    }
+    const h = setup();
+    let current = true;
+    h.route(() => { current = false; return new Response(''); });
+    await assert.rejects(h.recommend.load({videoId:'PRIVATE',isCurrent:() => current}));
+    assert.equal(h.calls.length,1);
+    assert.equal(h.events.length,0);
+  });
 });

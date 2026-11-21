@@ -136,6 +136,27 @@ async function compare(label,watchId,opt={},options={}){
 }
 const LAZY='/v4/watch/lazy/',WATCH='www.nicovideo.jp/watch/',NICOAD='api.nicoad.nicovideo.jp',DANIME='channelVideoDAnimeLinks';
 
+test('optional watch endpoints report their own failures while retaining playback or payment outcomes',async()=>{
+ const anime=v4({lazy:undefined,media:{},genre:{key:'anime',label:'anime'},payment:{ppv:{isEnabled:true}}});
+ for(const [route,payload,reply,endpoint,reason,apiStatus,missing] of [
+   [LAZY,v4(),res(200,{meta:{status:403}}),'video.watch-lazy','permission',403,undefined],
+   [NICOAD,v4({lazy:undefined,metadata:undefined}),res(200,new SyntaxError('private')),'video.owner.nicoad','schema',undefined,'json'],
+   [DANIME,anime,res(200,{data:{items:{}}}),'watch.linked-channel','schema',undefined,'data.items']
+ ]) {
+   const env=world({linked:true,routes:{[WATCH]:res(200,payload),[route]:reply}});
+   const events=[];
+   env.globals.RequestDiagnostics=loadLegacy(read('packages/lib/src/infra/RequestDiagnostics.js'),'RequestDiagnostics',{URL});
+   env.globals.RequestDiagnostics.setSink(e=>events.push(e));
+   const result=await settle(()=>loadLegacy(after,'VideoInfoLoader',env.globals).load('sm9',{}));
+   if(route===DANIME) assert.equal(result.error.info.isNeedPayment,true);
+   else assert.equal(result.value.isPlayable,true);
+   const matches=events.filter(e=>e.endpoint===endpoint);
+   assert.deepEqual(matches.map(e=>[e.method,e.reason,e.statusCode,e.apiStatus,e.missing]),[
+     [route===LAZY?'POST':'GET',reason,200,apiStatus,missing]
+   ],endpoint);
+ }
+});
+
 test('watch v4 success paths and owner sources',async()=>{
   const ok=await compare('lazy user owner + series','sm9',{routes:{[WATCH]:res(200,v4()),
     [LAZY]:res(200,{meta:{status:200},data:{owner:{type:'user',id:4,nickname:'N',icon:{url:'I'}},series:{id:5}}})}});

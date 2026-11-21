@@ -2,6 +2,7 @@
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const mountXClipAttachment = require('./x-clip-attachment.cjs');
+const mountCompanionButtons = require('./companion-buttons.cjs');
 const {createXDraftTransfer,mountXDraftSender} = require('./x-draft-transfer.cjs');
 const {startOrdinaryRuntime} = require('./ordinary-startup.cjs');
 const {splitOptionalPanels,panelLoader,providePanels} = require('./optional-panels.cjs');
@@ -77,7 +78,7 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
    if(draftTransfer)return draftTransfer;
    const hasDraftTabData=typeof GM_getTab==='function' && typeof GM_saveTab==='function' && typeof GM_getTabs==='function';
    return draftTransfer=(${createXDraftTransfer.toString()})({
-     open:url=>GM_openInTab(url,{active:true,insert:true}),tab:()=>new Promise(resolve=>GM_getTab(resolve)),
+     open:(url,options)=>GM_openInTab(url,options),tab:()=>new Promise(resolve=>GM_getTab(resolve)),
      save:tab=>new Promise(resolve=>GM_saveTab(tab,resolve)),tabs:hasDraftTabData ? ()=>new Promise(resolve=>GM_getTabs(resolve)) : null,
      get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key),
      listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:id=>GM_removeValueChangeListener(id)
@@ -91,7 +92,7 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
  ${externalModules}
  ${shared}
  if(typeof GM_openInTab==='function' && official && location.protocol==='https:' && (window===window.top || playerFrame)) {
-   window.addEventListener('zenza-share-panel-open',()=>{(${mountXDraftSender.toString()})(getDraftTransfer);},{once:true});
+   (${mountXDraftSender.toString()})(getDraftTransfer,playerFrame?'ZenzaWatchExternalTrial_':'ZenzaWatch_');
  }
  ${launcher}
  ${transport}
@@ -265,7 +266,7 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
  const mount=()=>{
    launcherHandle?.dispose();openVideo=null;if(legacyActive)return;
    const settings=externalModules.settings.readExternal(readExternalValues());
-   extDiag('companion','mount',{enabled:settings.enabled,siteMode:settings.siteMode,siteEnabled:externalModules.settings.siteEnabled?.(location.hostname,settings)??null,
+   extDiag('companion','mount',{enabled:settings.enabled,siteMode:settings.siteMode,siteEnabled:externalModules.settings.siteEnabled?.(location.href,settings)??null,
      activation:settings.activation,preflight:settings.preflight,textIds:settings.textIds,redirects:settings.redirects,prefixes:settings.prefixes,
      links:document.querySelectorAll('a[href*="nicovideo.jp/watch/"],a[href*="nico.ms/"]').length});
    const preflight=externalModules.preflight.createPreflight(preflightNetwork.fetch,DOMParser);
@@ -281,11 +282,10 @@ module.exports=function buildShells({base,legacyBlog,header,runtime,externalModu
          playerFrames:document.querySelectorAll('[data-zenza-player-host]').length}));}
      catch(error){extDiag('companion','open-failed',{id,ms:Date.now()-started,code:String(error?.message||error),stage:error?.stage||null});throw error;}
    };
-   const overlay=externalModules.overlay.mountOverlay(window,settings,open,preflight.check);
-   const inline=externalModules.inline.mountInlineButtons(window,settings,open,preflight.check);
+   const buttons=(${mountCompanionButtons.toString()})(window,externalModules,settings,open,preflight.check);
    setTimeout(()=>extDiag('companion','buttons',{inline:document.querySelectorAll('[data-zenza-external-inline]').length,
      overlay:document.querySelectorAll('[data-zenza-external-overlay]').length}),1500);
-   openVideo=open;launcherHandle={dispose(){active=false;preflight.dispose();overlay.dispose();inline.dispose();}};
+   openVideo=open;launcherHandle={dispose(){active=false;preflight.dispose();buttons.dispose();}};
  };
  const stopBlog=externalModules.blog.receiveBlogClicks(window,{get:GM_getValue,set:GM_setValue,remove:GM_deleteValue},readExternalValues,(id,event)=>openVideo&&!legacyActive?openVideo(id,event):Promise.reject(Error('LAUNCHER_UNAVAILABLE')));
  mount();

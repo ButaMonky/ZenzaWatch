@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/TagEditApi.ts",
   "runtime": "packages/lib/src/nico/TagEditApi.js",
-  "sourceSha256": "100207bad923cd3194ce8f45f81233b90ba6025ad1fb2fbfc7eef58e087cb1e4",
-  "runtimeSha256": "2579317e19f50bc4f49cdfd0a98400a7005a9bdedad4e3605c1165bb966c4b30"
+  "sourceSha256": "d9864c730f036d403aa9318da64f06cee89f581d445fa005be65b19dd3433e90",
+  "runtimeSha256": "f881861d70c75a2c35f3bc9a2e993a64077cde0b7b3cd215a97e07171985ccc8"
 }

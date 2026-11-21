@@ -1,3 +1,4 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {textUtil} from '../text/textUtil';
 import {netUtil} from '../infra/netUtil';
 import {MylistApiLoader} from './MylistApiLoader';
@@ -6,6 +7,7 @@ import {NicoRssLoader} from './NicoRssLoader';
 import {NicoSearchApiV2Loader} from './VideoSearch';
 // GENERATED FROM tools/typescript-stage1/nico-src/NicoQuery.ts (Task646). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const ItemDataConverter = {
     makeSortText: (text) => {
         return textUtil.convertKansuEi(text)
@@ -199,8 +201,19 @@ class NicoQuery {
             default:
                 throw new Error('unknown query: ' + query);
         }
-        result = await netUtil.fetch(_req.url, { credentials: 'include' })
-            .then(res => res.json());
+        const url = _req.url;
+        const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('legacy-query', url, 'response', undefined, undefined, { url, method: 'GET' });
+        const res = await netUtil.fetch(url, { credentials: 'include' }).catch(error => { ticket?.failure(error); throw error; });
+        result = await res.json().catch(error => { ticket?.failure(RequestDiagnostics.readFailure(res, error)); throw error; });
+        if (res.status >= 400)
+            ticket?.failure({ httpStatus: res.status });
+        else if (!result || typeof result !== 'object')
+            ticket?.failure({ httpStatus: res.status, kind: 'schema', missing: 'json' });
+        else if (result.status === 'fail')
+            ticket?.failure({ httpStatus: res.status, kind: 'service' });
+        else
+            ticket?.success();
         return Object.assign(result, { _req });
     }
     constructor(arg) {

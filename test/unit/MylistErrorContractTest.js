@@ -47,7 +47,7 @@ function loadLoader(rel = 'packages/lib/src/nico/MylistApiLoader.js') {
     if (start < 0 || end < 0) {
       throw new Error('generated MylistApiLoader block not found');
     }
-    run(text.slice(start, end) + ';globalThis.Subject=MylistApiLoader;', context);
+    run(text.slice(start, end) + '\n;globalThis.Subject=MylistApiLoader;', context);
   }
   return {loader: context.Subject, netUtil, fetches};
 }

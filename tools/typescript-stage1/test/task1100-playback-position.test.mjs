@@ -30,6 +30,7 @@ test('playback position separates wire, body and API errors and recovers per vid
   h.respond(204,'');await h.save('sm101');
   assert.deepEqual(h.events.map(e=>e.reason),['permission','service','permission','schema','recovered']);
   assert.equal(h.events[0].statusCode,403);
+  assert.deepEqual([h.events[0].method,h.events[0].endpoint],['PUT','watch.playback-position']);
   assert.equal(h.events[1].errorCode,'OTHER');
   assert.equal(h.events[2].apiStatus,403);
   assert.equal(h.events[3].missing,'response.json');

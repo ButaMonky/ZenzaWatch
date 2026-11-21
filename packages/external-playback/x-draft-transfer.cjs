@@ -34,24 +34,29 @@ function createXDraftTransfer(gm) {
     const intent = new URL('https://x.com/intent/tweet');
     if (typeof text === 'string' && text) intent.searchParams.set('text', text.slice(0,4096));
     if (signal.aborted) throw Error(fallback);
+    const issue = (message,reason) => Object.assign(Error(message),{reason});
+    const openTab = () => {
+      try { return gm.open(intent.href); }
+      catch (_) { throw issue('Xの下書きを別タブで開けませんでした。' + fallback,'draft-open-failed'); }
+    };
     if (!gm.tabs) {
-      gm.open(intent.href);
-      throw Error('Xの下書きを開きました。このスクリプト管理拡張では自動添付できません。コピー済みならXの「Zenzaの動画をクリップボードから読み込む」を押してください。' + fallback);
+      openTab();
+      throw issue('Xの下書きを開きました。このスクリプト管理拡張では自動添付できません。コピー済みならXの「Zenzaの動画をクリップボードから読み込む」を押してください。' + fallback,'draft-manager');
     }
     if (!file || file.type !== 'video/mp4' || !file.size || file.size > maxBytes) {
-      gm.open(intent.href);
-      throw Error('自動添付できるのは256 MiBまでのMP4です。' + fallback);
+      openTab();
+      throw issue('自動添付できるのは256 MiBまでのMP4です。' + fallback,'draft-size');
     }
     intent.hash = 'zenza-clip=' + id;
     let receiver, next = 0, busy = false, done = false, listener, timer, abort, tab;
     try {
       await new Promise((resolve,reject) => {
-        const fail = message => reject(Error(message));
+        const fail = (message,reason) => reject(issue(message,reason));
         abort = () => fail(fallback);
         signal.addEventListener('abort',abort,{once:true});
         const refreshTimeout = () => {
           clearTimeout(timer);
-          timer = setTimeout(() => fail(timeout),120000);
+          timer = setTimeout(() => fail(timeout,receiver ? 'draft-transfer-timeout' : 'draft-no-receiver'),120000);
         };
         refreshTimeout();
         listener = gm.listen(key, async (_,old,msg) => {
@@ -59,7 +64,7 @@ function createXDraftTransfer(gm) {
           if (!receiver && msg.type === 'pull' && msg.index === 0) receiver = msg.receiver;
           if (msg.receiver !== receiver) return;
           if (msg.type === 'attached' && next * chunkSize >= file.size) return resolve();
-          if (msg.type === 'failed') return fail('Xの添付欄に動画を渡せませんでした。' + fallback);
+          if (msg.type === 'failed') return fail('Xの添付欄に動画を渡せませんでした。' + fallback,'draft-input');
           if (msg.type !== 'pull' || busy || msg.index !== next || next * chunkSize >= file.size) return;
           busy = true;
           try {
@@ -71,15 +76,16 @@ function createXDraftTransfer(gm) {
             next++;
             busy = false;
             refreshTimeout();
-            onProgress();
+            onProgress('draft-attach');
             gm.set(key,{type:'chunk',receiver,index});
           } catch (_) { fail(fallback); }
         });
         try {
           gm.set(key,{type:'ready',expires:Date.now()+120000});
-          tab = gm.open(intent.href);
-          if (tab) tab.onclose = () => fail('Xの下書きが閉じられました。' + fallback);
-        } catch (_) { fail('Xの下書きを開けませんでした。' + fallback); }
+          tab = openTab();
+          onProgress('draft-receive');
+          if (tab) tab.onclose = () => fail('Xの下書きが閉じられました。' + fallback,'draft-closed');
+        } catch (error) { reject(error); }
       });
     } finally {
       done = true;
@@ -174,7 +180,7 @@ function mountXDraftSender(getTransfer) {
   },true);
   window.addEventListener('message', event => {
     const port = event.ports?.[0];
-    if (!event.isTrusted || event.origin !== location.origin || event.source !== window || event.data?.type !== 'zenza-reserve-x-draft' ||
+    if (!event.isTrusted || event.origin !== location.origin || event.source !== root.ownerDocument.defaultView || event.data?.type !== 'zenza-reserve-x-draft' ||
         !ticket || event.data.ticket !== ticket || !port) return;
     ticket = null;
     delete root.dataset.zenzaDraftTicket;
@@ -189,15 +195,21 @@ function mountXDraftSender(getTransfer) {
     let started = false;
     port.onmessage = async ({data}) => {
       if (data?.type === 'cancel') return close();
-      if (started || data?.type !== 'complete' || !(data.file instanceof File) || data.file.type !== 'video/mp4') return;
+      if (started || data?.type !== 'complete') return;
+      if (!(data.file instanceof File) || data.file.type !== 'video/mp4') {
+        port.postMessage({error:'管理拡張で受け取ったデータをMP4として確認できませんでした。',stage:'draft-format'});
+        return close();
+      }
       started = true;
       try {
-        await getTransfer().send(data.file,data.text,controller.signal,() => port.postMessage({progress:true}));
+        port.postMessage({stage:'draft-open'});
+        await getTransfer().send(data.file,data.text,controller.signal,stage => port.postMessage({progress:true,stage}));
         port.postMessage({attached:true});
       } catch (error) {
-        port.postMessage({error:error?.message || 'Xへの自動添付に失敗しました。完成画面から手動で添付できます。'});
+        port.postMessage({error:error?.message || 'Xへの自動添付に失敗しました。完成画面から手動で添付できます。',reason:error?.reason});
       } finally { close(); }
     };
+    port.postMessage({reserved:true});
   });
 }
 module.exports = {createXDraftTransfer,mountXDraftSender};

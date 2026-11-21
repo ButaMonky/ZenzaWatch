@@ -35,6 +35,41 @@ describe('完成クリップの一時保管', () => {
   });
   afterEach(() => w.close());
 
+  it('コメント準備を待つ間に動画を切り替えても元の映像を取得し、中止後に届いた描画データは解放する', async () => {
+    let currentVideo = '選んだ動画', captured, finishLayout, disposed = 0;
+    const job = jobs.start({name:'クリップ',from:0,to:3,
+      prepareRenderer:() => new Promise(resolve => {finishLayout = resolve;}),
+      getBlob:() => {captured = currentVideo; return file;}});
+    currentVideo = '別の動画';
+    assert.equal(captured,'選んだ動画');
+    jobs.cancel();
+    finishLayout({drawFrame(){},dispose(){disposed++;}});
+    await flush();
+    assert.equal(job.state,'cancelled');
+    assert.equal(disposed,1);
+    assert.equal(job.file,undefined);
+  });
+
+  it('編集中と閉じた後のどちらでも完了か失敗を一度だけ通知し、下書きの本文を履歴に含めない', async () => {
+    const notices = [];
+    const notify = (message, level) => notices.push([message,level]);
+    const stop = jobs.subscribe(() => {});
+    jobs.completeRecording({name:'最初の動画',shareText:'個人の下書き',file,
+      draft:{complete:async () => {}},onBackgroundFinish:notify});
+    await flush();
+    assert.equal(notices.length,1);
+    assert.match(notices[0][0],/最初の動画.*下書きに動画を添付しました/);
+    assert.equal(notices[0][1],'info');
+    stop();
+    const next = jobs.reserveRecording({name:'次の動画',onCancel(){},onBackgroundFinish:notify});
+    next({reason:'映像を取得できませんでした。'});
+    next({reason:'重複する完了イベント'});
+    assert.equal(notices.length,2);
+    assert.match(notices[1][0],/次の動画.*映像を取得できませんでした/);
+    assert.equal(notices[1][1],'warning');
+    assert(!JSON.stringify(notices).includes('個人の下書き'));
+  });
+
   it('完成表示に失敗しても自動転送と他の画面への通知を続ける', async () => {
     const error = new w.TypeError('完成画面の描画エラー');
     const reported = [], sent = [], states = [];

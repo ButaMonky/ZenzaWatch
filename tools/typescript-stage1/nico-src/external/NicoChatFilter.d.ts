@@ -125,6 +125,7 @@ declare class NicoChatFilter extends Emitter {
     _compositeDirty: boolean;
     _compositeApplied: boolean;
     _compositeWriting: boolean;
+    displayRevision: number;
     _compositeRevision: number | undefined;
     _compositeLegacy: ((chat: NicoFilterEvaluatedChat) => boolean) | undefined;
     constructor(params: NicoChatFilterOptions);
@@ -141,13 +142,18 @@ declare class NicoChatFilter extends Emitter {
     _captureCompositeEdit(chat: NicoFilterSourceChat): void;
     _applyCompositeState(chat: NicoFilterSourceChat, state: NicoCompositeDisplayState | null | undefined): void;
     _bansFor(key: NicoCompositeAuthorKey | null | undefined, authorMatches: Map<string, Set<NicoCompositeAuthorKey | null | undefined>>): Set<string>;
-    _ensureComposite(): false | Map<NicoFilterSourceChat, NicoCompositeDisplayState> | null;
+    _ensureComposite(prepared?: NicoCompositeProjectionOutput | null): false | Map<NicoFilterSourceChat, NicoCompositeDisplayState> | null;
     _storeComposite(output: NicoCompositeProjectionOutput, changed: Set<NicoCompositeGroupNotifier>): void;
     _reprojectCompositeAuthor(key: NicoCompositeAuthorKey | null | undefined, changed: Set<NicoCompositeGroupNotifier>): void;
     _notifyCompositeGroups(changed: Set<NicoCompositeGroupNotifier>): void;
     addCompositeChat(chat: NicoFilterSourceChat): Set<NicoCompositeGroupNotifier>;
     removeCompositeChat(chat: NicoFilterSourceChat): Set<NicoCompositeGroupNotifier>;
     updateCompositeChat(chat: NicoFilterSourceChat): Set<NicoCompositeGroupNotifier>;
+    prepareHistoryPool(chats: NicoFilterEvaluatedChat[]): {
+        displayChat: (chat: NicoFilterEvaluatedChat) => any;
+        filter: (group: NicoFilterEvaluatedChat[]) => NicoFilterEvaluatedChat[];
+        commit: () => void;
+    };
     _getCompositeProjection(fallback: readonly NicoFilterSourceChat[]): false | Map<NicoFilterSourceChat, NicoCompositeDisplayState> | null;
     get isEnable(): boolean;
     set isEnable(v: boolean);
@@ -199,7 +205,7 @@ declare class NicoChatFilter extends Emitter {
     set sharedNgLevel(level: string);
     get sharedNgLevel(): string;
     getFilterFunc(): (chat: NicoFilterEvaluatedChat) => boolean;
-    applyFilter(nicoChatArray: NicoFilterEvaluatedChat[]): NicoFilterEvaluatedChat[];
+    applyFilter(nicoChatArray: NicoFilterEvaluatedChat[], prepared?: Map<NicoFilterSourceChat, NicoCompositeDisplayState> | false): NicoFilterEvaluatedChat[];
     isSafe(nicoChat: NicoFilterEvaluatedChat): boolean;
     _buildFilterReg(filterList: string[]): RegExp | null;
     _buildFilterPerfectMatchinghReg(filterList: string[]): RegExp | null;

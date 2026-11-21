@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/PopupMessage.ts",
   "runtime": "packages/lib/src/ui/PopupMessage.js",
-  "sourceSha256": "24ca8de6e0155ebd2ce22cb546c631c9cc22bcf5ef18a5471a21bd73d34f2253",
-  "runtimeSha256": "a911fe8f6d5b9f05a790266e1ef6f02c1723b1eb9fb552d540e290ac3dbcb790"
+  "sourceSha256": "1265a772d75ad4bcaf9e601d8680e04c311cc513298da1c83d2b5319cff61f26",
+  "runtimeSha256": "e76b77594ba3ae6799371eb3a15e3c9739d2ad74118713cfe06a2953ff0bb52b"
 }

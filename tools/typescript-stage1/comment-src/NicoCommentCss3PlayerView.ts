@@ -414,6 +414,7 @@ class NicoCommentCss3PlayerView extends Emitter {
       this._style.textContent = '';
     }
 
+    this._admissionCursors = {};
     this._inViewTable.clear();
     this._inSlotTable.clear();
     this._domTable.clear();
@@ -436,12 +437,6 @@ class NicoCommentCss3PlayerView extends Emitter {
     }
 
     const vm = this._viewModel;
-    const inView = [
-      vm.getGroup(NicoChat.TYPE.NAKA).inViewMembers,
-      vm.getGroup(NicoChat.TYPE.BOTTOM).inViewMembers,
-      vm.getGroup(NicoChat.TYPE.TOP).inViewMembers
-    ].flat();
-
     const dom = [], subDom = [], candidates = [];
     const inSlotTable = this._inSlotTable, inViewTable = this._inViewTable;
     const ct = this._currentTime;
@@ -450,12 +445,20 @@ class NicoCommentCss3PlayerView extends Emitter {
     // 容量判定より前に行うので、終わったDOMが有効な新着を押し出すことはない。
     this._collectExpired(ct);
 
-    for (let i = 0, len = inView.length; i < len; i++) {
-      const nicoChat = inView[i];
-      if (inViewTable.has(nicoChat)) {
-        continue;
+    const cursors = this._admissionCursors || (this._admissionCursors = {});
+    for (const type of [NicoChat.TYPE.NAKA, NicoChat.TYPE.BOTTOM, NicoChat.TYPE.TOP]) {
+      const group = vm.getGroup(type);
+      const start = candidates.length;
+      if (group.appendNewInViewMembers) {
+        group.appendNewInViewMembers(ct, cursors[type] || (cursors[type] = {next:0}), candidates);
+      } else {
+        for (const chat of group.inViewMembers) candidates.push(chat);
       }
-      candidates.push(nicoChat);
+      let write = start;
+      for (let i = start; i < candidates.length; i++) {
+        if (!inViewTable.has(candidates[i])) candidates[write++] = candidates[i];
+      }
+      candidates.length = write;
     }
 
     // 上限判定は「新しく表示を開始する直前」だけ。表示中の要素は追い出さない。

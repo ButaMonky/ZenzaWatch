@@ -86,17 +86,28 @@ const ShareClipJobs = (() => {
       URL.revokeObjectURL(url);
     }
   }
+  function notifyResult(task, notify, message, level = 'info', stage, reason) {
+    if (!notify || task.notified) return;
+    task.notified = true;
+    const title = String(task.name || 'クリップ').slice(0,64);
+    notify('「' + title + '」 ' + message, level, stage, reason);
+  }
   async function sendDraft(task, onBackgroundFinish) {
     const draft = task.draft;
     if (!draft) return;
     const releaseLinks = keepWatchLinksInNewTabs();
+    let level = 'info', stage = 'draft-attached', reason;
     task.draftMessage = 'Xの下書きに動画を添付しています…';
     publish();
     try {
-      if (task.file.type !== 'video/mp4') throw Error('WebMで完成しました。完成画面で共有方法を選んでください。');
-      await draft.complete(task.file, task.shareText || task.name || '');
+      if (task.file.type !== 'video/mp4') throw Object.assign(Error('WebMで完成しました。完成画面で共有方法を選んでください。'),{stage:'draft-format'});
+      await draft.complete(task.file, task.shareText ?? task.name ?? '');
       task.draftMessage = 'Xの下書きに動画を添付しました。内容を確認して投稿してください。';
     } catch (error) {
+      level = 'warning';
+      stage = error?.stage || 'draft-attach';
+      reason = error?.reason;
+      task.draftFailureStage = stage;
       task.draftMessage = error?.message || 'Xの下書きに添付できませんでした。完成画面から手動で添付できます。';
     } finally {
       releaseLinks();
@@ -105,7 +116,7 @@ const ShareClipJobs = (() => {
         task.draft = null;
         touch(task);
         publish();
-        if (!listeners.size) onBackgroundFinish?.(task.draftMessage);
+        notifyResult(task, onBackgroundFinish, task.draftMessage, level, stage, reason);
       }
     }
   }
@@ -122,7 +133,7 @@ const ShareClipJobs = (() => {
     publish(message);
     return true;
   }
-  function start({name, shareText, from, to, hls, getBlob, renderer, comments, maxHeight, owner, onBackgroundFinish, draft}) {
+  function start({name, shareText, from, to, hls, getBlob, renderer, prepareRenderer, comments, maxHeight, owner, onBackgroundFinish, draft}) {
     if (latest?.state === 'running') throw Error('クリップを作成中です。');
     if (latest?.state === 'ready') discard();
     const controller = new AbortController();
@@ -138,7 +149,18 @@ const ShareClipJobs = (() => {
     }
     async function run() {
       try {
-        const blob = hls ? null : await getBlob(signal);
+        let prepared;
+        if (prepareRenderer) {
+          setStage('comments');
+          prepared = Promise.resolve(prepareRenderer(signal)).then(value => {
+            if (signal.aborted) { value?.dispose?.(); signal.throwIfAborted(); }
+            renderer = value;
+            if (typeof renderer?.drawFrame !== 'function') throw Error('選択したコメント・画面エフェクトを準備できませんでした。');
+          });
+        }
+        // Start reading the chosen video in this turn, before a panel or video switch.
+        const readSource = async () => hls ? null : getBlob(signal);
+        const [blob] = await Promise.all([readSource(), prepared]);
         signal.throwIfAborted();
         if (!hls && !(blob instanceof Blob)) throw Error('元ファイルを取得できませんでした。');
         const output = await ShareFastClip.convert({blob, hls, from, to, signal, comments, maxHeight, onStage:setStage,
@@ -160,6 +182,7 @@ const ShareClipJobs = (() => {
         task.state = 'ready';
       } catch (error) {
         task.state = signal.aborted ? 'cancelled' : 'failed';
+        controller.abort();
         task.clipProtected = error?.clipProtected === true;
         task.clipInputUnsupported = error?.clipInputUnsupported === true;
         // Library errors can include signed media URLs. Show only our own Japanese descriptions.
@@ -176,9 +199,9 @@ const ShareClipJobs = (() => {
           } else {
             task.draft?.cancel?.();
             task.draft = null;
-            if (!listeners.size && task.state !== 'cancelled') onBackgroundFinish?.(task.state === 'ready'
+            if (task.state !== 'cancelled') notifyResult(task, onBackgroundFinish, task.state === 'ready'
               ? 'クリップが完成しました。共有パネルから保存できます。'
-              : 'クリップを作成できませんでした。共有パネルで詳細を確認できます。');
+              : task.reason, task.state === 'ready' ? 'info' : 'warning', task.state === 'ready' ? 'export-ready' : 'export-' + task.stage);
           }
         }
       }
@@ -187,9 +210,10 @@ const ShareClipJobs = (() => {
     return task;
   }
   return {
-    start, discard, touch, hold, retentionMinutes,
+    start, discard, touch, hold, retentionMinutes, keepWatchLinksInNewTabs,
     reserveRecording({name, shareText, from, to, owner, onCancel, onBackgroundFinish}) {
       if (latest?.state === 'running') throw Error('クリップを作成中です。');
+      if (latest?.state === 'ready') discard();
       const controller = new AbortController();
       const task = latest = {name, shareText, from, to, owner, controller, recorded:true, stage:'recording', percent:null, state:'running'};
       controller.signal.addEventListener('abort', onCancel, {once:true});
@@ -202,8 +226,8 @@ const ShareClipJobs = (() => {
         touch(task);
         publish();
         if (file && draft) void sendDraft(task, onBackgroundFinish);
-        else if (!listeners.size && task.state !== 'cancelled') onBackgroundFinish?.(file
-          ? 'クリップが完成しました。共有パネルから保存できます。' : reason);
+        else if (task.state !== 'cancelled') notifyResult(task, onBackgroundFinish, file
+          ? 'クリップが完成しました。共有パネルから保存できます。' : reason, file ? 'info' : 'warning');
       };
     },
     completeRecording({name, shareText, file, owner, draft, onBackgroundFinish}) {
@@ -216,6 +240,7 @@ const ShareClipJobs = (() => {
       touch(latest);
       publish();
       if (draft) void sendDraft(latest, onBackgroundFinish);
+      else notifyResult(latest, onBackgroundFinish, 'クリップが完成しました。共有パネルから保存できます。');
       return true;
     },
     cancel() { if (latest?.state === 'running') latest.controller.abort(); },

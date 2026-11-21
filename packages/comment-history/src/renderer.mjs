@@ -9,6 +9,7 @@ export class CommentHistoryRenderer {
   // re-creating them. Released with the cache by reset() (video switch / reload) and clear() (OFF).
   #retained=new Map();
   constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
+    player._viewModel.isHistoryChat = vm => this.has(vm._nicoChat);
     this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
   }
   #groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
@@ -23,15 +24,34 @@ export class CommentHistoryRenderer {
     if(retain){for(const chat of this.#history)this.#retained.set(identity(chat),chat);}
     else this.#retained.clear();
     if(!this.#history.size)return;
-    for(const group of this.#groups()){
-      if(!group)continue;
-      group._members=group._members.filter(chat=>!this.#history.has(chat));
+    const groups=this.#groups().filter(Boolean);
+    const remaining=groups.map(group=>group._members.filter(chat=>!this.#history.has(chat)));
+    this.#player._model._nicoChatFilter.prepareHistoryPool?.(remaining.flat()).commit();
+    for(const [i,group] of groups.entries()){
+      group._members=remaining[i];
       group._filteredMembers=[];group._filteredMembersValid=false;
       group.onChange(null);
     }
     this.#history.clear();this.#player._view?.refresh();this.#player._model.emit('change');
   }
-  async apply(data,{isCurrent=()=>true,signal}={}){
+  async apply(data,control){
+    const vm=this.#player._viewModel;
+    const layout={pending:true};
+    vm.pendingHistoryLayout=layout;
+    try{
+      const result=await this.#prepare(data,control);
+      const model=this.#player._model;
+      layout.sources=[model.nakaGroup._members,model.topGroup._members,model.bottomGroup._members];
+      return result;
+    }catch(error){
+      layout.error=error;
+      throw error;
+    }finally{
+      layout.pending=false;
+      if(vm.pendingHistoryLayout===layout)vm.pendingHistoryLayout=null;
+    }
+  }
+  async #prepare(data,{isCurrent=()=>true,signal}={}){
     const revision=++this.#revision,model=this.#player._model;
     const valid=()=>revision===this.#revision&&!signal?.aborted&&isCurrent();
     const check=()=>{if(!valid())throw abortError();};
@@ -80,16 +100,22 @@ export class CommentHistoryRenderer {
         const normals=groups.flatMap(g=>g._members.filter(c=>!this.#history.has(c)));
         const normalKeys=new Set(normals.map(identity));
         const extras=added.filter(c=>!normalKeys.has(identity(c))&&!this.#deleted.has(identity(c)));
-        const all=normals.concat(extras);
+        const all=normals.concat(extras), filter=model._nicoChatFilter;
+        const filterRevision=filter.compositeRevision;
+        const projection=filter.prepareHistoryPool?.(all);
+        const byType=[[],[],[]];
+        for(const chat of all)byType[chat.type===types[0]?0:chat.type===types[2]?2:1].push(chat);
         for(let i=0;i<groups.length;i++){
           check();
-          const chats=all.filter(c=>c.type===types[i]||(i===1&&!types.includes(c.type)));
-          const filtered=model._nicoChatFilter.applyFilter(chats),members=[];
+          const chats=byType[i];
+          const filtered=projection?projection.filter(chats):filter.applyFilter(chats),members=[];
           // Keep the candidate owned by prepared during every await so failures release it too.
           const entry={chats,filtered,members,group:groups[i],vm:vms[i],sorted:[],maxDuration:0};prepared.push(entry);
+          let sliceEnd=Date.now()+4;
           for(const c of filtered){
-            members.push(this.#VM.create(c,vms[i]._offScreen));
-            if(members.length%100===0){await this.#yield();check();}
+            const display=projection?projection.displayChat(c):c;
+            members.push(this.#VM.create(display,vms[i]._offScreen));
+            if(members.length%100===0||Date.now()>=sliceEnd){await this.#yield();check();sliceEnd=Date.now()+4;}
           }
           this.#VM.prepareCommentArt?.(members);
           const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
@@ -104,14 +130,20 @@ export class CommentHistoryRenderer {
           }
         }
         check();
-        if(groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
+        if(filterRevision!==filter.compositeRevision||groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
         // Single synchronous commit: the old screen survives until every group has a valid reply.
+        projection?.commit();
         this.#player._view?.clear?.();
         for(const e of prepared){
           for(const c of e.chats)c.group=e.group;
           e.group._members=e.chats;e.group._filteredMembers=e.filtered;e.group._filteredMembersValid=true;
+          e.group._filteredRevision=filter.compositeRevision||0;
+          if(e.filtered===e.chats)e.group._filteredMembers=e.filtered.slice();
+          if(projection)for(let i=0;i<e.members.length;i++)e.members[i]._nicoChat=e.filtered[i];
           const old=e.vm._members;
           e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
+          e.vm._completedLayout=e.vm._lastUpdate;
+          e.vm._layoutFilterRevision=filter.displayRevision||0;
           for(const m of old)m.reset();
         }
         const next=new Set(extras);

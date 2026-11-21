@@ -6,6 +6,18 @@
 
 通知履歴で「再生途中の修復レポート」を開いてください。ブラウザから読み込み待ちの通知を受け、前面で15秒間再生時刻が進まなかった場合に記録します。停止位置を含む受信済み区間に0.25秒を超える先のデータがある場合は、映像を進める処理を案内します。それ以外では利用中の方式に応じてHLSまたは通常の動画要素へのデータ供給を案内します。通信、デコード、映像形式についてブラウザ自身がエラーを返した場合は、待ち時間を置かずに分類できます。観測処理は [PlaybackInterruptionTrace.js](../../src/PlaybackInterruptionTrace.js)、再現試験は [PlaybackInterruptionTraceTest.js](../../test/unit/PlaybackInterruptionTraceTest.js) にあります。Chrome と ffmpeg がある環境では `node test/browser/task1103-playback-interruption.cjs` で、合成動画の途中からデータを保留し、実際の通知からコピー、復旧までを再現できます。
 
+### 共有画面を閉じた後の投稿・添付の結果を調べるとき
+
+通知履歴で、ニコニコの直接投稿は元動画のID、Zenzaで作ったクリップはタイトルを手掛かりに結果を確認します。ニコニコの直接投稿は [ShareOfficialClip.js](../../src/ShareOfficialClip.js) がクリップ生成、連携先の再確認、投稿、結果照会を担当します。投稿を再送せずに結果を問い合わせるには、同じ動画の共有画面で「状態を再確認」を押してください。Zenzaで生成したMP4の処理とX下書きへの転送結果は [ShareClipJobs.js](../../src/ShareClipJobs.js) を確認してください。X下書きへの添付後は利用者がXで投稿します。
+
+「ニコニコ連携でクリップ投稿」の修復レポートでは、最後に確認できた処理、失敗した段階、応答で不足した項目、取得できた場合はHTTP状態・再試行時間を確認できます。「投稿結果を照会」が失敗したときは、結果を確認するまで新しい投稿を作らず「状態を再確認」を使います。
+
+「クリップをXの下書きに添付」の修復レポートでは、タブの受付・起動は [ShareClipClipboard.js](../../src/ShareClipClipboard.js)、管理拡張とXの受け渡しは [x-draft-transfer.cjs](../../packages/external-playback/x-draft-transfer.cjs) から確認します。「Xの受け取り待ち」は起動を要求した後、Xから受け取りを確認できていない段階です。「通常のブラウザータブで下書きを開く」では本文を渡しており、動画を添付するには完成画面のコピーまたは保存を使います。再現試験は [task1112-x-draft.cjs](../../test/browser/task1112-x-draft.cjs) です。
+
+### 通常再生とクリップで見えるコメントが違うとき
+
+まず元動画の同じ位置で、増量データが読み込み済みか、NGと同時表示件数の設定がどうなっているかを確認します。Zenzaの書き出しは [ShareClipRenderer.js](../../src/ShareClipRenderer.js) で元動画の区間を確定します。コメント抽出・表示の回帰テストは [CommentClipSnapshotTest.js](../../test/unit/CommentClipSnapshotTest.js) と [task1094-clip-renderer.cjs](../../test/browser/task1094-clip-renderer.cjs) です。ニコニコのサーバーで作る公式クリップの表示内容はニコニコ側が決めます。
+
 ### コメントを取得できたのに表示準備に失敗したとき
 
 通知が「コメントは取得済み」と伝えている場合は [CommentPlayer.ts](../../tools/typescript-stage1/nico-src/CommentPlayer.ts) の `setComment` と、応答形式に応じた変換処理を確認します。通常コメントと先読み済みコメントの再現試験は [CommentRequestLifetimeTest.js](../../test/unit/CommentRequestLifetimeTest.js) にあります。

@@ -22,6 +22,24 @@ function boot() {
 }
 
 describe('Task926 PopupMessage colors from Config',()=>{
+  it('shows a sharing result on returning to a hidden tab even after the player closed, with one journal entry',()=>{
+    const h=boot();
+    try {
+      const doc=h.dom.window.document;
+      let hidden=true;
+      Object.defineProperty(doc,'hidden',{get:()=>hidden});
+      h.root.hidden=true;
+      h.Popup.notify('公式クリップの投稿完了',false,{source:'official-share',details:{phase:'posted'}});
+      assert.equal(h.journal.length,1);
+      assert.equal(doc.querySelector('.zenzaShareNoticeHost'),null);
+      hidden=false;
+      doc.dispatchEvent(new h.dom.window.Event('visibilitychange'));
+      const toast=doc.querySelector('.zenzaShareNoticeHost .zenzaPopupMessage');
+      assert.equal(toast.textContent,'公式クリップの投稿完了');
+      assert(!h.root.contains(toast));
+      assert.equal(h.journal.length,1);
+    } finally {h.dom.window.close();}
+  });
   it('keeps original notify/error colors and the existing white text by default',()=>{
     const h=boot();
     try{

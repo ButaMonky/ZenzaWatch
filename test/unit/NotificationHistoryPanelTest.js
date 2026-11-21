@@ -34,6 +34,36 @@ function setup(records) {
 }
 
 describe('NotificationHistoryPanel (synthetic DOM)', () => {
+  it('exports confirmed progress, reason, repair location and retry guidance for a Nico receipt failure',async()=>{
+    const h=setup([{id:'official',timestamp:1,category:'general',level:'warning',message:'個人の投稿本文',source:'official-share',
+      version:'2.7.494-task1118',details:{operation:'official-share',phase:'official-receipt',lastStage:'attempted',
+        reason:'official-invalid-response',missing:'data.status',statusCode:200}}]);
+    try {
+      let report;
+      Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{writeText:async text=>{report=text;}}});
+      await flush();h.root.querySelector('[data-entry-id="official"]').click();
+      h.root.querySelector('[data-history-action="copy"]').click();await flush();
+      for (const text of ['ニコニコ連携でクリップ投稿','投稿結果を照会','Xへの投稿を要求','状態を再確認','data.status','src/ShareOfficialClip.js'])
+        assert(report.includes(text),text);
+      assert(!report.includes('個人の投稿本文'));
+    } finally {h.dom.window.close();}
+  });
+  it('copies the X draft delivery stage and repair file without sharing the draft or video title', async () => {
+    const h = setup([{id:'draft',timestamp:1,version:'2.7.494-task1118',category:'general',level:'warning',
+      source:'x-draft',message:'個人の動画名',details:{operation:'x-draft',phase:'draft-receive',reason:'draft-receive',outcome:'failed'}}]);
+    try {
+      let report;
+      Object.defineProperty(h.dom.window.navigator,'clipboard',{value:{writeText:async text => { report = text; }}});
+      await flush();
+      h.root.querySelector('[data-entry-id="draft"]').click();
+      h.root.querySelector('[data-history-action="copy"]').click();
+      await flush();
+      assert.match(report,/クリップをXの下書きに添付/);
+      assert.match(report,/段階　Xの受け取り待ち/);
+      assert.match(report,/packages\/external-playback\/x-draft-transfer.cjs/);
+      assert.doesNotMatch(report,/記録なし|個人の動画名/);
+    } finally { h.dom.window.close(); }
+  });
   it('copies only the selected problem using registered labels, field names and repair paths', async () => {
     const records = [{id:'sm912345', timestamp:1, category:'network', level:'warning', source:'comment-read',
       version:'2.7.473-task1096', message:'生のエラー文 https://private.invalid/?key=secretValue',

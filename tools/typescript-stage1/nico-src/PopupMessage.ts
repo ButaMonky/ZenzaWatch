@@ -9,6 +9,7 @@ declare const NotificationJournal: typeof import('./NotificationJournal').Notifi
 /** Config is supplied by the userscript dependency loader. */
 declare const Config: {getValue?(key: string): unknown};
 
+type PopupJournal = Pick<import('./NotificationJournalPolicy').JournalInput,'source'|'details'>;
 const PopupMessage = (() => {
   const __css__ = `
     .zenzaPopupMessage {
@@ -38,6 +39,19 @@ const PopupMessage = (() => {
       animation-fill-mode: forwards;
     }
 
+    .zenzaShareNoticeHost {
+      all: initial; position: fixed; inset: max(12px,env(safe-area-inset-top)) 12px auto auto;
+      z-index: 2147483647; width: min(28rem,calc(100vw - 24px)); margin: 0; padding: 0;
+      background: transparent; border: 0; overflow: visible; pointer-events: none;
+    }
+    .zenzaShareNoticeHost::backdrop {background:transparent;pointer-events:none}
+    .zenzaShareNoticeHost .zenzaPopupMessage {
+      white-space: normal; overflow-wrap: anywhere; font: 600 15px/1.5 system-ui,sans-serif;
+      animation-duration: 7s;
+    }
+    @media(prefers-reduced-motion:reduce) {
+      .zenzaShareNoticeHost .zenzaPopupMessage {animation:none;opacity:1}
+    }
     .zenzaPopupMessage.notify {
       background: var(--notify-color, #0c0);
     }
@@ -117,13 +131,51 @@ const PopupMessage = (() => {
     return d;
   };
 
-  const show = (msg: Element) => {
+  let noticeHost: HTMLElement | undefined;
+  const waitingNotices: Element[] = [];
+  function showShareNotice(msg: Element) {
+    if (document.hidden) {
+      waitingNotices.push(msg);
+      if (waitingNotices.length > 3) waitingNotices.shift();
+      document.addEventListener('visibilitychange', showWaiting);
+      return;
+    }
+    if (!noticeHost?.isConnected) {
+      noticeHost = document.createElement('div');
+      noticeHost.className = 'zenzaShareNoticeHost';
+      noticeHost.setAttribute('role','status');
+      noticeHost.setAttribute('aria-live','polite');
+      const supportsPopover = typeof noticeHost.showPopover === 'function';
+      if (supportsPopover) noticeHost.setAttribute('popover','manual');
+      const parent = supportsPopover ? document.body :
+        document.querySelector('dialog[open].zenzaShare') || document.fullscreenElement || document.body;
+      parent.appendChild(noticeHost);
+      if (supportsPopover) {
+        try { noticeHost.showPopover(); }
+        catch (_) { noticeHost.removeAttribute('popover'); }
+      }
+    }
+    const host = noticeHost;
+    host.prepend(msg);
+    while (host.childElementCount > 3) host.lastElementChild?.remove();
+    window.setTimeout(() => {
+      msg.remove();
+      if (!host.childElementCount) { host.remove(); if (host === noticeHost) noticeHost = undefined; }
+    },7200);
+  }
+  function showWaiting() {
+    if (document.hidden) return;
+    document.removeEventListener('visibilitychange',showWaiting);
+    for (const msg of waitingNotices.splice(0)) showShareNotice(msg);
+  }
+  const show = (msg: Element, shareNotice = false) => {
     initialize();
+    if (shareNotice) { showShareNotice(msg); return; }
     const target = document.querySelector('.popupMessageContainer');
     (target || document.body).prepend(msg);
   };
 
-  const nt = (msg: string | undefined, allowHtml: boolean, type: string, consoleStyle: string) => {
+  const nt = (msg: string | undefined, allowHtml: boolean, type: string, consoleStyle: string, journal?: PopupJournal) => {
     if (msg === undefined) {
       msg = '不明なエラー';
       window.console.error('undefined message sent');
@@ -136,21 +188,21 @@ const PopupMessage = (() => {
         category: 'general',
         level: type === 'alert' ? 'error' : type === 'warning' ? 'warning' : 'info',
         message: allowHtml ? msg.replace(/<[^>]*>/g, ' ') : msg,
-        source: 'popup'
+        source: journal?.source || 'popup', details: journal?.details
       });
     } catch (_) { /* history never interferes with notifications */ }
     console.log('%c%s', consoleStyle, msg);
-    show(create(msg, type, allowHtml));
+    show(create(msg, type, allowHtml), journal?.source === 'x-draft' || journal?.source === 'official-share' || journal?.source === 'clip-export');
   };
 
-  const notify = (msg?: string, allowHtml = false) =>
-    nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;');
+  const notify = (msg?: string, allowHtml = false, journal?: PopupJournal) =>
+    nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;', journal);
 
   const alert = (msg?: string, allowHtml = false) =>
     nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
 
-  const warning = (msg?: string, allowHtml = false) =>
-    nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;');
+  const warning = (msg?: string, allowHtml = false, journal?: PopupJournal) =>
+    nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;', journal);
 
   const debug = (msg?: string, allowHtml = false) =>
     nt(msg, allowHtml, 'debug', 'background: #333; color: #fff; padding: 8px;');

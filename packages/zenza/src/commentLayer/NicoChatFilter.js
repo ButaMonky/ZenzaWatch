@@ -44,7 +44,8 @@ class NicoChatFilter extends Emitter {
 
     const notifyChange=_.debounce(this._onChange.bind(this),50);
     // Invalidate predicates synchronously, even if UI change is debounced.
-    this._onChange=()=>{this._invalidateComposite();notifyChange();};
+    this.displayRevision=0;
+    this._onChange=()=>{this.displayRevision++;this._invalidateComposite();notifyChange();};
     // Preserve the debounced callback API used by existing lifecycle code.
     this._onChange.cancel=()=>notifyChange.cancel?.();
     this._onChange.flush=()=>notifyChange.flush?.();
@@ -108,7 +109,7 @@ class NicoChatFilter extends Emitter {
   _bansFor(key,authorMatches){
     return new Set([...authorMatches].filter(([,ids])=>ids.has(key)).map(([id])=>id));
   }
-  _ensureComposite(){
+  _ensureComposite(prepared){
     if(!this._compositeDirty)return this._compositeProjection;
     this._compositeDirty=false;
     this._compositeAuthors.clear();this._compositeBans.clear();
@@ -120,7 +121,7 @@ class NicoChatFilter extends Emitter {
       this._baselineComposite(c);if(this._compositeProgram.hasAuthors)this._registerCompositeAuthor(c);
     }
     this._compositeLegacy=this.getFilterFunc();
-    const output=NgCompositeRules.projectWithMeta([...this._compositePool],this._compositeProgram,
+    const output=prepared || NgCompositeRules.projectWithMeta([...this._compositePool],this._compositeProgram,
       this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
     this._compositeProjection=output.results;this._compositeApplied=true;
     for(const [c,state] of output.results)this._applyCompositeState(c,state);
@@ -191,6 +192,41 @@ class NicoChatFilter extends Emitter {
       this._storeComposite(output,changed);
     }
     this._notifyCompositeGroups(changed);return changed;
+  }
+  // History layout runs asynchronously. Evaluate all author rules against its candidate
+  // pool without changing the visible pool, its authors, or their live display properties.
+  prepareHistoryPool(chats) {
+    const legacy = this.getFilterFunc();
+    const output = this.hasActiveCompositeRules ? NgCompositeRules.projectWithMeta(
+      chats, this._compositeProgram, legacy, this._compositeVideoId, this._compositeBaselines) : null;
+    const displayChat = (chat) => {
+      const state = output?.results.get(chat) || (this._compositeApplied && this._compositeBaselines.get(chat));
+      if (!state || !chat.props || !['text','cmd','color','size','opacity'].some(k => chat[k] !== state[k])) return chat;
+      const copy = Object.create(chat);
+      copy.props = {...chat.props, group:null, text:state.text, cmd:state.cmd, color:state.color,
+        size:state.size, opacity:state.opacity, htmlText:chat.text === state.text ? chat.props.htmlText : null};
+      return copy;
+    };
+    return {
+      displayChat,
+      filter: (group) => {
+        if (output || !this._compositeApplied) return this.applyFilter(group, output?.results || false);
+        // A disabled rule may still be painted during its debounce. Evaluate legacy
+        // predicates on restored display values while keeping live chat objects intact.
+        const display = group.map(displayChat);
+        const accepted = new Set(this.applyFilter(display, false));
+        return group.filter((chat,i) => accepted.has(display[i]));
+      },
+      commit: () => {
+        const next = new Set(chats);
+        if (this._compositeApplied) for (const chat of this._compositePool) {
+          if (!next.has(chat)) this._applyCompositeState(chat, null);
+        }
+        this._compositePool = next;
+        this._invalidateComposite();
+        this._ensureComposite(output);
+      }
+    };
   }
   _getCompositeProjection(fallback){
     if(this.hasActiveCompositeRules)for(const c of fallback)if(!this._compositePool.has(c))this.addCompositeChat(c);
@@ -546,14 +582,14 @@ class NicoChatFilter extends Emitter {
         );
     };
   }
-  applyFilter(nicoChatArray) {
+  applyFilter(nicoChatArray, prepared) {
     const before = nicoChatArray.length;
     if (before < 1) {
       return nicoChatArray;
     }
     const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
     if (timeKey) { console.time(timeKey); }
-    const composite=this._getCompositeProjection(nicoChatArray);
+    const composite=prepared === undefined ? this._getCompositeProjection(nicoChatArray) : prepared;
     const filterFunc=composite?this._compositeLegacy:this.getFilterFunc();
     let result=nicoChatArray.filter(chat=>composite instanceof Map?
       composite.get(chat)?.visible===true:filterFunc(chat));

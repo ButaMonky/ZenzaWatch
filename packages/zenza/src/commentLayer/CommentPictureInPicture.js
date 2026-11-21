@@ -211,6 +211,7 @@ const CommentPictureInPicture = (() => {
     }
 
     _updateSnapshot(viewModel, now) {
+      if (viewModel.clipAdmissionApplied && this.snapshot.viewModel === viewModel) return this.snapshot;
       const groups = [NicoChat.TYPE.NAKA, NicoChat.TYPE.TOP, NicoChat.TYPE.BOTTOM]
         .map(type => viewModel.getGroup(type))
         .filter(Boolean);
@@ -278,7 +279,7 @@ const CommentPictureInPicture = (() => {
       const aiOpacity = props['commentLayer.aiCommentOpacity'];
       const {naka, fixed, upcoming} = this._getInView(viewModel, sec, now);
       const chats = naka.concat(fixed);
-      const start = Math.max(0, chats.length - MAX_DRAW_COMMENTS);
+      const start = viewModel.clipAdmissionApplied ? 0 : Math.max(0, chats.length - MAX_DRAW_COMMENTS);
       for (let i = start; i < chats.length; i++) {
         const chat = chats[i];
         let bitmap;

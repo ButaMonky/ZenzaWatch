@@ -77,6 +77,9 @@ const NotificationHistoryPanel = (() => {
   };
   const featureLabel = (entry: JournalEntry): string => {
     const operation = String(entry.details?.operation || entry.source);
+    if (operation === 'x-draft') return 'クリップをXの下書きに添付';
+    if (operation === 'official-share') return 'ニコニコ連携でクリップ投稿';
+    if (operation === 'clip-export') return 'Zenzaのクリップ作成';
     if (operation === 'script-error') return 'スクリプトエラー';
     if (operation === 'external-playback') return '外部サイトからの再生';
     return (typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.labelFor(operation)) ||
@@ -92,9 +95,55 @@ const NotificationHistoryPanel = (() => {
     entry.details?.reason === 'not-found' ? '対象なし・要確認' :
     entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
   const phaseLabels = new Map<string,string>([
+    ['official-create','ニコニコへクリップ作成を要求'], ['official-generate','ニコニコの生成結果を確認'],
+    ['official-verify','投稿先の連携アカウントを再確認'], ['official-post','ニコニコからXへの投稿を要求'],
+    ['official-receipt','ニコニコに投稿結果を照会'],
+    ['export-library','変換ライブラリの準備'], ['export-ready','動画の作成完了'], ['export-source','元動画の取得'], ['export-comments','区間のコメント準備'],
+    ['export-encoding','動画の書き出し'], ['export-checking','完成動画の検査'], ['export-recording','区間の録画'],
+    ['draft-reserve','タブ連携の受付'], ['draft-open','Xタブの起動要求'], ['draft-receive','Xの受け取り待ち'],
+    ['draft-attach','MP4の受け渡し・添付確認'], ['draft-attached','添付完了'], ['draft-format','動画形式の確認'],
+    ['draft-popup','待機タブを開く'], ['draft-tab-closed','待機タブの確認'], ['draft-native','通常のブラウザータブで下書きを開く'],
     ['transport','通信'], ['response','応答の確認'], ['session','処理'], ['dialog-precheck','投稿前の確認'], ['startup','再生開始'], ['playback','再生途中'], ['render','表示準備'], ['script','スクリプト実行'], ['script-promise','非同期処理']
   ]);
   const explanations: Record<string,string> = {
+      'official-posted':'ニコニコがXへの投稿完了を返しました。',
+      'official-rate-limit':'ニコニコの作成または投稿回数の上限に達しました。',
+      'official-login-required':'ニコニコへのログインを確認できませんでした。',
+      'official-unlinked':'ニコニコとXのアカウント連携が解除されています。',
+      'official-video-ineligible':'ニコニコでこの動画のクリップ投稿を利用できません。',
+      'official-permission-denied':'ニコニコはこのアカウントまたは動画の投稿を許可していません。',
+      'official-account-changed':'投稿先のアカウントが変わったため投稿を止めました。',
+      'official-account-unknown':'連携先のアカウント名を確認できませんでした。',
+      'official-invalid-text':'ニコニコが投稿本文を受け付けませんでした。',
+      'official-clip-missing':'ニコニコ側で作成したクリップを確認できませんでした。',
+      'official-generation-failed':'ニコニコ側がクリップの生成失敗を返しました。',
+      'official-post-failed':'ニコニコ側がXへの投稿失敗を返しました。',
+      'official-invalid-response':'ニコニコからの応答を所定の形式で読み取れませんでした。',
+      'official-timeout':'ニコニコからの結果を待つ間に制限時間を超えました。',
+      'official-network':'ニコニコとの通信を完了できませんでした。',
+      'official-http-error':'ニコニコからエラー応答が返りました。',
+      'official-token-invalid':'Xとの連携認証が無効になっています。',
+      'export-ready':'完成動画が利用できます。', 'export-source':'元動画の取得・解析を完了できませんでした。',
+      'export-encoding':'選んだ映像または音声を指定形式で書き出せませんでした。',
+      'export-recording':'プレビューから録画を完了できませんでした。',
+      'export-comments':'元動画のコメント配置を確定できませんでした。', 'export-checking':'完成動画の長さ・映像を確認できませんでした。',
+      'export-library':'変換ライブラリを読み込めませんでした。',
+      'draft-open-failed':'管理拡張がXタブの起動時にエラーを返しました。',
+      'draft-size':'この経路で自動添付できるMP4の上限は256 MiBです。区間を短くするか、完成画面から保存できます。',
+      'draft-manager':'Xの下書きは開きましたが、管理拡張に動画をタブ間で渡す機能がありません。',
+      'draft-closed':'Xの下書きタブが添付完了前に閉じられました。',
+      'draft-no-receiver':'Xタブの起動要求後、X側から最初の受け取り要求が届きませんでした。',
+      'draft-transfer-timeout':'Xから受け取り要求が届きましたが、データ転送または添付完了の応答が途切れました。',
+      'draft-input':'X側で動画を受け取れないか、投稿画面の添付欄に設定できませんでした。',
+      'draft-reserve':'MP4は完成しましたが、ユーザースクリプト管理拡張から受付を確認できませんでした。',
+      'draft-open':'MP4は完成しましたが、Xタブの起動要求が完了したことを確認できませんでした。',
+      'draft-receive':'Xタブの起動を要求しましたが、X側から動画の受け取りを確認できませんでした。',
+      'draft-attach':'MP4の受け渡しを開始しましたが、X側の添付完了を確認できませんでした。',
+      'draft-attached':'X側から動画の添付完了を受け取りました。',
+      'draft-format':'完成した動画は自動添付に必要なMP4形式ではありません。',
+      'draft-popup':'新しいタブの作成を確認できませんでした。ニコニコのポップアップ設定を確認してください。',
+      'draft-tab-closed':'待機タブが閉じられたか、別のページへ移動しました。',
+      'draft-native':'拡張との連携を確認できず、ブラウザーでXの下書きを開きました。動画は手動で添付してください。',
       schema:'受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
       'comment-apply':'コメントは取得済みです。受け取ったデータを表示用に変換する処理でエラーが発生しました。',
       'playback-wait':'再生が始まった後、読み込み待ちが続き、再生時刻の前進を確認できませんでした。',
@@ -171,6 +220,15 @@ const NotificationHistoryPanel = (() => {
     if (playbackTrace) {
       feature = d.phase === 'playback' ? '動画の再生途中' : '動画の再生開始';
       if (nextStage) location = nextStage.file;
+    } else if (operation === 'official-share' || operation === 'clip-export') {
+      feature = featureLabel(entry);
+      location = operation === 'official-share' ? 'src/ShareOfficialClip.js' :
+        d.phase === 'export-comments' ? 'src/ShareClipRenderer.js' : d.phase === 'export-recording' ? 'src/ShareLocalClip.js' :
+        d.phase === 'export-checking' ? 'src/ShareClipJobs.js' : 'src/ShareFastClip.js';
+    } else if (operation === 'x-draft') {
+      feature = 'クリップをXの下書きに添付';
+      location = ['draft-receive','draft-attach'].includes(String(d.phase)) ?
+        'packages/external-playback/x-draft-transfer.cjs' : 'src/ShareClipClipboard.js';
     } else if (registeredLabel) {
       feature = registeredLabel + '（' + operation + '）';
       location = modulePath(RequestDiagnostics.moduleFor(operation as DiagnosticOperation));
@@ -200,6 +258,39 @@ const NotificationHistoryPanel = (() => {
       if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
         lines.push((d.phase === 'playback' ? '待機からの経過　' : '操作からの経過　') + (d.elapsedMs / 1000).toFixed(1) + '秒');
     }
+    if (operation === 'official-share') {
+      const progress = new Map([['submitted','共有画面で投稿を開始'],['clip-ready','ニコニコでクリップを作成'],
+        ['attempted','ニコニコにXへの投稿を要求'],['confirmed','ニコニコが投稿完了を確認']]);
+      lines.push('最後に確認できた処理　' + (progress.get(String(d.lastStage)) || unknown));
+      if (typeof d.retryAfterMs === 'number' && d.retryAfterMs > 0) lines.push('再試行までの目安　' + Math.ceil(d.retryAfterMs / 1000) + '秒');
+      if (d.lastStage !== 'confirmed') {
+        const receiptUnknown = d.phase === 'official-receipt' && (validStatus(d.statusCode) ||
+          ['official-invalid-response','official-timeout','official-network'].includes(String(d.reason)));
+        const next = receiptUnknown ? '「状態を再確認」でニコニコに結果を照会してください。ここでは投稿を再送しません。' :
+          d.reason === 'official-token-invalid' || d.reason === 'official-unlinked' ? 'ニコニコの視聴ページでXアカウントの連携を確認してください。' :
+          d.reason === 'official-invalid-text' ? '共有画面で投稿本文を見直してください。' :
+          d.reason === 'official-rate-limit' ? '案内された時間を置いて、元動画から状態を確認してください。' :
+          d.lastStage === 'attempted' ? '元動画の共有画面で投稿結果とニコニコ側の案内を確認してください。' :
+          d.phase === 'official-verify' ? 'ニコニコで連携中のXアカウントを確認してください。' :
+          '元動画の共有画面を開き、ニコニコ連携の状態と利用条件を確認してください。';
+        lines.push('次に確認すること　' + next);
+      }
+    }
+    if (operation === 'x-draft') {
+      const progress = new Map<string,[string,string]>([
+        ['draft-reserve',['MP4の生成','完成画面からXを開いてください。']],
+        ['draft-open',['管理拡張でタブ連携を受付','完成画面からXを開いてください。']],
+        ['draft-receive',['管理拡張にXタブの起動を要求','Xタブの有無、Xへのログイン、x.comで管理拡張が有効かを確認してください。']],
+        ['draft-attach',['MP4の受け渡しを開始','Xに添付済みか確認し、必要なら完成画面からコピーまたは保存してください。']],
+        ['draft-attached',['X側でMP4の添付を確認','Xの下書きで内容を確認して投稿できます。']],
+        ['draft-format',['動画の生成','完成動画を保存して形式を確認してください。']],
+        ['draft-popup',['MP4の生成','完成画面の「Xの下書きを別タブで開く」を押してください。']],
+        ['draft-tab-closed',['待機タブの作成とMP4の生成','完成画面からXを開いてください。']],
+        ['draft-native',['通常のタブでXの下書きへの移動を要求','完成画面から動画をコピーまたは保存し、Xに添付してください。']]
+      ]);
+      const step = progress.get(String(d.phase));
+      if (step) lines.push('最後に確認できた処理　' + step[0], '次に確認すること　' + step[1]);
+    }
     if (script) {
       const source = bundle || '配布スクリプト';
       lines.push('発生箇所　' + (frame ? source + ' の ' + frame[2] + ' 行目' : source + '（発生行の記録なし）'));
@@ -210,8 +301,9 @@ const NotificationHistoryPanel = (() => {
     if (typeof RequestDiagnostics !== 'undefined' && RequestDiagnostics.isKnownErrorCode(d.errorCode)) lines.push('エラーコード　' + d.errorCode);
     if (typeof d.errorName === 'string' && ['TypeError','ReferenceError','RangeError','SyntaxError','Error'].includes(d.errorName))
       lines.push('エラーの種類　' + d.errorName);
-    lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown),
-      '修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
+    const sharing = ['x-draft','official-share','clip-export'].includes(operation);
+    if (!sharing || (typeof d.missing === 'string' && reportFields.has(d.missing))) lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown));
+    lines.push('修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
     return lines.join('\n');
   };
   const mount = (root: HTMLElement | null, events?: TabEvents,

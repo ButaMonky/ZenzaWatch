@@ -12,6 +12,8 @@ class NicoChatGroupViewModel {
     this._offScreen = offScreen;
     this._members = [];
     this._lastUpdate = 0;
+    this._completedLayout = 0;
+    this._layoutFilterRevision = 0;
 
     // メンバーをvposでソートした物. 計算効率改善用
     this._vSortedMembers = [];
@@ -75,6 +77,7 @@ class NicoChatGroupViewModel {
       for (let i = 0; i < members.length; i++) {
         members[i].bulkLayoutData = result.members[i];
       }
+      this._completedLayout = requestId;
       return true;
     } catch (err) {
       if (requestId === this._lastUpdate && this._members === sourceMembers) {
@@ -89,6 +92,7 @@ class NicoChatGroupViewModel {
   }
   async addChatArray(nicoChatArray) {
     const members = this._members;
+    if (!members.length) this._layoutFilterRevision = this._nicoChatGroup?._nicoChatFilter?.displayRevision || 0;
     // A cache miss measures styled text synchronously. Leave room for video frames
     // even when measuring far fewer than 100 complex comments takes several ms.
     let sliceEnd = Date.now() + 4;
@@ -127,6 +131,7 @@ class NicoChatGroupViewModel {
     }
   }
   addChat(nicoChat) {
+    if (!this._members.length) this._layoutFilterRevision = this._nicoChatGroup?._nicoChatFilter?.displayRevision || 0;
     let timeKey = 'addChat:' + nicoChat.text;
     console.time(timeKey);
     let nc = NicoChatViewModel.create(nicoChat, this._offScreen);
@@ -261,6 +266,42 @@ class NicoChatGroupViewModel {
       }
     }
     return low;
+  }
+
+  // The CSS view keeps its own cursor. A layout commit or a backwards seek must
+  // reconsider in-flight rows, including ones that were unready on the previous tick.
+  appendNewInViewMembers(sec, cursor, candidates) {
+    const members = this._vSortedMembers;
+    const settled = this._completedLayout === this._lastUpdate;
+    const resume = settled && cursor.members === members && cursor.layout === this._completedLayout &&
+      cursor.time !== undefined && sec >= cursor.time;
+    let i = resume ? cursor.next : this._findInViewStartIndex(sec);
+    for (; i < members.length; i++) {
+      const chat = members[i];
+      if (chat.beginLeftTiming > sec + 1) break;
+      if (chat.isInViewBySecond(sec)) candidates.push(chat);
+    }
+    cursor.members = settled ? members : undefined;
+    cursor.layout = this._completedLayout;
+    cursor.next = i;
+    cursor.time = sec;
+  }
+
+  get clipLayoutReady() {
+    const count = this._nicoChatGroup.members.length;
+    if (!count && !this._members.length) return true;
+    return this._layoutFilterRevision === (this._nicoChatGroup._nicoChatFilter?.displayRevision || 0) &&
+      this._completedLayout === this._lastUpdate && this._vSortedMembers.length === count;
+  }
+
+  getMembersInRange(from, to) {
+    const members = this._vSortedMembers, result = [];
+    for (let i = this._findInViewStartIndex(from); i < members.length; i++) {
+      const chat = members[i];
+      if (chat.beginLeftTiming > to) break;
+      if (chat.endRightTiming >= from) result.push(chat);
+    }
+    return result;
   }
 
   get members() {return this._members;}

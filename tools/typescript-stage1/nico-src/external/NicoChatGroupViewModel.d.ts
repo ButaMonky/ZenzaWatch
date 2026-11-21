@@ -56,6 +56,9 @@ interface NicoChatGroupSource {
     on(event: 'addChat', listener: (chat: NicoChatGroupSourceChat) => void): unknown;
     on(event: 'reset', listener: () => void): unknown;
     on(event: 'change', listener: (event: unknown) => void): unknown;
+    readonly _nicoChatFilter?: {
+        displayRevision?: number;
+    };
     readonly members: readonly NicoChatGroupSourceChat[];
     readonly currentTime: number;
     readonly type: string;
@@ -71,6 +74,8 @@ declare class NicoChatGroupViewModel {
     _members: NicoChatGroupMember[];
     _vSortedMembers: NicoChatGroupMember[];
     _lastUpdate: number;
+    _layoutFilterRevision: number;
+    _completedLayout: number;
     _maxInViewDuration: number;
     _layoutWorker: {
         post(message: {
@@ -110,6 +115,14 @@ declare class NicoChatGroupViewModel {
      */
     _createVSortedMembers(): NicoChatGroupMember[];
     _findInViewStartIndex(sec: number): number;
+    appendNewInViewMembers(sec: number, cursor: {
+        members?: NicoChatGroupMember[];
+        layout?: number;
+        time?: number;
+        next: number;
+    }, candidates: NicoChatGroupMember[]): void;
+    get clipLayoutReady(): boolean;
+    getMembersInRange(from: number, to: number): NicoChatGroupMember[];
     get members(): NicoChatGroupMember[];
     /**
      * 現時点で表示状態のメンバーのみを返す

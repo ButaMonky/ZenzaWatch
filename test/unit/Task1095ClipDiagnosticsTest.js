@@ -153,7 +153,7 @@ describe('official clip diagnostics', () => {
   });
   it('records an ambiguous X submission once and resumes by GET without another POST',async () => {
     await open(); await click('create');
-    reply = stage => stage === 'post' ? http(503) : undefined;
+    reply = stage => stage === 'post' ? http(503) : stage === 'post-status' ? http(404) : undefined;
     await click('post');
     assert.deepEqual([events.at(-1).operation,events.at(-1).statusCode],['clip-post',503]);
     reply = undefined;

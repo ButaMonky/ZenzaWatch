@@ -24,14 +24,120 @@ describe('official NicoNico clip sharing', () => {
       return {ok:true, status:200, json:async () => ({meta:{status:200}, data})};
     };
     const module = page.window.eval(beginSection('src/ShareOfficialClip.js') + '\nShareOfficialClip');
-    reopen = () => {
-      cleanup = module.mount(root, {info, startTime:39, text:()=>'選んだ場面',
+    reopen = (currentInfo = info) => {
+      cleanup = module.mount(root, {info:currentInfo, startTime:39, text:()=>'選んだ場面',
         officialUrl:'https://www.nicovideo.jp/watch/12345?zenza_official=1&from=39', ...settings});
     };
     reopen();
   }
   const find = name => root.querySelector('[name="' + name + '"]');
   afterEach(() => { cleanup?.(); page?.window.close(); });
+  const named = screenName => ({...allowed,twitterLinkage:{isLinked:true,screenName}});
+  it('finishes the original official submission after a video switch with exactly one private notification', async () => {
+    let finish, text = '編集した本文', notices = [], states = [], guards = 0;
+    mount(({path,options}) => {
+      if (path.endsWith('/tweet-possibility')) return named('LinkedName');
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) return {clipId:'frozen'};
+      if (path.endsWith('/frozen')) return new Promise(resolve => { finish = resolve; });
+      if (path.endsWith('/x-post')) return options.method === 'POST' ? {} : {status:'DONE'};
+      throw Error(path);
+    },undefined,{sharedEditor:true,startTime:8,endTime:18,text:() => text,
+      holdWatchPage() { guards++; return () => { guards--; }; },
+      onNotify:(...args) => notices.push(args),onSubmitState:state => states.push(state)});
+    await flush();
+    cleanup.setRange({start:9.125,end:19.5}); cleanup.refresh();
+    assert(calls.every(call => call.options.method === 'GET') && states.at(-1).enabled);
+    assert.strictEqual(states.at(-1).account,'LinkedName');
+    assert.strictEqual(states.at(-1).phase,'edit');
+    cleanup.submit(); cleanup.submit(); await flush();
+    assert.deepStrictEqual([...calls.find(call => call.path.endsWith('/clips')).options.body],[['startTime','9125'],['endTime','19500']]);
+    cleanup(); reopen(); await flush(); cleanup.submit();
+    assert(states.at(-1).busy);
+    assert.strictEqual(states.at(-1).phase,'generating');
+    assert.match(states.at(-1).status,/生成/);
+    cleanup(); text = '別の動画の本文'; reopen({watchId:'sm10',videoId:'sm10',duration:45}); await flush();
+    assert.strictEqual(guards,1);
+    const before = calls.length;
+    finish({status:'DONE',clipUri:'https://media.example/private.mp4'}); await flush();
+    assert.deepStrictEqual(calls.slice(before).map(({path,options}) => [options.method,path]),[
+      ['GET','/v1/videos/sm9/tweet-possibility'],['POST','/v1/clips/frozen/x-post'],['GET','/v1/clips/frozen/x-post']]);
+    assert.deepStrictEqual([...calls[before+1].options.body],[['text','編集した本文']]);
+    assert.strictEqual(calls.filter(call => call.options.method === 'POST').length,2);
+    assert.strictEqual(notices.length,1);
+    assert.strictEqual(guards,0);
+    assert.match(notices[0][0],/12345.*ポストしました/);
+    assert.doesNotMatch(notices[0][0],/本文|LinkedName|private/);
+    assert.deepStrictEqual({...notices[0][2]}, {stage:'receipt',reason:'posted',clipReady:true,postAttempted:true});
+  });
+  for (const [label,recheck] of [['renamed',named('AnotherName')],['unlinked',{...allowed,twitterLinkage:{isLinked:false}}]]) {
+    it('stops before publication when the linked account is ' + label, async () => {
+      let seen = 0, notices = [];
+      mount(({path}) => {
+        if (path.endsWith('/tweet-possibility')) return seen++ ? recheck : named('FirstName');
+        if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+        if (path.endsWith('/clips')) return {clipId:'ready'};
+        return {status:'DONE',clipUri:'https://media.example/ready.mp4'};
+      },undefined,{sharedEditor:true,startTime:3,endTime:6,onNotify:(...args) => notices.push(args)});
+      await flush(); cleanup.submit(); await flush();
+      assert.strictEqual(seen,2);
+      assert(!calls.some(call => call.path.endsWith('/x-post')));
+      assert.strictEqual(notices.length,1);
+      assert.match(notices[0][0],/12345.*連携/);
+      assert.strictEqual(notices[0][1],'warning');
+      assert.deepStrictEqual({...notices[0][2]}, {
+        stage:'verify',reason:label === 'renamed' ? 'account-changed' : 'unlinked',clipReady:true,postAttempted:false
+      });
+    });
+  }
+  for (const [stage,reply,reason,extra = {}] of [
+    ['create',{httpStatus:429,retryAfter:'30'},'rate-limit',{statusCode:429,retrySeconds:30}],
+    ['generate',{status:'FAILED',failureReason:'private reason'},'generation-failed'],
+    ['verify',{isLogin:true},'invalid-response',{missing:'data.twitterLinkage.isLinked'}],
+    ['post',{httpStatus:422,errorCode:'private reason'},'invalid-text',{statusCode:422}],
+    ['receipt',{status:'FAILED',failureReason:'X_TOO_MANY_REQUESTS'},'rate-limit'],
+    ['receipt',{status:'ERROR',failureReason:'X_TOKEN_INVALID'},'token-invalid'],
+    ['receipt',{status:'FAILED',failureReason:'private reason'},'post-failed'],
+    ['receipt',{},'invalid-response',{missing:'data.status'}],
+    ['receipt',{httpStatus:503},'http-error',{statusCode:503}],
+    ['receipt',{httpStatus:408},'timeout',{statusCode:408}]
+  ]) {
+    it('reports ' + stage + '/' + reason + ' with only the observed progress and approved fields', async () => {
+      const notices = [];
+      let permissions = 0;
+      mount(({path,options}) => {
+        if (path.endsWith('/tweet-possibility')) return permissions++ && stage === 'verify' ? reply : named('private account');
+        if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+        if (path.endsWith('/clips')) return stage === 'create' ? reply : {clipId:'private clip'};
+        if (path.endsWith('/x-post')) {
+          if (options.method === 'POST') return stage === 'post' ? reply : {};
+          return reply;
+        }
+        return stage === 'generate' ? reply : {status:'DONE',clipUri:'https://example.org/private'};
+      },undefined,{sharedEditor:true,startTime:3,endTime:6,onNotify:(...args) => notices.push(args)});
+      await flush(); cleanup.submit(); await flush();
+      assert.strictEqual(notices.length,1);
+      assert.strictEqual(notices[0][1],'warning');
+      assert.deepStrictEqual({...notices[0][2]}, {
+        stage,reason,clipReady:['verify','post','receipt'].includes(stage),postAttempted:['post','receipt'].includes(stage),...extra
+      });
+    });
+  }
+  it('keeps the generated clip for explicit confirmation when the service omits the linked name', async () => {
+    mount(({path}) => {
+      if (path.endsWith('/tweet-possibility')) return allowed;
+      if (path.endsWith('/license')) return {isUseLicensedMusic:false};
+      if (path.endsWith('/clips')) return {clipId:'ready'};
+      return {status:'DONE',clipUri:'https://media.example/ready.mp4'};
+    },undefined,{sharedEditor:true,startTime:3,endTime:6});
+    await flush(); cleanup.submit(); await flush();
+    assert(!calls.some(call => call.path.endsWith('/x-post')));
+    assert.match(root.querySelector('[role=status]').textContent,/連携先の名前/);
+    cleanup(); reopen(); await flush();
+    assert(!calls.some(call => call.path.endsWith('/x-post')));
+    cleanup.submit(); await flush();
+    assert.strictEqual(calls.filter(call => call.path.endsWith('/x-post') && call.options.method === 'POST').length,1);
+  });
   it('joins an in-flight creation after closing and reuses the same millisecond range', async () => {
     let acknowledge;
     const settings = {startTime:6.00011,endTime:9.00014};
@@ -267,24 +373,31 @@ describe('official NicoNico clip sharing', () => {
     assert(find('post').disabled);
     assert.strictEqual(calls.filter(r => r.path.endsWith('/x-post') && r.options.method === 'POST').length, 2);
   });
-  it('restores an unacknowledged post with status reads only', async () => {
-    let statusReads = 0;
+  for (const recovered of ['DONE','FAILED']) it('restores an unacknowledged post with status reads only: '+recovered, async () => {
+    let statusReads = 0, notices = [];
     mount(({path, options}) => {
       if (path.endsWith('/tweet-possibility')) return allowed;
       if (path.endsWith('/license')) return {isUseLicensedMusic:false};
       if (path.endsWith('/clips')) return {clipId:'draft-resume'};
       if (path.endsWith('/x-post')) {
         if (options.method === 'POST') throw new Error('network');
-        statusReads++;
-        return {status:'DONE'};
+        if (++statusReads === 1) return {httpStatus:404};
+        return {status:recovered,failureReason:'VIDEO_CLIP_NOT_FOUND'};
       }
       return {status:'DONE', clipUri:'https://media.example/clip.mp4'};
-    });
+    },undefined,{onNotify:(message,level,details) => notices.push({level,...details})});
     await flush(); find('create').click(); await flush(); find('post').click(); await flush();
+    const unknown = {level:'warning',stage:'receipt',reason:'http-error',statusCode:404,clipReady:true,postAttempted:true};
+    assert.deepStrictEqual(notices,[unknown]);
     cleanup(); reopen(); await flush();
-    assert.strictEqual(statusReads, 1);
+    cleanup(); reopen(); await flush();
+    assert.strictEqual(statusReads, recovered === 'DONE' ? 2 : 3);
+    assert.deepStrictEqual(notices,[unknown,{
+      level:recovered === 'DONE' ? 'info' : 'warning',stage:'receipt',reason:recovered === 'DONE' ? 'posted' : 'clip-missing',
+      clipReady:true,postAttempted:true
+    }]);
     assert.strictEqual(calls.filter(r => r.path.endsWith('/x-post') && r.options.method === 'POST').length, 1);
-    assert.match(root.querySelector('[role=status]').textContent, /ポストしました/);
+    assert.match(root.querySelector('[role=status]').textContent, recovered === 'DONE' ? /ポストしました/ : /見つかりません/);
   });
   it('ignores eligibility results from a panel closed before the response', async () => {
     let finish;
@@ -299,7 +412,7 @@ describe('official X posting from the clip editor', () => {
   let page, root, panel;
   let localCreates, calls;
   const flush = () => new Promise(resolve => setImmediate(resolve));
-  const tab = () => root.querySelector('[data-view=official]');
+  const submitButton = () => root.querySelector('[data-action=official-submit]');
   const find = name => root.querySelector('#zenzaShareOfficial [name="' + name + '"]');
   function open(selection) {
     page = new JSDOM('<body></body>', {url:'https://www.nicovideo.jp/watch/sm9', runScripts:'outside-only'});
@@ -308,8 +421,9 @@ describe('official X posting from the clip editor', () => {
     w.HTMLDialogElement.prototype.close = function() { this.open = false; };
     w.textUtil = {secToTime:String};
     w.ShareClipJobs = {busy:false};
+    w.PopupMessage = {notify() {},warning() {}};
     w.ShareLocalClip = {mount(host, options) {
-      host.innerHTML = '<div data-provider-slot></div><button data-action=create></button><button data-action=provider-fallback></button>';
+      host.innerHTML = '<div data-share-composer-slot></div><footer class=clipFooter><div data-role=createActions><button data-action=create></button><button data-action=provider-fallback></button></div></footer>';
       const fallback = host.querySelector('[data-action=provider-fallback]');
       fallback.onclick = () => options.onOpenOfficial(fallback);
       options.onSelectionChange(selection);
@@ -322,7 +436,7 @@ describe('official X posting from the clip editor', () => {
       const path = new URL(url).pathname;
       calls.push({path, options});
       let data;
-      if (path.endsWith('/tweet-possibility')) data = {isLogin:true, isClipTweetAllowed:true, twitterLinkage:{isLinked:true}};
+      if (path.endsWith('/tweet-possibility')) data = {isLogin:true, isClipTweetAllowed:true, twitterLinkage:{isLinked:true,screenName:'LinkedName'}};
       else if (path.endsWith('/license')) data = {isUseLicensedMusic:false};
       else if (path.endsWith('/clips')) data = {clipId:'selected-clip'};
       else if (path.endsWith('/x-post')) data = {status:'DONE'};
@@ -335,52 +449,55 @@ describe('official X posting from the clip editor', () => {
     root = w.document.querySelector('dialog');
   }
   afterEach(() => { panel?.close(); page?.window.close(); });
-  it('only checks provider availability when invoked from a failed local conversion', async () => {
+  it('brings official information into view from a failed local conversion without starting a submission', async () => {
     open({isCurrent:true,start:965.45,end:995.45});
     root.querySelector('[data-action=provider-fallback]').click(); await flush();
-    assert.equal(tab().getAttribute('aria-pressed'),'true');
+    assert(!submitButton().closest('[hidden]'));
     assert(calls.length && calls.every(call => call.options.method === 'GET'));
     assert.equal(localCreates,0);
   });
-  it('prepares the chosen original interval from the first screen and posts only on confirmation', async () => {
+  it('submits the visible original interval and shared text with one explicit official action', async () => {
     open({isCurrent:true,start:8.25,end:18.5});
-    assert(tab() && !tab().closest('[hidden]'));
-    assert.equal(calls.length,0);
-    tab().click(); await flush();
-    assert(calls.every(call => call.options.method === 'GET'));
-    root.querySelector('[data-action=back]').click();
-    tab().click(); await flush();
-    assert(calls.every(call => call.options.method === 'GET'));
-    find('create').click(); await flush();
+    assert.equal(root.querySelector('[data-view]'),null);
+    await flush();
+    assert(calls.length && calls.every(call => call.options.method === 'GET'));
+    for (const action of ['official-submit','create','x']) {
+      assert(!root.querySelector('[data-action='+action+']').closest('[hidden]'));
+    }
+    assert(submitButton().compareDocumentPosition(root.querySelector('[data-action=create]')) & page.window.Node.DOCUMENT_POSITION_FOLLOWING);
+    const body = root.querySelector('[name=shareText]');
+    body.value = '画面で指定した本文';
+    body.dispatchEvent(new page.window.Event('input'));
+    const submit = root.querySelector('[data-action=official-submit]');
+    assert(!submit.disabled && !submit.closest('[hidden]'));
+    submit.click(); submit.click(); await flush();
     const create = calls.find(call => call.path.endsWith('/clips'));
     assert.deepEqual([...create.options.body], [['startTime','8250'],['endTime','18500']]);
     assert.equal(localCreates,0);
-    assert.equal(tab().getAttribute('aria-pressed'),'true');
-    assert(!calls.some(call => call.path.endsWith('/x-post')));
-    find('post').click(); await flush();
+    assert(!submitButton().closest('[hidden]'));
     const post = calls.find(call => call.path.endsWith('/x-post') && call.options.method === 'POST');
-    assert.deepEqual([...post.options.body.keys()],['text']);
+    assert.deepEqual([...post.options.body],[['text','画面で指定した本文']]);
+    assert.equal(calls.filter(call => call.options.method === 'POST').length,2);
   });
   for (const [selection, note] of [
-    [{start:5,end:65}, /先頭30秒/],
+    [{start:5,end:65}, /3〜30秒/],
     [{start:5,end:10,comments:true}, /コメント/],
     [{start:5,end:10,effects:true}, /画面エフェクト/],
-    [{start:0,end:2.99}, /3秒/]
+    [{start:0,end:2.99}, /3〜30秒/]
   ]) {
     it('explains the difference before creating a server clip ' + JSON.stringify(selection), async () => {
       open({...selection,isCurrent:true});
-      tab().click(); await flush();
+      await flush();
       assert.match(root.querySelector('#zenzaShareOfficial [data-selection-note]').textContent, note);
       assert(calls.every(call => call.options.method === 'GET'));
       assert.equal(localCreates,0);
-      root.querySelector('[data-action=back]').click();
       assert.equal(root.querySelector('#zenzaShareLocal').hidden,false);
       assert.equal(localCreates,0);
     });
   }
   it('explains sharing a device file without requesting a NicoNico clip for another source', async () => {
     open({start:0,end:10,isFile:true});
-    tab().click(); await flush();
+    await flush();
     assert.match(root.querySelector('#zenzaShareOfficial [data-selection-note]').textContent, /ファイル/);
     assert.equal(calls.length,0);
     assert.equal(localCreates,0);

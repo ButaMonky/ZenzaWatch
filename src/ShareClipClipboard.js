@@ -60,54 +60,117 @@ const ShareClipClipboard = (() => {
   async function copyIfGranted(file) {
     try {
       if (!document.hasFocus() || copyUnavailableReason(file) || !navigator.permissions?.query) return;
-      const permission = await navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true});
-      if (permission.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
+      let timer;
+      let permission;
+      try {
+        permission = await Promise.race([navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true}),
+          new Promise(resolve => { timer = setTimeout(resolve,1500); })]);
+      } finally { clearTimeout(timer); }
+      if (permission?.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
     } catch (_) { /* Clipboard support is optional for direct attachment. */ }
   }
-  function reserveDraft() {
+  // A waiting tab is used only if the script manager cannot accept this click.
+  // Never navigate a tab that the viewer closed or navigated elsewhere.
+  function reserveBrowserTab() {
+    let tab;
+    const ownsTab = () => {
+      try { return !!tab && !tab.closed && tab.location.href === 'about:blank'; }
+      catch (_) { return false; }
+    };
+    try {
+      tab = window.open('about:blank','_blank');
+      if (tab) {
+        tab.opener = null;
+        tab.document.title = 'ZenzaWatch ｜ Xの下書き';
+        tab.document.body.textContent = 'クリップの完成後、ここにXの下書きを開きます。元のタブで視聴を続けられます。';
+      }
+    } catch (_) { /* Report the browser result when the MP4 is ready. */ }
+    return {
+      complete(file,text) {
+        const fail = (message,stage) => { throw Object.assign(Error(message),{stage}); };
+        if (!tab) fail('MP4は完成しました。別タブを開けませんでした。完成画面からXを開いてください。','draft-popup');
+        if (!ownsTab()) fail('MP4は完成しました。待機タブが閉じられたか、別のページに移動しました。','draft-tab-closed');
+        const url = new URL('https://x.com/intent/tweet');
+        if (text) url.searchParams.set('text',text);
+        void copyIfGranted(file);
+        const link = tab.document.createElement('a');
+        link.href = url.href;
+        link.rel = 'noreferrer';
+        link.click();
+        tab = null;
+        fail('Xの下書きを別タブで開きました。自動添付を開始できなかったため、完成画面から動画をコピーまたは保存して添付してください。','draft-native');
+      },
+      cancel() { if (ownsTab()) tab.close(); tab = null; }
+    };
+  }
+  function reserveDraft(trustedClick = false) {
     const ticket = document.documentElement.dataset.zenzaDraftTicket;
-    if (!ticket) return null;
+    if (!ticket) return trustedClick ? reserveBrowserTab() : null;
     const channel = new MessageChannel();
     const port = channel.port1;
-    window.postMessage({type:'zenza-reserve-x-draft',ticket}, location.origin, [channel.port2]);
-    let pending, timer, closed = false;
+    let timer, stopped = false, pending, browserTab, acknowledge;
+    let stage = 'draft-reserve';
+    const ready = new Promise(resolve => { acknowledge = resolve; });
     const stop = () => {
-      if (closed) return;
-      closed = true;
+      if (stopped) return;
+      stopped = true;
       clearTimeout(timer);
-      pending = null;
+      acknowledge(false);
       port.onmessage = null;
       port.postMessage({type:'cancel'});
       port.close();
     };
+    port.onmessage = ({data}) => {
+      if (data?.reserved) {
+        clearTimeout(timer);
+        stage = 'draft-open';
+        acknowledge(true);
+      } else if (data?.error) {
+        if (data.stage === 'draft-format') stage = data.stage;
+        pending?.settle(data);
+      } else if (['draft-open','draft-receive','draft-attach'].includes(data?.stage)) {
+        stage = data.stage;
+        pending?.refresh();
+      } else if (data?.attached) pending?.settle(data);
+    };
+    // A late receiver must never open a second tab. The file is sent only after acknowledgement.
+    timer = setTimeout(() => {
+      if (trustedClick) browserTab = reserveBrowserTab();
+      stop();
+    },350);
+    window.postMessage({type:'zenza-reserve-x-draft',ticket},location.origin,[channel.port2]);
     return {
-      complete(file, text) {
-        if (closed || pending) return Promise.reject(Error('Xの自動添付を終了しました。完成画面から手動で添付できます。'));
+      async complete(file,text) {
+        if (!await ready) {
+          if (browserTab) return browserTab.complete(file,text);
+          throw Object.assign(Error('Xを開くための受付を確認できませんでした。完成画面からXを開いてください。'),{stage});
+        }
+        if (stopped || pending) throw Object.assign(Error('Xの自動添付を終了しました。'),{stage});
         return new Promise((resolve,reject) => {
-          pending = reject;
           const settle = message => {
             stop();
+            pending = null;
             if (message?.attached === true) resolve();
-            else reject(Error(message?.error || 'Xへの自動添付を確認できませんでした。完成画面から手動で添付できます。'));
+            else {
+              const known = ['draft-open-failed','draft-manager','draft-size','draft-transfer-timeout','draft-no-receiver','draft-input','draft-closed'];
+              const reason = known.includes(message?.reason) ? message.reason : stage;
+              reject(Object.assign(Error(message?.error || 'Xへの自動添付の応答を確認できませんでした。完成画面から手動で添付できます。'),{stage,reason}));
+            }
           };
-          const refreshTimeout = () => {
-            clearTimeout(timer);
-            timer = setTimeout(settle,180000);
-          };
-          port.onmessage = event => event.data?.progress === true ? refreshTimeout() : settle(event.data);
-          refreshTimeout();
-          // Start an already-permitted write while the source still has focus.
-          // Opening X must not wait for clipboard serialization of the entire MP4.
-          copyIfGranted(file).then(() => {
-            if (!closed) port.postMessage({type:'complete',file,text});
-          }).catch(() => settle());
+          const refresh = () => { clearTimeout(timer); timer = setTimeout(settle,180000); };
+          pending = {refresh,settle};
+          refresh();
+          // Clipboard permission is optional. Its response must never delay opening X.
+          void copyIfGranted(file);
+          try { port.postMessage({type:'complete',file,text}); }
+          catch (_) { settle({error:'完成したMP4をX連携に渡せませんでした。'}); }
         });
       },
       cancel() {
-        if (closed) return;
-        const reject = pending;
-        stop();
-        reject?.(Error('Xへの自動添付を中止しました。'));
+        browserTab?.cancel();
+        browserTab = null;
+        if (pending) pending.settle({error:'Xへの自動添付を中止しました。'});
+        else stop();
       }
     };
   }

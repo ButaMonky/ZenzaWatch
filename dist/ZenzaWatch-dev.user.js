@@ -54,7 +54,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.492-task1116
+// @version        2.7.494-task1118
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -62,7 +62,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-20 16:57Z 7b396f03
+// build: 2026-11-21 12:01Z 686932c0
 (() => {
  let draftTransfer;
  function getDraftTransfer() {
@@ -101,24 +101,29 @@
     const intent = new URL('https://x.com/intent/tweet');
     if (typeof text === 'string' && text) intent.searchParams.set('text', text.slice(0,4096));
     if (signal.aborted) throw Error(fallback);
+    const issue = (message,reason) => Object.assign(Error(message),{reason});
+    const openTab = () => {
+      try { return gm.open(intent.href); }
+      catch (_) { throw issue('Xの下書きを別タブで開けませんでした。' + fallback,'draft-open-failed'); }
+    };
     if (!gm.tabs) {
-      gm.open(intent.href);
-      throw Error('Xの下書きを開きました。このスクリプト管理拡張では自動添付できません。コピー済みならXの「Zenzaの動画をクリップボードから読み込む」を押してください。' + fallback);
+      openTab();
+      throw issue('Xの下書きを開きました。このスクリプト管理拡張では自動添付できません。コピー済みならXの「Zenzaの動画をクリップボードから読み込む」を押してください。' + fallback,'draft-manager');
     }
     if (!file || file.type !== 'video/mp4' || !file.size || file.size > maxBytes) {
-      gm.open(intent.href);
-      throw Error('自動添付できるのは256 MiBまでのMP4です。' + fallback);
+      openTab();
+      throw issue('自動添付できるのは256 MiBまでのMP4です。' + fallback,'draft-size');
     }
     intent.hash = 'zenza-clip=' + id;
     let receiver, next = 0, busy = false, done = false, listener, timer, abort, tab;
     try {
       await new Promise((resolve,reject) => {
-        const fail = message => reject(Error(message));
+        const fail = (message,reason) => reject(issue(message,reason));
         abort = () => fail(fallback);
         signal.addEventListener('abort',abort,{once:true});
         const refreshTimeout = () => {
           clearTimeout(timer);
-          timer = setTimeout(() => fail(timeout),120000);
+          timer = setTimeout(() => fail(timeout,receiver ? 'draft-transfer-timeout' : 'draft-no-receiver'),120000);
         };
         refreshTimeout();
         listener = gm.listen(key, async (_,old,msg) => {
@@ -126,7 +131,7 @@
           if (!receiver && msg.type === 'pull' && msg.index === 0) receiver = msg.receiver;
           if (msg.receiver !== receiver) return;
           if (msg.type === 'attached' && next * chunkSize >= file.size) return resolve();
-          if (msg.type === 'failed') return fail('Xの添付欄に動画を渡せませんでした。' + fallback);
+          if (msg.type === 'failed') return fail('Xの添付欄に動画を渡せませんでした。' + fallback,'draft-input');
           if (msg.type !== 'pull' || busy || msg.index !== next || next * chunkSize >= file.size) return;
           busy = true;
           try {
@@ -138,15 +143,16 @@
             next++;
             busy = false;
             refreshTimeout();
-            onProgress();
+            onProgress('draft-attach');
             gm.set(key,{type:'chunk',receiver,index});
           } catch (_) { fail(fallback); }
         });
         try {
           gm.set(key,{type:'ready',expires:Date.now()+120000});
-          tab = gm.open(intent.href);
-          if (tab) tab.onclose = () => fail('Xの下書きが閉じられました。' + fallback);
-        } catch (_) { fail('Xの下書きを開けませんでした。' + fallback); }
+          tab = openTab();
+          onProgress('draft-receive');
+          if (tab) tab.onclose = () => fail('Xの下書きが閉じられました。' + fallback,'draft-closed');
+        } catch (error) { reject(error); }
       });
     } finally {
       done = true;
@@ -289,54 +295,117 @@ const ShareClipClipboard = (() => {
   async function copyIfGranted(file) {
     try {
       if (!document.hasFocus() || copyUnavailableReason(file) || !navigator.permissions?.query) return;
-      const permission = await navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true});
-      if (permission.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
+      let timer;
+      let permission;
+      try {
+        permission = await Promise.race([navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true}),
+          new Promise(resolve => { timer = setTimeout(resolve,1500); })]);
+      } finally { clearTimeout(timer); }
+      if (permission?.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
     } catch (_) { /* Clipboard support is optional for direct attachment. */ }
   }
-  function reserveDraft() {
+  // A waiting tab is used only if the script manager cannot accept this click.
+  // Never navigate a tab that the viewer closed or navigated elsewhere.
+  function reserveBrowserTab() {
+    let tab;
+    const ownsTab = () => {
+      try { return !!tab && !tab.closed && tab.location.href === 'about:blank'; }
+      catch (_) { return false; }
+    };
+    try {
+      tab = window.open('about:blank','_blank');
+      if (tab) {
+        tab.opener = null;
+        tab.document.title = 'ZenzaWatch ｜ Xの下書き';
+        tab.document.body.textContent = 'クリップの完成後、ここにXの下書きを開きます。元のタブで視聴を続けられます。';
+      }
+    } catch (_) { /* Report the browser result when the MP4 is ready. */ }
+    return {
+      complete(file,text) {
+        const fail = (message,stage) => { throw Object.assign(Error(message),{stage}); };
+        if (!tab) fail('MP4は完成しました。別タブを開けませんでした。完成画面からXを開いてください。','draft-popup');
+        if (!ownsTab()) fail('MP4は完成しました。待機タブが閉じられたか、別のページに移動しました。','draft-tab-closed');
+        const url = new URL('https://x.com/intent/tweet');
+        if (text) url.searchParams.set('text',text);
+        void copyIfGranted(file);
+        const link = tab.document.createElement('a');
+        link.href = url.href;
+        link.rel = 'noreferrer';
+        link.click();
+        tab = null;
+        fail('Xの下書きを別タブで開きました。自動添付を開始できなかったため、完成画面から動画をコピーまたは保存して添付してください。','draft-native');
+      },
+      cancel() { if (ownsTab()) tab.close(); tab = null; }
+    };
+  }
+  function reserveDraft(trustedClick = false) {
     const ticket = document.documentElement.dataset.zenzaDraftTicket;
-    if (!ticket) return null;
+    if (!ticket) return trustedClick ? reserveBrowserTab() : null;
     const channel = new MessageChannel();
     const port = channel.port1;
-    window.postMessage({type:'zenza-reserve-x-draft',ticket}, location.origin, [channel.port2]);
-    let pending, timer, closed = false;
+    let timer, stopped = false, pending, browserTab, acknowledge;
+    let stage = 'draft-reserve';
+    const ready = new Promise(resolve => { acknowledge = resolve; });
     const stop = () => {
-      if (closed) return;
-      closed = true;
+      if (stopped) return;
+      stopped = true;
       clearTimeout(timer);
-      pending = null;
+      acknowledge(false);
       port.onmessage = null;
       port.postMessage({type:'cancel'});
       port.close();
     };
+    port.onmessage = ({data}) => {
+      if (data?.reserved) {
+        clearTimeout(timer);
+        stage = 'draft-open';
+        acknowledge(true);
+      } else if (data?.error) {
+        if (data.stage === 'draft-format') stage = data.stage;
+        pending?.settle(data);
+      } else if (['draft-open','draft-receive','draft-attach'].includes(data?.stage)) {
+        stage = data.stage;
+        pending?.refresh();
+      } else if (data?.attached) pending?.settle(data);
+    };
+    // A late receiver must never open a second tab. The file is sent only after acknowledgement.
+    timer = setTimeout(() => {
+      if (trustedClick) browserTab = reserveBrowserTab();
+      stop();
+    },350);
+    window.postMessage({type:'zenza-reserve-x-draft',ticket},location.origin,[channel.port2]);
     return {
-      complete(file, text) {
-        if (closed || pending) return Promise.reject(Error('Xの自動添付を終了しました。完成画面から手動で添付できます。'));
+      async complete(file,text) {
+        if (!await ready) {
+          if (browserTab) return browserTab.complete(file,text);
+          throw Object.assign(Error('Xを開くための受付を確認できませんでした。完成画面からXを開いてください。'),{stage});
+        }
+        if (stopped || pending) throw Object.assign(Error('Xの自動添付を終了しました。'),{stage});
         return new Promise((resolve,reject) => {
-          pending = reject;
           const settle = message => {
             stop();
+            pending = null;
             if (message?.attached === true) resolve();
-            else reject(Error(message?.error || 'Xへの自動添付を確認できませんでした。完成画面から手動で添付できます。'));
+            else {
+              const known = ['draft-open-failed','draft-manager','draft-size','draft-transfer-timeout','draft-no-receiver','draft-input','draft-closed'];
+              const reason = known.includes(message?.reason) ? message.reason : stage;
+              reject(Object.assign(Error(message?.error || 'Xへの自動添付の応答を確認できませんでした。完成画面から手動で添付できます。'),{stage,reason}));
+            }
           };
-          const refreshTimeout = () => {
-            clearTimeout(timer);
-            timer = setTimeout(settle,180000);
-          };
-          port.onmessage = event => event.data?.progress === true ? refreshTimeout() : settle(event.data);
-          refreshTimeout();
-          // Start an already-permitted write while the source still has focus.
-          // Opening X must not wait for clipboard serialization of the entire MP4.
-          copyIfGranted(file).then(() => {
-            if (!closed) port.postMessage({type:'complete',file,text});
-          }).catch(() => settle());
+          const refresh = () => { clearTimeout(timer); timer = setTimeout(settle,180000); };
+          pending = {refresh,settle};
+          refresh();
+          // Clipboard permission is optional. Its response must never delay opening X.
+          void copyIfGranted(file);
+          try { port.postMessage({type:'complete',file,text}); }
+          catch (_) { settle({error:'完成したMP4をX連携に渡せませんでした。'}); }
         });
       },
       cancel() {
-        if (closed) return;
-        const reject = pending;
-        stop();
-        reject?.(Error('Xへの自動添付を中止しました。'));
+        browserTab?.cancel();
+        browserTab = null;
+        if (pending) pending.settle({error:'Xへの自動添付を中止しました。'});
+        else stop();
       }
     };
   }
@@ -1759,7 +1828,7 @@ function createDisplaySettings(w, gm, registered=[]) {
   },true);
   window.addEventListener('message', event => {
     const port = event.ports?.[0];
-    if (!event.isTrusted || event.origin !== location.origin || event.source !== window || event.data?.type !== 'zenza-reserve-x-draft' ||
+    if (!event.isTrusted || event.origin !== location.origin || event.source !== root.ownerDocument.defaultView || event.data?.type !== 'zenza-reserve-x-draft' ||
         !ticket || event.data.ticket !== ticket || !port) return;
     ticket = null;
     delete root.dataset.zenzaDraftTicket;
@@ -1774,15 +1843,21 @@ function createDisplaySettings(w, gm, registered=[]) {
     let started = false;
     port.onmessage = async ({data}) => {
       if (data?.type === 'cancel') return close();
-      if (started || data?.type !== 'complete' || !(data.file instanceof File) || data.file.type !== 'video/mp4') return;
+      if (started || data?.type !== 'complete') return;
+      if (!(data.file instanceof File) || data.file.type !== 'video/mp4') {
+        port.postMessage({error:'管理拡張で受け取ったデータをMP4として確認できませんでした。',stage:'draft-format'});
+        return close();
+      }
       started = true;
       try {
-        await getTransfer().send(data.file,data.text,controller.signal,() => port.postMessage({progress:true}));
+        port.postMessage({stage:'draft-open'});
+        await getTransfer().send(data.file,data.text,controller.signal,stage => port.postMessage({progress:true,stage}));
         port.postMessage({attached:true});
       } catch (error) {
-        port.postMessage({error:error?.message || 'Xへの自動添付に失敗しました。完成画面から手動で添付できます。'});
+        port.postMessage({error:error?.message || 'Xへの自動添付に失敗しました。完成画面から手動で添付できます。',reason:error?.reason});
       } finally { close(); }
     };
+    port.postMessage({reserved:true});
   });
 })(getDraftTransfer);},{once:true});
  }
@@ -8974,7 +9049,7 @@ class NgCompositeRuleEditor {
 		`).trim();
 		return new SettingPanel({ playerConfig: Config, $container: $('body') });
 });},
-createVideoSharePanel:function({Array,CommentPictureInPicture,HlsLibrary,PopupMessage,RequestDiagnostics,ScreenFilter,ShareClipPreferences,document,textUtil,window}){return (function createVideoSharePanel() {
+createVideoSharePanel:function({Array,CommentDisplayBudget,CommentPictureInPicture,HlsLibrary,NicoChat,NicoChatViewModel,PopupMessage,RequestDiagnostics,ScreenFilter,ShareClipPreferences,document,textUtil,window}){return (function createVideoSharePanel() {
 // already required
 const ShareClipClipboard = (() => {
 	const type = 'application/x-zenzawatch-clip';
@@ -9035,52 +9110,113 @@ const ShareClipClipboard = (() => {
 	async function copyIfGranted(file) {
 		try {
 			if (!document.hasFocus() || copyUnavailableReason(file) || !navigator.permissions?.query) return;
-			const permission = await navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true});
-			if (permission.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
+			let timer;
+			let permission;
+			try {
+				permission = await Promise.race([navigator.permissions.query({name:'clipboard-write', allowWithoutGesture:true}),
+					new Promise(resolve => { timer = setTimeout(resolve,1500); })]);
+			} finally { clearTimeout(timer); }
+			if (permission?.state === 'granted' && document.hasFocus()) void copy(file).catch(() => {});
 		} catch (_) { /* Clipboard support is optional for direct attachment. */ }
 	}
-	function reserveDraft() {
+	function reserveBrowserTab() {
+		let tab;
+		const ownsTab = () => {
+			try { return !!tab && !tab.closed && tab.location.href === 'about:blank'; }
+			catch (_) { return false; }
+		};
+		try {
+			tab = window.open('about:blank','_blank');
+			if (tab) {
+				tab.opener = null;
+				tab.document.title = 'ZenzaWatch ｜ Xの下書き';
+				tab.document.body.textContent = 'クリップの完成後、ここにXの下書きを開きます。元のタブで視聴を続けられます。';
+			}
+		} catch (_) { /* Report the browser result when the MP4 is ready. */ }
+		return {
+			complete(file,text) {
+				const fail = (message,stage) => { throw Object.assign(Error(message),{stage}); };
+				if (!tab) fail('MP4は完成しました。別タブを開けませんでした。完成画面からXを開いてください。','draft-popup');
+				if (!ownsTab()) fail('MP4は完成しました。待機タブが閉じられたか、別のページに移動しました。','draft-tab-closed');
+				const url = new URL('https://x.com/intent/tweet');
+				if (text) url.searchParams.set('text',text);
+				void copyIfGranted(file);
+				const link = tab.document.createElement('a');
+				link.href = url.href;
+				link.rel = 'noreferrer';
+				link.click();
+				tab = null;
+				fail('Xの下書きを別タブで開きました。自動添付を開始できなかったため、完成画面から動画をコピーまたは保存して添付してください。','draft-native');
+			},
+			cancel() { if (ownsTab()) tab.close(); tab = null; }
+		};
+	}
+	function reserveDraft(trustedClick = false) {
 		const ticket = document.documentElement.dataset.zenzaDraftTicket;
-		if (!ticket) return null;
+		if (!ticket) return trustedClick ? reserveBrowserTab() : null;
 		const channel = new MessageChannel();
 		const port = channel.port1;
-		window.postMessage({type:'zenza-reserve-x-draft',ticket}, location.origin, [channel.port2]);
-		let pending, timer, closed = false;
+		let timer, stopped = false, pending, browserTab, acknowledge;
+		let stage = 'draft-reserve';
+		const ready = new Promise(resolve => { acknowledge = resolve; });
 		const stop = () => {
-			if (closed) return;
-			closed = true;
+			if (stopped) return;
+			stopped = true;
 			clearTimeout(timer);
-			pending = null;
+			acknowledge(false);
 			port.onmessage = null;
 			port.postMessage({type:'cancel'});
 			port.close();
 		};
+		port.onmessage = ({data}) => {
+			if (data?.reserved) {
+				clearTimeout(timer);
+				stage = 'draft-open';
+				acknowledge(true);
+			} else if (data?.error) {
+				if (data.stage === 'draft-format') stage = data.stage;
+				pending?.settle(data);
+			} else if (['draft-open','draft-receive','draft-attach'].includes(data?.stage)) {
+				stage = data.stage;
+				pending?.refresh();
+			} else if (data?.attached) pending?.settle(data);
+		};
+		timer = setTimeout(() => {
+			if (trustedClick) browserTab = reserveBrowserTab();
+			stop();
+		},350);
+		window.postMessage({type:'zenza-reserve-x-draft',ticket},location.origin,[channel.port2]);
 		return {
-			complete(file, text) {
-				if (closed || pending) return Promise.reject(Error('Xの自動添付を終了しました。完成画面から手動で添付できます。'));
+			async complete(file,text) {
+				if (!await ready) {
+					if (browserTab) return browserTab.complete(file,text);
+					throw Object.assign(Error('Xを開くための受付を確認できませんでした。完成画面からXを開いてください。'),{stage});
+				}
+				if (stopped || pending) throw Object.assign(Error('Xの自動添付を終了しました。'),{stage});
 				return new Promise((resolve,reject) => {
-					pending = reject;
 					const settle = message => {
 						stop();
+						pending = null;
 						if (message?.attached === true) resolve();
-						else reject(Error(message?.error || 'Xへの自動添付を確認できませんでした。完成画面から手動で添付できます。'));
+						else {
+							const known = ['draft-open-failed','draft-manager','draft-size','draft-transfer-timeout','draft-no-receiver','draft-input','draft-closed'];
+							const reason = known.includes(message?.reason) ? message.reason : stage;
+							reject(Object.assign(Error(message?.error || 'Xへの自動添付の応答を確認できませんでした。完成画面から手動で添付できます。'),{stage,reason}));
+						}
 					};
-					const refreshTimeout = () => {
-						clearTimeout(timer);
-						timer = setTimeout(settle,180000);
-					};
-					port.onmessage = event => event.data?.progress === true ? refreshTimeout() : settle(event.data);
-					refreshTimeout();
-					copyIfGranted(file).then(() => {
-						if (!closed) port.postMessage({type:'complete',file,text});
-					}).catch(() => settle());
+					const refresh = () => { clearTimeout(timer); timer = setTimeout(settle,180000); };
+					pending = {refresh,settle};
+					refresh();
+					void copyIfGranted(file);
+					try { port.postMessage({type:'complete',file,text}); }
+					catch (_) { settle({error:'完成したMP4をX連携に渡せませんでした。'}); }
 				});
 			},
 			cancel() {
-				if (closed) return;
-				const reject = pending;
-				stop();
-				reject?.(Error('Xへの自動添付を中止しました。'));
+				browserTab?.cancel();
+				browserTab = null;
+				if (pending) pending.settle({error:'Xへの自動添付を中止しました。'});
+				else stop();
 			}
 		};
 	}
@@ -10401,17 +10537,28 @@ const ShareClipJobs = (() => {
 			URL.revokeObjectURL(url);
 		}
 	}
+	function notifyResult(task, notify, message, level = 'info', stage, reason) {
+		if (!notify || task.notified) return;
+		task.notified = true;
+		const title = String(task.name || 'クリップ').slice(0,64);
+		notify('「' + title + '」 ' + message, level, stage, reason);
+	}
 	async function sendDraft(task, onBackgroundFinish) {
 		const draft = task.draft;
 		if (!draft) return;
 		const releaseLinks = keepWatchLinksInNewTabs();
+		let level = 'info', stage = 'draft-attached', reason;
 		task.draftMessage = 'Xの下書きに動画を添付しています…';
 		publish();
 		try {
-			if (task.file.type !== 'video/mp4') throw Error('WebMで完成しました。完成画面で共有方法を選んでください。');
-			await draft.complete(task.file, task.shareText || task.name || '');
+			if (task.file.type !== 'video/mp4') throw Object.assign(Error('WebMで完成しました。完成画面で共有方法を選んでください。'),{stage:'draft-format'});
+			await draft.complete(task.file, task.shareText ?? task.name ?? '');
 			task.draftMessage = 'Xの下書きに動画を添付しました。内容を確認して投稿してください。';
 		} catch (error) {
+			level = 'warning';
+			stage = error?.stage || 'draft-attach';
+			reason = error?.reason;
+			task.draftFailureStage = stage;
 			task.draftMessage = error?.message || 'Xの下書きに添付できませんでした。完成画面から手動で添付できます。';
 		} finally {
 			releaseLinks();
@@ -10420,7 +10567,7 @@ const ShareClipJobs = (() => {
 				task.draft = null;
 				touch(task);
 				publish();
-				if (!listeners.size) onBackgroundFinish?.(task.draftMessage);
+				notifyResult(task, onBackgroundFinish, task.draftMessage, level, stage, reason);
 			}
 		}
 	}
@@ -10437,7 +10584,7 @@ const ShareClipJobs = (() => {
 		publish(message);
 		return true;
 	}
-	function start({name, shareText, from, to, hls, getBlob, renderer, comments, maxHeight, owner, onBackgroundFinish, draft}) {
+	function start({name, shareText, from, to, hls, getBlob, renderer, prepareRenderer, comments, maxHeight, owner, onBackgroundFinish, draft}) {
 		if (latest?.state === 'running') throw Error('クリップを作成中です。');
 		if (latest?.state === 'ready') discard();
 		const controller = new AbortController();
@@ -10453,7 +10600,17 @@ const ShareClipJobs = (() => {
 		}
 		async function run() {
 			try {
-				const blob = hls ? null : await getBlob(signal);
+				let prepared;
+				if (prepareRenderer) {
+					setStage('comments');
+					prepared = Promise.resolve(prepareRenderer(signal)).then(value => {
+						if (signal.aborted) { value?.dispose?.(); signal.throwIfAborted(); }
+						renderer = value;
+						if (typeof renderer?.drawFrame !== 'function') throw Error('選択したコメント・画面エフェクトを準備できませんでした。');
+					});
+				}
+				const readSource = async () => hls ? null : getBlob(signal);
+				const [blob] = await Promise.all([readSource(), prepared]);
 				signal.throwIfAborted();
 				if (!hls && !(blob instanceof Blob)) throw Error('元ファイルを取得できませんでした。');
 				const output = await ShareFastClip.convert({blob, hls, from, to, signal, comments, maxHeight, onStage:setStage,
@@ -10475,6 +10632,7 @@ const ShareClipJobs = (() => {
 				task.state = 'ready';
 			} catch (error) {
 				task.state = signal.aborted ? 'cancelled' : 'failed';
+				controller.abort();
 				task.clipProtected = error?.clipProtected === true;
 				task.clipInputUnsupported = error?.clipInputUnsupported === true;
 				task.reason = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(error.message) &&
@@ -10490,9 +10648,9 @@ const ShareClipJobs = (() => {
 					} else {
 						task.draft?.cancel?.();
 						task.draft = null;
-						if (!listeners.size && task.state !== 'cancelled') onBackgroundFinish?.(task.state === 'ready'
+						if (task.state !== 'cancelled') notifyResult(task, onBackgroundFinish, task.state === 'ready'
 							? 'クリップが完成しました。共有パネルから保存できます。'
-							: 'クリップを作成できませんでした。共有パネルで詳細を確認できます。');
+							: task.reason, task.state === 'ready' ? 'info' : 'warning', task.state === 'ready' ? 'export-ready' : 'export-' + task.stage);
 					}
 				}
 			}
@@ -10501,9 +10659,10 @@ const ShareClipJobs = (() => {
 		return task;
 	}
 	return {
-		start, discard, touch, hold, retentionMinutes,
+		start, discard, touch, hold, retentionMinutes, keepWatchLinksInNewTabs,
 		reserveRecording({name, shareText, from, to, owner, onCancel, onBackgroundFinish}) {
 			if (latest?.state === 'running') throw Error('クリップを作成中です。');
+			if (latest?.state === 'ready') discard();
 			const controller = new AbortController();
 			const task = latest = {name, shareText, from, to, owner, controller, recorded:true, stage:'recording', percent:null, state:'running'};
 			controller.signal.addEventListener('abort', onCancel, {once:true});
@@ -10516,8 +10675,8 @@ const ShareClipJobs = (() => {
 				touch(task);
 				publish();
 				if (file && draft) void sendDraft(task, onBackgroundFinish);
-				else if (!listeners.size && task.state !== 'cancelled') onBackgroundFinish?.(file
-					? 'クリップが完成しました。共有パネルから保存できます。' : reason);
+				else if (task.state !== 'cancelled') notifyResult(task, onBackgroundFinish, file
+					? 'クリップが完成しました。共有パネルから保存できます。' : reason, file ? 'info' : 'warning');
 			};
 		},
 		completeRecording({name, shareText, file, owner, draft, onBackgroundFinish}) {
@@ -10530,6 +10689,7 @@ const ShareClipJobs = (() => {
 			touch(latest);
 			publish();
 			if (draft) void sendDraft(latest, onBackgroundFinish);
+			else notifyResult(latest, onBackgroundFinish, 'クリップが完成しました。共有パネルから保存できます。');
 			return true;
 		},
 		cancel() { if (latest?.state === 'running') latest.controller.abort(); },
@@ -10544,7 +10704,7 @@ const ShareClipJobs = (() => {
 })();
 const ShareLocalClip = {
 	mount(container, {title = '', startTime = 0, getCurrentVideo, seekCurrentVideo, getShareText,
-		createFrameRenderer, getThumbnail, clipSession, onSelectionChange, getCurrentFile, getCurrentHlsSource, getCurrentHlsRendition, getFragmentCache, getStoryboardInterval, qualityConfig, onBackgroundFinish, onOpenOfficial} = {}) {
+		createFrameRenderer, getThumbnail, clipSession, onSelectionChange, getCurrentFile, getCurrentHlsSource, getCurrentHlsRendition, getFragmentCache, getStoryboardInterval, qualityConfig, onBackgroundFinish, onNotify = onBackgroundFinish, onOpenOfficial} = {}) {
 		const root = document.createElement('section');
 		root.className = 'zenzaLocalClip';
 		root.innerHTML = `
@@ -10570,29 +10730,30 @@ const ShareLocalClip = {
 			<video data-role="source" playsinline hidden aria-label="元ファイル"></video>
 			<div class="clipPages" role="group" aria-label="クリップの編集項目">
 				<button type="button" data-editor-page="range" aria-pressed="true">区間</button>
-				<button type="button" data-editor-page="quality" aria-pressed="false">画質</button>
+				<button type="button" data-editor-page="quality" aria-pressed="false">画質・合成</button>
 				<button type="button" data-editor-page="sources" aria-pressed="false">その他の作成方法</button>
 				<button type="button" data-editor-page="result" aria-pressed="false" hidden>完成した動画</button>
 			</div>
 			<div class="clipWorkspace">
 				<div data-role="timeline"></div>
 				<div data-editor-pane="range">
+			<div data-share-composer-slot></div>
 			<div class="clipRange" role="group" aria-label="秒数を直接指定">
 				<label>開始 <input type="number" name="start" min="0" step="any" disabled> 秒</label>
 				<label>終了 <input type="number" name="end" min="0" step="any" disabled> 秒</label>
 			</div>
 			<p class="clipHint" data-role="lengthHint" hidden>Xで添付できる動画の長さは、アカウントにより異なります。</p>
+			<label><input type="checkbox" name="openXDraft"> 完成後に別タブでXを開いて動画を添付</label>
+				</div>
+				<div data-editor-pane="quality" hidden><div class="clipRange" data-role="quality"></div>
 			<div class="clipLayers" role="group" aria-label="書き出しに含めるもの">
 				<label><input type="checkbox" name="comments"> <span data-role="commentsLabel">コメント</span></label>
 				<label><input type="checkbox" name="effects"> 画面エフェクト</label>
 			</div>
 			<p class="clipHint" data-role="layerHint"></p>
-			<label><input type="checkbox" name="openXDraft"> 完成後に別タブでXを開いて動画を添付</label>
-				</div>
-				<div data-editor-pane="quality" hidden><div class="clipRange" data-role="quality"></div>
 			<p class="clipHint">初期設定では、プレビューと保存する動画は視聴中の画質、場面画像は通信量優先です。ここで選んだ画質は次回も使い、上級者設定の「動画クリップ・X共有」にも反映されます。</p></div>
 				<div data-editor-pane="sources" hidden>
-					<p class="clipHint">「クリップを作成」を押したら、共有画面を閉じて別の動画を視聴できます。書き出しが終わるまで元のタブを残してください。完成した動画は共有画面で保存できます。</p>
+					<p class="clipHint">「ZenzaでMP4」を押したら、共有画面を閉じて別の動画を視聴できます。書き出しが終わるまで元のタブを残してください。完成した動画は共有画面で保存できます。</p>
 					<div data-provider-slot></div>
 			<details data-role="fileOptions"><summary>動画ファイルを使う</summary><div class="clipSources">
 				<label class="shareAction clipFile">ファイルを選ぶ<input type="file" accept="video/*,.mp4,.webm,.mov,.m4v" aria-label="動画ファイルを選ぶ"></label>
@@ -10615,9 +10776,9 @@ const ShareLocalClip = {
 			</div>
 			</div>
 			<footer class="clipFooter">
-				<div class="clipActions" data-role="createActions"><button type="button" data-action="create" disabled>クリップを作成</button>
+				<div class="clipActions" data-role="createActions"><button type="button" data-action="create" disabled>ZenzaでMP4</button>
 					<button type="button" data-action="low-quality" hidden>通信量優先の画質で高速作成</button>
-					<button type="button" data-action="provider-fallback" hidden>ニコニコで作成する画面へ</button>
+					<button type="button" data-action="provider-fallback" hidden>ニコニコ連携の詳細</button>
 					<button type="button" data-action="record" hidden>再生しながら作成</button></div>
 				<button type="button" data-action="cancel" hidden>キャンセル</button>
 				<p role="status" aria-live="polite"></p>
@@ -10673,10 +10834,10 @@ const ShareLocalClip = {
 		openXDraft.onchange = () => qualityConfig?.setValue(draftSetting, openXDraft.checked);
 		qualityConfig?.onkey?.(draftSetting, syncDraftSetting);
 		editorEvents.signal.addEventListener('abort', () => qualityConfig?.offkey?.(draftSetting, syncDraftSetting), {once:true});
-		function reserveDraft() {
+		function reserveDraft(click) {
 			if (!openXDraft.checked) return null;
-			return ShareClipClipboard.reserveDraft?.() || {
-				complete() { throw Error('Xの下書きを自動で開けませんでした。完成画面から手動で添付できます。'); }
+			return ShareClipClipboard.reserveDraft?.(click?.isTrusted === true) || {
+				complete() { throw Object.assign(Error('Xの下書きを自動で開けませんでした。完成画面から手動で添付できます。'),{stage:'draft-reserve'}); }
 			};
 		}
 		const draftStatus = find('[data-role=draftStatus]');
@@ -10778,7 +10939,7 @@ const ShareLocalClip = {
 				: typeof createFrameRenderer !== 'function' ? 'このプレイヤーでは画面合成を利用できません。' : '';
 			layerHint.hidden = !layerHint.textContent;
 			start.disabled = end.disabled = !ready || busy;
-			create.textContent = !local && !getCurrentFile && !getCurrentHlsSource ? '再生しながら作成' : 'クリップを作成';
+			create.textContent = !local && !getCurrentFile && !getCurrentHlsSource ? '再生しながら作成' : 'ZenzaでMP4';
 			canCreateRange = canExport && ready && !busy && !rangeError();
 			create.disabled = !canCreateRange || !validLength;
 			find('[data-role=lengthHint]').hidden = !(ready && end.valueAsNumber - start.valueAsNumber > 140);
@@ -10861,7 +11022,8 @@ const ShareLocalClip = {
 			status.textContent = message;
 			refresh();
 			if (detached || active?.independent || (active && message && outputFile && !displayedTask)) clearResult();
-			active?.independent?.settle?.({reason:message});
+			if (active?.independent) active.independent.settle?.({reason:message});
+			else if (active && message && message !== '作成をキャンセルしました。') onNotify?.(message,'warning');
 		}
 		function present(active, blob, from, to) {
 			if (!recordingSourceValid(active)) return finish('再生中の動画が変わったため中断しました。');
@@ -10897,7 +11059,7 @@ const ShareLocalClip = {
 				if (Number.isFinite(preview.duration) && Math.abs(preview.duration - (to - from)) > tolerance) return failed(true);
 				const {draft, independent} = active;
 				const file = outputFile;
-				const shareText = independent?.shareText ?? (source === localVideo ? '' : getShareText?.() || sourceName);
+				const shareText = independent?.shareText ?? active.shareText;
 				active.draft = active.independent = null;
 				finish('');
 				if (independent) independent.settle({file,draft});
@@ -10909,7 +11071,8 @@ const ShareLocalClip = {
 		function showAttachmentOptions() {
 			share.hidden = !navigator.canShare?.({files:[outputFile]});
 			const reason = ShareClipClipboard.copyUnavailableReason(outputFile);
-			copyForX.hidden = postX.hidden = !!reason;
+			copyForX.hidden = !!reason;
+			postX.textContent = reason || displayedTask?.draftFailureStage ? 'Xの下書きを別タブで開く' : 'コピーして別タブでXを開く';
 			attachHint.textContent = reason || '手動で添付するときは、Xで「Zenzaの動画をクリップボードから読み込む」を押してください。';
 		}
 		async function copyClipForX(openDraft) {
@@ -10940,6 +11103,7 @@ const ShareLocalClip = {
 				status.textContent = '「' + file.name + '」をコピーしました。';
 				if (openDraft && (!draft || draft.closed)) {
 					status.textContent += '別タブを開けませんでした。ポップアップを許可してもう一度押してください。';
+					onNotify?.('動画をコピーしました。Xを開くにはポップアップの許可が必要です。','warning');
 					return;
 				}
 				if (draft) {
@@ -10952,8 +11116,11 @@ const ShareLocalClip = {
 					postX.focus({preventScroll:true});
 				}
 				status.textContent += 'Xの投稿画面で読み込んでください。';
+				if (openDraft) onNotify?.('動画をコピーし、Xの下書きを別タブで開きました。','info');
 			} catch (error) {
-				if (file === outputFile) status.textContent = error.message || '動画をコピーできませんでした。';
+				const message = error.message || '動画をコピーできませんでした。';
+				if (file === outputFile) status.textContent = message;
+				if (openDraft) onNotify?.(message,'warning');
 			} finally {
 				release();
 				window.removeEventListener('pagehide', closeDraft);
@@ -10964,11 +11131,12 @@ const ShareLocalClip = {
 		copyForX.onclick = () => copyClipForX(false);
 		function updatePostLink() {
 			const intent = new URL('https://x.com/intent/tweet');
-			const text = displayedTask?.shareText || displayedTask?.name;
+			const text = displayedTask?.shareText ?? displayedTask?.name;
 			if (text) intent.searchParams.set('text', text);
 			postX.href = intent.href;
 		}
 		postX.onclick = event => {
+			if (event.isTrusted && (copyForX.hidden || displayedTask?.draftFailureStage)) { updatePostLink(); return; }
 			event.preventDefault();
 			if (!event.isTrusted || copyForX.disabled) return;
 			updatePostLink();
@@ -10996,7 +11164,10 @@ const ShareLocalClip = {
 				ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
 				ctx.getImageData(0, 0, 1, 1);
 				if (!active.independent && (comments.checked || effects.checked)) {
-					active.renderer = createFrameRenderer({comments:comments.checked, effects:effects.checked, video:media});
+					const renderer = await createFrameRenderer({comments:comments.checked, effects:effects.checked,
+						video:media, from, to, signal:active.events.signal});
+					if (job !== active) { renderer?.dispose?.(); return; }
+					active.renderer = renderer;
 					if (typeof active.renderer?.draw !== 'function' || typeof active.renderer?.dispose !== 'function') {
 						throw Error('選択したレイヤーを取得できませんでした。');
 					}
@@ -11211,13 +11382,13 @@ const ShareLocalClip = {
 				: '録画中はこのタブと共有パネルを開いてください。');
 			if (available) status.textContent += ' ' + recordFallback.title;
 		}
-		function startRecording(from, to, webm, restore, fallback = false, previewUrl = null, draft, independent) {
+		async function startRecording(from, to, webm, restore, fallback = false, previewUrl = null, draft, independent, click) {
 			if (!available) return finish('このブラウザーではこの動画を書き出せません。PC版のChromeまたはEdgeでお試しください。');
 			if (!independent && !currentSelection()) return finish('再生中の動画が変わりました。もう一度動画を選んでください。');
 			const previewOrigin = timeline?.stopPreview({forRecording:true});
 			ShareClipJobs.discard();
 			clearResult();
-			const active = job = {events:new AbortController(), webm, previewUrl, draft:draft === undefined ? reserveDraft() : draft};
+			const active = job = {events:new AbortController(), webm, previewUrl, shareText:getShareText?.() ?? (source === localVideo ? '' : title), draft:draft === undefined ? reserveDraft(click) : draft};
 			const options = {signal:active.events.signal};
 			document.addEventListener('visibilitychange', () => {
 				if (document.hidden) finish('タブが非表示になったため作成を中断しました。');
@@ -11236,17 +11407,21 @@ const ShareLocalClip = {
 				try {
 					if (!independent) {
 						const height = qualityHeight('export',source);
-						independent = {name:title, shareText:getShareText?.() || title, height,
+						independent = {name:title, shareText:getShareText?.() ?? title, height,
 							maxHeight:quality.export.value === 'source' ? null : height || 144};
 						independent.settle = ShareClipJobs.reserveRecording({...independent,from,to,owner,onBackgroundFinish,
 							onCancel:() => finish('作成をキャンセルしました。')});
 						active.independent = independent;
-						if (comments.checked || effects.checked) independent.renderer = createFrameRenderer({video:media,
-							comments:comments.checked,effects:effects.checked,from,to});
+						if (comments.checked || effects.checked) {
+							const renderer = await createFrameRenderer({video:media, comments:comments.checked,
+								effects:effects.checked, from, to, signal:active.events.signal});
+							if (job !== active) { renderer?.dispose?.(); return; }
+							independent.renderer = renderer;
+						}
 					}
 					active.independent = independent;
 					active.renderer = independent.renderer;
-				} catch (error) { return finish(error.message); }
+				} catch (error) { if (job === active) finish(error.message); return; }
 				const diagnostic = () => typeof RequestDiagnostics !== 'undefined'
 					? RequestDiagnostics.begin('clip-preview', (clipSession ?? 0) + ':recording', 'response')
 					: null;
@@ -11322,7 +11497,7 @@ const ShareLocalClip = {
 			const label = '「' + (titleChars.length > 32 ? titleChars.slice(0,32).join('') + '…' : taskTitle) + '」';
 			if (task.state === 'running') {
 				if (displayedTask) clearResult();
-				const stages = {library:'変換ライブラリを準備中', source:'元動画の区間を確認中',
+				const stages = {comments:'コメントと画面エフェクトを準備中',library:'変換ライブラリを準備中', source:'元動画の区間を確認中',
 					encoding:'映像と音声を書き出し中', checking:'完成したMP4を確認中', recording:'プレビューで録画中（このタブを表示してください）'};
 				const message = (task.owner === owner ? '' : label + ' · ') + stages[task.stage];
 				if (status.textContent !== message) status.textContent = message;
@@ -11335,7 +11510,10 @@ const ShareLocalClip = {
 			}
 			if (task.state === 'ready') {
 				draftStatus.textContent = task.draftMessage || '';
-				if (displayedTask === task && outputFile === task.file) return;
+				if (displayedTask === task && outputFile === task.file) {
+					if (task.draftFailureStage) showAttachmentOptions();
+					return;
+				}
 				if (outputFile !== task.file) {
 					clearResult();
 					outputFile = task.file;
@@ -11384,54 +11562,53 @@ const ShareLocalClip = {
 				startRecording(task.from, task.to, false, undefined, true, null, draft);
 			} else offerRecording();
 		}
-		function createClip(from, to, useLowest = false) {
+		function createClip(from, to, useLowest, click) {
 			if (!currentSelection() || source.mediaKeys) return finish('元の動画を確認できません。もう一度動画を選んでください。');
 			const local = source === localVideo;
 			const url = !local && getCurrentHlsSource?.(source);
 			const rendition = url && !useLowest && quality.export.value === 'source' ? getCurrentHlsRendition?.(source) : undefined;
 			const hls = url && ShareFastClip.acceptsHls(url) ? {url,height:useLowest ? 0 : qualityHeight('export',source,rendition),
 				renditionUrl:rendition?.uri,cache:getFragmentCache?.(source)} : null;
-			if (!local && !getCurrentFile && !hls) return startRecording(from, to, false);
+			if (!local && !getCurrentFile && !hls) return startRecording(from, to, false, undefined, false, null, undefined, undefined, click);
 			timeline.stopPreview();
 			clearResult();
 			const selected = source;
 			const file = local && fileInput.files[0];
 			const name = (local ? file?.name.replace(/\.[^.]+$/, '') : title) || 'clip';
-			const shareText = local ? name : getShareText?.() || name;
-			let renderer;
+			const shareText = getShareText?.() ?? (local ? '' : name);
+			const layers = {video:selected, comments:comments.checked, effects:effects.checked, from, to};
+			const draft = reserveDraft(click);
 			try {
-				if (comments.checked || effects.checked) {
-					renderer = createFrameRenderer({video:selected, comments:comments.checked, effects:effects.checked, from, to});
-					if (typeof renderer?.drawFrame !== 'function') throw Error('選択した合成を利用できません。');
-				}
+				const prepareRenderer = layers.comments || layers.effects ?
+					signal => createFrameRenderer({...layers,signal}) : undefined;
 				fallbackRange = {from,to};
 				const maxHeight = quality.export.value === 'source' ? undefined : qualityHeight('export',source) || (hls ? undefined : 144);
-				ShareClipJobs.start({name,shareText,from,to,hls,renderer,maxHeight,comments:comments.checked,owner,onBackgroundFinish,draft:reserveDraft(),
+				ShareClipJobs.start({name,shareText,from,to,hls,prepareRenderer,maxHeight,comments:layers.comments,owner,onBackgroundFinish,draft,
 					getBlob:local ? () => file : signal => getCurrentFile(selected, signal)});
 			} catch (error) {
-				renderer?.dispose?.();
-				if (local) return startRecording(from,to,false,undefined,true);
+				if (local) return startRecording(from,to,false,undefined,true,null,draft);
+				draft?.cancel?.();
 				status.textContent = error.message;
 				offerRecording();
 			}
 		}
-		lowQualityFallback.onclick = () => {
+		lowQualityFallback.onclick = event => {
 			if (!lowQualityFallback.hidden && !create.disabled && !job && !ShareClipJobs.busy) {
-				createClip(start.valueAsNumber, end.valueAsNumber, true);
+				createClip(start.valueAsNumber, end.valueAsNumber, true, event);
 			}
 		};
-		recordFallback.onclick = () => {
+		recordFallback.onclick = event => {
 			if (!recordFallback.hidden && !job && !rangeError() && currentSelection() && !source.mediaKeys) {
 				const url = availablePreviewUrl();
 				if (recordFallback.dataset.mode === 'preview' && !url) {
-					status.textContent = '録画用の配信が切り替わりました。もう一度「クリップを作成」を押してください。';
+					status.textContent = '録画用の配信が切り替わりました。もう一度「ZenzaでMP4」を押してください。';
 					recordFallback.hidden = true;
 					return;
 				}
-				startRecording(start.valueAsNumber, end.valueAsNumber, false, undefined, false, url);
+				startRecording(start.valueAsNumber, end.valueAsNumber, false, undefined, false, url, undefined, undefined, event);
 			}
 		};
-		create.onclick = () => { if (!create.disabled) createClip(start.valueAsNumber, end.valueAsNumber); };
+		create.onclick = event => { if (!create.disabled) createClip(start.valueAsNumber, end.valueAsNumber, false, event); };
 		cancel.onclick = () => {
 			if (ShareClipJobs.busy) { ShareClipJobs.cancel(); return; }
 			finish('作成をキャンセルしました。');
@@ -11641,30 +11818,80 @@ const SharePlaybackFile = (() => {
 })();
 // already required
 // already required
+// already required
+// already required
+// already required
 const ShareClipRenderer = {
-	captureComments(viewModel, from, to) {
+	captureComments(viewModel, from, to, limit) {
 		if (typeof viewModel?.getGroup !== 'function') throw Error('この動画のコメントを取得できません。');
-		const groups = new Map();
+		const groups = new Map(), arrivals = new Map();
+		const margin = 2 * (NicoChatViewModel.SPEED_RATE || 1);
 		const fields = ['type', 'isFixed', 'isReverse', 'isOverflow', 'fontSizePixel', 'fontCommand',
 			'lineHeight', 'isLineResized', 'size', 'color', 'commentVer', 'width', 'height', 'cssScale', 'cssScaleY',
 			'ypos', 'duration', 'speed', 'opacity', 'fork', 'htmlText', 'text'];
 		for (const type of ['naka', 'ue', 'shita']) {
-			const members = [];
-			for (const chat of viewModel.getGroup(type)?.members || []) {
+			const group = viewModel.getGroup(type), members = [];
+			groups.set(type, {members});
+			const candidates = group?.getMembersInRange ? group.getMembersInRange(from - 2, to + 1) : group?.members || [];
+			for (const chat of candidates) {
 				const beginLeftTiming = chat.beginLeftTiming, endRightTiming = chat.endRightTiming;
-				if (beginLeftTiming > to + 1 || endRightTiming < from - 2 || chat.isInvisible ||
+				if (beginLeftTiming > to + 1 || endRightTiming < from - (chat.isFixed ? 0 : 2) || chat.isInvisible ||
 						!chat.isInViewBySecond(beginLeftTiming)) continue;
 				const copy = {beginLeftTiming, endRightTiming, isInViewBySecond(sec) {
 					return sec + 1 >= this.beginLeftTiming && sec <= this.endRightTiming;
 				}};
 				for (const name of fields) copy[name] = chat[name];
-				members.push(copy);
+				copy.vpos = chat.vpos;
+				copy.threadId = chat.threadId;
+				copy.no = chat.no;
+				copy.tier = CommentDisplayBudget.tierOf(chat, viewModel.isHistoryChat?.(chat));
+				copy.commentArtGroup = chat.commentArtGroup;
+				const tick = Math.max(0, Math.ceil((beginLeftTiming - 1 - from) * 10));
+				if (!arrivals.has(tick)) arrivals.set(tick, []);
+				arrivals.get(tick).push(copy);
 			}
-			groups.set(type, {members});
 		}
-		return {getGroup:type => groups.get(type)};
+		let expires = [];
+		for (const tick of [...arrivals.keys()].sort((a,b) => a-b)) {
+			const time = from + tick / 10;
+			expires = expires.filter(end => end > time);
+			const {admitted} = CommentDisplayBudget.admit(arrivals.get(tick), {
+				liveCount:expires.length, limit, tierOf:chat => chat.tier,
+				order:NicoChat.SORT_FUNCTION, groupOf:chat => chat.commentArtGroup
+			});
+			for (const chat of admitted) {
+				groups.get(chat.type).members.push(chat);
+				if (chat.tier >= 0) expires.push(chat.endRightTiming + margin);
+			}
+		}
+		return {clipAdmissionApplied:true, getGroup:type => groups.get(type)};
 	},
-	create({video, comments = false, effects = false, config, getViewModel, from, to}) {
+	prepareComments(viewModel, from, to, limit, signal, isCurrent) {
+		if (!viewModel?.getGroup) throw Error('この動画のコメントを取得できません。');
+		const groups = ['naka','ue','shita'].map(type => viewModel.getGroup(type));
+		if (groups.some(g => !g)) throw Error('コメントを読み込み中です。少し待ってから再試行してください。');
+		const sources = groups.map(g => g._nicoChatGroup?._members);
+		const history = viewModel.pendingHistoryLayout;
+		const ready = () => !history?.pending && groups.every(g => g.clipLayoutReady !== false);
+		const capture = () => ShareClipRenderer.captureComments(viewModel, from, to, limit);
+		if (signal?.aborted) throw signal.reason || new DOMException('中止しました。','AbortError');
+		if (ready()) return capture();
+		return (async () => {
+			const until = Date.now() + 20000;
+			for (;;) {
+				if (signal?.aborted) throw signal.reason || new DOMException('中止しました。','AbortError');
+				if (history?.error) throw Error('増量コメントの反映が完了しませんでした。件数を確認してから再試行してください。');
+				const expected = history?.sources || sources;
+				if ((isCurrent && !isCurrent()) || groups.some((g,i) => g._nicoChatGroup?._members !== expected[i])) {
+					throw Error('コメントの準備中に動画またはコメントが切り替わりました。元の動画から再試行してください。');
+				}
+				if (ready()) return capture();
+				if (Date.now() >= until) throw Error('コメントの配置が完了しませんでした。読み込み完了後に再試行してください。');
+				await new Promise(resolve => setTimeout(resolve, 25));
+			}
+		})();
+	},
+	create({video, comments = false, effects = false, config, getViewModel, from, to, signal, isCurrent}) {
 		if (comments && (!config?.props || typeof getViewModel !== 'function')) {
 			throw new Error('コメントの描画に必要な情報を取得できません。');
 		}
@@ -11672,7 +11899,8 @@ const ShareClipRenderer = {
 		let savedComments = null, savedStyle = null;
 		if (exporting) {
 			if (comments) {
-				savedComments = ShareClipRenderer.captureComments(getViewModel(), from, to);
+				savedComments = ShareClipRenderer.prepareComments(getViewModel(), from, to,
+					config.props['commentLayer.maxDisplayComment'], signal, isCurrent);
 				const props = {};
 				for (const key of ['baseFontBolder', 'cssFontWeight', 'baseFontFamily', 'commentLayerOpacity',
 					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity']) props[key] = config.props[key];
@@ -11681,6 +11909,14 @@ const ShareClipRenderer = {
 			if (effects) savedStyle = ScreenFilter.captureClipStyle();
 			getViewModel = null;
 		}
+		const drawing = snapshot => ShareClipRenderer.createDrawing({video, comments, effects, config,
+			getViewModel, savedComments:snapshot, savedStyle});
+		return savedComments?.then ? savedComments.then(drawing, error => {
+			savedStyle?.dispose();
+			throw error;
+		}) : drawing(savedComments);
+	},
+	createDrawing({video, comments, effects, config, getViewModel, savedComments, savedStyle}) {
 		let renderer = comments ? new CommentPictureInPicture.CommentRenderer({config}) : null;
 		let disposed = false;
 		function drawFrame(ctx, width, height, image, sec) {
@@ -11742,14 +11978,26 @@ const ShareOfficialClip = (() => {
 	const pollInterval = 5000;
 	const recent = new Map();
 	const pendingCreations = new Map();
+	const publications = new Map();
 	const pollLimit = 30 * 60 * 1000;
 	const ignored = {reason:'cancelled'};
 	const schema = missing => ({kind:'schema', missing});
 	const postFailures = {
-		X_TOKEN_INVALID:'X アカウントの連携を公式ページで確認してください。',
-		X_TOO_MANY_REQUESTS:'X の利用上限に達しました。しばらく時間をおいてください。',
-		VIDEO_CLIP_NOT_FOUND:'公式サービスでクリップが見つかりません。'
+		X_TOKEN_INVALID:{reason:'token-invalid',message:'X アカウントの連携を公式ページで確認してください。'},
+		X_TOO_MANY_REQUESTS:{reason:'rate-limit',message:'X の利用上限に達しました。しばらく時間をおいてください。'},
+		VIDEO_CLIP_NOT_FOUND:{reason:'clip-missing',message:'公式サービスでクリップが見つかりません。'}
 	};
+	function postFailure(code) {
+		return Object.hasOwn(postFailures,code) ? postFailures[code] : {reason:'post-failed',message:'X への投稿に失敗しました。'};
+	}
+	function publicationDetails(stage, reason, error) {
+		const details = {stage,reason,clipReady:['verify','post','receipt'].includes(stage),
+			postAttempted:stage === 'post' || stage === 'receipt'};
+		if (error?.httpStatus) details.statusCode = error.httpStatus;
+		if (error?.missing) details.missing = error.missing;
+		if (error?.retrySeconds) details.retrySeconds = error.retrySeconds;
+		return details;
+	}
 	function responseIssue(operation, data, expired) {
 		if (operation === 'clip-permission') {
 			if (typeof data?.isLogin !== 'boolean') return schema('data.isLogin');
@@ -11779,7 +12027,226 @@ const ShareOfficialClip = (() => {
 			}
 		}
 	}
-	function mount(container, {info, startTime, endTime, text, officialUrl, onUseLocal}) {
+	function transport(win,videoId,signal,expired) {
+		const beginDiagnostic = operation => typeof RequestDiagnostics === 'undefined' ? null :
+			RequestDiagnostics.begin(operation, videoId, 'response', () => !signal.aborted);
+		async function request(operation, path, method = 'GET', fields) {
+			const abort = new win.AbortController();
+			const stop = () => abort.abort();
+			if (signal.aborted) throw new Error('closed');
+			if (operation !== 'clip-create') signal.addEventListener('abort', stop, {once:true});
+			const ticket = beginDiagnostic(operation);
+			let timedOut = false, diagnostic = {kind:'network'};
+			const failure = new Error('request failed');
+			const timeout = win.setTimeout(() => { timedOut = true; stop(); }, 20000);
+			try {
+				const headers = {'Accept':'application/json', 'X-Frontend-Id':'6', 'X-Frontend-Version':'0'};
+				if (method !== 'GET') headers['X-Request-With'] = win.location.origin;
+				const options = {method, headers, credentials:'include', cache:'no-store', signal:abort.signal};
+				if (fields) options.body = new win.URLSearchParams(fields);
+				const response = await win.fetch(base + path, options);
+				if (abort.signal.aborted) throw new Error('interrupted');
+				if (response.ok && response.status === 204 && (operation === 'clip-delete' || operation === 'clip-post')) {
+					ticket?.success();
+					return;
+				}
+				let envelope;
+				try { envelope = await response.json(); }
+				catch (_) { if (response.ok) { diagnostic = schema('json'); throw new Error('invalid response'); } }
+				if (abort.signal.aborted) throw new Error('interrupted');
+				if (!response.ok || !Number.isInteger(envelope?.meta?.status) ||
+						envelope.meta.status < 200 || envelope.meta.status >= 300) {
+					if (envelope?.meta?.errorCode === 'USER_LIMIT_EXCEEDED') failure.message = 'USER_LIMIT_EXCEEDED';
+					const statusCode = response.ok ? envelope?.meta?.status : response.status;
+					if (Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599) failure.httpStatus = statusCode;
+					if (statusCode === 429 || failure.message === 'USER_LIMIT_EXCEEDED') {
+						const wait = response.headers?.get?.('Retry-After');
+						const retry = /^\d+$/.test(wait || '') ? Date.now() + Number(wait) * 1000 : Date.parse(wait);
+						const seconds = Math.ceil((retry - Date.now()) / 1000);
+						if (Number.isSafeInteger(seconds) && seconds > 0) failure.retrySeconds = seconds;
+					}
+					if (!failure.httpStatus) diagnostic = schema('meta.status');
+					else if ([401,403,404,429].includes(statusCode) || failure.message === 'USER_LIMIT_EXCEEDED' ||
+							(operation === 'clip-post' && [400,422].includes(statusCode))) diagnostic = ignored;
+					else diagnostic = statusCode === 408 ? {kind:'timeout', statusCode} : {statusCode};
+					throw failure;
+				}
+				const issue = responseIssue(operation, envelope.data, expired());
+				if (issue?.kind === 'schema') { diagnostic = issue; throw new Error('invalid response'); }
+				if (issue) ticket?.failure(issue); else ticket?.success();
+				return envelope.data;
+			} catch (_) {
+				ticket?.failure(timedOut ? {kind:'timeout'} : diagnostic);
+				const code = failure.httpStatus;
+				if (timedOut || code === 408) failure.reason = 'timeout';
+				else if (code === 429 || failure.message === 'USER_LIMIT_EXCEEDED') failure.reason = 'rate-limit';
+				else if (diagnostic.kind === 'schema') {
+					failure.reason = 'invalid-response';
+					failure.missing = diagnostic.missing;
+				} else if (code === 401) failure.reason = 'login-required';
+				else if (code === 403) failure.reason = 'permission-denied';
+				else if (operation === 'clip-post' && [400,422].includes(code)) failure.reason = 'invalid-text';
+				else failure.reason = code ? 'http-error' : 'network';
+				throw failure;
+			} finally {
+				win.clearTimeout(timeout);
+				signal.removeEventListener('abort', stop);
+			}
+		}
+		return {request,beginDiagnostic};
+	}
+	const permissionMessages = {
+		'video-ineligible':'ニコニコでは、この動画の公式クリップ投稿を利用できません。',
+		'login-required':'公式投稿にはニコニコへのログインとXアカウント連携が必要です。',
+		'unlinked':'公式投稿には、ニコニコの視聴ページでXアカウントの連携が必要です。',
+		'permission-denied':'ニコニコでは、この動画またはアカウントの公式クリップ投稿を利用できません。'
+	};
+	function permissionReason(data) {
+		if (data.isClipTweetAllowedVideo === false) return 'video-ineligible';
+		if (!data.isLogin) return 'login-required';
+		if (data.twitterLinkage?.isLinked === false) return 'unlinked';
+		if (data.isClipTweetAllowed !== true || data.twitterLinkage?.isLinked !== true) return 'permission-denied';
+	}
+	function linkedName(permission) {
+		const name = permission.twitterLinkage?.screenName;
+		return typeof name === 'string' ? name.trim() : '';
+	}
+	function read(win,key) {
+		try { return recent.get(key) || win.sessionStorage.getItem(key); }
+		catch (_) { return recent.get(key); }
+	}
+	function store(win,key,value) {
+		if (value) recent.set(key,value); else recent.delete(key);
+		try {
+			if (value) win.sessionStorage.setItem(key,value); else win.sessionStorage.removeItem(key);
+		} catch (_) { /* The tab can continue when session storage is unavailable. */ }
+	}
+	function createTracked(win, request, source, key, first, last, text) {
+		store(win,key + ':creation','unconfirmed');
+		const pending = request('clip-create',source + '/clips','POST',{startTime:String(first),endTime:String(last)})
+			.then(({clipId}) => {
+				store(win,key,JSON.stringify({kind:'clip',id:clipId,start:first/1000,end:last/1000,text}));
+				store(win,key + ':creation',null);
+				return clipId;
+			}).catch(error => {
+				if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') {
+					store(win,key + ':creation',error.retrySeconds ? String(Date.now()+error.retrySeconds*1000) : 'limited');
+				} else if (error.httpStatus >= 400 && error.httpStatus < 500 && ![408,409].includes(error.httpStatus)) {
+					store(win,key + ':creation',null);
+				}
+				throw error;
+			}).finally(() => pendingCreations.delete(key));
+		pendingCreations.set(key,pending);
+		return pending;
+	}
+	function publish(win,spec,onNotify,holdWatchPage) {
+		const {key,videoId,watchId,source,first,last,text,account} = spec;
+		const existing = publications.get(key);
+		if (existing) return existing;
+		const controller = new win.AbortController();
+		const {signal} = controller;
+		let deadline;
+		const {request,beginDiagnostic} = transport(win,videoId,signal,() => Date.now() >= deadline);
+		const job = {phase:'creating',message:'クリップを作成しています…',kind:'clip',id:spec.id,
+			first,last,text,uri:spec.uri,listeners:new Set()};
+		publications.set(key,job);
+		let stage = 'create', details;
+		function emit(phase,message) {
+			job.phase = phase;
+			job.message = message;
+			for (const fn of job.listeners) fn();
+		}
+		function finish(phase,message,reason,error) {
+			details = publicationDetails(stage,reason,error);
+			emit(phase,message);
+		}
+		const releaseLinks = holdWatchPage?.();
+		const stop = () => controller.abort();
+		win.addEventListener('pagehide',stop,{once:true});
+		const remember = (kind,failureNotified) => store(win,key,JSON.stringify({kind,id:job.id,start:first/1000,end:last/1000,text,failureNotified}));
+		const clipPath = () => '/clips/' + encodeURIComponent(job.id);
+		async function poll(posting) {
+			deadline = Date.now() + pollLimit;
+			for (;;) {
+				signal.throwIfAborted();
+				const result = await request(posting ? 'clip-post-status' : 'clip-status',clipPath() + (posting ? '/x-post' : ''));
+				if (result.status === 'DONE' || result.status === 'FAILED' || result.status === 'ERROR') return result;
+				if (Date.now() >= deadline) throw Object.assign(new Error('timeout'),{reason:'timeout'});
+				await new Promise(resolve => {
+					const resume = () => { win.clearTimeout(timer); signal.removeEventListener('abort',resume); resolve(); };
+					const timer = win.setTimeout(resume,pollInterval);
+					signal.addEventListener('abort',resume,{once:true});
+				});
+			}
+		}
+		async function run() {
+			if (!job.id) {
+				job.id = await createTracked(win,request,source,key,first,last,text);
+				signal.throwIfAborted();
+				stage = 'generate';
+				emit('generating','ニコニコでクリップを生成しています…');
+				const clip = await poll(false);
+				if (clip.status !== 'DONE') return finish('clipError','クリップの生成に失敗しました。','generation-failed');
+				job.uri = clip.clipUri;
+			}
+			signal.throwIfAborted();
+			stage = 'verify';
+			emit('verifying','ニコニコで投稿先アカウントを確認しています…');
+			const permission = await request('clip-permission',source + '/tweet-possibility');
+			signal.throwIfAborted();
+			const denied = permissionReason(permission);
+			const current = linkedName(permission);
+			if (denied || current.toLowerCase() !== account.toLowerCase()) {
+				return finish('postFailed',permissionMessages[denied] || '連携アカウントが変更されています。共有画面を開き直してください。',denied || 'account-changed');
+			}
+			if (!account && !spec.id) {
+				return finish('preview','クリップを作成しました。連携先の名前を取得できないため、ニコニコで投稿先を確認してから投稿してください。','account-unknown');
+			}
+			job.kind = 'post';
+			remember('post');
+			stage = 'post';
+			emit('posting','X にクリップを送信しています…');
+			try { await request('clip-post',clipPath() + '/x-post','POST',{text}); }
+			catch (error) {
+				if (error.httpStatus >= 400 && error.httpStatus < 500 && ![408,409].includes(error.httpStatus)) {
+					job.kind = 'clip';
+					remember('clip');
+					if ([400,422].includes(error.httpStatus)) return finish('preview','投稿が受理されませんでした。本文の長さや内容を確認して修正してください。',error.reason,error);
+					if (error.httpStatus === 429) return finish('preview','X の利用上限に達しました。時間をおいてからお試しください。',error.reason,error);
+					return finish('postFailed','投稿が受理されませんでした。公式の視聴ページで連携と利用条件を確認してください。',error.reason,error);
+				}
+			}
+			stage = 'receipt';
+			const result = await poll(true);
+			if (result.status !== 'DONE') {
+				const failure = postFailure(result.failureReason);
+				remember('post',true);
+				return finish('postFailed',failure.message,failure.reason);
+			}
+			beginDiagnostic('clip-post')?.success();
+			remember('posted');
+			finish('posted','X にクリップをポストしました。','posted');
+		}
+		void run().catch(error => {
+			if (signal.aborted) return;
+			details = publicationDetails(stage,error.reason || 'network',error);
+			if (job.kind === 'post') emit('postUnknown','投稿結果を確認できません。「状態を再確認」で結果を確認してください。');
+			else if (job.phase === 'verifying') emit('preview','投稿先を確認できませんでした。まだ投稿していません。もう一度確認してください。');
+			else if (job.id) emit('clipUnknown','生成状況を確認できません。「状態を再確認」で確認してください。');
+			else if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') emit('edit','作成回数の制限に達しました。時間をおいてお試しください。');
+			else if ([401,403].includes(error.httpStatus)) emit('denied','ニコニコで公式クリップを作成できません。ログイン、X連携、動画の共有設定を確認してください。');
+			else emit('createUnknown','クリップの作成結果を確認できません。ニコニコの視聴ページで確認してください。');
+		}).finally(() => {
+			releaseLinks?.();
+			win.removeEventListener('pagehide',stop);
+			publications.delete(key);
+			for (const fn of job.listeners) fn();
+			job.listeners.clear();
+			if (!signal.aborted) onNotify?.('公式クリップ（' + watchId + '）　' + job.message,job.phase === 'posted' ? 'info' : 'warning',details);
+		});
+		return job;
+	}
+	function mount(container, {info, startTime, endTime, text, officialUrl, onUseLocal, sharedEditor = false, onSubmitState, onNotify, holdWatchPage}) {
 		const win = container.ownerDocument.defaultView;
 		const duration = Number(info.duration);
 		const videoId = String(info.videoId || info.watchId || '');
@@ -11792,9 +12259,10 @@ const ShareOfficialClip = (() => {
 		let deadline;
 		let account;
 		let recordKey;
-		let retryAt = 0, retryTimer;
+		let selectedRange;
+		let retryAt = 0, retryTimer, unobserve;
 		container.innerHTML = `
-<p>ニコニコが元動画の指定区間（3〜30秒）を切り出します。コメントと音声はプレビューで確認し、ここから連携済みのXに投稿できます。</p>
+<p>${sharedEditor ? 'ニコニコが元動画の3〜30秒を切り出し、連携したXに直接投稿します。' : 'ニコニコが元動画の指定区間（3〜30秒）を切り出します。コメントと音声はプレビューで確認し、ここから連携済みのXに投稿できます。'}</p>
 <p name="account"></p>
 <div class="shareRow">
 	<label>開始 <input name="clipStart" type="number" min="0" step="0.001"> 秒</label>
@@ -11827,6 +12295,13 @@ const ShareOfficialClip = (() => {
 		const discard = find('discard');
 		const again = find('again');
 		const useLocal = find('useLocal');
+		if (sharedEditor) {
+			start.closest('.shareRow').remove();
+			draft.closest('label').remove();
+			create.remove();
+			post.remove();
+			useLocal.remove();
+		}
 		const limit = Number.isFinite(duration) && duration > 0 ? Math.floor(duration * 1000) / 1000 : Infinity;
 		const seconds = value => Math.round(value * 1000) / 1000;
 		const hasEnd = Number.isFinite(endTime);
@@ -11856,12 +12331,31 @@ const ShareOfficialClip = (() => {
 				last - first >= 3000 && last - first <= 30000 && last <= Math.floor(limit * 1000);
 		}
 		function update() {
+			if (sharedEditor && selectedRange && !publications.has(recordKey) &&
+					['edit','checking','denied','preview','posted','clipError','postFailed'].includes(phase) &&
+					(start.valueAsNumber !== selectedRange.start || end.valueAsNumber !== selectedRange.end)) {
+				if (clipId) {
+					clipId = null;
+					preview.hidden = true;
+					preview.removeAttribute('src');
+					phase = 'edit';
+				}
+				start.value = String(selectedRange.start);
+				end.value = String(selectedRange.end);
+			}
 			const edit = phase === 'edit';
 			start.disabled = end.disabled = !['edit','denied','checking'].includes(phase);
 			find('composer').hidden = !clipId;
-			create.hidden = !!clipId;
+			create.hidden = sharedEditor || !!clipId;
 			create.disabled = !edit || Date.now() < retryAt || !validRange();
 			post.disabled = phase !== 'preview' || !draft.value.trim();
+			if (sharedEditor) {
+				link.hidden = !['denied','postFailed','postUnknown','clipUnknown','clipError','createUnknown'].includes(phase) && !(phase === 'preview' && !account);
+				const busy = ['creating','generating','verifying','posting','discarding'].includes(phase);
+				onSubmitState?.({enabled:(phase === 'preview' || (edit && Date.now() >= retryAt && validRange())) && !!String(text() || '').trim(),
+					busy,phase,account:account || '',status:status.textContent,
+					label:phase === 'preview' ? 'このクリップをXに投稿' : 'クリップを作成してXに投稿'});
+			}
 			draft.disabled = ['posting', 'posted', 'postUnknown'].includes(phase);
 			again.hidden = phase !== 'posted';
 			check.hidden = phase !== 'postUnknown' && phase !== 'clipUnknown';
@@ -11870,7 +12364,7 @@ const ShareOfficialClip = (() => {
 		function state(value, message) {
 			if (lifetime.signal.aborted) return;
 			phase = value;
-			const busy = ['checking','creating','generating','posting','discarding'].includes(phase);
+			const busy = ['checking','creating','generating','verifying','posting','discarding'].includes(phase);
 			status.dataset.busy = String(busy);
 			container.querySelector('[name=editor]').setAttribute('aria-busy', String(busy));
 			status.textContent = message;
@@ -11896,30 +12390,21 @@ const ShareOfficialClip = (() => {
 		function remember(kind) {
 			if (!recordKey) return;
 			const value = kind ? JSON.stringify({kind, id:clipId, start:start.value, end:end.value, text:draft.value}) : null;
-			if (value) recent.set(recordKey, value); else recent.delete(recordKey);
-			try {
-				if (value) win.sessionStorage.setItem(recordKey, value);
-				else win.sessionStorage.removeItem(recordKey);
-			} catch (_) { /* The open tab still retains its request state. */ }
+			store(win,recordKey,value);
 		}
 		function saved() {
 			try {
-				const value = JSON.parse(recent.get(recordKey) || win.sessionStorage.getItem(recordKey) || 'null');
+				const value = JSON.parse(read(win,recordKey) || 'null');
 				if (value && ['clip','post','posted'].includes(value.kind) && value.id) return value;
 			} catch (_) { /* An unavailable or old record cannot be resumed. */ }
 			return null;
 		}
 		function setCreateNotice(value) {
-			const key = recordKey + ':creation';
-			if (value) recent.set(key, value); else recent.delete(key);
-			try {
-				if (value) win.sessionStorage.setItem(key, value); else win.sessionStorage.removeItem(key);
-			} catch (_) { /* An open page still retains its latest state. */ }
+			store(win,recordKey + ':creation',value);
 		}
 		function createNotice() {
 			const key = recordKey + ':creation';
-			let value = recent.get(key);
-			try { value ||= win.sessionStorage.getItem(key); } catch (_) { /* storage unavailable */ }
+			const value = read(win,key);
 			if (!value) return '';
 			if (value === 'unconfirmed') return '前回の作成リクエストが受理されたか確認できません。公式ページで状態を確認してから、必要な場合にもう一度作成してください。';
 			if (value === 'limited') return '前回、ニコニコが短時間の作成リクエストを制限しました。時間をおいてから再度作成するか、「この範囲を端末で作成」を選べます。';
@@ -11935,67 +12420,7 @@ const ShareOfficialClip = (() => {
 			setCreateNotice('');
 			return '';
 		}
-		const beginDiagnostic = operation => typeof RequestDiagnostics === 'undefined' ? null :
-			RequestDiagnostics.begin(operation, videoId, 'response', () => !lifetime.signal.aborted);
-		async function request(operation, path, method = 'GET', fields) {
-			const abort = new win.AbortController();
-			const stop = () => abort.abort();
-			if (lifetime.signal.aborted) throw new Error('closed');
-			if (operation !== 'clip-create') lifetime.signal.addEventListener('abort', stop, {once:true});
-			const ticket = beginDiagnostic(operation);
-			let timedOut = false, diagnostic = {kind:'network'};
-			const timeout = win.setTimeout(() => { timedOut = true; stop(); }, 20000);
-			try {
-				const headers = {'Accept':'application/json', 'X-Frontend-Id':'6', 'X-Frontend-Version':'0'};
-				if (method !== 'GET') headers['X-Request-With'] = win.location.origin;
-				const options = {method, headers, credentials:'include', cache:'no-store', signal:abort.signal};
-				if (fields) options.body = new win.URLSearchParams(fields);
-				const response = await win.fetch(base + path, options);
-				if (abort.signal.aborted) throw new Error('interrupted');
-				if (response.ok && response.status === 204 && (operation === 'clip-delete' || operation === 'clip-post')) {
-					ticket?.success();
-					return;
-				}
-				let envelope;
-				try { envelope = await response.json(); }
-				catch (_) { if (response.ok) { diagnostic = schema('json'); throw new Error('invalid response'); } }
-				if (abort.signal.aborted) throw new Error('interrupted');
-				if (!response.ok || !Number.isInteger(envelope?.meta?.status) ||
-						envelope.meta.status < 200 || envelope.meta.status >= 300) {
-					const error = new Error(envelope?.meta?.errorCode === 'USER_LIMIT_EXCEEDED' ? 'USER_LIMIT_EXCEEDED' : 'request failed');
-					error.httpStatus = response.ok ? envelope?.meta?.status : response.status;
-					if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') {
-						const wait = response.headers?.get?.('Retry-After');
-						const retry = /^\d+$/.test(wait || '') ? Date.now() + Number(wait) * 1000 : Date.parse(wait);
-						if (Number.isFinite(retry) && retry > Date.now()) error.retrySeconds = Math.ceil((retry - Date.now()) / 1000);
-					}
-					const statusCode = error.httpStatus;
-					if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) diagnostic = schema('meta.status');
-					else if ([401,403,404,429].includes(statusCode) || error.message === 'USER_LIMIT_EXCEEDED' ||
-							(operation === 'clip-post' && [400,422].includes(statusCode))) diagnostic = ignored;
-					else diagnostic = statusCode === 408 ? {kind:'timeout', statusCode} : {statusCode};
-					throw error;
-				}
-				const issue = responseIssue(operation, envelope.data, Date.now() >= deadline);
-				if (issue?.kind === 'schema') { diagnostic = issue; throw new Error('invalid response'); }
-				if (issue) ticket?.failure(issue); else ticket?.success();
-				return envelope.data;
-			} catch (error) {
-				ticket?.failure(timedOut ? {kind:'timeout'} : diagnostic);
-				throw error;
-			} finally {
-				win.clearTimeout(timeout);
-				lifetime.signal.removeEventListener('abort', stop);
-			}
-		}
-		function permissionMessage(data) {
-			if (!data || typeof data.isLogin !== 'boolean') return 'ニコニコの公式投稿を利用できるか確認できません。';
-			if (data.isClipTweetAllowedVideo === false) return 'ニコニコでは、この動画の公式クリップ投稿を利用できません。';
-			if (!data.isLogin) return '公式投稿にはニコニコへのログインとXアカウント連携が必要です。';
-			if (data.twitterLinkage?.isLinked !== true) return '公式投稿には、ニコニコの視聴ページでXアカウントの連携が必要です。';
-			if (data.isClipTweetAllowed !== true) return 'ニコニコでは、この動画またはアカウントの公式クリップ投稿を利用できません。';
-			return '';
-		}
+		const {request,beginDiagnostic} = transport(win,videoId,lifetime.signal,() => Date.now() >= deadline);
 		async function load() {
 			if (!videoId || limit < 3) {
 				state('denied', '公式クリップには長さ3秒以上のニコニコ動画が必要です。');
@@ -12005,30 +12430,32 @@ const ShareOfficialClip = (() => {
 			try {
 				const permission = await request('clip-permission', source + '/tweet-possibility');
 				if (lifetime.signal.aborted) return;
-				const reason = permissionMessage(permission);
-				if (reason) { state('denied', reason); return; }
-				account = permission.twitterLinkage.screenName || '';
+				const reason = permissionReason(permission);
+				if (reason) { state('denied', permissionMessages[reason]); return; }
+				account = linkedName(permission);
 				find('account').textContent = account ? '投稿先　@' + account : '連携した X アカウントに投稿';
 				find('editor').hidden = false;
-				recordKey = 'zenzaWatch:officialClip:' + videoId + ':' + account;
+				const prefix = 'zenzaWatch:officialClip:' + videoId + ':';
+				recordKey = prefix + account.toLowerCase();
+				if (recordKey !== prefix + account) {
+					for (const suffix of ['',':creation']) {
+						const oldKey = prefix + account + suffix, value = read(win,oldKey);
+						if (!value) continue;
+						if (!read(win,recordKey + suffix)) store(win,recordKey + suffix,value);
+						store(win,oldKey,null);
+					}
+				}
+				const running = publications.get(recordKey);
+				if (running) { observe(running); return; }
 				if (pendingCreations.has(recordKey)) {
 					state('creating', '先ほどの作成リクエストの結果を確認しています…');
 					await pendingCreations.get(recordKey).catch(() => {});
 					if (lifetime.signal.aborted) return;
 				}
 				const previous = saved();
-				const sameRange = previous && seconds(Number(previous.start)) === initialStart && seconds(Number(previous.end)) === initialEnd;
+				const sameRange = previous && seconds(Number(previous.start)) === start.valueAsNumber && seconds(Number(previous.end)) === end.valueAsNumber;
 				if (previous && (!hasEnd || sameRange || previous.kind === 'post')) {
-					clipId = previous.id;
-					start.value = String(seconds(Number(previous.start)));
-					end.value = String(seconds(Number(previous.end)));
-					draft.value = previous.text;
-					if (previous.kind === 'posted') state('posted', 'X にクリップをポストしました。');
-					else {
-						task = previous.kind;
-						deadline = Date.now() + pollLimit;
-						void poll();
-					}
+					restore(previous);
 				} else state('edit', createNotice());
 				let licensed;
 				try { licensed = (await request('clip-license', source + '/license'))?.isUseLicensedMusic; } catch (_) { /* report uncertainty below */ }
@@ -12042,6 +12469,18 @@ const ShareOfficialClip = (() => {
 			}
 		}
 		const clipPath = () => '/clips/' + encodeURIComponent(clipId);
+		function restore(previous) {
+			clipId = previous.id;
+			start.value = String(seconds(Number(previous.start)));
+			end.value = String(seconds(Number(previous.end)));
+			draft.value = previous.text;
+			if (previous.kind === 'posted') state('posted', 'X にクリップをポストしました。');
+			else {
+				task = previous.kind;
+				deadline = Date.now() + pollLimit;
+				void poll();
+			}
+		}
 		function uncertain() {
 			if (task === 'post') state('postUnknown', '投稿結果を確認できません。「状態を再確認」で結果を確認してください。');
 			else state('clipUnknown', '生成状況を確認できません。「状態を再確認」で確認してください。');
@@ -12056,7 +12495,11 @@ const ShareOfficialClip = (() => {
 				if (result?.status === 'DONE') {
 					if (posting) {
 						beginDiagnostic('clip-post')?.success();
-						remember('posted'); state('posted', 'X にクリップをポストしました。'); return;
+						const recovered = saved()?.kind === 'post';
+						remember('posted');
+						state('posted', 'X にクリップをポストしました。');
+						if (recovered) onNotify?.('公式クリップ（' + (info.watchId || videoId) + '）　X にクリップをポストしました。','info',publicationDetails('receipt','posted'));
+						return;
 					}
 					const uri = new URL(result.clipUri);
 					if (uri.protocol !== 'https:') throw new Error('preview');
@@ -12066,7 +12509,15 @@ const ShareOfficialClip = (() => {
 					return;
 				}
 				if (result?.status === 'FAILED' || result?.status === 'ERROR') {
-					if (posting) state('postFailed', Object.hasOwn(postFailures, result.failureReason) ? postFailures[result.failureReason] : 'X への投稿に失敗しました。');
+					if (posting) {
+						const failure = postFailure(result.failureReason);
+						state('postFailed',failure.message);
+						const previous = saved();
+						if (previous?.kind === 'post' && !previous.failureNotified) {
+							store(win,recordKey,JSON.stringify({...previous,failureNotified:true}));
+							onNotify?.('公式クリップ（' + (info.watchId || videoId) + '）　' + failure.message,'warning',publicationDetails('receipt',failure.reason));
+						}
+					}
 					else state('clipError', 'クリップの生成に失敗しました。');
 					return;
 				}
@@ -12081,26 +12532,11 @@ const ShareOfficialClip = (() => {
 			}
 		}
 		create.onclick = async () => {
-			if (phase !== 'edit' || !validRange() || pendingCreations.has(recordKey)) return;
+			if (phase !== 'edit' || !validRange() || pendingCreations.has(recordKey) || publications.has(recordKey)) return;
 			state('creating', 'クリップの作成をリクエストしています…');
-			setCreateNotice('unconfirmed');
-			const creation = request('clip-create', source + '/clips', 'POST', {
-				startTime:String(Math.round(start.valueAsNumber * 1000)), endTime:String(Math.round(end.valueAsNumber * 1000))
-			}).then(result => {
-				clipId = result.clipId;
-				remember('clip');
-				setCreateNotice('');
-			}).catch(error => {
-				if (error.httpStatus === 429 || error.message === 'USER_LIMIT_EXCEEDED') {
-					setCreateNotice(error.retrySeconds ? String(Date.now() + error.retrySeconds * 1000) : 'limited');
-				} else if (error.httpStatus >= 400 && error.httpStatus < 500 && ![408,409].includes(error.httpStatus)) {
-					setCreateNotice('');
-				}
-				throw error;
-			}).finally(() => pendingCreations.delete(recordKey));
-			pendingCreations.set(recordKey, creation);
 			try {
-				await creation;
+				clipId = await createTracked(win,request,source,recordKey,Math.round(start.valueAsNumber * 1000),
+					Math.round(end.valueAsNumber * 1000),draft.value);
 				if (lifetime.signal.aborted) return;
 				task = 'clip';
 				deadline = Date.now() + pollLimit;
@@ -12112,40 +12548,42 @@ const ShareOfficialClip = (() => {
 				} else state('createUnknown', 'ニコニコでのクリップ作成結果を確認できません。');
 			}
 		};
-		post.onclick = async () => {
-			if (phase !== 'preview' || !draft.value.trim()) return;
-			const body = draft.value;
-			state('posting', 'ニコニコで投稿先アカウントを確認しています…');
-			try {
-				const permission = await request('clip-permission', source + '/tweet-possibility');
+		function observe(job) {
+			unobserve?.();
+			const sync = () => {
 				if (lifetime.signal.aborted) return;
-				const denied = permissionMessage(permission);
-				if (denied || account !== (permission.twitterLinkage.screenName || '')) {
-					state('postFailed', denied || '連携アカウントが変更されています。共有画面を開き直してください。');
-					return;
+				clipId = job.id;
+				task = job.kind;
+				start.value = String(job.first/1000);
+				end.value = String(job.last/1000);
+				draft.value = job.text;
+				if (job.uri && !sharedEditor && preview.getAttribute('src') !== job.uri) {
+					preview.src = job.uri;
+					preview.hidden = false;
 				}
-			} catch (_) {
-				state('preview', 'ニコニコの公式投稿を利用できるか確認できません。まだ投稿していません。');
+				let message = job.message;
+				if (job.phase === 'edit') message = createNotice() || message;
+				state(job.phase,message);
+			};
+			job.listeners.add(sync);
+			unobserve = () => { job.listeners.delete(sync); unobserve = null; };
+			sync();
+		}
+		function submit() {
+			if (lifetime.signal.aborted || !recordKey || publications.has(recordKey) || pendingCreations.has(recordKey)) return;
+			if (phase !== 'preview' && !(sharedEditor && phase === 'edit' && validRange() && Date.now() >= retryAt)) return;
+			const previous = saved();
+			if (previous?.kind === 'post' || (previous?.kind === 'posted' && Number(previous.start) === start.valueAsNumber && Number(previous.end) === end.valueAsNumber)) {
+				restore(previous);
 				return;
 			}
-			task = 'post';
-			remember('post');
-			deadline = Date.now() + pollLimit;
-			state('posting', 'X にクリップを送信しています…');
-			try { await request('clip-post', clipPath() + '/x-post', 'POST', {text:body}); }
-			catch (error) {
-				if (lifetime.signal.aborted) return;
-				if (error.httpStatus >= 400 && error.httpStatus < 500 && error.httpStatus !== 408 && error.httpStatus !== 409) {
-					task = 'clip';
-					remember('clip');
-					if (error.httpStatus === 400 || error.httpStatus === 422) state('preview', '投稿が受理されませんでした。本文の長さや内容を確認して修正してください。');
-					else if (error.httpStatus === 429) state('preview', 'X の利用上限に達しました。時間をおいてからお試しください。');
-					else state('postFailed', '投稿が受理されませんでした。公式の視聴ページで連携と利用条件を確認してください。');
-				} else uncertain();
-				return;
-			}
-			await poll();
-		};
+			const body = sharedEditor ? String(text() || '') : draft.value;
+			if (!body.trim()) return;
+			observe(publish(win,{key:recordKey,account,source,videoId,watchId:String(info.watchId || videoId),
+				id:phase === 'preview' ? clipId : null,uri:preview.getAttribute('src'),
+				first:Math.round(start.valueAsNumber*1000),last:Math.round(end.valueAsNumber*1000),text:body},onNotify,holdWatchPage));
+		}
+		post.onclick = submit;
 		check.onclick = () => {
 			if (!['postUnknown', 'clipUnknown'].includes(phase)) return;
 			deadline = Date.now() + pollLimit;
@@ -12174,7 +12612,8 @@ const ShareOfficialClip = (() => {
 			} catch (_) { state(previous, '削除結果を確認できません。公式の視聴ページで確認してください。'); }
 		};
 		void load();
-		return () => {
+		const cleanup = () => {
+			unobserve?.();
 			lifetime.abort();
 			win.clearTimeout(timer);
 			win.clearTimeout(retryTimer);
@@ -12182,11 +12621,32 @@ const ShareOfficialClip = (() => {
 			preview.removeAttribute('src');
 			if (preview.currentSrc) preview.load();
 		};
+		return Object.assign(cleanup,{submit,refresh:update,setRange(range) {
+			if (!range || lifetime.signal.aborted || !Number.isFinite(range.start) || !Number.isFinite(range.end)) return;
+			selectedRange = {start:seconds(range.start),end:seconds(range.end)};
+			update();
+		}});
 	}
 	return {mount};
 })();
 		return ShareOfficialClip;
 	}
+	function notify(title, message, level, source, details) {
+		const report = level === 'error' || level === 'warning' ? PopupMessage.warning : PopupMessage.notify;
+		report(title + '：' + message,false,{source,details:{operation:source,
+			outcome:level === 'info' ? 'success' : 'failed',...details}});
+	}
+	const notifyClip = (message,level,stage,reason) => {
+		const draft = stage?.startsWith('draft-');
+		const phase = stage || (level === 'info' ? 'export-ready' : 'export-recording');
+		notify('動画クリップ',message,level,draft ? 'x-draft' : 'clip-export',{phase,reason:reason || phase});
+	};
+	const notifyOfficial = (message,level,result) => {
+		const details = result ? {phase:'official-' + result.stage,reason:'official-' + result.reason,
+			lastStage:result.reason === 'posted' ? 'confirmed' : result.postAttempted ? 'attempted' : result.clipReady ? 'clip-ready' : 'submitted',
+			statusCode:result.statusCode,missing:result.missing,retryAfterMs:result.retrySeconds * 1000} : {};
+		notify('ニコニコ連携投稿',message,level,'official-share',details);
+	};
 	let activeClose, officialClipService;
 	const css = `
 .zenzaShare {color-scheme:dark;box-sizing:border-box;width:min(64rem,calc(100vw - 24px));max-width:none;
@@ -12194,20 +12654,15 @@ const ShareOfficialClip = (() => {
 	border-radius:12px;text-align:left;overflow:auto;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 44px #0009}
 .zenzaShare::backdrop {background:#090c1066}
 .zenzaShare summary {cursor:pointer}
-.zenzaShare .shareProvider p {color:#c1ccd7}
-.zenzaShare [data-action=back] {margin-bottom:.5rem}
 .zenzaShare * {box-sizing:border-box}
 .zenzaShare header,.zenzaShare > section {padding:14px 18px}
 .zenzaShare header {display:flex;align-items:center;justify-content:space-between;padding-bottom:4px}
 .zenzaShare h2 {font:700 19px/1.5 system-ui;margin:0;color:inherit}
 .zenzaShare p {margin:6px 0 10px}
 .zenzaShare .shareTitle {color:#c3cdd7;padding:0 18px;overflow-wrap:anywhere}
-.zenzaShare nav,.zenzaShare .shareRow {display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.zenzaShare nav {padding:6px 18px 0;gap:3px;border-bottom:1px solid #475364}
+.zenzaShare .shareRow {display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .zenzaShare button,.zenzaShare a {color:#edf3fb;font:inherit;cursor:pointer}
 .zenzaShare button,.zenzaShare .shareAction {display:inline-block;background:#313a46;border:1px solid #526175;border-radius:6px;padding:5px 10px;text-decoration:none;line-height:1.5}
-.zenzaShare nav button {background:none;border:0;border-bottom:3px solid transparent;border-radius:0;padding:6px 8px}
-.zenzaShare nav button[aria-pressed=true] {border-bottom-color:#6fc5ff;font-weight:700;color:white}
 .zenzaShare :is(a,button):hover {background:#414d5c}
 .zenzaShare :focus-visible {outline:2px solid #85d2ff;outline-offset:2px}
 .zenzaShare input,.zenzaShare textarea,.zenzaShare select {font:inherit;color:#f2f5f8;background:#11161c;border:1px solid #697889;border-radius:4px;padding:5px}
@@ -12231,7 +12686,7 @@ const ShareOfficialClip = (() => {
 .zenzaShare .clipWorkspace [data-role=quality] {display:grid;gap:9px}
 .zenzaShare [data-role=quality] label {display:flex;align-items:center;justify-content:space-between;gap:8px}
 .zenzaShare [data-role=timeline] {min-width:0}
-.zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(54px,calc(100dvh - 425px),420px)}
+.zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(54px,calc(100dvh - 430px),420px)}
 .zenzaShare .clipFooter {border-top:1px solid #465365;margin-top:8px;padding-top:8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
 .zenzaShare .clipFooter .clipActions,.zenzaShare .clipFooter p {margin:0}
 .zenzaShare [role=status][data-busy=true]::before {content:"";display:inline-block;vertical-align:-.1em;width:.8em;height:.8em;margin-right:.45em;border:2px solid #647382;border-top-color:#b8deff;border-radius:50%;animation:zwShareSpin .85s linear infinite}
@@ -12244,36 +12699,52 @@ const ShareOfficialClip = (() => {
 .zenzaShare [data-role=result] video {grid-row:span 2;max-height:clamp(80px,calc(100dvh - 240px),420px)}
 .zenzaShare .zenzaLocalClip:not([data-page=range]) [data-role=timeline],.zenzaShare .zenzaLocalClip:not([data-page=result]) [data-role=result] {display:none}
 .zenzaShare .clipSourceName {max-width:100%}
-.zenzaShare #zenzaShareLink {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
-.zenzaShare #zenzaShareLink > :not(details) {grid-column:1}
-.zenzaShare #zenzaShareLink > details {grid-column:2;grid-row:1/span 5}
-.zenzaShare textarea {resize:none;min-height:0}
-.zenzaShare [data-official-editor] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;align-items:start}
-.zenzaShare [data-official-editor]>:not([name=editor]) {grid-column:1;margin:0}
-.zenzaShare [data-official-editor]>[name=editor] {grid-column:2;grid-row:1/span 6}
+.zenzaShare .shareBody {min-width:0}
+.zenzaShare .shareBodyLabel {display:flex;align-items:baseline;gap:5px 8px;flex-wrap:wrap;justify-content:space-between}
+.zenzaShare [data-link-option] {font-size:.9em}
+.zenzaShare [data-action=tools] {font-size:.9em}
+.zenzaShare [data-text-count] {color:#b9c6d5;font-size:.85em}
+.zenzaShare [name=shareText] {display:block;margin:2px 0;resize:vertical;min-height:2em;max-height:9em}
+.zenzaShare [data-official-editor] p,.zenzaShare [data-selection-note] {margin:3px 0;overflow-wrap:anywhere}
+.zenzaShare .clipFooter [data-action=official-submit] {background:#b8deff;color:#11263c;font-weight:700}
+.zenzaShare .clipFooter .clipActions [data-action=create] {background:#313a46;color:#edf3fb;border-color:#65788c;font-weight:500}
+.zenzaShare #zenzaShareGuide {flex:0 0 100%;font-size:.9em;color:#d4e4f3}
+.zenzaShare [data-page=result] #zenzaShareGuide {display:none}
+.zenzaShare #zenzaShareOfficial {margin-top:4px;font-size:.9em}
+.zenzaShare:has([data-page=result]) #zenzaShareOfficial {display:none}
+.zenzaShare #zenzaShareOfficial summary {width:fit-content;overflow-wrap:anywhere;color:#c9d7e5}
+.zenzaShare [data-official-editor] > :is([name=account],[role=status]) {display:none}
+.zenzaShare [data-official-editor] > p:first-child {display:none}
+.zenzaShare [data-action=x][aria-disabled=true] {opacity:.55;cursor:default}
+.zenzaShare [data-share-tools] {margin-top:5px;border-top:1px solid #465365;padding-top:4px}
+.zenzaShare [data-share-tools] summary {width:fit-content;color:#c7d5e4}
+.zenzaShare .shareToolsGrid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px;align-items:start;padding:5px 0}
+.zenzaShare .shareStatus:empty {display:none}
 .zenzaShare [name=composer] video {max-height:clamp(58px,calc(100dvh - 355px),240px)}
 @media(max-width:559px) {
 	.zenzaShare {width:calc(100vw - 12px)}
-	.zenzaShare .clipWorkspace,.zenzaShare [data-role=result],.zenzaShare #zenzaShareLink,.zenzaShare [data-official-editor] {display:block}
-	.zenzaShare .clipWorkspace [data-role=timeline] {margin-bottom:6px}
+	.zenzaShare .clipWorkspace,.zenzaShare [data-role=result],.zenzaShare .shareToolsGrid {display:block}
+	.zenzaShare .clipWorkspace [data-role=timeline] {margin-bottom:4px}
 	.zenzaShare .zwClipTimeline .zwClipScreen {max-height:clamp(36px,calc(100dvh - 430px),340px)}
-	.zenzaShare .zenzaLocalClip[data-page=range] .zwClipScreen {max-height:clamp(34px,calc(100dvh - 456px),340px)}
-	.zenzaShare #zenzaShareLink:has(details[open]) > :not(details,.shareStatus) {display:none}
-	.zenzaShare [data-official-editor]:has([name=composer]:not([hidden])) > :is(p:not([role=status]),.shareRow:first-of-type) {display:none}
-	.zenzaShare [name=composer] video {max-height:clamp(56px,calc(100dvh - 425px),240px)}
+	.zenzaShare .zenzaLocalClip[data-page=range] .zwClipScreen {max-height:clamp(34px,calc(100dvh - 520px),340px)}
 }
 @media(min-width:560px) and (max-height:470px) {
-	.zenzaShare[open] {display:grid;grid-template-columns:minmax(0,1fr) auto}
-	.zenzaShare > header {grid-column:1}
-	.zenzaShare > nav {grid-column:2;align-self:center;border:none}
-	.zenzaShare > section {grid-column:1/-1}
+	.zenzaShare .shareBody textarea {height:2.65em}
 	.zenzaShare .zenzaLocalClip[data-page=sources] .clipWorkspace {display:block}
+	.zenzaShare .shareToolsGrid {display:block;padding:0}
+	.zenzaShare .shareToolsGrid textarea {height:2.5em;margin:2px 0}
 }
 @media(max-height:550px),(max-width:500px) {
 	.zenzaShare {font-size:13px}
 	.zenzaShare > section,.zenzaShare header {padding:6px 10px}
-	.zenzaShare nav {padding:0 8px}
-	.zenzaShare .clipPages {margin-bottom:5px;gap:1px}
+	.zenzaShare button,.zenzaShare .shareAction {padding:3px 7px}
+	.zenzaShare input,.zenzaShare select,.zenzaShare textarea {padding:3px}
+	.zenzaShare header {gap:6px}
+	.zenzaShare .clipPages {margin-bottom:3px;gap:1px}
+	.zenzaShare .zwClipLength input {width:5ch}
+	.zenzaShare .shareBody [name=shareText] {height:2.4em}
+	.zenzaShare .shareTime {margin-bottom:3px}
+	.zenzaShare .clipWorkspace .clipLayers,.zenzaShare .clipWorkspace .clipRange {margin:3px 0}
 	.zenzaShare .clipPages button {padding:4px 6px}
 	.zenzaShare .zwClipTimeline :is(.zwClipReadout,.zwClipTools,.zwClipRailWrap) {margin:3px 0}
 	.zenzaShare .zwClipTimeline .zwClipRail {height:32px}
@@ -12286,8 +12757,9 @@ const ShareOfficialClip = (() => {
 	.zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:38dvh}
 }
 @media(max-width:380px) {
-	.zenzaShare nav {gap:1px;padding-inline:4px}
-	.zenzaShare nav button {padding-inline:4px}
+	.zenzaShare .clipFooter {gap:4px}
+	.zenzaShare .clipFooter [data-role=createActions] {display:contents}
+	.zenzaShare .clipFooter :is(button,.shareAction) {font-size:12px;padding:3px 4px}
 	.zenzaShare .zenzaLocalClip[data-page=result] video[data-role=preview] {max-height:clamp(64px,calc(100dvh - 392px),210px)}
 }
 `;
@@ -12299,130 +12771,179 @@ const ShareOfficialClip = (() => {
 		dialog.setAttribute('aria-labelledby', 'zenzaShareHeading');
 		dialog.innerHTML = `
 <style></style>
-<header><h2 id="zenzaShareHeading">動画を共有</h2><p class="shareTitle"></p><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
-<nav aria-label="共有方法">
-<button type="button" data-view="local" aria-controls="zenzaShareLocal">ビデオクリップ</button>
-<button type="button" data-view="official" aria-controls="zenzaShareOfficial" title="ニコニコでプレビューを作成してから投稿">Xに直接投稿</button>
-<button type="button" data-view="link" aria-controls="zenzaShareLink">リンク・埋め込み</button>
-</nav>
-<section id="zenzaShareLink" hidden>
-<div class="shareRow shareTime"><label><input type="checkbox" name="includeTime"> 開始位置を指定</label>
-<label><input type="number" name="start" min="0" step="0.01" inputmode="decimal"> 秒から</label></div>
-<label>共有リンク<input readonly name="link" aria-label="共有リンク"></label>
-<label>投稿本文<textarea rows="2"></textarea></label>
-<div class="shareRow"><a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">別タブでXの下書きを開く</a>
-<button type="button" data-copy="link">リンクをコピー</button>
-<button type="button" data-copy="text">本文とリンクをコピー</button>
-<button type="button" data-action="system" hidden>端末で共有</button></div>
-<details><summary>埋め込みコード</summary>
-<label>プレーヤーのサイズ <select name="embedSize"><option value="320,180">小（320 × 180）</option><option value="640,360">中（640 × 360）</option><option value="720,480">大（720 × 480）</option></select></label>
-<label>外部プレーヤー<textarea rows="3" name="embed" readonly></textarea></label>
-<button type="button" data-copy="embed">プレーヤーのコードをコピー</button>
-<label>動画情報とサムネイル<textarea rows="3" name="thumb" readonly></textarea></label>
-<button type="button" data-copy="thumb">動画情報のコードをコピー</button></details>
-<p class="shareStatus" role="status"></p></section>
-<section id="zenzaShareLocal" hidden><div data-clip-editor></div>
-<div class="shareProvider"><button type="button" data-action="official">Xに直接投稿する画面へ</button>
-<p>ニコニコが元動画から3〜30秒の映像を作成します。確認してからXに投稿できます。</p>
-<p data-provider-range hidden></p><p data-provider-layers hidden>ここで選んだコメント・画面エフェクトは、端末で作成するファイルに反映されます。</p>
-</div></section>
-<section id="zenzaShareOfficial" hidden><button type="button" data-action="back">‹ クリップ編集に戻る</button><p data-selection-note hidden></p><div data-official-editor></div></section>`;
+<header><h2 id="zenzaShareHeading">動画を共有</h2><p class="shareTitle"></p><button type="button" data-action="tools" aria-controls="zenzaShareTools" aria-expanded="false">リンク・埋め込み</button><button type="button" data-action="close" aria-label="共有画面を閉じる">閉じる</button></header>
+<section>
+<div class="shareBody" data-share-body>
+<div class="shareBodyLabel"><label for="zenzaShareText">投稿本文</label><label data-link-option title="MP4とテキストの下書きに視聴ページのリンクを添える"><input type="checkbox" name="includeLink" checked> 下書きに動画リンク</label><span data-text-count></span></div>
+<textarea id="zenzaShareText" name="shareText" rows="2"></textarea></div>
+<div id="zenzaShareLocal" data-clip-editor></div>
+<p id="zenzaShareGuide">3〜30秒の区間を連携先のXへ自動投稿します。元のタブを残せば、投稿中もこの画面を閉じられます。</p>
+<button type="button" data-action="official-submit" disabled aria-describedby="zenzaShareGuide">ニコニコでXに投稿</button>
+<a class="shareAction" data-action="x" target="_blank" rel="noopener noreferrer">本文でX下書き</a>
+<div id="zenzaShareOfficial"><p data-selection-note hidden></p>
+<details><summary><span aria-live="polite">ニコニコ連携の詳細</span></summary><div data-official-editor></div></details></div>
+<div id="zenzaShareTools" data-share-tools hidden></div></section>`;
 		const find = selector => dialog.querySelector(selector);
 		find('style').textContent = css;
 		find('.shareTitle').title = find('.shareTitle').textContent = info.title || info.watchId;
-		const time = find('[name=start]');
-		const useTime = find('[name=includeTime]');
-		const message = find('#zenzaShareLink textarea');
+		const message = find('[name=shareText]');
+		const includeLink = find('[name=includeLink]');
+		const draftLink = find('[data-action=x]');
+		const officialAction = find('[data-action=official-submit]');
+		let selection = {}, textEdited = false, savedWatchLink = true;
+		let localEditor, officialEditor;
+		let officialState = {enabled:false};
 		const duration = Math.max(0, Math.floor(Number(info.duration) || 0));
 		const startTime = Math.min(Math.max(0, Math.floor((Number(position) || 0) * 100) / 100), duration || Infinity);
-		time.value = String(startTime);
-		if (duration) { time.max = String(duration); }
 		const tags = [info.videoId, info.isChannel && 'nicoch'].filter(Boolean).map(tag => '#' + tag);
 		const length = duration ? '(' + textUtil.secToTime(duration) + ')' : '';
-		message.value = [(info.title || '').replace(/@/g, '@ ') + length, ...tags].join(' ').trim();
+		const defaultText = [(info.title || '').replace(/@/g, '@ ') + length, ...tags].join(' ').trim();
+		message.value = defaultText;
 		const watch = new URL('https://www.nicovideo.jp/watch/' + info.watchId);
 		const official = new URL(watch);
 		official.searchParams.set('zenza_official', '1');
 		if (startTime) { official.searchParams.set('from', String(startTime)); }
-		const status = find('.shareStatus');
-		const link = find('[name=link]');
-		const embed = find('[name=embed]');
-		const thumb = find('[name=thumb]');
-		const size = find('[name=embedSize]');
-		const attr = value => String(value).replace(/[&<>"']/g, char =>
-			({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'})[char]);
 		const videoId = /^(?:[a-z]{2})?\d+$/i.test(info.videoId) ? info.videoId : info.watchId;
 		const shorts = location.hostname === 'www.nicovideo.jp' && location.pathname === '/shorts/' + videoId;
-		function update() {
-			const url = new URL('https://www.nicovideo.jp/' + (shorts ? 'shorts/' : 'watch/') + videoId);
-			const embedUrl = new URL('https://embed.nicovideo.jp/watch/' + videoId + '/script');
-			const [width, height] = size.value.split(',');
-			embedUrl.searchParams.set('w', width); embedUrl.searchParams.set('h', height);
-			const sec = Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity);
-			if (useTime.checked && sec) {
-				url.searchParams.set('from', String(sec));
-				embedUrl.searchParams.set('from', String(sec));
-			}
-			time.disabled = !useTime.checked;
-			link.value = url.href;
-			const title = attr(info.title || videoId);
-			embed.value = '<script type="application/javascript" src="' + attr(embedUrl.href) + '"></' + 'script>' +
-				'<noscript><a href="' + attr(url.href) + '">' + title + '</a></noscript>';
-			thumb.value = '<iframe width="312" height="176" src="https://ext.nicovideo.jp/thumb/' + videoId +
-				'" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="' + attr(watch.href) + '">' +
-				title + '</a></iframe>';
-			const draftLink = find('[data-action=x]');
+		const shareUrl = new URL('https://www.nicovideo.jp/' + (shorts ? 'shorts/' : 'watch/') + videoId);
+		const textCount = find('[data-text-count]');
+		function updateDraft() {
 			const intent = new URL('https://x.com/intent/tweet');
 			intent.searchParams.set('text', message.value);
-			intent.searchParams.set('url', url.href);
-			draftLink.href = intent.href;
-			status.textContent = '';
+			if (includeLink.checked) intent.searchParams.set('url', shareUrl.href);
+			if (message.value.trim() || includeLink.checked) {
+				draftLink.href = intent.href;
+				draftLink.removeAttribute('aria-disabled');
+			} else {
+				draftLink.removeAttribute('href');
+				draftLink.setAttribute('aria-disabled','true');
+			}
+			textCount.textContent = Array.from(message.value).length + '文字';
 		}
-		find('[data-action=x]').addEventListener('click', update);
-		for (const input of [time, useTime, message, size]) { input.addEventListener('input', update); }
-		time.addEventListener('change', () => {
-			time.value = String(Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity));
-			update();
+		includeLink.addEventListener('input', updateDraft);
+		message.addEventListener('input', () => {
+			textEdited = true;
+			officialEditor?.refresh?.();
+			updateDraft();
 		});
-		for (const button of dialog.querySelectorAll('[data-copy]')) {
-			button.onclick = async () => {
-				const values = {link:link.value, text:[message.value, link.value].filter(Boolean).join('\n'), embed:embed.value, thumb:thumb.value};
-				try {
-					if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(values[button.dataset.copy]); }
-					else {
-						const temp = document.createElement('textarea');
-						temp.value = values[button.dataset.copy]; dialog.append(temp); temp.select();
-						let copied;
-						try { copied = document.execCommand('copy'); } finally { temp.remove(); button.focus(); }
-						if (!copied) { throw new Error('copy'); }
-					}
-					status.textContent = 'コピーしました。';
-				} catch (_) { status.textContent = 'コピーできませんでした。上の欄を選択してコピーできます。'; }
-			};
-		}
-		const system = find('[data-action=system]');
-		system.hidden = !navigator.share;
-		system.onclick = async () => {
-			try { await navigator.share({title:info.title, text:message.value, url:link.value}); }
-			catch (error) { if (error.name !== 'AbortError') { status.textContent = '端末の共有画面を開けませんでした。'; } }
+		const toolsButton = find('[data-action=tools]');
+		const shareTools = find('[data-share-tools]');
+		toolsButton.onclick = () => {
+			if (!shareTools.firstChild) mountTools();
+			shareTools.hidden = !shareTools.hidden;
+			toolsButton.setAttribute('aria-expanded', String(!shareTools.hidden));
+			localHost.hidden = !shareTools.hidden;
+			find('#zenzaShareOfficial').hidden = !shareTools.hidden;
+			if (!shareTools.hidden) localEditor?.stopPreview?.();
+			dialog.scrollTop = 0;
 		};
-		const mounted = new Map();
-		const sections = {link:find('#zenzaShareLink'), official:find('#zenzaShareOfficial'), local:find('#zenzaShareLocal')};
-		const provider = find('.shareProvider');
-		const prepare = find('[data-action=official]');
-		const rangeNote = find('[data-provider-range]');
-		let selection = {};
+		function mountTools() {
+			shareTools.innerHTML = `<div class="shareToolsGrid"><details name="zenzaShareCopyTools" open><summary>共有リンク</summary>
+<div class="shareRow shareTime"><label><input type="checkbox" name="includeTime"> 開始位置を指定</label>
+<label><input type="number" name="linkStart" min="0" step="0.01" inputmode="decimal"> 秒から</label></div>
+<label>共有リンク<input readonly name="link" aria-label="共有リンク"></label>
+<div class="shareRow"><button type="button" data-copy="link">リンクをコピー</button>
+<button type="button" data-copy="text">本文とリンクをコピー</button>
+<button type="button" data-action="system" hidden>端末で共有</button></div></details>
+<details data-embed-tools name="zenzaShareCopyTools"><summary>埋め込みコード</summary>
+<label>プレーヤーのサイズ <select name="embedSize"><option value="320,180">小（320 × 180）</option><option value="640,360">中（640 × 360）</option><option value="720,480">大（720 × 480）</option></select></label>
+<label>外部プレーヤー<textarea rows="2" name="embed" readonly></textarea></label>
+<button type="button" data-copy="embed">プレーヤーのコードをコピー</button>
+<label>動画情報とサムネイル<textarea rows="2" name="thumb" readonly></textarea></label>
+<button type="button" data-copy="thumb">動画情報のコードをコピー</button></details></div>
+<p class="shareStatus" role="status"></p>`;
+			const time = find('[name=linkStart]');
+			const useTime = find('[name=includeTime]');
+			time.value = String(startTime);
+			if (duration) time.max = String(duration);
+			const status = shareTools.querySelector('.shareStatus');
+			const link = find('[name=link]');
+			const embed = find('[name=embed]');
+			const thumb = find('[name=thumb]');
+			const size = find('[name=embedSize]');
+			const attr = value => String(value).replace(/[&<>"']/g, char =>
+				({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'})[char]);
+			const seconds = () => Math.min(Math.max(0, Math.round((Number(time.value) || 0) * 100) / 100), duration || Infinity);
+			function updateTools() {
+				const embedUrl = new URL('https://embed.nicovideo.jp/watch/' + videoId + '/script');
+				const [width, height] = size.value.split(',');
+				embedUrl.searchParams.set('w', width); embedUrl.searchParams.set('h', height);
+				const sec = seconds();
+				shareUrl.searchParams.delete('from');
+				if (useTime.checked && sec) {
+					shareUrl.searchParams.set('from', String(sec));
+					embedUrl.searchParams.set('from', String(sec));
+				}
+				time.disabled = !useTime.checked;
+				link.value = shareUrl.href;
+				const title = attr(info.title || videoId);
+				embed.value = '<script type="application/javascript" src="' + attr(embedUrl.href) + '"></' + 'script>' +
+					'<noscript><a href="' + attr(shareUrl.href) + '">' + title + '</a></noscript>';
+				thumb.value = '<iframe width="312" height="176" src="https://ext.nicovideo.jp/thumb/' + videoId +
+					'" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="' + attr(watch.href) + '">' +
+					title + '</a></iframe>';
+				status.textContent = '';
+				updateDraft();
+			}
+			for (const input of [time, useTime, size]) input.addEventListener('input', updateTools);
+			time.addEventListener('change', () => {
+				time.value = String(seconds());
+				updateTools();
+			});
+			for (const button of shareTools.querySelectorAll('[data-copy]')) {
+				button.onclick = async () => {
+					const values = {link:link.value, text:[message.value, link.value].filter(Boolean).join('\n'), embed:embed.value, thumb:thumb.value};
+					try {
+						if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(values[button.dataset.copy]); }
+						else {
+							const temp = document.createElement('textarea');
+							temp.value = values[button.dataset.copy]; dialog.append(temp); temp.select();
+							let copied;
+							try { copied = document.execCommand('copy'); } finally { temp.remove(); button.focus(); }
+							if (!copied) { throw new Error('copy'); }
+						}
+						status.textContent = 'コピーしました。';
+					} catch (_) { status.textContent = 'コピーできませんでした。上の欄を選択してコピーできます。'; }
+				};
+			}
+			const system = find('[data-action=system]');
+			system.hidden = !navigator.share;
+			system.onclick = async () => {
+				try { await navigator.share({title:info.title, text:message.value, url:link.value}); }
+				catch (error) { if (error.name !== 'AbortError') { status.textContent = '端末の共有画面を開けませんでした。'; } }
+			};
+			updateTools();
+		}
+		const body = find('[data-share-body]');
+		const localHost = find('#zenzaShareLocal');
+		const officialDetails = find('#zenzaShareOfficial details');
+		const officialSummary = officialDetails.querySelector('summary span');
+		const guide = find('#zenzaShareGuide');
+		const rangeNote = find('[data-selection-note]');
+		function officialAvailability() {
+			const length = Math.round(selection.end * 1000) - Math.round(selection.start * 1000);
+			const valid = Number.isFinite(length) && length >= 3000 && length <= 30000;
+			const notes = [];
+			if (selection.isFile) notes.push('選んだファイルはZenzaでMP4にできます。ニコニコ連携は視聴ページの元動画のみ使えます。');
+			else if (!valid) notes.push('ニコニコ連携では、元動画から3〜30秒の区間を選んでください。');
+			if (!selection.isFile && (selection.comments || selection.effects)) notes.push('コメントはニコニコ側の設定を使います。Zenzaの画面エフェクトはMP4で使えます。');
+			rangeNote.textContent = notes.join(' ');
+			rangeNote.hidden = !notes.length;
+			officialAction.disabled = !officialState.enabled || !valid || !!selection.isFile || !!selection.recording;
+			officialAction.textContent = officialState.label === 'このクリップをXに投稿' ? 'ニコニコでこのクリップをXに投稿' : 'ニコニコでXに投稿';
+		}
 		function showSelection(next) {
+			if (!!selection.isFile !== !!next.isFile) {
+				if (next.isFile) savedWatchLink = includeLink.checked;
+				includeLink.checked = next.isFile ? false : savedWatchLink;
+				if (!textEdited) message.value = next.isFile ? '' : defaultText;
+				updateDraft();
+			}
 			selection = next;
-			provider.hidden = next.isFile;
-			find('[data-view=official]').disabled = prepare.disabled = next.recording;
-			find('[data-view=link]').disabled = next.recording;
-			const length = next.end - next.start;
-			prepare.textContent = length > 30 ? '先頭30秒をXに直接投稿する画面へ' : 'Xに直接投稿する画面へ';
-			rangeNote.hidden = !(length > 30 || length < 3);
-			rangeNote.textContent = length > 30 ? 'ニコニコには選択範囲の先頭30秒を渡します。' :
-				'ニコニコでの投稿には3秒以上の範囲を指定してください。';
-			find('[data-provider-layers]').hidden = !next.comments && !next.effects;
+			guide.hidden = officialDetails.hidden = !!next.isFile;
+			if (!next.isFile && localEditor) mountOfficialEditor();
+			if (!next.isFile) officialEditor?.setRange?.(next);
+			officialAvailability();
 		}
 		let resumeVideo;
 		function holdPlayback() {
@@ -12440,97 +12961,62 @@ const ShareOfficialClip = (() => {
 			resumeVideo?.();
 			resumeVideo = null;
 		}
-		function select(view) {
-			if (view === 'link') {
-				update();
-				releasePlayback();
-			} else holdPlayback();
-			if (view !== 'local') { mounted.get('local')?.stopPreview?.(); }
-			if (view !== 'official' && mounted.has('official')) {
-				mounted.get('official')();
-				mounted.delete('official');
-				find('[data-official-editor]').replaceChildren();
-			}
-			for (const [key, el] of Object.entries(sections)) { el.hidden = key !== view; }
-			for (const btn of dialog.querySelectorAll('[data-view]')) {
-				btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
-			}
-			if (view === 'official' && !mounted.has(view)) {
-				const note = find('[data-selection-note]');
-				if (selection.isFile) {
-					note.textContent = 'ニコニコ連携で投稿できるのは視聴ページの元動画です。選んだファイルはクリップ編集で作成し、完成した動画からXに添付できます。';
-					note.hidden = false;
-					return;
+		function mountEditor() {
+			holdPlayback();
+			localEditor = ShareLocalClip.mount(localHost, {
+				qualityConfig:playerContext?.config,
+				onBackgroundFinish:notifyClip,
+				onOpenOfficial() { officialDetails.open = true; officialDetails.querySelector('summary').focus(); },
+				title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
+				getThumbnail:playerContext?.getThumbnail, clipSession:playerContext?.clipSession, onSelectionChange:showSelection,
+				getCurrentHlsSource:playerContext?.getCurrentHlsSource, getFragmentCache:playerContext?.getFragmentCache,
+				getCurrentHlsRendition:playerContext?.getCurrentHlsRendition,
+				getStoryboardInterval:playerContext?.getStoryboardInterval,
+				getCurrentFile(video, signal) {
+					const src = playerContext?.getCurrentFileSource?.(video);
+					if (!src) return Promise.resolve(null);
+					return SharePlaybackFile.get(video, src, {
+						signal, keepOriginal:true, isCurrent:() => playerContext.getCurrentFileSource(video) === src
+					});
+				},
+				createFrameRenderer: options => ShareClipRenderer.create({...playerContext, ...options}),
+				getShareText: () => [message.value, includeLink.checked && shareUrl.href].filter(Boolean).join('\n')
+			});
+			localHost.querySelector('[data-share-composer-slot]').append(body);
+			const actions = localHost.querySelector('[data-role=createActions]');
+			actions.prepend(officialAction);
+			actions.after(draftLink);
+			actions.before(guide);
+			if (!selection.isFile) mountOfficialEditor();
+			officialAvailability();
+			localEditor?.startPreview?.();
+		}
+		function mountOfficialEditor() {
+			if (officialEditor) return;
+			officialClipService ||= createOfficialClipService();
+			officialEditor = officialClipService.mount(find('[data-official-editor]'), {
+				info, startTime:selection.start, endTime:selection.end, text:() => message.value,
+				officialUrl:official.href, sharedEditor:true,
+				onNotify:notifyOfficial, holdWatchPage:ShareClipJobs.keepWatchLinksInNewTabs,
+				onSubmitState(state) {
+					officialState = state;
+					const destination = state.account ? '投稿先 @' + state.account : '';
+					const summary = [destination,state.status].filter(Boolean).join('　') || 'ニコニコ連携の詳細';
+					if (officialSummary.textContent !== summary) officialSummary.textContent = summary;
+					officialAvailability();
 				}
-				const start = Number.isFinite(selection.start) ? selection.start : startTime;
-				const end = Number.isFinite(selection.end) ? Math.min(selection.end, start + 30) : undefined;
-				const lengthMs = Math.round(selection.end * 1000) - Math.round(selection.start * 1000);
-				const differences = [];
-				if (lengthMs > 30000) differences.push('公式クリップの初期範囲は選択区間の先頭30秒です。');
-				else if (lengthMs < 3000) differences.push('公式クリップには3秒以上の区間を指定してください。');
-				if (selection.comments || selection.effects) differences.push('コメント表示はニコニコ側の設定になり、ZenzaWatchの画面エフェクトは含まれません。');
-				if (lengthMs > 30000 || selection.comments || selection.effects) differences.push('元の編集内容を使うには、クリップ編集に戻ってください。');
-				note.textContent = differences.join('');
-				note.hidden = !differences.length;
-				officialClipService ||= createOfficialClipService();
-				mounted.set(view, officialClipService.mount(find('[data-official-editor]'), {
-					info, startTime:start, endTime:end,
-					text:() => message.value, officialUrl:official.href,
-					onUseLocal(range) {
-						select('local');
-						sections.local.querySelector('[data-editor-page=range]')?.click();
-						const valid = mounted.get('local')?.setRange?.(range);
-						const create = sections.local.querySelector('[data-action=create]');
-						if (valid && create && !create.disabled) {
-							create.click();
-						} else {
-							find('[data-view=local]').focus({preventScroll:true});
-						}
-					}
-				}));
-			}
-			if (view === 'local' && !mounted.has(view)) {
-				mounted.set(view, ShareLocalClip.mount(find('[data-clip-editor]'), {
-					qualityConfig:playerContext?.config,
-					onBackgroundFinish:message => PopupMessage.notify(message),
-					onOpenOfficial:button => openOfficial(button),
-					title:info.title, startTime, getCurrentVideo, seekCurrentVideo:playerContext?.seekCurrentVideo,
-					getThumbnail:playerContext?.getThumbnail, clipSession:playerContext?.clipSession, onSelectionChange:showSelection,
-					getCurrentHlsSource:playerContext?.getCurrentHlsSource, getFragmentCache:playerContext?.getFragmentCache,
-					getCurrentHlsRendition:playerContext?.getCurrentHlsRendition,
-					getStoryboardInterval:playerContext?.getStoryboardInterval,
-					getCurrentFile(video, signal) {
-						const src = playerContext?.getCurrentFileSource?.(video);
-						if (!src) return Promise.resolve(null);
-						return SharePlaybackFile.get(video, src, {
-							signal, keepOriginal:true, isCurrent:() => playerContext.getCurrentFileSource(video) === src
-						});
-					},
-					createFrameRenderer: options => ShareClipRenderer.create({...playerContext, ...options}),
-					getShareText: () => [message.value, link.value].filter(Boolean).join('\n')
-				}));
-			}
-			const providerSlot = sections.local.querySelector('[data-provider-slot]');
-			if (providerSlot && provider.parentNode !== providerSlot) providerSlot.append(provider);
-			if (view === 'local') mounted.get('local')?.startPreview?.();
-			dialog.scrollTop = 0;
+			});
+			officialEditor.setRange?.(selection);
 		}
-		let officialOpener;
-		function openOfficial(button) {
-			officialOpener = button;
-			select('official');
-			find('[data-action=back]').focus();
-		}
-		prepare.onclick = () => openOfficial(prepare);
-		find('[data-action=back]').onclick = () => { select('local'); officialOpener?.focus(); };
-		for (const btn of dialog.querySelectorAll('[data-view]')) {
-			btn.onclick = () => btn.dataset.view === 'official' ? openOfficial(btn) : select(btn.dataset.view);
-		}
+		officialAction.onclick = () => {
+			if (!officialAction.disabled) officialEditor.submit();
+		};
 		const previousFocus = document.activeElement;
 		function close() {
 			if (activeClose !== close) { return; }
 			activeClose = null;
-			for (const cleanup of mounted.values()) { if (typeof cleanup === 'function') { cleanup(); } }
+			officialEditor?.();
+			localEditor?.();
 			releasePlayback();
 			if (dialog.open) { dialog.close(); }
 			dialog.remove();
@@ -12542,10 +13028,10 @@ const ShareOfficialClip = (() => {
 		dialog.addEventListener('close', close);
 		for (const type of ['keydown', 'keyup', 'keypress']) { dialog.addEventListener(type, event => event.stopPropagation()); }
 		(document.fullscreenElement || document.body).append(dialog);
-		update();
+		updateDraft();
 		dialog.showModal();
 		window.dispatchEvent(new Event('zenza-share-panel-open'));
-		select('local');
+		mountEditor();
 	}
 	return {open, close() { if (activeClose) { activeClose(); } }};
 });}};
@@ -13141,10 +13627,10 @@ const startup = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.492-task1116';
+    var VER = '2.7.494-task1118';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-20 16:57Z 7b396f03';
+    var BUILD = '2026-11-21 12:01Z 686932c0';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -19571,6 +20057,19 @@ const PopupMessage = (() => {
 			animation: zenza-popup-message-animation 5s;
 			animation-fill-mode: forwards;
 		}
+		.zenzaShareNoticeHost {
+			all: initial; position: fixed; inset: max(12px,env(safe-area-inset-top)) 12px auto auto;
+			z-index: 2147483647; width: min(28rem,calc(100vw - 24px)); margin: 0; padding: 0;
+			background: transparent; border: 0; overflow: visible; pointer-events: none;
+		}
+		.zenzaShareNoticeHost::backdrop {background:transparent;pointer-events:none}
+		.zenzaShareNoticeHost .zenzaPopupMessage {
+			white-space: normal; overflow-wrap: anywhere; font: 600 15px/1.5 system-ui,sans-serif;
+			animation-duration: 7s;
+		}
+		@media(prefers-reduced-motion:reduce) {
+			.zenzaShareNoticeHost .zenzaPopupMessage {animation:none;opacity:1}
+		}
 		.zenzaPopupMessage.notify {
 			background: var(--notify-color, #0c0);
 		}
@@ -19651,12 +20150,66 @@ const PopupMessage = (() => {
 				d.addEventListener('animationend', () => d.remove(), { once: true });
 				return d;
 		};
-		const show = (msg) => {
+		let noticeHost;
+		const waitingNotices = [];
+		function showShareNotice(msg) {
+				if (document.hidden) {
+						waitingNotices.push(msg);
+						if (waitingNotices.length > 3)
+								waitingNotices.shift();
+						document.addEventListener('visibilitychange', showWaiting);
+						return;
+				}
+				if (!noticeHost?.isConnected) {
+						noticeHost = document.createElement('div');
+						noticeHost.className = 'zenzaShareNoticeHost';
+						noticeHost.setAttribute('role', 'status');
+						noticeHost.setAttribute('aria-live', 'polite');
+						const supportsPopover = typeof noticeHost.showPopover === 'function';
+						if (supportsPopover)
+								noticeHost.setAttribute('popover', 'manual');
+						const parent = supportsPopover ? document.body :
+								document.querySelector('dialog[open].zenzaShare') || document.fullscreenElement || document.body;
+						parent.appendChild(noticeHost);
+						if (supportsPopover) {
+								try {
+										noticeHost.showPopover();
+								}
+								catch (_) {
+										noticeHost.removeAttribute('popover');
+								}
+						}
+				}
+				const host = noticeHost;
+				host.prepend(msg);
+				while (host.childElementCount > 3)
+						host.lastElementChild?.remove();
+				window.setTimeout(() => {
+						msg.remove();
+						if (!host.childElementCount) {
+								host.remove();
+								if (host === noticeHost)
+										noticeHost = undefined;
+						}
+				}, 7200);
+		}
+		function showWaiting() {
+				if (document.hidden)
+						return;
+				document.removeEventListener('visibilitychange', showWaiting);
+				for (const msg of waitingNotices.splice(0))
+						showShareNotice(msg);
+		}
+		const show = (msg, shareNotice = false) => {
 				initialize();
+				if (shareNotice) {
+						showShareNotice(msg);
+						return;
+				}
 				const target = document.querySelector('.popupMessageContainer');
 				(target || document.body).prepend(msg);
 		};
-		const nt = (msg, allowHtml, type, consoleStyle) => {
+		const nt = (msg, allowHtml, type, consoleStyle, journal) => {
 				if (msg === undefined) {
 						msg = '不明なエラー';
 						window.console.error('undefined message sent');
@@ -19667,16 +20220,16 @@ const PopupMessage = (() => {
 								category: 'general',
 								level: type === 'alert' ? 'error' : type === 'warning' ? 'warning' : 'info',
 								message: allowHtml ? msg.replace(/<[^>]*>/g, ' ') : msg,
-								source: 'popup'
+								source: journal?.source || 'popup', details: journal?.details
 						});
 				}
 				catch (_) { /* history never interferes with notifications */ }
 				console.log('%c%s', consoleStyle, msg);
-				show(create(msg, type, allowHtml));
+				show(create(msg, type, allowHtml), journal?.source === 'x-draft' || journal?.source === 'official-share' || journal?.source === 'clip-export');
 		};
-		const notify = (msg, allowHtml = false) => nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;');
+		const notify = (msg, allowHtml = false, journal) => nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;', journal);
 		const alert = (msg, allowHtml = false) => nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
-		const warning = (msg, allowHtml = false) => nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;');
+		const warning = (msg, allowHtml = false, journal) => nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;', journal);
 		const debug = (msg, allowHtml = false) => nt(msg, allowHtml, 'debug', 'background: #333; color: #fff; padding: 8px;');
 		return { notify, alert, warning, debug };
 })();
@@ -33723,6 +34276,7 @@ class CommentHistoryRenderer {
 	#player;#Chat;#VM;#yield;#revision=0;#history=new Set();#deleted=new Set();
 	#retained=new Map();
 	constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
+		player._viewModel.isHistoryChat = vm => this.has(vm._nicoChat);
 		this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
 	}
 	#groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
@@ -33735,15 +34289,34 @@ class CommentHistoryRenderer {
 		if(retain){for(const chat of this.#history)this.#retained.set(identity(chat),chat);}
 		else this.#retained.clear();
 		if(!this.#history.size)return;
-		for(const group of this.#groups()){
-			if(!group)continue;
-			group._members=group._members.filter(chat=>!this.#history.has(chat));
+		const groups=this.#groups().filter(Boolean);
+		const remaining=groups.map(group=>group._members.filter(chat=>!this.#history.has(chat)));
+		this.#player._model._nicoChatFilter.prepareHistoryPool?.(remaining.flat()).commit();
+		for(const [i,group] of groups.entries()){
+			group._members=remaining[i];
 			group._filteredMembers=[];group._filteredMembersValid=false;
 			group.onChange(null);
 		}
 		this.#history.clear();this.#player._view?.refresh();this.#player._model.emit('change');
 	}
-	async apply(data,{isCurrent=()=>true,signal}={}){
+	async apply(data,control){
+		const vm=this.#player._viewModel;
+		const layout={pending:true};
+		vm.pendingHistoryLayout=layout;
+		try{
+			const result=await this.#prepare(data,control);
+			const model=this.#player._model;
+			layout.sources=[model.nakaGroup._members,model.topGroup._members,model.bottomGroup._members];
+			return result;
+		}catch(error){
+			layout.error=error;
+			throw error;
+		}finally{
+			layout.pending=false;
+			if(vm.pendingHistoryLayout===layout)vm.pendingHistoryLayout=null;
+		}
+	}
+	async #prepare(data,{isCurrent=()=>true,signal}={}){
 		const revision=++this.#revision,model=this.#player._model;
 		const valid=()=>revision===this.#revision&&!signal?.aborted&&isCurrent();
 		const check=()=>{if(!valid())throw abortError();};
@@ -33791,15 +34364,21 @@ class CommentHistoryRenderer {
 				const normals=groups.flatMap(g=>g._members.filter(c=>!this.#history.has(c)));
 				const normalKeys=new Set(normals.map(identity));
 				const extras=added.filter(c=>!normalKeys.has(identity(c))&&!this.#deleted.has(identity(c)));
-				const all=normals.concat(extras);
+				const all=normals.concat(extras), filter=model._nicoChatFilter;
+				const filterRevision=filter.compositeRevision;
+				const projection=filter.prepareHistoryPool?.(all);
+				const byType=[[],[],[]];
+				for(const chat of all)byType[chat.type===types[0]?0:chat.type===types[2]?2:1].push(chat);
 				for(let i=0;i<groups.length;i++){
 					check();
-					const chats=all.filter(c=>c.type===types[i]||(i===1&&!types.includes(c.type)));
-					const filtered=model._nicoChatFilter.applyFilter(chats),members=[];
+					const chats=byType[i];
+					const filtered=projection?projection.filter(chats):filter.applyFilter(chats),members=[];
 					const entry={chats,filtered,members,group:groups[i],vm:vms[i],sorted:[],maxDuration:0};prepared.push(entry);
+					let sliceEnd=Date.now()+4;
 					for(const c of filtered){
-						members.push(this.#VM.create(c,vms[i]._offScreen));
-						if(members.length%100===0){await this.#yield();check();}
+						const display=projection?projection.displayChat(c):c;
+						members.push(this.#VM.create(display,vms[i]._offScreen));
+						if(members.length%100===0||Date.now()>=sliceEnd){await this.#yield();check();sliceEnd=Date.now()+4;}
 					}
 					this.#VM.prepareCommentArt?.(members);
 					const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
@@ -33814,13 +34393,19 @@ class CommentHistoryRenderer {
 					}
 				}
 				check();
-				if(groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
+				if(filterRevision!==filter.compositeRevision||groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
+				projection?.commit();
 				this.#player._view?.clear?.();
 				for(const e of prepared){
 					for(const c of e.chats)c.group=e.group;
 					e.group._members=e.chats;e.group._filteredMembers=e.filtered;e.group._filteredMembersValid=true;
+					e.group._filteredRevision=filter.compositeRevision||0;
+					if(e.filtered===e.chats)e.group._filteredMembers=e.filtered.slice();
+					if(projection)for(let i=0;i<e.members.length;i++)e.members[i]._nicoChat=e.filtered[i];
 					const old=e.vm._members;
 					e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
+					e.vm._completedLayout=e.vm._lastUpdate;
+					e.vm._layoutFilterRevision=filter.displayRevision||0;
 					for(const m of old)m.reset();
 				}
 				const next=new Set(extras);
@@ -49108,7 +49693,8 @@ class NicoChatFilter extends Emitter {
 		this._userIdReg = null;
 		this._commandReg = null;
 		const notifyChange=_.debounce(this._onChange.bind(this),50);
-		this._onChange=()=>{this._invalidateComposite();notifyChange();};
+		this.displayRevision=0;
+		this._onChange=()=>{this.displayRevision++;this._invalidateComposite();notifyChange();};
 		this._onChange.cancel=()=>notifyChange.cancel?.();
 		this._onChange.flush=()=>notifyChange.flush?.();
 		this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
@@ -49170,7 +49756,7 @@ class NicoChatFilter extends Emitter {
 	_bansFor(key,authorMatches){
 		return new Set([...authorMatches].filter(([,ids])=>ids.has(key)).map(([id])=>id));
 	}
-	_ensureComposite(){
+	_ensureComposite(prepared){
 		if(!this._compositeDirty)return this._compositeProjection;
 		this._compositeDirty=false;
 		this._compositeAuthors.clear();this._compositeBans.clear();
@@ -49182,7 +49768,7 @@ class NicoChatFilter extends Emitter {
 			this._baselineComposite(c);if(this._compositeProgram.hasAuthors)this._registerCompositeAuthor(c);
 		}
 		this._compositeLegacy=this.getFilterFunc();
-		const output=NgCompositeRules.projectWithMeta([...this._compositePool],this._compositeProgram,
+		const output=prepared || NgCompositeRules.projectWithMeta([...this._compositePool],this._compositeProgram,
 			this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
 		this._compositeProjection=output.results;this._compositeApplied=true;
 		for(const [c,state] of output.results)this._applyCompositeState(c,state);
@@ -49253,6 +49839,37 @@ class NicoChatFilter extends Emitter {
 			this._storeComposite(output,changed);
 		}
 		this._notifyCompositeGroups(changed);return changed;
+	}
+	prepareHistoryPool(chats) {
+		const legacy = this.getFilterFunc();
+		const output = this.hasActiveCompositeRules ? NgCompositeRules.projectWithMeta(
+			chats, this._compositeProgram, legacy, this._compositeVideoId, this._compositeBaselines) : null;
+		const displayChat = (chat) => {
+			const state = output?.results.get(chat) || (this._compositeApplied && this._compositeBaselines.get(chat));
+			if (!state || !chat.props || !['text','cmd','color','size','opacity'].some(k => chat[k] !== state[k])) return chat;
+			const copy = Object.create(chat);
+			copy.props = {...chat.props, group:null, text:state.text, cmd:state.cmd, color:state.color,
+				size:state.size, opacity:state.opacity, htmlText:chat.text === state.text ? chat.props.htmlText : null};
+			return copy;
+		};
+		return {
+			displayChat,
+			filter: (group) => {
+				if (output || !this._compositeApplied) return this.applyFilter(group, output?.results || false);
+				const display = group.map(displayChat);
+				const accepted = new Set(this.applyFilter(display, false));
+				return group.filter((chat,i) => accepted.has(display[i]));
+			},
+			commit: () => {
+				const next = new Set(chats);
+				if (this._compositeApplied) for (const chat of this._compositePool) {
+					if (!next.has(chat)) this._applyCompositeState(chat, null);
+				}
+				this._compositePool = next;
+				this._invalidateComposite();
+				this._ensureComposite(output);
+			}
+		};
 	}
 	_getCompositeProjection(fallback){
 		if(this.hasActiveCompositeRules)for(const c of fallback)if(!this._compositePool.has(c))this.addCompositeChat(c);
@@ -49588,14 +50205,14 @@ class NicoChatFilter extends Emitter {
 				);
 		};
 	}
-	applyFilter(nicoChatArray) {
+	applyFilter(nicoChatArray, prepared) {
 		const before = nicoChatArray.length;
 		if (before < 1) {
 			return nicoChatArray;
 		}
 		const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
 		if (timeKey) { console.time(timeKey); }
-		const composite=this._getCompositeProjection(nicoChatArray);
+		const composite=prepared === undefined ? this._getCompositeProjection(nicoChatArray) : prepared;
 		const filterFunc=composite?this._compositeLegacy:this.getFilterFunc();
 		let result=nicoChatArray.filter(chat=>composite instanceof Map?
 			composite.get(chat)?.visible===true:filterFunc(chat));
@@ -50585,6 +51202,8 @@ class NicoChatGroupViewModel {
 		this._offScreen = offScreen;
 		this._members = [];
 		this._lastUpdate = 0;
+		this._completedLayout = 0;
+		this._layoutFilterRevision = 0;
 		this._vSortedMembers = [];
 		this._maxInViewDuration = 0;
 		this._initWorker();
@@ -50641,6 +51260,7 @@ class NicoChatGroupViewModel {
 			for (let i = 0; i < members.length; i++) {
 				members[i].bulkLayoutData = result.members[i];
 			}
+			this._completedLayout = requestId;
 			return true;
 		} catch (err) {
 			if (requestId === this._lastUpdate && this._members === sourceMembers) {
@@ -50655,6 +51275,7 @@ class NicoChatGroupViewModel {
 	}
 	async addChatArray(nicoChatArray) {
 		const members = this._members;
+		if (!members.length) this._layoutFilterRevision = this._nicoChatGroup?._nicoChatFilter?.displayRevision || 0;
 		let sliceEnd = Date.now() + 4;
 		for (let i = 0, len = nicoChatArray.length; i < len; i++) {
 			if (members !== this._members) { return; }
@@ -50690,6 +51311,7 @@ class NicoChatGroupViewModel {
 		}
 	}
 	addChat(nicoChat) {
+		if (!this._members.length) this._layoutFilterRevision = this._nicoChatGroup?._nicoChatFilter?.displayRevision || 0;
 		let timeKey = 'addChat:' + nicoChat.text;
 		console.time(timeKey);
 		let nc = NicoChatViewModel.create(nicoChat, this._offScreen);
@@ -50803,6 +51425,37 @@ class NicoChatGroupViewModel {
 			}
 		}
 		return low;
+	}
+	appendNewInViewMembers(sec, cursor, candidates) {
+		const members = this._vSortedMembers;
+		const settled = this._completedLayout === this._lastUpdate;
+		const resume = settled && cursor.members === members && cursor.layout === this._completedLayout &&
+			cursor.time !== undefined && sec >= cursor.time;
+		let i = resume ? cursor.next : this._findInViewStartIndex(sec);
+		for (; i < members.length; i++) {
+			const chat = members[i];
+			if (chat.beginLeftTiming > sec + 1) break;
+			if (chat.isInViewBySecond(sec)) candidates.push(chat);
+		}
+		cursor.members = settled ? members : undefined;
+		cursor.layout = this._completedLayout;
+		cursor.next = i;
+		cursor.time = sec;
+	}
+	get clipLayoutReady() {
+		const count = this._nicoChatGroup.members.length;
+		if (!count && !this._members.length) return true;
+		return this._layoutFilterRevision === (this._nicoChatGroup._nicoChatFilter?.displayRevision || 0) &&
+			this._completedLayout === this._lastUpdate && this._vSortedMembers.length === count;
+	}
+	getMembersInRange(from, to) {
+		const members = this._vSortedMembers, result = [];
+		for (let i = this._findInViewStartIndex(from); i < members.length; i++) {
+			const chat = members[i];
+			if (chat.beginLeftTiming > to) break;
+			if (chat.endRightTiming >= from) result.push(chat);
+		}
+		return result;
 	}
 	get members() {return this._members;}
 	get inViewMembers() {return this.getInViewMembersBySecond(this.currentTime);}
@@ -51195,6 +51848,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 		if (this._style) {
 			this._style.textContent = '';
 		}
+		this._admissionCursors = {};
 		this._inViewTable.clear();
 		this._inSlotTable.clear();
 		this._domTable.clear();
@@ -51215,21 +51869,24 @@ class NicoCommentCss3PlayerView extends Emitter {
 			return;
 		}
 		const vm = this._viewModel;
-		const inView = [
-			vm.getGroup(NicoChat.TYPE.NAKA).inViewMembers,
-			vm.getGroup(NicoChat.TYPE.BOTTOM).inViewMembers,
-			vm.getGroup(NicoChat.TYPE.TOP).inViewMembers
-		].flat();
 		const dom = [], subDom = [], candidates = [];
 		const inSlotTable = this._inSlotTable, inViewTable = this._inViewTable;
 		const ct = this._currentTime;
 		this._collectExpired(ct);
-		for (let i = 0, len = inView.length; i < len; i++) {
-			const nicoChat = inView[i];
-			if (inViewTable.has(nicoChat)) {
-				continue;
+		const cursors = this._admissionCursors || (this._admissionCursors = {});
+		for (const type of [NicoChat.TYPE.NAKA, NicoChat.TYPE.BOTTOM, NicoChat.TYPE.TOP]) {
+			const group = vm.getGroup(type);
+			const start = candidates.length;
+			if (group.appendNewInViewMembers) {
+				group.appendNewInViewMembers(ct, cursors[type] || (cursors[type] = {next:0}), candidates);
+			} else {
+				for (const chat of group.inViewMembers) candidates.push(chat);
 			}
-			candidates.push(nicoChat);
+			let write = start;
+			for (let i = start; i < candidates.length; i++) {
+				if (!inViewTable.has(candidates[i])) candidates[write++] = candidates[i];
+			}
+			candidates.length = write;
 		}
 		const stats = this._displayStats;
 		const {admitted, suppressed, tiers} = candidates.length ?
@@ -65951,6 +66608,12 @@ const NotificationHistoryPanel = (() => {
 		};
 		const featureLabel = (entry) => {
 				const operation = String(entry.details?.operation || entry.source);
+				if (operation === 'x-draft')
+						return 'クリップをXの下書きに添付';
+				if (operation === 'official-share')
+						return 'ニコニコ連携でクリップ投稿';
+				if (operation === 'clip-export')
+						return 'Zenzaのクリップ作成';
 				if (operation === 'script-error')
 						return 'スクリプトエラー';
 				if (operation === 'external-playback')
@@ -65967,9 +66630,55 @@ const NotificationHistoryPanel = (() => {
 								entry.details?.reason === 'not-found' ? '対象なし・要確認' :
 										entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
 		const phaseLabels = new Map([
+				['official-create', 'ニコニコへクリップ作成を要求'], ['official-generate', 'ニコニコの生成結果を確認'],
+				['official-verify', '投稿先の連携アカウントを再確認'], ['official-post', 'ニコニコからXへの投稿を要求'],
+				['official-receipt', 'ニコニコに投稿結果を照会'],
+				['export-library', '変換ライブラリの準備'], ['export-ready', '動画の作成完了'], ['export-source', '元動画の取得'], ['export-comments', '区間のコメント準備'],
+				['export-encoding', '動画の書き出し'], ['export-checking', '完成動画の検査'], ['export-recording', '区間の録画'],
+				['draft-reserve', 'タブ連携の受付'], ['draft-open', 'Xタブの起動要求'], ['draft-receive', 'Xの受け取り待ち'],
+				['draft-attach', 'MP4の受け渡し・添付確認'], ['draft-attached', '添付完了'], ['draft-format', '動画形式の確認'],
+				['draft-popup', '待機タブを開く'], ['draft-tab-closed', '待機タブの確認'], ['draft-native', '通常のブラウザータブで下書きを開く'],
 				['transport', '通信'], ['response', '応答の確認'], ['session', '処理'], ['dialog-precheck', '投稿前の確認'], ['startup', '再生開始'], ['playback', '再生途中'], ['render', '表示準備'], ['script', 'スクリプト実行'], ['script-promise', '非同期処理']
 		]);
 		const explanations = {
+				'official-posted': 'ニコニコがXへの投稿完了を返しました。',
+				'official-rate-limit': 'ニコニコの作成または投稿回数の上限に達しました。',
+				'official-login-required': 'ニコニコへのログインを確認できませんでした。',
+				'official-unlinked': 'ニコニコとXのアカウント連携が解除されています。',
+				'official-video-ineligible': 'ニコニコでこの動画のクリップ投稿を利用できません。',
+				'official-permission-denied': 'ニコニコはこのアカウントまたは動画の投稿を許可していません。',
+				'official-account-changed': '投稿先のアカウントが変わったため投稿を止めました。',
+				'official-account-unknown': '連携先のアカウント名を確認できませんでした。',
+				'official-invalid-text': 'ニコニコが投稿本文を受け付けませんでした。',
+				'official-clip-missing': 'ニコニコ側で作成したクリップを確認できませんでした。',
+				'official-generation-failed': 'ニコニコ側がクリップの生成失敗を返しました。',
+				'official-post-failed': 'ニコニコ側がXへの投稿失敗を返しました。',
+				'official-invalid-response': 'ニコニコからの応答を所定の形式で読み取れませんでした。',
+				'official-timeout': 'ニコニコからの結果を待つ間に制限時間を超えました。',
+				'official-network': 'ニコニコとの通信を完了できませんでした。',
+				'official-http-error': 'ニコニコからエラー応答が返りました。',
+				'official-token-invalid': 'Xとの連携認証が無効になっています。',
+				'export-ready': '完成動画が利用できます。', 'export-source': '元動画の取得・解析を完了できませんでした。',
+				'export-encoding': '選んだ映像または音声を指定形式で書き出せませんでした。',
+				'export-recording': 'プレビューから録画を完了できませんでした。',
+				'export-comments': '元動画のコメント配置を確定できませんでした。', 'export-checking': '完成動画の長さ・映像を確認できませんでした。',
+				'export-library': '変換ライブラリを読み込めませんでした。',
+				'draft-open-failed': '管理拡張がXタブの起動時にエラーを返しました。',
+				'draft-size': 'この経路で自動添付できるMP4の上限は256 MiBです。区間を短くするか、完成画面から保存できます。',
+				'draft-manager': 'Xの下書きは開きましたが、管理拡張に動画をタブ間で渡す機能がありません。',
+				'draft-closed': 'Xの下書きタブが添付完了前に閉じられました。',
+				'draft-no-receiver': 'Xタブの起動要求後、X側から最初の受け取り要求が届きませんでした。',
+				'draft-transfer-timeout': 'Xから受け取り要求が届きましたが、データ転送または添付完了の応答が途切れました。',
+				'draft-input': 'X側で動画を受け取れないか、投稿画面の添付欄に設定できませんでした。',
+				'draft-reserve': 'MP4は完成しましたが、ユーザースクリプト管理拡張から受付を確認できませんでした。',
+				'draft-open': 'MP4は完成しましたが、Xタブの起動要求が完了したことを確認できませんでした。',
+				'draft-receive': 'Xタブの起動を要求しましたが、X側から動画の受け取りを確認できませんでした。',
+				'draft-attach': 'MP4の受け渡しを開始しましたが、X側の添付完了を確認できませんでした。',
+				'draft-attached': 'X側から動画の添付完了を受け取りました。',
+				'draft-format': '完成した動画は自動添付に必要なMP4形式ではありません。',
+				'draft-popup': '新しいタブの作成を確認できませんでした。ニコニコのポップアップ設定を確認してください。',
+				'draft-tab-closed': '待機タブが閉じられたか、別のページへ移動しました。',
+				'draft-native': '拡張との連携を確認できず、ブラウザーでXの下書きを開きました。動画は手動で添付してください。',
 				schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
 				'comment-apply': 'コメントは取得済みです。受け取ったデータを表示用に変換する処理でエラーが発生しました。',
 				'playback-wait': '再生が始まった後、読み込み待ちが続き、再生時刻の前進を確認できませんでした。',
@@ -66043,6 +66752,17 @@ const NotificationHistoryPanel = (() => {
 						if (nextStage)
 								location = nextStage.file;
 				}
+				else if (operation === 'official-share' || operation === 'clip-export') {
+						feature = featureLabel(entry);
+						location = operation === 'official-share' ? 'src/ShareOfficialClip.js' :
+								d.phase === 'export-comments' ? 'src/ShareClipRenderer.js' : d.phase === 'export-recording' ? 'src/ShareLocalClip.js' :
+										d.phase === 'export-checking' ? 'src/ShareClipJobs.js' : 'src/ShareFastClip.js';
+				}
+				else if (operation === 'x-draft') {
+						feature = 'クリップをXの下書きに添付';
+						location = ['draft-receive', 'draft-attach'].includes(String(d.phase)) ?
+								'packages/external-playback/x-draft-transfer.cjs' : 'src/ShareClipClipboard.js';
+				}
 				else if (registeredLabel) {
 						feature = registeredLabel + '（' + operation + '）';
 						location = modulePath(RequestDiagnostics.moduleFor(operation));
@@ -66075,6 +66795,41 @@ const NotificationHistoryPanel = (() => {
 						if (typeof d.elapsedMs === 'number' && Number.isSafeInteger(d.elapsedMs) && d.elapsedMs >= 0)
 								lines.push((d.phase === 'playback' ? '待機からの経過　' : '操作からの経過　') + (d.elapsedMs / 1000).toFixed(1) + '秒');
 				}
+				if (operation === 'official-share') {
+						const progress = new Map([['submitted', '共有画面で投稿を開始'], ['clip-ready', 'ニコニコでクリップを作成'],
+								['attempted', 'ニコニコにXへの投稿を要求'], ['confirmed', 'ニコニコが投稿完了を確認']]);
+						lines.push('最後に確認できた処理　' + (progress.get(String(d.lastStage)) || unknown));
+						if (typeof d.retryAfterMs === 'number' && d.retryAfterMs > 0)
+								lines.push('再試行までの目安　' + Math.ceil(d.retryAfterMs / 1000) + '秒');
+						if (d.lastStage !== 'confirmed') {
+								const receiptUnknown = d.phase === 'official-receipt' && (validStatus(d.statusCode) ||
+										['official-invalid-response', 'official-timeout', 'official-network'].includes(String(d.reason)));
+								const next = receiptUnknown ? '「状態を再確認」でニコニコに結果を照会してください。ここでは投稿を再送しません。' :
+										d.reason === 'official-token-invalid' || d.reason === 'official-unlinked' ? 'ニコニコの視聴ページでXアカウントの連携を確認してください。' :
+												d.reason === 'official-invalid-text' ? '共有画面で投稿本文を見直してください。' :
+														d.reason === 'official-rate-limit' ? '案内された時間を置いて、元動画から状態を確認してください。' :
+																d.lastStage === 'attempted' ? '元動画の共有画面で投稿結果とニコニコ側の案内を確認してください。' :
+																		d.phase === 'official-verify' ? 'ニコニコで連携中のXアカウントを確認してください。' :
+																				'元動画の共有画面を開き、ニコニコ連携の状態と利用条件を確認してください。';
+								lines.push('次に確認すること　' + next);
+						}
+				}
+				if (operation === 'x-draft') {
+						const progress = new Map([
+								['draft-reserve', ['MP4の生成', '完成画面からXを開いてください。']],
+								['draft-open', ['管理拡張でタブ連携を受付', '完成画面からXを開いてください。']],
+								['draft-receive', ['管理拡張にXタブの起動を要求', 'Xタブの有無、Xへのログイン、x.comで管理拡張が有効かを確認してください。']],
+								['draft-attach', ['MP4の受け渡しを開始', 'Xに添付済みか確認し、必要なら完成画面からコピーまたは保存してください。']],
+								['draft-attached', ['X側でMP4の添付を確認', 'Xの下書きで内容を確認して投稿できます。']],
+								['draft-format', ['動画の生成', '完成動画を保存して形式を確認してください。']],
+								['draft-popup', ['MP4の生成', '完成画面の「Xの下書きを別タブで開く」を押してください。']],
+								['draft-tab-closed', ['待機タブの作成とMP4の生成', '完成画面からXを開いてください。']],
+								['draft-native', ['通常のタブでXの下書きへの移動を要求', '完成画面から動画をコピーまたは保存し、Xに添付してください。']]
+						]);
+						const step = progress.get(String(d.phase));
+						if (step)
+								lines.push('最後に確認できた処理　' + step[0], '次に確認すること　' + step[1]);
+				}
 				if (script) {
 						const source = bundle || '配布スクリプト';
 						lines.push('発生箇所　' + (frame ? source + ' の ' + frame[2] + ' 行目' : source + '（発生行の記録なし）'));
@@ -66089,7 +66844,10 @@ const NotificationHistoryPanel = (() => {
 						lines.push('エラーコード　' + d.errorCode);
 				if (typeof d.errorName === 'string' && ['TypeError', 'ReferenceError', 'RangeError', 'SyntaxError', 'Error'].includes(d.errorName))
 						lines.push('エラーの種類　' + d.errorName);
-				lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown), '修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
+				const sharing = ['x-draft', 'official-share', 'clip-export'].includes(operation);
+				if (!sharing || (typeof d.missing === 'string' && reportFields.has(d.missing)))
+						lines.push('読めなかった項目　' + (typeof d.missing === 'string' && reportFields.has(d.missing) ? d.missing : unknown));
+				lines.push('修正箇所の目安　' + location, '修復ガイド（開発リポジトリ内）　' + repairGuide);
 				return lines.join('\n');
 		};
 		const mount = (root, events, isVisible = () => !!root?.classList.contains('activeTab')) => {
@@ -74111,6 +74869,7 @@ const CommentPictureInPicture = (() => {
 			return bitmap;
 		}
 		_updateSnapshot(viewModel, now) {
+			if (viewModel.clipAdmissionApplied && this.snapshot.viewModel === viewModel) return this.snapshot;
 			const groups = [NicoChat.TYPE.NAKA, NicoChat.TYPE.TOP, NicoChat.TYPE.BOTTOM]
 				.map(type => viewModel.getGroup(type))
 				.filter(Boolean);
@@ -74173,7 +74932,7 @@ const CommentPictureInPicture = (() => {
 			const aiOpacity = props['commentLayer.aiCommentOpacity'];
 			const {naka, fixed, upcoming} = this._getInView(viewModel, sec, now);
 			const chats = naka.concat(fixed);
-			const start = Math.max(0, chats.length - MAX_DRAW_COMMENTS);
+			const start = viewModel.clipAdmissionApplied ? 0 : Math.max(0, chats.length - MAX_DRAW_COMMENTS);
 			for (let i = start; i < chats.length; i++) {
 				const chat = chats[i];
 				let bitmap;
@@ -74878,7 +75637,7 @@ const HlsLibrary = (() => {
 		};
 		return { version, url, load };
 })();
-function createVideoSharePanel(...args){return loadOptionalPanel("createVideoSharePanel").then(install => install({Array,CommentPictureInPicture,HlsLibrary,PopupMessage,RequestDiagnostics,ScreenFilter,ShareClipPreferences,document,textUtil,window})(...args));}
+function createVideoSharePanel(...args){return loadOptionalPanel("createVideoSharePanel").then(install => install({Array,CommentDisplayBudget,CommentPictureInPicture,HlsLibrary,NicoChat,NicoChatViewModel,PopupMessage,RequestDiagnostics,ScreenFilter,ShareClipPreferences,document,textUtil,window})(...args));}
 const VideoSharePanel = (() => {
 	let panel, loading, requested;
 	function ready(instance) {
@@ -93020,7 +93779,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY, pageRealm = false) => {
    window.addEventListener('unhandledrejection',e=>frameDiag('frame-rejection',{message:String(e.reason?.message||e.reason||'').slice(0,200)}));
  }
  if(playerFrame||loader)frameDiag('boot',{playerFrame,loader,referrerHost:externalSettingsHost,
-   version:"2.7.492-task1116",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
+   version:"2.7.494-task1118",hls:typeof Hls!=='undefined',lodash:typeof _!=='undefined',
    gmXhr:typeof GM_xmlhttpRequest==='function',readyState:document.readyState});
  if(!playerFrame&&!loader){
    if(official){displaySettings.publish();window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});}

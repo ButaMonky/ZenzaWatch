@@ -40,8 +40,8 @@ function setup() {
 test('two anonymous tabs transfer the exact MP4 in bounded tab-only chunks and acknowledge attachment',async () => {
   const env = setup(), bytes = randomBytes(2 * 1024 ** 2 + 7);
   const file = new File([bytes],'試験.mp4',{type:'video/mp4'});
-  let progress = 0;
-  const sender = env.source.send(file,'最初の動画',new AbortController().signal,() => { progress++; });
+  const progress = [];
+  const sender = env.source.send(file,'最初の動画',new AbortController().signal,stage => progress.push(stage));
   const id = env.id(), draft = env.url();
   assert.equal(draft.origin,'https://x.com');
   assert.equal(draft.pathname,'/intent/tweet');
@@ -52,7 +52,7 @@ test('two anonymous tabs transfer the exact MP4 in bounded tab-only chunks and a
   assert.equal(received.type,'video/mp4');
   assert.deepEqual(Buffer.from(await received.arrayBuffer()),bytes);
   assert.deepEqual(env.chunks,[1048576,1048576,699060]);
-  assert.equal(progress,env.chunks.length);
+  assert.deepEqual(progress,['draft-receive',...env.chunks.map(() => 'draft-attach')]);
   assert.equal(env.values.size,0);
   assert.equal(env.listeners.size,0);
   assert.equal(env.opened.onclose,null);
@@ -85,9 +85,18 @@ test('close, cancellation, and X rejecting its occupied input preserve a manual 
     assert.equal(env.records.source?.zenzaXDraftChunk,undefined);
   }
 });
+test('records the failing tab-open step and cleans the pending notification without a receiver',async()=>{
+  const env=setup();
+  env.gm.open=()=>{throw Error('private manager details');};
+  const file=new File(['movie'],'private.mp4',{type:'video/mp4'});
+  await assert.rejects(env.source.send(file,'private',new AbortController().signal),error =>
+    error.reason === 'draft-open-failed' && !error.message.includes('private'));
+  assert.equal(env.values.size,0);
+  assert.equal(env.listeners.size,0);
+});
 test('oversized clips open a text draft without disclosing bytes', async () => {
   const env = setup();
-  await assert.rejects(env.source.send({type:'video/mp4',size:256 * 1024 ** 2 + 1},'本文',new AbortController().signal),/256 MiB/);
+  await assert.rejects(env.source.send({type:'video/mp4',size:256 * 1024 ** 2 + 1},'本文',new AbortController().signal),error => error.reason === 'draft-size' && /256 MiB/.test(error.message));
   assert.equal(env.url().hash,'');
   assert.equal(env.url().searchParams.get('text'),'本文');
   assert.equal(env.writes.length,0);
@@ -97,7 +106,7 @@ test('a manager with only tab opening still opens a text draft at completion and
   env.gm.tabs = null;
   const signal = new AbortController().signal;
   const file = new File(['MP4'],'test.mp4',{type:'video/mp4'});
-  await assert.rejects(env.source.send(file,'本文',signal),/下書きを開きました.*クリップボードから読み込む/);
+  await assert.rejects(env.source.send(file,'本文',signal),error => error.reason === 'draft-manager' && /下書きを開きました.*クリップボードから読み込む/.test(error.message));
   assert.equal(env.url().hash,'');
   assert.equal(env.url().searchParams.get('text'),'本文');
   assert.equal(env.writes.length,0);

@@ -111,6 +111,33 @@ class VideoHoverMenu {
                 });
             }
         }
+        const myButton = container.querySelector('.mylistAddMenu');
+        const myTrigger = myButton?.querySelector('.menuButtonInner');
+        if (myTrigger) {
+            myButton.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    myTrigger.focus();
+                    myButton.dataset.dismissed = 'true';
+                }
+                else if (e.target === myTrigger && ['Enter', ' ', 'ArrowDown'].includes(e.key)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    delete myButton.dataset.dismissed;
+                    myButton.querySelector('.mylistLink')?.focus();
+                }
+                else if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                }
+            });
+            myButton.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter' || e.key === ' ')
+                    e.stopPropagation();
+            });
+            myTrigger.addEventListener('focus', () => { delete myButton.dataset.dismissed; });
+            myButton.addEventListener('pointerdown', () => { delete myButton.dataset.dismissed; });
+        }
         const $mc = util.$(container.querySelectorAll('.menuItemContainer'));
         $mc.on('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
         $mc.on('click', this._onClick.bind(this));
@@ -143,45 +170,25 @@ class VideoHoverMenu {
         const ul = document.createElement('ul');
         mylistList.forEach((mylist) => {
             const li = document.createElement('li');
-            const icon = document.createElement('span');
-            icon.className = 'mylistIcon command';
-            Object.assign(icon.dataset, {
-                mylistId: mylist.id,
-                mylistName: mylist.name,
-                command: 'mylistOpen'
-            });
-            icon.title = mylist.name + 'を開く';
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('viewBox', '0 0 24 24');
-            const folder = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            folder.setAttribute('d', 'M1 6V5c0-1.1.9-2 2-2h7a2 2 0 011.6.9L13 6h8a2 2 0 012 2v12a2 2 0 01-2 2H3a2 2 0 01-2-2V6z');
-            if (mylist.isPublic) {
-                folder.setAttribute('fill-rule', 'evenodd');
-                svg.append(folder);
-            }
-            else {
-                const graph = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-                graph.setAttribute('fill-rule', 'evenodd');
-                const locked = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                locked.setAttribute('fill', '#FFF');
-                locked.setAttribute('d', 'M17 13v-.5a1.5 1.5 0 00-3 0v.5h3zm2 0h1.2c.4 0 .8.4.8.9V19c0 .5-.4.9-.9.9H11a.9.9 0 01-.9-.9V14c0-.5.4-.9.9-.9H12v-.5a3.5 3.5 0 117 0v.5zm-3.5 2a1.5 1.5 0 100 3 1.5 1.5 0 000-3z');
-                graph.append(folder, locked);
-                svg.append(graph);
-            }
-            icon.append(svg);
-            const link = document.createElement('a');
-            link.className = 'mylistLink name command';
-            link.textContent = mylist.name;
-            link.href = `https://www.nicovideo.jp/my/mylist/#/${mylist.id}`;
-            Object.assign(link.dataset, {
-                mylistId: mylist.id,
-                mylistName: mylist.name,
-                command: 'mylistAdd'
-            });
-            li.append(icon, link);
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'playerMenuAction mylistLink command';
+            Object.assign(add.dataset, { command: 'mylistAdd', mylistId: mylist.id, mylistName: mylist.name });
+            const name = document.createElement('strong');
+            name.textContent = mylist.name;
+            const hint = document.createElement('small');
+            hint.textContent = (mylist.isPublic ? '公開' : '非公開') + ' · ここに追加';
+            add.append(name, hint);
+            const open = document.createElement('a');
+            open.className = 'mylistOpen command';
+            open.dataset.command = 'mylistOpen';
+            open.href = `https://www.nicovideo.jp/my/mylist/#/${mylist.id}`;
+            open.textContent = '開く ↗';
+            open.setAttribute('aria-label', mylist.name + 'を開く');
+            li.append(add, open);
             ul.append(li);
         });
-        menu.querySelector('.mylistSelectMenuInner').append(ul);
+        menu.querySelector('.mylistSelectMenuInner').replaceChildren(ul);
     }
     _onMouseDown(e) {
         e.stopPropagation();
@@ -204,15 +211,11 @@ class VideoHoverMenu {
                 util.dispatchCommand(target, command);
                 break;
             case 'mylistAdd': {
-                command = (e.shiftKey || e.which > 1) ? 'mylistRemove' : 'mylistAdd';
+                if (!(e.which > 1))
+                    break; // Normal clicks and keyboard activation go through _onClick.
                 const { mylistId, mylistName } = target.dataset;
+                util.dispatchCommand(target, 'mylistRemove', { mylistId, mylistName });
                 this._hideMenu();
-                util.dispatchCommand(target, command, { mylistId, mylistName });
-                break;
-            }
-            case 'mylistOpen': {
-                const mylistId = target.dataset.mylistId;
-                location.href = `https://www.nicovideo.jp/my/mylist/#/${mylistId}`;
                 break;
             }
             case 'close':
@@ -223,13 +226,15 @@ class VideoHoverMenu {
         }
     }
     _onClick(e) {
-        e.preventDefault();
         e.stopPropagation();
         const target = e.target.closest('[data-command]');
         if (!target) {
             return;
         }
         let { command, type, param } = target.dataset;
+        if (command === 'mylistOpen')
+            return; // Keep the destination link's native activation.
+        e.preventDefault();
         switch (type) {
             case 'json':
             case 'bool':
@@ -250,9 +255,14 @@ class VideoHoverMenu {
                     }
                 }
                 break;
+            case 'mylistAdd': {
+                const { mylistId, mylistName } = target.dataset;
+                util.dispatchCommand(target, e.shiftKey ? 'mylistRemove' : 'mylistAdd', { mylistId, mylistName });
+                target.blur();
+                this._hideMenu();
+                break;
+            }
             case 'deflistAdd':
-            case 'mylistAdd':
-            case 'mylistOpen':
             case 'close':
                 this._hideMenu();
                 break;
@@ -668,38 +678,83 @@ startup.add('VideoHoverMenu:style', () => {
       left: 40px;
     }
 
-    .shareQuickActions {
-      position: absolute;
-      z-index: 2;
-      right: 2px;
-      top: 30px;
-      width: min(220px, 100%);
-      box-sizing: border-box;
+    .shareQuickActions.zenzaPopupMenu {
+      --share-anchor: 56px; /* center of the 32px share button at left:40px */
+      left: 0;
+      top: 36px;
+      width: min(228px, 100%);
       display: none;
-      padding: 4px;
-      border: 1px solid var(--zt-border, #666);
-      border-radius: 5px;
-      background: var(--zt-overlay-dark, #21242a);
-      color: #fff;
-      pointer-events: auto;
+    }
+    .zenzaScreenMode_small .shareQuickActions.zenzaPopupMenu {
+      left: auto;
+      right: 0;
+      --share-anchor: calc(100% - 112px);
+    }
+    .shareQuickActions::before {
+      content: '';
+      position: absolute;
+      left: calc(var(--share-anchor) - 16px);
+      top: -6px;
+      width: 32px;
+      height: 6px;
+    }
+    .shareQuickActions.zenzaPopupMenu .triangle {
+      left: calc(var(--share-anchor) - 6px);
+      top: -6px;
+      width: 10px;
+      height: 10px;
+      transform: rotate(135deg);
+      background: inherit;
+      border-color: inherit;
+      pointer-events: none;
     }
     .zenzaTweetButton:not([hidden]):is(:hover,:focus-visible) + .shareQuickActions:not([hidden],[data-dismissed]),
     .zenzaTweetButton:not([hidden]) + .shareQuickActions:not([hidden],[data-dismissed]):is(:hover,:focus-within) {
-      display: grid;
+      display: block;
+      visibility: visible;
+      opacity: 0.99;
+      pointer-events: auto;
+      animation: playerMenuOpen 160ms ease-out;
     }
     .zenzaTweetButton:has(+ .shareQuickActions:not([hidden])) .tooltip {display:none;}
-    .shareQuickAction {
-      text-align: left;
-      background: transparent;
-      color: inherit;
-      padding: 7px 9px;
-      border: 0;
-      border-radius: 3px;
-      font: 14px/1.35 sans-serif;
-      cursor: pointer;
+    @keyframes playerMenuOpen {
+      from { opacity: 0; transform: translateY(-3px); }
+      to { opacity: 0.99; transform: translateY(0); }
     }
-    .shareQuickAction:is(:hover,:focus-visible) {background:#39495a;}
-    .shareQuickAction small {display:block;font-size:11px;color:#dae4ee;}
+    .playerActionMenu.zenzaPopupMenu {
+      box-sizing: border-box;
+      background: #272d30;
+      color: #fff;
+      border: 1px solid #738087;
+      border-radius: 4px;
+      padding: 4px;
+      font: 13px/1.45 system-ui, sans-serif;
+      text-align: left;
+      text-shadow: none;
+      box-shadow: 0 2px 4px #0008;
+    }
+    .playerActionMenu ul {margin:0; padding:0;}
+    .playerActionMenu.zenzaPopupMenu ul > li {margin:0; padding:0; display:flex; align-items:stretch;}
+    .playerActionMenu.zenzaPopupMenu ul > li:hover {background:transparent;}
+    .playerActionMenu.zenzaPopupMenu ul > li + li {border-top:1px solid #475053;}
+    .playerActionMenu .playerMenuAction, .playerActionMenu .mylistOpen {
+      box-sizing:border-box; color:inherit; font:inherit; background:transparent;
+      border:0; padding:5px 8px; text-align:left; cursor:pointer;
+    }
+    .playerMenuAction {flex:1; min-width:0; white-space:normal; overflow-wrap:anywhere;}
+    .playerMenuAction strong {display:block; font-weight:600;}
+    .playerMenuAction small {display:block; font-size:11px; color:#c9d0d2;}
+    .playerActionMenu .mylistOpen {
+      align-self:center; flex:none; margin:3px 0; border-left:1px solid #535e64;
+      font-size:12px; white-space:nowrap; text-decoration:none; color:#d0d6d7;
+    }
+    .playerActionMenu :is(.playerMenuAction,.mylistOpen):is(:hover,:focus-visible) {background:#344c58;}
+    .playerActionMenu :is(.playerMenuAction,.mylistOpen):focus-visible {outline:2px solid #9ed4f4; outline-offset:-2px;}
+    .playerMenuAction:active {transform:translateY(1px);}
+    @media (prefers-reduced-motion: reduce) {
+      .playerActionMenu.zenzaPopupMenu {animation:none !important; transition:none !important;}
+      .playerMenuAction:active {transform:none;}
+    }
 
     @keyframes spinX {
       0%   { transform: rotateX(0deg); }
@@ -734,9 +789,11 @@ startup.add('VideoHoverMenu:style', () => {
       color: var(--zt-text-inverse, #000) !important;
       box-shadow: none !important;
     }
-    .mylistButton.mylistAddMenu:focus-within {
-      background: var(--zt-surface-3, #888) !important;
+    .mylistButton.mylistAddMenu:focus-within:not([data-dismissed]) {
+      background: var(--zt-info, #1da1f2) !important;
+      color: var(--zt-text-0, #fff) !important;
     }
+    .mylistButton.mylistAddMenu:focus-within:not([data-dismissed]) .tooltip {display:none;}
     .is-updatingMylist  .mylistButton.mylistAddMenu {
       background: var(--zt-surface-3, #888) !important;
       color: var(--zt-text-inverse, #000) !important;
@@ -747,80 +804,25 @@ startup.add('VideoHoverMenu:style', () => {
     }
 
     .mylistSelectMenu {
-      top: 36px;
-      right: -48px;
-      padding: 8px 0;
-      font-size: 13px;
-      backface-visibility: hidden;
+      top:35px; left:-81px; width:228px;
+      backface-visibility:hidden;
     }
-    .is-updatingMylist .mylistSelectMenu {
-      display: none;
+    .mylistAddMenu .menuButtonInner {pointer-events:auto;}
+    .mylistAddMenu:focus-within .mylistSelectMenu {animation:playerMenuOpen 160ms ease-out;}
+    .mylistAddMenu[data-dismissed] .mylistSelectMenu, .is-updatingMylist .mylistSelectMenu {display:none;}
+    .mylistSelectMenuInner {overflow:auto; max-height:50vh; overscroll-behavior:contain;}
+    .mylistSelectMenu.zenzaPopupMenu .triangle {
+      width:10px; height:10px; top:-6px; left:90px;
+      transform:rotate(135deg); background:inherit; border-color:inherit; pointer-events:none;
     }
-      .mylistSelectMenu .mylistSelectMenuInner {
-        overflow-y: auto;
-        overflow-x: hidden;
-        max-height: 50vh;
-        overscroll-behavior: none;
-      }
-
-      .mylistSelectMenu .triangle {
-        transform: rotate(135deg);
-        top: -8.5px;
-        right: 55px;
-      }
-
-      .mylistSelectMenu ul li {
-        line-height: 120%;
-        overflow-y: visible;
-        border-bottom: none;
-      }
-
-      .mylistSelectMenu .mylistIcon {
-        display: inline-block;
-        width: 18px;
-        height: 14px;
-        margin: -4px 4px 0 0;
-        margin-right: 15px;
-        transform: scale(1.5);
-        transform-origin: 0 0 0;
-        transition: transform 0.1s ease, box-shadow 0.1s ease;
-        cursor: pointer;
-      }
-      .mylistSelectMenu .mylistIcon:hover {
-        background-color: var(--zt-accent, #ff9);
-        transform: scale(2);
-      }
-      .mylistSelectMenu .mylistIcon:hover::after {
-        background: var(--zt-surface-light, #fff);
-        z-index: 100;
-        opacity: 1;
-      }
-      .mylistSelectMenu .mylistIcon > svg {
-        fill: var(--zt-text-inverse, #666);
-        width: 100%;
-        height: 100%;
-      }
-
-
-      .mylistSelectMenu .name {
-        display: inline-block;
-        width: calc(100% - 20px);
-        vertical-align: middle;
-        font-size: 110%;
-        color: var(--zt-text-0, #fff);
-        text-decoration: none !important;
-      }
-      .mylistSelectMenu .name:hover {
-        color: var(--zt-text-0, #fff);
-      }
-      .mylistSelectMenu .name::after {
-        content: ' に登録';
-        font-size: 75%;
-        color: var(--zt-text-inverse, #333);
-      }
-      .mylistSelectMenu li:hover .name::after {
-        color: var(--zt-text-0, #fff);
-      }
+    .zenzaScreenMode_small .mylistSelectMenu {
+      left:auto; right:-65px;
+      width:min(228px, var(--zenzaSmallWidth, 228px));
+    }
+    .zenzaScreenMode_small .mylistSelectMenu .triangle {left:auto; right:74px;}
+    .zenzaScreenMode_small .mylistSelectMenuInner {
+      max-height:min(50vh, max(52px, calc(var(--zenzaSmallHeight, 224px) - 52px)));
+    }
 
       .toggleLikeButton {
         transition:
@@ -868,7 +870,8 @@ startup.add('VideoHoverMenu:style', () => {
         visibility: visible;
       }
 
-      .zenzaTweetButton:hover {
+      .zenzaTweetButton:hover,
+      .zenzaTweetButton:has(+ .shareQuickActions:not([hidden],[data-dismissed]):is(:hover,:focus-within)) {
         text-shadow: 1px 1px 2px var(--zt-info, #88c);
         background: var(--zt-info, #1da1f2);
         color: var(--zt-text-0, #fff);
@@ -1002,15 +1005,18 @@ VideoHoverMenu.__tpl__ = (`
             <div class="tooltip">共有（X・クリップ・リンク）</div>
             <div class="menuButtonInner">t</div>
           </div>
-          <div class="shareQuickActions" role="group" aria-label="クリップの投稿" hidden>
-            <button type="button" class="shareQuickAction" data-command="shareNicoNext30">今から30秒を自動投稿<small>ニコニコの連携先のXに投稿</small></button>
-            <button type="button" class="shareQuickAction" data-command="shareZenzaFull">全範囲をXの下書きに添付<small>ZenzaでMP4を作成</small></button>
+          <div class="shareQuickActions playerActionMenu zenzaPopupMenu" role="group" aria-label="クリップの投稿" hidden>
+            <div class="triangle" aria-hidden="true"></div>
+            <ul>
+              <li><button type="button" class="shareQuickAction playerMenuAction" data-command="shareNicoNext30"><strong>今から30秒を自動投稿</strong><small>ニコニコ連携 · そのままXに投稿</small></button></li>
+              <li><button type="button" class="shareQuickAction playerMenuAction" data-command="shareZenzaFull"><strong>全範囲を下書きに添付</strong><small>ZenzaでMP4を作成 · Xで確認して投稿</small></button></li>
+            </ul>
           </div>
           <div class="menuButton mylistButton mylistAddMenu forMember"
             data-command="nop" tabindex="-1" data-has-submenu="1">
             <div class="tooltip">マイリスト登録</div>
-            <div class="menuButtonInner">My</div>
-            <div class="mylistSelectMenu selectMenu zenzaPopupMenu forMember">
+            <div class="menuButtonInner" role="button" tabindex="0" aria-label="マイリスト登録">My</div>
+            <div class="mylistSelectMenu playerActionMenu selectMenu zenzaPopupMenu forMember">
               <div class="triangle"></div>
               <div class="mylistSelectMenuInner">
               </div>
